@@ -33,6 +33,7 @@ services:
       retries: 5
 
   api:
+    image: ${API_IMAGE:-ghcr.io/crisweb1994/bourse-api:latest}
     build:
       context: .
       dockerfile: Dockerfile
@@ -73,6 +74,7 @@ services:
       WEB_SEARCH_CACHE_TTL_MS: ${WEB_SEARCH_CACHE_TTL_MS:-}
 
   web:
+    image: ${WEB_IMAGE:-ghcr.io/crisweb1994/bourse-web:latest}
     build:
       context: .
       dockerfile: Dockerfile
