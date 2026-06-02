@@ -2,19 +2,15 @@
 # Bourse — single unified compose file.
 #
 # Local dev (only need the DB; api/web run via `pnpm dev`):
-#     docker compose up -d
+#     docker compose up -d postgres
 #
 # Full deploy (postgres + api + web):
 #     cp .env.example .env       # fill in JWT_SECRET / GITHUB_* / AI keys
-#     docker compose --profile app up -d --build
+#     docker compose up -d --build
 #
 # Stop:
 #     docker compose down            # keeps pgdata
 #     docker compose down -v         # also wipes the DB volume
-#
-# The `app` profile gates api + web so the dev workflow (`docker compose up`
-# brings up just postgres) stays one command, and the prod workflow is one
-# command plus a `--profile app` flag.
 # =============================================================================
 
 services:
@@ -37,7 +33,6 @@ services:
       retries: 5
 
   api:
-    profiles: [app]
     build:
       context: .
       dockerfile: Dockerfile
@@ -78,7 +73,6 @@ services:
       WEB_SEARCH_CACHE_TTL_MS: ${WEB_SEARCH_CACHE_TTL_MS:-}
 
   web:
-    profiles: [app]
     build:
       context: .
       dockerfile: Dockerfile
