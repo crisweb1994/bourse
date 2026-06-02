@@ -1,0 +1,376 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+/* =============================================================
+   Bourse — UI design tokens
+   Editorial-developer-console aesthetic (ref freemodel.dev).
+   Black + white + gray + a single emerald accent. No shadows.
+   ============================================================= */
+@theme {
+  /* Sans + Mono — actual font families come from next/font in
+     src/app/layout.tsx and bind to --font-geist-sans / -mono. */
+  --font-sans: var(--font-geist-sans), 'Inter', -apple-system, BlinkMacSystemFont,
+               'Helvetica Neue', 'PingFang SC', 'Hiragino Sans GB',
+               'Microsoft YaHei', sans-serif;
+  --font-mono: var(--font-geist-mono), 'JetBrains Mono', ui-monospace,
+               SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Semantic palette — use these in component classes via Tailwind v4
+     arbitrary-value syntax (bg-[var(--color-fg)]) OR via the
+     bg-fg / text-fg-2 utilities below. */
+  /* PR-8: migrated to Style A · Editorial Refined palette.
+     - bg shifts to warm off-white (was #ffffff)
+     - accent moves from emerald-500 to deep forest green
+     - borders and neutrals get a warm undertone matching the bg */
+  --color-bg:            #fbfbf8;
+  /* PR-9: bg-elev sits one click brighter than the off-white canvas so
+     Card surfaces visibly elevate. Style A mockup uses #ffffff cards on
+     a #fbfbf8 page; we mirror that. */
+  --color-bg-elev:       #ffffff;
+  --color-fg:            #111111;
+  --color-fg-2:          #555555;
+  --color-fg-3:          #8a8a8a;
+  --color-fg-4:          #c4c4c4;
+  --color-border:        #e8e6df;
+  --color-border-soft:   #efede6;
+  --color-surface-hover: #f1efe8;
+  --color-surface-2:     #f4f2eb;
+
+  --color-accent:        #1f6b51;
+  --color-accent-600:    #0f3d2e;
+  --color-accent-soft:   #e5efe9;
+  --color-accent-line:   #c1d8cc;
+
+  /* Status palettes — Style A muted warm versions of warn/danger to match
+     the new accent. Mostly used as soft pill fills + border-lefts. */
+  --color-warn:          #a17223;
+  --color-warn-soft:     #f6efdc;
+  --color-warn-line:     #e5d7ad;
+  --color-danger:        #a8443a;
+  --color-danger-soft:   #f4e3e0;
+  --color-danger-line:   #e6c2bb;
+  --color-info:          #3d6296;
+  --color-info-soft:     #e7edf5;
+  --color-info-line:     #bdccdf;
+
+  /* Signal palette — Style A: bullish=accent green, bearish=muted brick. */
+  --color-signal-bullish: var(--color-accent);
+  --color-signal-neutral: var(--color-fg-2);
+  --color-signal-bearish: var(--color-danger);
+
+  --color-severity-high:   #a8443a;
+  --color-severity-medium: var(--color-warn);
+  --color-severity-low:    #6e6a60;
+
+  /* Layout */
+  --spacing-sidebar: 220px;
+  --spacing-content-max: 1440px;
+
+  /* Radius — Style A is more rectilinear than the original; cards shrink
+     from 12px → 8px so the editorial chrome stays tight. */
+  --radius-card: 8px;
+  --radius-btn:  6px;
+  --radius-pill: 999px;
+}
+
+/* =============================================================
+   Dark theme — same structural tokens, inverted neutrals.
+   Emerald accent stays the same brand color but with a slightly
+   higher-contrast soft variant for readable callouts on near-black.
+   ============================================================= */
+.dark {
+  /* PR-8: dark mode held in same warm-neutral family as light. Slightly
+     desaturated near-black + warm grays + brighter accent for legibility. */
+  --color-bg:            #0e0d0a;
+  --color-bg-elev:       #18171a;
+  --color-fg:            #ecebe5;
+  --color-fg-2:          #a6a399;
+  --color-fg-3:          #7a766c;
+  --color-fg-4:          #4a473f;
+  --color-border:        #2a2823;
+  --color-border-soft:   #211f1b;
+  --color-surface-hover: #181714;
+  --color-surface-2:     #141310;
+
+  --color-accent:        #67a98d;
+  --color-accent-600:    #8cc4a9;
+  --color-accent-soft:   #15281f;
+  --color-accent-line:   #1f4233;
+
+  --color-warn:          #d4a056;
+  --color-warn-soft:     #2a1f0e;
+  --color-warn-line:     #4f3a17;
+  --color-danger:        #d97a6f;
+  --color-danger-soft:   #2a1411;
+  --color-danger-line:   #4f1f1a;
+  --color-info:          #8aabd6;
+  --color-info-soft:     #14202e;
+  --color-info-line:     #29405d;
+
+  --color-signal-bearish: var(--color-danger);
+  --color-severity-high:  var(--color-danger);
+  --color-severity-low:   var(--color-fg-3);
+}
+
+/* =============================================================
+   Base
+   ============================================================= */
+
+* { border-color: var(--color-border); }
+
+html, body {
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-feature-settings: "tnum", "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* =============================================================
+   Mono utility helpers — used across the design language for
+   the `§ SECTION` mini-labels, ticker symbols, URLs, timestamps,
+   step numbers etc.
+   ============================================================= */
+
+.mono { font-family: var(--font-mono); font-feature-settings: "ss01", "cv11"; }
+
+.section-tag {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--color-fg-2);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.section-tag .glyph { color: var(--color-fg-3); margin-right: 4px; }
+
+.kbd {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1;
+  color: var(--color-fg-2);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  background: var(--color-bg);
+}
+
+/* =============================================================
+   Streaming dot — keyframe ring is the ONE exception to
+   "no shadow" since it's intentional motion, not depth.
+   ============================================================= */
+
+.stream-dot {
+  width: 7px; height: 7px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  display: inline-block;
+  box-shadow: 0 0 0 0 rgba(31, 107, 81, 0.45);
+  animation: stream-pulse 1.6s ease-out infinite;
+}
+@keyframes stream-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(31, 107, 81, 0.45); }
+  70%  { box-shadow: 0 0 0 8px rgba(31, 107, 81, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(31, 107, 81, 0); }
+}
+
+/* Indeterminate progress bar — used in /callback */
+.progress-indeterminate {
+  position: relative;
+  height: 2px;
+  background: var(--color-border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.progress-indeterminate::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 50%;
+  background: var(--color-accent);
+  border-radius: 999px;
+  animation: progress-slide 1.6s ease-in-out infinite;
+}
+@keyframes progress-slide {
+  0%   { transform: translateX(-110%); }
+  100% { transform: translateX(220%); }
+}
+
+/* =============================================================
+   Prose (markdown analysis reports). Re-bound to new tokens.
+   Headings and body stay near-black; links underline only;
+   inline code uses surface-hover bg; emerald citation chips
+   are emitted via <span class="cite">.
+   ============================================================= */
+
+.prose {
+  --tw-prose-body:           var(--color-fg);
+  --tw-prose-headings:       var(--color-fg);
+  --tw-prose-lead:           var(--color-fg-2);
+  --tw-prose-links:          var(--color-fg);
+  --tw-prose-bold:           var(--color-fg);
+  --tw-prose-counters:       var(--color-fg-2);
+  --tw-prose-bullets:        var(--color-fg-3);
+  --tw-prose-hr:             var(--color-border);
+  --tw-prose-quotes:         var(--color-fg-2);
+  --tw-prose-quote-borders:  var(--color-fg-4);
+  --tw-prose-captions:       var(--color-fg-2);
+  --tw-prose-code:           var(--color-fg);
+  --tw-prose-pre-code:       var(--color-fg);
+  --tw-prose-pre-bg:         var(--color-surface-hover);
+  --tw-prose-th-borders:     var(--color-border);
+  --tw-prose-td-borders:     var(--color-border-soft);
+
+  font-size: 14.5px;
+  line-height: 1.72;
+}
+.prose h2 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; margin: 28px 0 10px; }
+.prose h3 { font-size: 14px; font-weight: 500; margin: 22px 0 6px; }
+.prose blockquote { font-style: normal; font-size: 13.5px; }
+.prose code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  background: var(--color-surface-hover);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 400;
+}
+.prose a {
+  color: var(--color-fg);
+  text-decoration: none;
+  border-bottom: 1px solid var(--color-fg-4);
+  transition: border-color 120ms;
+}
+.prose a:hover { border-bottom-color: var(--color-fg); }
+.prose hr { margin: 28px 0; }
+
+/* Emerald citation chip — emitted inline by markdown renderer */
+.cite-chip {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--color-accent-600);
+  border: 1px solid var(--color-accent-line);
+  background: var(--color-accent-soft);
+  border-radius: 4px;
+  padding: 0 5px;
+  margin: 0 2px;
+  line-height: 1.55;
+  vertical-align: 2px;
+  letter-spacing: 0.03em;
+}
+
+/* =============================================================
+   Scrollbar — slim, foreground-tinted. (light + dark via tokens)
+   ============================================================= */
+
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--color-fg-4);
+  border-radius: 999px;
+  border: 3px solid var(--color-bg);
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--color-fg-3); }
+
+/* Focus ring — only on buttons & links. Form inputs visualize focus
+   through their wrapping shell's `focus-within:border-fg` rule, so a
+   second outline would create a "double border" (the bug from
+   pre-2026-05-17 globals.css). */
+:where(button, a, [role="button"]):focus-visible {
+  outline: 2px solid var(--color-fg);
+  outline-offset: 2px;
+  border-radius: var(--radius-btn);
+}
+
+/* Radix-managed triggers (DropdownMenu / Select / Popover / AlertDialog…)
+   carry a `data-state` attribute. They already telegraph their state
+   visually (open → highlighted bg, panel below), so the focus ring is
+   redundant noise. Suppress in any state. */
+[data-state]:focus,
+[data-state]:focus-visible {
+  outline: none;
+}
+
+/* Inputs / textareas / selects — kill any browser default outline.
+   Their wrapper (InputShell, Card, etc.) provides the visual focus
+   cue via `focus-within:border-[var(--color-fg)]`. */
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible,
+select:focus,
+select:focus-visible {
+  outline: none;
+}
+
+/* =============================================================
+   Print mode (S4+ · PDF export via window.print()).
+   Hides chrome and lets the analysis report take the page.
+   Triggered by `document.body.classList.add('print-mode')` in
+   ReportActionsBar — kept as a class so the same rules apply in
+   the print preview (which also respects `@media print`).
+   ============================================================= */
+@media print {
+  html, body { background: #ffffff !important; }
+  body { font-size: 12px; }
+  /* Hide global chrome: side nav / footers / sticky bars. */
+  aside, nav, [data-actions-bar],
+  [data-testid="data-quality-notice"] .dev,
+  .stream-dot { display: none !important; }
+  /* Cards lose chrome to save ink. */
+  .rounded-\[var\(--radius-card\)\] {
+    border: none !important;
+    background: #ffffff !important;
+    padding: 0 !important;
+  }
+  /* Keep dimension nav out — only the report body needs to print. */
+  [class*="lg:grid-cols-\[200px"] { grid-template-columns: 1fr !important; }
+  /* Headings keep their hierarchy but lose link-ish accent colours. */
+  .prose h2, .prose h3 { color: #000 !important; }
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.8em; color: #666;
+  }
+}
+body.print-mode aside,
+body.print-mode nav,
+body.print-mode [data-actions-bar] { display: none !important; }
+
+/* =============================================================
+   Pointer cursor on every interactive element.
+   Tailwind v4 dropped the historical UA default; we restore it
+   for the whole app so anything clickable feels clickable.
+   ============================================================= */
+button:not(:disabled),
+a[href],
+label[for],
+summary,
+select,
+[role="button"]:not([aria-disabled="true"]),
+[role="tab"],
+[role="menuitem"],
+[role="option"],
+[role="checkbox"],
+[role="radio"],
+[role="switch"],
+input[type="checkbox"]:not(:disabled),
+input[type="radio"]:not(:disabled),
+input[type="submit"]:not(:disabled),
+input[type="reset"]:not(:disabled),
+input[type="button"]:not(:disabled) {
+  cursor: pointer;
+}
+
+/* explicit not-allowed for disabled controls */
+button:disabled,
+[aria-disabled="true"],
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+}
+

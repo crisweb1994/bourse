@@ -1,0 +1,30 @@
+{
+  "id": "SYN_AAPL_20250525",
+  "rawHash": "c5892781355b87ea",
+  "computedFacts": {
+    "ratios": {
+      "pe": 30,
+      "pb": 8.571428571428571,
+      "ps": 6,
+      "grossMargin": 0.45,
+      "netMargin": 0.2,
+      "roe": 0.2857142857142857,
+      "fcfYield": 0.03
+    },
+    "technicalIndicators": null,
+    "redFlagsCount": 0,
+    "redFlagRules": [],
+    "valuation": {
+      "marketCap": 600000000000,
+      "impliedGrowthRate": 0.1402730941772461,
+      "pe5yPercentile": null
+    },
+    "availability": {
+      "available": [
+        "financials",
+        "quote"
+      ],
+      "missingCount": 2
+    }
+  }
+}

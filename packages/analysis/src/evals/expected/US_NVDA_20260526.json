@@ -1,0 +1,34 @@
+{
+  "id": "US_NVDA_20260526",
+  "rawHash": "463c45aa9ff6ea0c",
+  "computedFacts": {
+    "ratios": {
+      "pe": null,
+      "pb": null,
+      "ps": null,
+      "grossMargin": 0.6405244489485685,
+      "netMargin": 0.42632379022042055,
+      "roe": 0.4242439522482887,
+      "fcfYield": null
+    },
+    "technicalIndicators": {
+      "sma20": 214.74550094604493,
+      "sma50": 196.80779998779298,
+      "sma200": 187.01961402893068,
+      "rsi14": 53.713806928849564,
+      "macdTrend": "bearish",
+      "trend": "uptrend"
+    },
+    "redFlagsCount": 0,
+    "redFlagRules": [],
+    "valuation": null,
+    "availability": {
+      "available": [
+        "financials",
+        "history",
+        "quote"
+      ],
+      "missingCount": 9
+    }
+  }
+}

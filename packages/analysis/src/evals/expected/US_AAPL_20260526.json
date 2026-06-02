@@ -1,0 +1,34 @@
+{
+  "id": "US_AAPL_20260526",
+  "rawHash": "e6bceb2edbbe0bbb",
+  "computedFacts": {
+    "ratios": {
+      "pe": null,
+      "pb": null,
+      "ps": null,
+      "grossMargin": 0.4494477036097458,
+      "netMargin": 0.2591401340410378,
+      "roe": 1.8080245829675154,
+      "fcfYield": null
+    },
+    "technicalIndicators": {
+      "sma20": 289.217626953125,
+      "sma50": 270.35794860839843,
+      "sma200": 261.08861976623535,
+      "rsi14": 78.63015328729372,
+      "macdTrend": "bullish",
+      "trend": "uptrend"
+    },
+    "redFlagsCount": 0,
+    "redFlagRules": [],
+    "valuation": null,
+    "availability": {
+      "available": [
+        "financials",
+        "history",
+        "quote"
+      ],
+      "missingCount": 9
+    }
+  }
+}

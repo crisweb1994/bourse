@@ -1,0 +1,218 @@
+{
+  "scenarioName": "comprehensive-happy-2dim",
+  "kind": "comprehensive",
+  "result": {
+    "terminalStatus": "COMPLETED",
+    "factConflictCount": 0,
+    "failedSectionTypes": []
+  },
+  "sendEvents": [
+    {
+      "type": "section_start",
+      "data": {
+        "sectionType": "FUNDAMENTAL",
+        "sectionId": "sec-fund",
+        "order": 0
+      }
+    },
+    {
+      "type": "report_chunk",
+      "data": {
+        "text": "hello ",
+        "sectionType": "FUNDAMENTAL"
+      }
+    },
+    {
+      "type": "citation",
+      "data": {
+        "title": "Source",
+        "url": "https://example.com/a",
+        "claim": "",
+        "sectionType": "FUNDAMENTAL"
+      }
+    },
+    {
+      "type": "report_complete",
+      "data": {
+        "sectionType": "FUNDAMENTAL"
+      }
+    },
+    {
+      "type": "structured_data",
+      "data": {
+        "json": {
+          "schemaVersion": "agent-result-v1",
+          "conclusion": {
+            "signal": "BULLISH",
+            "confidence": "HIGH",
+            "oneLiner": "fixture conclusion",
+            "evidence": []
+          },
+          "evidence": [],
+          "dataAvailability": {
+            "missingFields": [],
+            "reason": "ok"
+          },
+          "dataAsOf": "2026-05-21",
+          "disclaimer": "fixture disclaimer"
+        },
+        "sectionType": "FUNDAMENTAL"
+      }
+    },
+    {
+      "type": "section_complete",
+      "data": {
+        "sectionType": "FUNDAMENTAL",
+        "status": "COMPLETED"
+      }
+    },
+    {
+      "type": "section_start",
+      "data": {
+        "sectionType": "VALUATION",
+        "sectionId": "sec-val",
+        "order": 1
+      }
+    },
+    {
+      "type": "report_chunk",
+      "data": {
+        "text": "val ",
+        "sectionType": "VALUATION"
+      }
+    },
+    {
+      "type": "citation",
+      "data": {
+        "title": "Source",
+        "url": "https://example.com/b",
+        "claim": "",
+        "sectionType": "VALUATION"
+      }
+    },
+    {
+      "type": "report_complete",
+      "data": {
+        "sectionType": "VALUATION"
+      }
+    },
+    {
+      "type": "structured_data",
+      "data": {
+        "json": {
+          "schemaVersion": "agent-result-v1",
+          "conclusion": {
+            "signal": "NEUTRAL",
+            "confidence": "MEDIUM",
+            "oneLiner": "fixture conclusion",
+            "evidence": []
+          },
+          "evidence": [],
+          "dataAvailability": {
+            "missingFields": [],
+            "reason": "ok"
+          },
+          "dataAsOf": "2026-05-21",
+          "disclaimer": "fixture disclaimer"
+        },
+        "sectionType": "VALUATION"
+      }
+    },
+    {
+      "type": "section_complete",
+      "data": {
+        "sectionType": "VALUATION",
+        "status": "COMPLETED"
+      }
+    },
+    {
+      "type": "summary_chunk",
+      "data": {
+        "text": "summary "
+      }
+    },
+    {
+      "type": "report_complete",
+      "data": {
+        "sectionType": "COMPREHENSIVE"
+      }
+    },
+    {
+      "type": "summary_complete",
+      "data": {
+        "summaryJson": {
+          "schemaVersion": "agent-result-v1",
+          "overall": {
+            "signal": "BULLISH",
+            "confidence": "HIGH",
+            "recommendation": "BUY"
+          },
+          "disclaimer": "fixture"
+        }
+      }
+    },
+    {
+      "type": "done",
+      "data": {
+        "analysisId": "a-test",
+        "status": "COMPLETED"
+      }
+    }
+  ],
+  "prismaWrites": [
+    {
+      "table": "analysisSection",
+      "method": "updateMany",
+      "whereKeys": [
+        "id"
+      ],
+      "dataKeys": [
+        "status"
+      ],
+      "dataStatus": "IN_PROGRESS"
+    },
+    {
+      "table": "analysisSection",
+      "method": "update",
+      "whereKeys": [
+        "id"
+      ],
+      "dataKeys": [
+        "citations",
+        "reportMarkdown",
+        "status",
+        "structuredJson"
+      ],
+      "dataStatus": "COMPLETED"
+    },
+    {
+      "table": "analysisSection",
+      "method": "update",
+      "whereKeys": [
+        "id"
+      ],
+      "dataKeys": [
+        "citations",
+        "reportMarkdown",
+        "status",
+        "structuredJson"
+      ],
+      "dataStatus": "COMPLETED"
+    },
+    {
+      "table": "analysis",
+      "method": "update",
+      "whereKeys": [
+        "id"
+      ],
+      "dataKeys": [
+        "aiModel",
+        "generatedAt",
+        "status",
+        "summaryJson",
+        "summaryMarkdown"
+      ],
+      "dataStatus": "COMPLETED"
+    }
+  ]
+}

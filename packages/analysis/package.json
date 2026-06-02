@@ -1,0 +1,32 @@
+{
+  "name": "@bourse/analysis",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
+    "lint": "echo 'no lint configured'",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "vendor:fixture": "tsx src/evals/vendor-fixture.ts",
+    "eval:judge": "vitest run src/evals/__tests__/judge.test.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.95.0",
+    "@bourse/shared-types": "workspace:*",
+    "openai": "^6.36.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@bourse/tsconfig": "workspace:*",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

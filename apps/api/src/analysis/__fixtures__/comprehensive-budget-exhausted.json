@@ -1,0 +1,117 @@
+{
+  "scenarioName": "comprehensive-budget-exhausted",
+  "kind": "comprehensive",
+  "result": {
+    "terminalStatus": "BUDGET_EXHAUSTED",
+    "factConflictCount": 0,
+    "failedSectionTypes": [
+      "VALUATION"
+    ]
+  },
+  "sendEvents": [
+    {
+      "type": "section_start",
+      "data": {
+        "sectionType": "FUNDAMENTAL",
+        "sectionId": "sec-fund",
+        "order": 0
+      }
+    },
+    {
+      "type": "report_complete",
+      "data": {
+        "sectionType": "FUNDAMENTAL"
+      }
+    },
+    {
+      "type": "structured_data",
+      "data": {
+        "json": {
+          "schemaVersion": "agent-result-v1",
+          "conclusion": {
+            "signal": "BULLISH",
+            "confidence": "HIGH",
+            "oneLiner": "fixture conclusion",
+            "evidence": []
+          },
+          "evidence": [],
+          "dataAvailability": {
+            "missingFields": [],
+            "reason": "ok"
+          },
+          "dataAsOf": "2026-05-21",
+          "disclaimer": "fixture disclaimer"
+        },
+        "sectionType": "FUNDAMENTAL"
+      }
+    },
+    {
+      "type": "section_complete",
+      "data": {
+        "sectionType": "FUNDAMENTAL",
+        "status": "COMPLETED"
+      }
+    },
+    {
+      "type": "done",
+      "data": {
+        "analysisId": "a-test",
+        "status": "BUDGET_EXHAUSTED"
+      }
+    }
+  ],
+  "prismaWrites": [
+    {
+      "table": "analysisSection",
+      "method": "updateMany",
+      "whereKeys": [
+        "id"
+      ],
+      "dataKeys": [
+        "status"
+      ],
+      "dataStatus": "IN_PROGRESS"
+    },
+    {
+      "table": "analysisSection",
+      "method": "update",
+      "whereKeys": [
+        "id"
+      ],
+      "dataKeys": [
+        "citations",
+        "reportMarkdown",
+        "status",
+        "structuredJson"
+      ],
+      "dataStatus": "COMPLETED"
+    },
+    {
+      "table": "analysis",
+      "method": "update",
+      "whereKeys": [
+        "id"
+      ],
+      "dataKeys": [
+        "aiModel",
+        "generatedAt",
+        "status"
+      ],
+      "dataStatus": "BUDGET_EXHAUSTED"
+    },
+    {
+      "table": "analysisSection",
+      "method": "updateMany",
+      "whereKeys": [
+        "analysisId",
+        "status",
+        "type"
+      ],
+      "dataKeys": [
+        "errorMessage",
+        "status"
+      ],
+      "dataStatus": "FAILED"
+    }
+  ]
+}

@@ -1,0 +1,118 @@
+{
+  "meta": {
+    "id": "SYN_AAPL_20250525",
+    "symbol": "AAPL",
+    "market": "US",
+    "vendoredAt": "2025-05-25T00:00:00.000Z",
+    "description": "Synthetic AAPL-shaped fixture (no live network) for offline judge regression",
+    "category": "synthetic"
+  },
+  "rawFacts": {
+    "quote": {
+      "instrument": { "instrumentId": "US:AAPL", "market": "US", "symbol": "AAPL" },
+      "price": 200,
+      "currency": "USD",
+      "timestamp": "2025-05-25T15:00:00.000Z",
+      "marketCap": 600000000000,
+      "peRatio": 28.5
+    },
+    "history": null,
+    "profile": null,
+    "financials": {
+      "periods": [
+        {
+          "fiscalPeriod": "TTM",
+          "kind": "TTM",
+          "fiscalYearEnd": "2025-03-31",
+          "filed": "2025-04-30",
+          "income": {
+            "revenue": { "value": 100000000000, "unit": "USD" },
+            "grossProfit": { "value": 45000000000, "unit": "USD" },
+            "operatingIncome": { "value": 25000000000, "unit": "USD" },
+            "netIncome": { "value": 20000000000, "unit": "USD" }
+          },
+          "balance": {
+            "totalAssets": { "value": 350000000000, "unit": "USD" },
+            "totalLiabilities": { "value": 280000000000, "unit": "USD" },
+            "totalStockholdersEquity": { "value": 70000000000, "unit": "USD" }
+          },
+          "cashFlow": {
+            "operatingCashFlow": { "value": 22000000000, "unit": "USD" },
+            "freeCashFlow": { "value": 18000000000, "unit": "USD" }
+          }
+        },
+        {
+          "fiscalPeriod": "FY2024",
+          "kind": "FY",
+          "fiscalYearEnd": "2024-09-30",
+          "filed": "2024-10-30",
+          "income": {
+            "revenue": { "value": 90000000000, "unit": "USD" },
+            "netIncome": { "value": 17000000000, "unit": "USD" }
+          },
+          "balance": {
+            "totalAssets": { "value": 340000000000, "unit": "USD" },
+            "totalLiabilities": { "value": 270000000000, "unit": "USD" },
+            "totalStockholdersEquity": { "value": 70000000000, "unit": "USD" }
+          },
+          "cashFlow": {
+            "operatingCashFlow": { "value": 21000000000, "unit": "USD" }
+          }
+        },
+        {
+          "fiscalPeriod": "FY2023",
+          "kind": "FY",
+          "fiscalYearEnd": "2023-09-30",
+          "filed": "2023-10-30",
+          "income": {
+            "revenue": { "value": 85000000000, "unit": "USD" },
+            "netIncome": { "value": 15000000000, "unit": "USD" }
+          },
+          "balance": {
+            "totalAssets": { "value": 330000000000, "unit": "USD" },
+            "totalLiabilities": { "value": 260000000000, "unit": "USD" },
+            "totalStockholdersEquity": { "value": 70000000000, "unit": "USD" }
+          },
+          "cashFlow": {
+            "operatingCashFlow": { "value": 19000000000, "unit": "USD" }
+          }
+        }
+      ],
+      "currency": "USD",
+      "sourceUrl": "https://www.sec.gov/cgi-bin/browse-edgar?CIK=AAPL",
+      "retrievedAt": "2025-05-25T00:00:00.000Z",
+      "provider": "sec-edgar-xbrl",
+      "qualityTier": "A"
+    },
+    "filings": null,
+    "consensusEps": null,
+    "northboundFlow": null,
+    "lhb": null,
+    "unlockCalendar": null,
+    "shareholders": null,
+    "webSearch": null,
+    "macro": null
+  },
+  "citations": [
+    {
+      "factKey": "quote",
+      "title": "Yahoo AAPL",
+      "url": "https://finance.yahoo.com/quote/AAPL",
+      "retrievedAt": "2025-05-25T15:00:00.000Z"
+    },
+    {
+      "factKey": "financials",
+      "title": "SEC AAPL",
+      "url": "https://www.sec.gov/cgi-bin/browse-edgar?CIK=AAPL",
+      "retrievedAt": "2025-05-25T15:00:00.000Z"
+    }
+  ],
+  "dataAvailability": {
+    "available": ["quote", "financials"],
+    "missing": [
+      { "field": "history", "reason": "no_data" },
+      { "field": "filings", "reason": "no_data" }
+    ],
+    "warnings": []
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "id": "US_MSFT_20260526",
+  "rawHash": "f831906e49e753d2",
+  "computedFacts": {
+    "ratios": {
+      "pe": null,
+      "pb": null,
+      "ps": null,
+      "grossMargin": 0.6761771998583133,
+      "netMargin": 0.33460165834447403,
+      "roe": 0.27291847240214856,
+      "fcfYield": null
+    },
+    "technicalIndicators": {
+      "sma20": 415.80363006591796,
+      "sma50": 399.61177307128906,
+      "sma200": 458.2742663574219,
+      "rsi14": 55.10511437724177,
+      "macdTrend": "bearish",
+      "trend": "sideways"
+    },
+    "redFlagsCount": 0,
+    "redFlagRules": [],
+    "valuation": null,
+    "availability": {
+      "available": [
+        "financials",
+        "history",
+        "quote"
+      ],
+      "missingCount": 9
+    }
+  }
+}

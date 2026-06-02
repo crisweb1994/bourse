@@ -1,0 +1,465 @@
+import type {
+  StockSearchResult,
+  WatchlistItemDto,
+} from '@bourse/shared-types';
+import { API_URL, csrfHeaders } from './utils';
+
+async function fetchApi<T>(
+  path: string,
+  options?: RequestInit,
+): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    credentials: 'include',
+    ...options,
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, body.message || res.statusText);
+  }
+
+  return res.json();
+}
+
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+// Stock APIs
+export async function searchStocks(query: string): Promise<StockSearchResult[]> {
+  if (!query || query.length < 1) return [];
+  return fetchApi(`/api/stocks/search?q=${encodeURIComponent(query)}`);
+}
+
+// plan-v2 §12.1 — merged stock detail. `stock` is null + `candidates`
+// populated when (symbol, market) hasn't been seen yet; otherwise quote
+// and profile are fetched in parallel server-side.
+export interface StockDtoBrief {
+  id: string;
+  symbol: string;
+  name: string;
+  market: string;
+  exchange: string;
+  currency: string;
+  yahooSymbol: string | null;
+  sector?: string | null;
+}
+
+export type StockQuoteDto =
+  | {
+      degraded: false;
+      price: number;
+      change: number;
+      changePct: number;
+      currency: string;
+      marketState: string;
+      asOf: string;
+    }
+  | { degraded: true; reason: string };
+
+export type StockProfileDto =
+  | {
+      degraded: false;
+      marketCap?: number;
+      sector?: string;
+      industry?: string;
+      nextEarningsDate?: string;
+    }
+  | { degraded: true; reason: string };
+
+export interface StockDetailResult {
+  stock: StockDtoBrief | null;
+  quote: StockQuoteDto | null;
+  profile: StockProfileDto | null;
+  candidates: StockSearchResult[];
+}
+
+export async function getStockDetail(
+  symbol: string,
+  market: string,
+): Promise<StockDetailResult> {
+  return fetchApi(
+    `/api/stocks/${encodeURIComponent(symbol)}?market=${encodeURIComponent(market)}`,
+  );
+}
+
+
+// Watchlist APIs
+export async function getWatchlist(): Promise<WatchlistItemDto[]> {
+  return fetchApi('/api/watchlist');
+}
+
+export async function addToWatchlist(
+  stock: StockSearchResult,
+  notes?: string,
+): Promise<WatchlistItemDto> {
+  return fetchApi('/api/watchlist', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...csrfHeaders(),
+    },
+    body: JSON.stringify({ ...stock, notes }),
+  });
+}
+
+export async function updateWatchlistItem(
+  id: string,
+  notes: string,
+): Promise<WatchlistItemDto> {
+  return fetchApi(`/api/watchlist/${id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...csrfHeaders(),
+    },
+    body: JSON.stringify({ notes }),
+  });
+}
+
+export async function removeFromWatchlist(id: string): Promise<{ ok: boolean }> {
+  return fetchApi(`/api/watchlist/${id}`, {
+    method: 'DELETE',
+    headers: csrfHeaders(),
+  });
+}
+
+// Analysis APIs
+export interface AnalysisDto {
+  id: string;
+  userId: string;
+  stockId: string;
+  symbol: string;
+  market: string;
+  analysisType: string;
+  status: string;
+  aiProvider: string | null;
+  aiModel: string | null;
+  promptVersion: string | null;
+  dataAsOf: string | null;
+  generatedAt: string | null;
+  overallSignal: string | null;
+  overallConfidence: string | null;
+  /** RFC rfc-evidence-pack-web-search-fallback. */
+  degradedSource?: 'WEB_SEARCH_FALLBACK' | null;
+  // plan-v2 Wave 2: snapshotIds + research (planner summary) dropped along
+  // with the planning pipeline and ResearchSnapshot persistence.
+  createdAt: string;
+  /** Free-form payload — used by DEBATE for { config, evidencePack,
+   * debateResult, judgeText, partialRounds } and by COMPREHENSIVE for
+   * the summary block. Frontend uses it via narrow type assertions. */
+  summaryJson?: unknown;
+  stock: {
+    id: string;
+    symbol: string;
+    name: string;
+    market: string;
+    exchange: string;
+    currency: string;
+    yahooSymbol: string | null;
+  };
+  sections: AnalysisSectionDto[];
+}
+
+export interface AnalysisSectionDto {
+  id: string;
+  type: string;
+  status: string;
+  reportMarkdown: string | null;
+  structuredJson: any;
+  citations: any[];
+  order: number;
+}
+
+export async function createAnalysis(
+  stockId: string,
+  analysisType: string,
+  aiProviderSettingId?: string,
+  aiModel?: string,
+): Promise<AnalysisDto> {
+  const body: Record<string, string> = { stockId, analysisType };
+  if (aiProviderSettingId) body.aiProviderSettingId = aiProviderSettingId;
+  if (aiModel) body.aiModel = aiModel;
+
+  return fetchApi('/api/analysis', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...csrfHeaders(),
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function getAnalysis(id: string): Promise<AnalysisDto> {
+  return fetchApi(`/api/analysis/${id}`);
+}
+
+/**
+ * RFC rfc-evidence-pack-web-search-fallback §3.1: persist the user's
+ * opt-in for v2-tool-failure → v1 web_search fallback. Returns the
+ * updated value so callers can confirm without re-fetching `/me`.
+ */
+// plan-v2 Wave 4.5 — WebSearchSetting CRUD client removed. Web search
+// provider now picked from server-side env (TAVILY_API_KEY etc); UI
+// has no override surface.
+
+export async function updateUserPreferences(patch: {
+  allowWebSearchFallback?: boolean;
+}): Promise<{ allowWebSearchFallback: boolean }> {
+  return fetchApi('/api/auth/preferences', {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...csrfHeaders(),
+    },
+    body: JSON.stringify(patch),
+  });
+}
+
+// plan-v2 Wave 3.1b — createDebate removed alongside the DEBATE workflow.
+
+export async function getAnalysisHistory(
+  page = 1,
+  limit = 20,
+  filters?: {
+    analysisType?: string;
+    status?: string;
+    symbol?: string;
+    stockId?: string;
+    /** RFC rfc-evidence-pack-web-search-fallback: 仅看 degraded 行。 */
+    degradedOnly?: boolean;
+  },
+): Promise<{ items: AnalysisDto[]; total: number; page: number; limit: number }> {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (filters?.analysisType) params.set('analysisType', filters.analysisType);
+  if (filters?.status) params.set('status', filters.status);
+  if (filters?.symbol) params.set('symbol', filters.symbol);
+  if (filters?.stockId) params.set('stockId', filters.stockId);
+  if (filters?.degradedOnly) params.set('degradedOnly', 'true');
+  return fetchApi(`/api/analysis/history?${params.toString()}`);
+}
+
+export async function deleteAnalysis(id: string): Promise<{ ok: boolean }> {
+  return fetchApi(`/api/analysis/${id}`, {
+    method: 'DELETE',
+    headers: csrfHeaders(),
+  });
+}
+
+export async function abortAnalysis(id: string): Promise<{ ok: boolean }> {
+  return fetchApi(`/api/analysis/${id}/abort`, {
+    method: 'POST',
+    headers: csrfHeaders(),
+  });
+}
+
+// plan-v2 Wave 4.2 — InvestorProfileDto + getInvestorProfile +
+// updateInvestorProfile removed. plan-v2 §15.1 "用户画像放 URL params +
+// localStorage, beta 无需持久化".
+
+export async function retrySection(
+  analysisId: string,
+  sectionId: string,
+): Promise<{ ok: boolean }> {
+  return fetchApi(`/api/analysis/${analysisId}/sections/${sectionId}/retry`, {
+    method: 'POST',
+    headers: csrfHeaders(),
+  });
+}
+
+// plan-v2 Wave 4.1 — BatchJobDto + createBatchAnalysis / getBatchAnalysis /
+// cancelBatchAnalysis removed alongside the BatchJob backend.
+
+// AI settings APIs — Phase 1: multi-config + builtin catalog
+export type ProviderTypeStr = 'ANTHROPIC' | 'OPENAI_COMPATIBLE';
+
+export interface AiProviderSettingDto {
+  id: string;
+  label: string;
+  providerType: ProviderTypeStr;
+  baseUrl: string;
+  apiKey: string | null;
+  enabledModels: string[];
+  primaryModel: string | null;
+  utilityModel: string | null;
+  supportsWebSearch: boolean;
+  supportsTools: boolean;
+  isDefault: boolean;
+  enabled: boolean;
+}
+
+export interface BuiltinProviderTemplate {
+  id: string;
+  label: string;
+  providerType: ProviderTypeStr;
+  baseUrl: string;
+  defaultModels: string[];
+  supportsWebSearch: boolean;
+  supportsTools: boolean;
+  iconColor: string;
+  iconText: string;
+}
+
+export interface AiModelOptionDto {
+  id: string;
+  name: string;
+}
+
+export interface TestConnectionResult {
+  ok: boolean;
+  latencyMs: number;
+  error?: string;
+}
+
+export interface AiProviderSettingInput {
+  label: string;
+  providerType: ProviderTypeStr;
+  baseUrl?: string;
+  apiKey?: string;
+  enabledModels?: string[];
+  primaryModel?: string;
+  utilityModel?: string;
+  supportsWebSearch?: boolean;
+  supportsTools?: boolean;
+  isDefault?: boolean;
+  enabled?: boolean;
+}
+
+export function listAiProviderSettings(): Promise<AiProviderSettingDto[]> {
+  return fetchApi('/api/settings/providers');
+}
+
+export function createAiProviderSetting(
+  data: AiProviderSettingInput,
+): Promise<AiProviderSettingDto> {
+  return fetchApi('/api/settings/providers', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateAiProviderSetting(
+  id: string,
+  data: Partial<AiProviderSettingInput>,
+): Promise<AiProviderSettingDto> {
+  return fetchApi(`/api/settings/providers/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteAiProviderSetting(id: string): Promise<{ ok: true }> {
+  return fetchApi(`/api/settings/providers/${id}`, {
+    method: 'DELETE',
+    headers: csrfHeaders(),
+  });
+}
+
+export function fetchProviderModels(input: {
+  providerType: ProviderTypeStr;
+  baseUrl: string;
+  apiKey?: string;
+}): Promise<AiModelOptionDto[]> {
+  return fetchApi('/api/settings/providers/models', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+    body: JSON.stringify(input),
+  });
+}
+
+export function testProviderConnection(input: {
+  providerType: ProviderTypeStr;
+  apiKey: string;
+  baseUrl?: string;
+  model: string;
+}): Promise<TestConnectionResult> {
+  return fetchApi('/api/settings/providers/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+    body: JSON.stringify(input),
+  });
+}
+
+// ============================================================================
+// Web Search Setting (plan-v2 §17.4.4)
+// ============================================================================
+
+export type WebSearchProviderType = 'TAVILY' | 'SEARXNG';
+export type WebSearchPrimaryMode = 'NATIVE_FIRST' | 'CUSTOM_ONLY';
+
+export interface WebSearchSettingDto {
+  providerType: WebSearchProviderType;
+  apiKeyMasked: string | null;
+  baseUrl: string | null;
+  primaryMode: WebSearchPrimaryMode;
+  timeoutMs: number | null;
+  budgetUsdPerRun: number | null;
+  cacheTtlMs: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertWebSearchSettingPayload {
+  providerType: WebSearchProviderType;
+  apiKey?: string;
+  baseUrl?: string;
+  primaryMode?: WebSearchPrimaryMode;
+  timeoutMs?: number;
+  budgetUsdPerRun?: number;
+  cacheTtlMs?: number;
+}
+
+export interface WebSearchTestResult {
+  ok: boolean;
+  latencyMs: number;
+  sample?: { title: string; url: string };
+  error?: string;
+}
+
+export function getWebSearchSetting(): Promise<WebSearchSettingDto | null> {
+  return fetchApi('/api/settings/web-search');
+}
+
+export function putWebSearchSetting(
+  payload: UpsertWebSearchSettingPayload,
+): Promise<WebSearchSettingDto> {
+  return fetchApi('/api/settings/web-search', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteWebSearchSetting(): Promise<void> {
+  // DELETE returns 204 No Content → can't go through fetchApi (which assumes
+  // JSON body), but still need explicit !res.ok handling so 401/403/500
+  // surface as ApiError instead of silently no-op'ing while the UI toasts
+  // "已删除" and clears local state.
+  const res = await fetch(`${API_URL}/api/settings/web-search`, {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: csrfHeaders(),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, body.message || res.statusText);
+  }
+}
+
+export function testWebSearchSetting(
+  payload: UpsertWebSearchSettingPayload,
+): Promise<WebSearchTestResult> {
+  return fetchApi('/api/settings/web-search/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+    body: JSON.stringify(payload),
+  });
+}

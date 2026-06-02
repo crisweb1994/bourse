@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
+  },
+  "include": ["src"],
+  "exclude": [
+    "src/**/__tests__/**",
+    "src/**/__testing__/**",
+    "src/**/*.test.ts",
+    "src/**/*.spec.ts",
+    "src/evals/vendor-fixture.ts"
+  ]
+}

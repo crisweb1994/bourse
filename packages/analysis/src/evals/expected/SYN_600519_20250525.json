@@ -1,0 +1,35 @@
+{
+  "id": "SYN_600519_20250525",
+  "rawHash": "170b3ea017e1f667",
+  "computedFacts": {
+    "ratios": {
+      "pe": 24.4983667755483,
+      "pb": 9.130434782608695,
+      "ps": 12.059262662225795,
+      "grossMargin": null,
+      "netMargin": 0.4922476168599977,
+      "roe": 0.37269565217391304,
+      "fcfYield": 0.030952380952380953
+    },
+    "technicalIndicators": null,
+    "redFlagsCount": 0,
+    "redFlagRules": [],
+    "valuation": {
+      "marketCap": 2100000000000,
+      "impliedGrowthRate": 0.13605928421020508,
+      "pe5yPercentile": null
+    },
+    "availability": {
+      "available": [
+        "consensusEps",
+        "financials",
+        "lhb",
+        "northboundFlow",
+        "quote",
+        "shareholders",
+        "unlockCalendar"
+      ],
+      "missingCount": 5
+    }
+  }
+}

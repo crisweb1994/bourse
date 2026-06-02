@@ -1,0 +1,3356 @@
+{
+  "meta": {
+    "id": "CN_600036_20260526",
+    "symbol": "600036",
+    "market": "CN",
+    "vendoredAt": "2026-05-26T01:11:07.470Z",
+    "description": "招商银行 bank live vendor",
+    "category": "mature_large_cap"
+  },
+  "rawFacts": {
+    "quote": {
+      "instrument": {
+        "instrumentId": "CN:600036",
+        "market": "CN",
+        "symbol": "600036",
+        "currency": "CNY",
+        "exchange": "SSE"
+      },
+      "price": 36.94,
+      "currency": "CNY",
+      "timestamp": "2026-05-26T01:11:05.990Z",
+      "marketCap": 9316.21,
+      "peRatio": 40.63
+    },
+    "history": [
+      {
+        "timestamp": "2025-05-26",
+        "open": 40.88,
+        "close": 40.79,
+        "high": 41.16,
+        "low": 40.62,
+        "volume": 456100
+      },
+      {
+        "timestamp": "2025-05-27",
+        "open": 40.79,
+        "close": 40.73,
+        "high": 41.14,
+        "low": 40.66,
+        "volume": 363750
+      },
+      {
+        "timestamp": "2025-05-28",
+        "open": 40.77,
+        "close": 40.67,
+        "high": 41.04,
+        "low": 40.59,
+        "volume": 300355
+      },
+      {
+        "timestamp": "2025-05-29",
+        "open": 40.69,
+        "close": 40.46,
+        "high": 40.94,
+        "low": 40.44,
+        "volume": 492990
+      },
+      {
+        "timestamp": "2025-05-30",
+        "open": 40.54,
+        "close": 40.42,
+        "high": 40.87,
+        "low": 40.34,
+        "volume": 571391
+      },
+      {
+        "timestamp": "2025-06-03",
+        "open": 40.49,
+        "close": 40.96,
+        "high": 41.42,
+        "low": 40.49,
+        "volume": 503685
+      },
+      {
+        "timestamp": "2025-06-04",
+        "open": 41.04,
+        "close": 41.05,
+        "high": 41.26,
+        "low": 40.89,
+        "volume": 373417
+      },
+      {
+        "timestamp": "2025-06-05",
+        "open": 41.05,
+        "close": 41.36,
+        "high": 41.41,
+        "low": 40.99,
+        "volume": 421317
+      },
+      {
+        "timestamp": "2025-06-06",
+        "open": 41.44,
+        "close": 41.46,
+        "high": 41.7,
+        "low": 41.29,
+        "volume": 373499
+      },
+      {
+        "timestamp": "2025-06-09",
+        "open": 41.59,
+        "close": 41.59,
+        "high": 41.67,
+        "low": 41.2,
+        "volume": 474774
+      },
+      {
+        "timestamp": "2025-06-10",
+        "open": 41.56,
+        "close": 41.66,
+        "high": 42.04,
+        "low": 41.44,
+        "volume": 528349
+      },
+      {
+        "timestamp": "2025-06-11",
+        "open": 41.71,
+        "close": 42.3,
+        "high": 42.67,
+        "low": 41.71,
+        "volume": 776761
+      },
+      {
+        "timestamp": "2025-06-12",
+        "open": 42.39,
+        "close": 42.22,
+        "high": 42.64,
+        "low": 42.09,
+        "volume": 452391
+      },
+      {
+        "timestamp": "2025-06-13",
+        "open": 42.23,
+        "close": 42.17,
+        "high": 42.34,
+        "low": 41.94,
+        "volume": 474081
+      },
+      {
+        "timestamp": "2025-06-16",
+        "open": 42.07,
+        "close": 42.77,
+        "high": 42.8,
+        "low": 41.94,
+        "volume": 414474
+      },
+      {
+        "timestamp": "2025-06-17",
+        "open": 42.87,
+        "close": 42.97,
+        "high": 43.04,
+        "low": 42.7,
+        "volume": 474209
+      },
+      {
+        "timestamp": "2025-06-18",
+        "open": 42.91,
+        "close": 42.84,
+        "high": 43.06,
+        "low": 42.64,
+        "volume": 426429
+      },
+      {
+        "timestamp": "2025-06-19",
+        "open": 42.83,
+        "close": 42.62,
+        "high": 43.05,
+        "low": 42.36,
+        "volume": 513454
+      },
+      {
+        "timestamp": "2025-06-20",
+        "open": 42.72,
+        "close": 42.98,
+        "high": 43.17,
+        "low": 42.54,
+        "volume": 448157
+      },
+      {
+        "timestamp": "2025-06-23",
+        "open": 42.89,
+        "close": 43.24,
+        "high": 43.33,
+        "low": 42.42,
+        "volume": 538931
+      },
+      {
+        "timestamp": "2025-06-24",
+        "open": 43.3,
+        "close": 43.74,
+        "high": 43.99,
+        "low": 43.17,
+        "volume": 655815
+      },
+      {
+        "timestamp": "2025-06-25",
+        "open": 43.74,
+        "close": 44.49,
+        "high": 44.49,
+        "low": 43.58,
+        "volume": 607680
+      },
+      {
+        "timestamp": "2025-06-26",
+        "open": 44.48,
+        "close": 44.87,
+        "high": 44.87,
+        "low": 44.04,
+        "volume": 590201
+      },
+      {
+        "timestamp": "2025-06-27",
+        "open": 44.84,
+        "close": 43.21,
+        "high": 44.86,
+        "low": 43.03,
+        "volume": 954143
+      },
+      {
+        "timestamp": "2025-06-30",
+        "open": 43.12,
+        "close": 42.94,
+        "high": 43.28,
+        "low": 42.76,
+        "volume": 624614
+      },
+      {
+        "timestamp": "2025-07-01",
+        "open": 42.95,
+        "close": 43.44,
+        "high": 43.66,
+        "low": 42.91,
+        "volume": 450613
+      },
+      {
+        "timestamp": "2025-07-02",
+        "open": 43.69,
+        "close": 43.89,
+        "high": 44.15,
+        "low": 43.44,
+        "volume": 518563
+      },
+      {
+        "timestamp": "2025-07-03",
+        "open": 43.89,
+        "close": 43.6,
+        "high": 43.94,
+        "low": 43.33,
+        "volume": 556226
+      },
+      {
+        "timestamp": "2025-07-04",
+        "open": 43.59,
+        "close": 44.06,
+        "high": 44.49,
+        "low": 43.39,
+        "volume": 678948
+      },
+      {
+        "timestamp": "2025-07-07",
+        "open": 44.06,
+        "close": 44.19,
+        "high": 44.29,
+        "low": 43.69,
+        "volume": 567427
+      },
+      {
+        "timestamp": "2025-07-08",
+        "open": 44.27,
+        "close": 44.61,
+        "high": 44.66,
+        "low": 44.09,
+        "volume": 637421
+      },
+      {
+        "timestamp": "2025-07-09",
+        "open": 44.49,
+        "close": 44.12,
+        "high": 44.76,
+        "low": 44.12,
+        "volume": 614566
+      },
+      {
+        "timestamp": "2025-07-10",
+        "open": 44.09,
+        "close": 45.23,
+        "high": 45.54,
+        "low": 44.09,
+        "volume": 1219784
+      },
+      {
+        "timestamp": "2025-07-11",
+        "open": 45.27,
+        "close": 44.63,
+        "high": 45.49,
+        "low": 44.61,
+        "volume": 1184443
+      },
+      {
+        "timestamp": "2025-07-14",
+        "open": 44.64,
+        "close": 44.56,
+        "high": 45.08,
+        "low": 44.43,
+        "volume": 648484
+      },
+      {
+        "timestamp": "2025-07-15",
+        "open": 44.76,
+        "close": 44.21,
+        "high": 44.91,
+        "low": 43.79,
+        "volume": 666206
+      },
+      {
+        "timestamp": "2025-07-16",
+        "open": 44.25,
+        "close": 44.1,
+        "high": 44.53,
+        "low": 43.87,
+        "volume": 468186
+      },
+      {
+        "timestamp": "2025-07-17",
+        "open": 44.09,
+        "close": 43.99,
+        "high": 44.32,
+        "low": 43.9,
+        "volume": 416895
+      },
+      {
+        "timestamp": "2025-07-18",
+        "open": 44.04,
+        "close": 44.04,
+        "high": 44.15,
+        "low": 43.73,
+        "volume": 543431
+      },
+      {
+        "timestamp": "2025-07-21",
+        "open": 44.04,
+        "close": 43.84,
+        "high": 44.22,
+        "low": 43.82,
+        "volume": 566412
+      },
+      {
+        "timestamp": "2025-07-22",
+        "open": 43.84,
+        "close": 43.93,
+        "high": 43.97,
+        "low": 43.2,
+        "volume": 922319
+      },
+      {
+        "timestamp": "2025-07-23",
+        "open": 43.96,
+        "close": 44.11,
+        "high": 44.69,
+        "low": 43.95,
+        "volume": 853249
+      },
+      {
+        "timestamp": "2025-07-24",
+        "open": 44.2,
+        "close": 43.87,
+        "high": 44.35,
+        "low": 43.79,
+        "volume": 826620
+      },
+      {
+        "timestamp": "2025-07-25",
+        "open": 43.83,
+        "close": 43.82,
+        "high": 44.16,
+        "low": 43.74,
+        "volume": 696264
+      },
+      {
+        "timestamp": "2025-07-28",
+        "open": 43.79,
+        "close": 43.43,
+        "high": 44.15,
+        "low": 43.4,
+        "volume": 635127
+      },
+      {
+        "timestamp": "2025-07-29",
+        "open": 43.43,
+        "close": 43.13,
+        "high": 43.79,
+        "low": 43.13,
+        "volume": 785813
+      },
+      {
+        "timestamp": "2025-07-30",
+        "open": 43.16,
+        "close": 43.41,
+        "high": 43.74,
+        "low": 42.92,
+        "volume": 725461
+      },
+      {
+        "timestamp": "2025-07-31",
+        "open": 43.39,
+        "close": 43.47,
+        "high": 43.55,
+        "low": 42.84,
+        "volume": 733195
+      },
+      {
+        "timestamp": "2025-08-01",
+        "open": 43.49,
+        "close": 43.41,
+        "high": 43.96,
+        "low": 43.34,
+        "volume": 594621
+      },
+      {
+        "timestamp": "2025-08-04",
+        "open": 43.3,
+        "close": 43.89,
+        "high": 43.96,
+        "low": 43.3,
+        "volume": 498008
+      },
+      {
+        "timestamp": "2025-08-05",
+        "open": 43.77,
+        "close": 44.24,
+        "high": 44.39,
+        "low": 43.63,
+        "volume": 555258
+      },
+      {
+        "timestamp": "2025-08-06",
+        "open": 44.28,
+        "close": 44.11,
+        "high": 44.72,
+        "low": 44.1,
+        "volume": 430296
+      },
+      {
+        "timestamp": "2025-08-07",
+        "open": 44.11,
+        "close": 44.14,
+        "high": 44.59,
+        "low": 43.95,
+        "volume": 440643
+      },
+      {
+        "timestamp": "2025-08-08",
+        "open": 44.19,
+        "close": 43.52,
+        "high": 44.27,
+        "low": 43.52,
+        "volume": 456422
+      },
+      {
+        "timestamp": "2025-08-11",
+        "open": 43.52,
+        "close": 43.09,
+        "high": 43.62,
+        "low": 43.09,
+        "volume": 536724
+      },
+      {
+        "timestamp": "2025-08-12",
+        "open": 43.12,
+        "close": 42.99,
+        "high": 43.47,
+        "low": 42.99,
+        "volume": 562252
+      },
+      {
+        "timestamp": "2025-08-13",
+        "open": 43.13,
+        "close": 42.53,
+        "high": 43.24,
+        "low": 42.48,
+        "volume": 876737
+      },
+      {
+        "timestamp": "2025-08-14",
+        "open": 42.54,
+        "close": 42.77,
+        "high": 42.93,
+        "low": 42.49,
+        "volume": 676352
+      },
+      {
+        "timestamp": "2025-08-15",
+        "open": 42.65,
+        "close": 42.29,
+        "high": 42.73,
+        "low": 42.29,
+        "volume": 932957
+      },
+      {
+        "timestamp": "2025-08-18",
+        "open": 42.09,
+        "close": 42.5,
+        "high": 42.66,
+        "low": 41.88,
+        "volume": 926397
+      },
+      {
+        "timestamp": "2025-08-19",
+        "open": 42.44,
+        "close": 42.39,
+        "high": 42.69,
+        "low": 42.28,
+        "volume": 574119
+      },
+      {
+        "timestamp": "2025-08-20",
+        "open": 42.29,
+        "close": 42.44,
+        "high": 42.62,
+        "low": 42.14,
+        "volume": 547240
+      },
+      {
+        "timestamp": "2025-08-21",
+        "open": 42.49,
+        "close": 42.46,
+        "high": 42.58,
+        "low": 42.22,
+        "volume": 578540
+      },
+      {
+        "timestamp": "2025-08-22",
+        "open": 42.46,
+        "close": 42.25,
+        "high": 42.47,
+        "low": 42.03,
+        "volume": 794496
+      },
+      {
+        "timestamp": "2025-08-25",
+        "open": 42.31,
+        "close": 42.86,
+        "high": 42.86,
+        "low": 42.1,
+        "volume": 907390
+      },
+      {
+        "timestamp": "2025-08-26",
+        "open": 42.88,
+        "close": 42.51,
+        "high": 43.01,
+        "low": 42.41,
+        "volume": 755722
+      },
+      {
+        "timestamp": "2025-08-27",
+        "open": 42.49,
+        "close": 41.99,
+        "high": 42.65,
+        "low": 41.99,
+        "volume": 758141
+      },
+      {
+        "timestamp": "2025-08-28",
+        "open": 42.01,
+        "close": 41.97,
+        "high": 42.29,
+        "low": 41.59,
+        "volume": 822426
+      },
+      {
+        "timestamp": "2025-08-29",
+        "open": 41.97,
+        "close": 41.88,
+        "high": 42.98,
+        "low": 41.88,
+        "volume": 1360879
+      },
+      {
+        "timestamp": "2025-09-01",
+        "open": 41.61,
+        "close": 40.97,
+        "high": 41.63,
+        "low": 40.87,
+        "volume": 1276333
+      },
+      {
+        "timestamp": "2025-09-02",
+        "open": 40.85,
+        "close": 42.43,
+        "high": 42.49,
+        "low": 40.85,
+        "volume": 1452141
+      },
+      {
+        "timestamp": "2025-09-03",
+        "open": 42.43,
+        "close": 41.89,
+        "high": 42.56,
+        "low": 41.69,
+        "volume": 818406
+      },
+      {
+        "timestamp": "2025-09-04",
+        "open": 41.8,
+        "close": 42.04,
+        "high": 42.31,
+        "low": 41.13,
+        "volume": 935363
+      },
+      {
+        "timestamp": "2025-09-05",
+        "open": 41.99,
+        "close": 41.75,
+        "high": 42.01,
+        "low": 41.52,
+        "volume": 572328
+      },
+      {
+        "timestamp": "2025-09-08",
+        "open": 41.69,
+        "close": 41.42,
+        "high": 42.09,
+        "low": 41.36,
+        "volume": 851682
+      },
+      {
+        "timestamp": "2025-09-09",
+        "open": 41.41,
+        "close": 41.82,
+        "high": 41.87,
+        "low": 41.39,
+        "volume": 589527
+      },
+      {
+        "timestamp": "2025-09-10",
+        "open": 41.79,
+        "close": 41.99,
+        "high": 42.14,
+        "low": 41.55,
+        "volume": 471387
+      },
+      {
+        "timestamp": "2025-09-11",
+        "open": 42.12,
+        "close": 42.29,
+        "high": 42.32,
+        "low": 41.77,
+        "volume": 650731
+      },
+      {
+        "timestamp": "2025-09-12",
+        "open": 42.37,
+        "close": 41.53,
+        "high": 42.46,
+        "low": 41.41,
+        "volume": 823140
+      },
+      {
+        "timestamp": "2025-09-15",
+        "open": 41.47,
+        "close": 41.21,
+        "high": 41.78,
+        "low": 41.1,
+        "volume": 699491
+      },
+      {
+        "timestamp": "2025-09-16",
+        "open": 41.31,
+        "close": 40.74,
+        "high": 41.42,
+        "low": 40.65,
+        "volume": 859051
+      },
+      {
+        "timestamp": "2025-09-17",
+        "open": 40.75,
+        "close": 40.75,
+        "high": 41.18,
+        "low": 40.69,
+        "volume": 572363
+      },
+      {
+        "timestamp": "2025-09-18",
+        "open": 40.77,
+        "close": 39.82,
+        "high": 40.83,
+        "low": 39.79,
+        "volume": 1003522
+      },
+      {
+        "timestamp": "2025-09-19",
+        "open": 39.79,
+        "close": 39.99,
+        "high": 40.52,
+        "low": 39.54,
+        "volume": 836563
+      },
+      {
+        "timestamp": "2025-09-22",
+        "open": 40.14,
+        "close": 39.91,
+        "high": 40.36,
+        "low": 39.79,
+        "volume": 656110
+      },
+      {
+        "timestamp": "2025-09-23",
+        "open": 39.97,
+        "close": 40.54,
+        "high": 40.74,
+        "low": 39.62,
+        "volume": 938851
+      },
+      {
+        "timestamp": "2025-09-24",
+        "open": 40.49,
+        "close": 40.31,
+        "high": 40.88,
+        "low": 40.28,
+        "volume": 643900
+      },
+      {
+        "timestamp": "2025-09-25",
+        "open": 40.31,
+        "close": 39.81,
+        "high": 40.35,
+        "low": 39.8,
+        "volume": 666949
+      },
+      {
+        "timestamp": "2025-09-26",
+        "open": 39.8,
+        "close": 39.79,
+        "high": 39.99,
+        "low": 39.29,
+        "volume": 682767
+      },
+      {
+        "timestamp": "2025-09-29",
+        "open": 39.76,
+        "close": 39.67,
+        "high": 40.28,
+        "low": 39.35,
+        "volume": 835551
+      },
+      {
+        "timestamp": "2025-09-30",
+        "open": 39.64,
+        "close": 39.4,
+        "high": 39.78,
+        "low": 39.4,
+        "volume": 700025
+      },
+      {
+        "timestamp": "2025-10-09",
+        "open": 39.2,
+        "close": 39.32,
+        "high": 39.43,
+        "low": 38.81,
+        "volume": 972320
+      },
+      {
+        "timestamp": "2025-10-10",
+        "open": 39.29,
+        "close": 39.17,
+        "high": 39.64,
+        "low": 39.12,
+        "volume": 955050
+      },
+      {
+        "timestamp": "2025-10-13",
+        "open": 38.75,
+        "close": 39.1,
+        "high": 39.29,
+        "low": 38.69,
+        "volume": 1065936
+      },
+      {
+        "timestamp": "2025-10-14",
+        "open": 39.08,
+        "close": 40.25,
+        "high": 40.48,
+        "low": 38.82,
+        "volume": 1733827
+      },
+      {
+        "timestamp": "2025-10-15",
+        "open": 40.24,
+        "close": 40.49,
+        "high": 40.56,
+        "low": 40,
+        "volume": 1062767
+      },
+      {
+        "timestamp": "2025-10-16",
+        "open": 40.49,
+        "close": 40.92,
+        "high": 40.98,
+        "low": 40.12,
+        "volume": 1062488
+      },
+      {
+        "timestamp": "2025-10-17",
+        "open": 40.87,
+        "close": 40.58,
+        "high": 41.21,
+        "low": 40.37,
+        "volume": 829827
+      },
+      {
+        "timestamp": "2025-10-20",
+        "open": 40.6,
+        "close": 40.41,
+        "high": 40.78,
+        "low": 40.09,
+        "volume": 649477
+      },
+      {
+        "timestamp": "2025-10-21",
+        "open": 40.48,
+        "close": 40.97,
+        "high": 41.09,
+        "low": 40.48,
+        "volume": 759931
+      },
+      {
+        "timestamp": "2025-10-22",
+        "open": 40.97,
+        "close": 40.94,
+        "high": 41.19,
+        "low": 40.72,
+        "volume": 551334
+      },
+      {
+        "timestamp": "2025-10-23",
+        "open": 40.94,
+        "close": 41.23,
+        "high": 41.48,
+        "low": 40.77,
+        "volume": 713174
+      },
+      {
+        "timestamp": "2025-10-24",
+        "open": 41.34,
+        "close": 40.94,
+        "high": 41.44,
+        "low": 40.84,
+        "volume": 698832
+      },
+      {
+        "timestamp": "2025-10-27",
+        "open": 40.89,
+        "close": 40.58,
+        "high": 40.96,
+        "low": 40.41,
+        "volume": 988949
+      },
+      {
+        "timestamp": "2025-10-28",
+        "open": 40.61,
+        "close": 40.59,
+        "high": 40.71,
+        "low": 40.22,
+        "volume": 705951
+      },
+      {
+        "timestamp": "2025-10-29",
+        "open": 40.52,
+        "close": 39.76,
+        "high": 40.52,
+        "low": 39.68,
+        "volume": 910988
+      },
+      {
+        "timestamp": "2025-10-30",
+        "open": 39.79,
+        "close": 40.19,
+        "high": 40.35,
+        "low": 39.72,
+        "volume": 1131538
+      },
+      {
+        "timestamp": "2025-10-31",
+        "open": 40.25,
+        "close": 39.88,
+        "high": 40.29,
+        "low": 39.83,
+        "volume": 702607
+      },
+      {
+        "timestamp": "2025-11-03",
+        "open": 40.13,
+        "close": 40.78,
+        "high": 40.96,
+        "low": 40.05,
+        "volume": 921981
+      },
+      {
+        "timestamp": "2025-11-04",
+        "open": 40.83,
+        "close": 42,
+        "high": 42.1,
+        "low": 40.8,
+        "volume": 1340036
+      },
+      {
+        "timestamp": "2025-11-05",
+        "open": 42.09,
+        "close": 41.79,
+        "high": 42.46,
+        "low": 41.74,
+        "volume": 731714
+      },
+      {
+        "timestamp": "2025-11-06",
+        "open": 41.64,
+        "close": 41.33,
+        "high": 41.88,
+        "low": 41.3,
+        "volume": 871973
+      },
+      {
+        "timestamp": "2025-11-07",
+        "open": 41.39,
+        "close": 41.5,
+        "high": 41.71,
+        "low": 41.27,
+        "volume": 593191
+      },
+      {
+        "timestamp": "2025-11-10",
+        "open": 41.44,
+        "close": 41.71,
+        "high": 41.87,
+        "low": 41.27,
+        "volume": 532369
+      },
+      {
+        "timestamp": "2025-11-11",
+        "open": 41.68,
+        "close": 41.95,
+        "high": 42.03,
+        "low": 41.51,
+        "volume": 544671
+      },
+      {
+        "timestamp": "2025-11-12",
+        "open": 42.11,
+        "close": 41.92,
+        "high": 42.35,
+        "low": 41.92,
+        "volume": 587929
+      },
+      {
+        "timestamp": "2025-11-13",
+        "open": 41.96,
+        "close": 42.2,
+        "high": 42.29,
+        "low": 41.73,
+        "volume": 587980
+      },
+      {
+        "timestamp": "2025-11-14",
+        "open": 42.23,
+        "close": 42.24,
+        "high": 42.58,
+        "low": 42.17,
+        "volume": 518210
+      },
+      {
+        "timestamp": "2025-11-17",
+        "open": 42.09,
+        "close": 41.64,
+        "high": 42.19,
+        "low": 41.49,
+        "volume": 610674
+      },
+      {
+        "timestamp": "2025-11-18",
+        "open": 41.55,
+        "close": 41.87,
+        "high": 41.9,
+        "low": 41.43,
+        "volume": 517439
+      },
+      {
+        "timestamp": "2025-11-19",
+        "open": 41.87,
+        "close": 42.21,
+        "high": 42.49,
+        "low": 41.79,
+        "volume": 511696
+      },
+      {
+        "timestamp": "2025-11-20",
+        "open": 42.21,
+        "close": 42.22,
+        "high": 42.78,
+        "low": 42.04,
+        "volume": 585852
+      },
+      {
+        "timestamp": "2025-11-21",
+        "open": 42.23,
+        "close": 41.99,
+        "high": 42.54,
+        "low": 41.75,
+        "volume": 791264
+      },
+      {
+        "timestamp": "2025-11-24",
+        "open": 42.09,
+        "close": 41.62,
+        "high": 42.2,
+        "low": 41.5,
+        "volume": 678549
+      },
+      {
+        "timestamp": "2025-11-25",
+        "open": 41.65,
+        "close": 42.24,
+        "high": 42.29,
+        "low": 41.43,
+        "volume": 666409
+      },
+      {
+        "timestamp": "2025-11-26",
+        "open": 42.33,
+        "close": 42.24,
+        "high": 42.62,
+        "low": 41.96,
+        "volume": 451072
+      },
+      {
+        "timestamp": "2025-11-27",
+        "open": 42.17,
+        "close": 42.18,
+        "high": 42.38,
+        "low": 41.59,
+        "volume": 621434
+      },
+      {
+        "timestamp": "2025-11-28",
+        "open": 42.09,
+        "close": 41.94,
+        "high": 42.11,
+        "low": 41.81,
+        "volume": 494658
+      },
+      {
+        "timestamp": "2025-12-01",
+        "open": 42.07,
+        "close": 42.43,
+        "high": 42.46,
+        "low": 41.92,
+        "volume": 567919
+      },
+      {
+        "timestamp": "2025-12-02",
+        "open": 42.43,
+        "close": 42.37,
+        "high": 42.64,
+        "low": 42.21,
+        "volume": 406735
+      },
+      {
+        "timestamp": "2025-12-03",
+        "open": 42.26,
+        "close": 42,
+        "high": 42.57,
+        "low": 41.99,
+        "volume": 468960
+      },
+      {
+        "timestamp": "2025-12-04",
+        "open": 42.04,
+        "close": 42.21,
+        "high": 42.41,
+        "low": 42,
+        "volume": 361207
+      },
+      {
+        "timestamp": "2025-12-05",
+        "open": 42.24,
+        "close": 42.44,
+        "high": 42.54,
+        "low": 41.9,
+        "volume": 548906
+      },
+      {
+        "timestamp": "2025-12-08",
+        "open": 42.43,
+        "close": 42.17,
+        "high": 42.63,
+        "low": 42.06,
+        "volume": 580039
+      },
+      {
+        "timestamp": "2025-12-09",
+        "open": 42.17,
+        "close": 42.03,
+        "high": 42.29,
+        "low": 41.82,
+        "volume": 465939
+      },
+      {
+        "timestamp": "2025-12-10",
+        "open": 42.07,
+        "close": 40.69,
+        "high": 42.07,
+        "low": 40.54,
+        "volume": 1083157
+      },
+      {
+        "timestamp": "2025-12-11",
+        "open": 40.85,
+        "close": 40.67,
+        "high": 41.04,
+        "low": 40.4,
+        "volume": 846231
+      },
+      {
+        "timestamp": "2025-12-12",
+        "open": 40.74,
+        "close": 40.73,
+        "high": 40.82,
+        "low": 40.47,
+        "volume": 717625
+      },
+      {
+        "timestamp": "2025-12-15",
+        "open": 40.73,
+        "close": 40.79,
+        "high": 41.27,
+        "low": 40.62,
+        "volume": 562666
+      },
+      {
+        "timestamp": "2025-12-16",
+        "open": 40.77,
+        "close": 40.69,
+        "high": 41.12,
+        "low": 40.42,
+        "volume": 566176
+      },
+      {
+        "timestamp": "2025-12-17",
+        "open": 40.59,
+        "close": 40.51,
+        "high": 40.84,
+        "low": 40.22,
+        "volume": 631267
+      },
+      {
+        "timestamp": "2025-12-18",
+        "open": 40.53,
+        "close": 41.36,
+        "high": 41.41,
+        "low": 40.39,
+        "volume": 768119
+      },
+      {
+        "timestamp": "2025-12-19",
+        "open": 41.36,
+        "close": 40.98,
+        "high": 41.47,
+        "low": 40.9,
+        "volume": 573823
+      },
+      {
+        "timestamp": "2025-12-22",
+        "open": 41.07,
+        "close": 40.76,
+        "high": 41.12,
+        "low": 40.7,
+        "volume": 524740
+      },
+      {
+        "timestamp": "2025-12-23",
+        "open": 40.73,
+        "close": 40.9,
+        "high": 41.03,
+        "low": 40.65,
+        "volume": 606510
+      },
+      {
+        "timestamp": "2025-12-24",
+        "open": 40.92,
+        "close": 40.82,
+        "high": 40.98,
+        "low": 40.54,
+        "volume": 536305
+      },
+      {
+        "timestamp": "2025-12-25",
+        "open": 40.92,
+        "close": 40.77,
+        "high": 41.07,
+        "low": 40.69,
+        "volume": 499214
+      },
+      {
+        "timestamp": "2025-12-26",
+        "open": 40.78,
+        "close": 40.69,
+        "high": 40.87,
+        "low": 40.61,
+        "volume": 508810
+      },
+      {
+        "timestamp": "2025-12-29",
+        "open": 40.65,
+        "close": 40.86,
+        "high": 40.92,
+        "low": 40.41,
+        "volume": 682551
+      },
+      {
+        "timestamp": "2025-12-30",
+        "open": 40.89,
+        "close": 41.27,
+        "high": 41.47,
+        "low": 40.77,
+        "volume": 834783
+      },
+      {
+        "timestamp": "2025-12-31",
+        "open": 41.23,
+        "close": 41.09,
+        "high": 41.32,
+        "low": 40.91,
+        "volume": 554142
+      },
+      {
+        "timestamp": "2026-01-05",
+        "open": 41.47,
+        "close": 41.34,
+        "high": 41.79,
+        "low": 41.26,
+        "volume": 840830
+      },
+      {
+        "timestamp": "2026-01-06",
+        "open": 41.44,
+        "close": 41.72,
+        "high": 41.78,
+        "low": 41.08,
+        "volume": 923715
+      },
+      {
+        "timestamp": "2026-01-07",
+        "open": 41.74,
+        "close": 41.14,
+        "high": 42.01,
+        "low": 41.13,
+        "volume": 880560
+      },
+      {
+        "timestamp": "2026-01-08",
+        "open": 41.19,
+        "close": 40.57,
+        "high": 41.24,
+        "low": 40.29,
+        "volume": 1115727
+      },
+      {
+        "timestamp": "2026-01-09",
+        "open": 40.53,
+        "close": 40.29,
+        "high": 40.75,
+        "low": 40.11,
+        "volume": 985471
+      },
+      {
+        "timestamp": "2026-01-12",
+        "open": 40.29,
+        "close": 40.11,
+        "high": 40.42,
+        "low": 39.99,
+        "volume": 1186641
+      },
+      {
+        "timestamp": "2026-01-13",
+        "open": 40.19,
+        "close": 40.12,
+        "high": 40.37,
+        "low": 40.02,
+        "volume": 1159365
+      },
+      {
+        "timestamp": "2026-01-14",
+        "open": 40.12,
+        "close": 39.06,
+        "high": 40.16,
+        "low": 39.05,
+        "volume": 1917744
+      },
+      {
+        "timestamp": "2026-01-15",
+        "open": 39.1,
+        "close": 39.1,
+        "high": 39.41,
+        "low": 38.99,
+        "volume": 1217271
+      },
+      {
+        "timestamp": "2026-01-16",
+        "open": 39.49,
+        "close": 38.72,
+        "high": 39.5,
+        "low": 38.65,
+        "volume": 1525245
+      },
+      {
+        "timestamp": "2026-01-19",
+        "open": 38.73,
+        "close": 38.55,
+        "high": 38.92,
+        "low": 38.5,
+        "volume": 988703
+      },
+      {
+        "timestamp": "2026-01-20",
+        "open": 38.57,
+        "close": 38.73,
+        "high": 39.13,
+        "low": 38.51,
+        "volume": 1113873
+      },
+      {
+        "timestamp": "2026-01-21",
+        "open": 38.92,
+        "close": 38.24,
+        "high": 38.94,
+        "low": 38.18,
+        "volume": 1215000
+      },
+      {
+        "timestamp": "2026-01-22",
+        "open": 38.27,
+        "close": 37.85,
+        "high": 38.58,
+        "low": 37.8,
+        "volume": 1877546
+      },
+      {
+        "timestamp": "2026-01-23",
+        "open": 37.85,
+        "close": 37.5,
+        "high": 38.17,
+        "low": 37.38,
+        "volume": 1892113
+      },
+      {
+        "timestamp": "2026-01-26",
+        "open": 37.5,
+        "close": 38.02,
+        "high": 38.3,
+        "low": 37.31,
+        "volume": 2166794
+      },
+      {
+        "timestamp": "2026-01-27",
+        "open": 38.06,
+        "close": 38.1,
+        "high": 38.51,
+        "low": 37.87,
+        "volume": 1572406
+      },
+      {
+        "timestamp": "2026-01-28",
+        "open": 38.12,
+        "close": 37.8,
+        "high": 38.44,
+        "low": 37.7,
+        "volume": 2041667
+      },
+      {
+        "timestamp": "2026-01-29",
+        "open": 37.88,
+        "close": 38.53,
+        "high": 38.65,
+        "low": 37.55,
+        "volume": 1999982
+      },
+      {
+        "timestamp": "2026-01-30",
+        "open": 38.53,
+        "close": 38.67,
+        "high": 39.17,
+        "low": 38.53,
+        "volume": 1660843
+      },
+      {
+        "timestamp": "2026-02-02",
+        "open": 38.88,
+        "close": 38.45,
+        "high": 39.3,
+        "low": 38.41,
+        "volume": 1384979
+      },
+      {
+        "timestamp": "2026-02-03",
+        "open": 38.67,
+        "close": 38.3,
+        "high": 38.67,
+        "low": 38.14,
+        "volume": 842792
+      },
+      {
+        "timestamp": "2026-02-04",
+        "open": 38.3,
+        "close": 39.01,
+        "high": 39.02,
+        "low": 38.26,
+        "volume": 1021316
+      },
+      {
+        "timestamp": "2026-02-05",
+        "open": 38.94,
+        "close": 39.71,
+        "high": 39.92,
+        "low": 38.91,
+        "volume": 1218895
+      },
+      {
+        "timestamp": "2026-02-06",
+        "open": 39.7,
+        "close": 39.6,
+        "high": 39.95,
+        "low": 39.31,
+        "volume": 802980
+      },
+      {
+        "timestamp": "2026-02-09",
+        "open": 39.6,
+        "close": 39.48,
+        "high": 39.74,
+        "low": 39.33,
+        "volume": 658949
+      },
+      {
+        "timestamp": "2026-02-10",
+        "open": 39.49,
+        "close": 39.34,
+        "high": 39.56,
+        "low": 39.31,
+        "volume": 495965
+      },
+      {
+        "timestamp": "2026-02-11",
+        "open": 39.36,
+        "close": 39.4,
+        "high": 39.45,
+        "low": 39.2,
+        "volume": 528817
+      },
+      {
+        "timestamp": "2026-02-12",
+        "open": 39.4,
+        "close": 38.99,
+        "high": 39.42,
+        "low": 38.73,
+        "volume": 777526
+      },
+      {
+        "timestamp": "2026-02-13",
+        "open": 38.95,
+        "close": 38.71,
+        "high": 39.09,
+        "low": 38.63,
+        "volume": 705370
+      },
+      {
+        "timestamp": "2026-02-24",
+        "open": 39.2,
+        "close": 38.94,
+        "high": 39.41,
+        "low": 38.82,
+        "volume": 754674
+      },
+      {
+        "timestamp": "2026-02-25",
+        "open": 38.9,
+        "close": 38.78,
+        "high": 39.15,
+        "low": 38.72,
+        "volume": 723971
+      },
+      {
+        "timestamp": "2026-02-26",
+        "open": 38.8,
+        "close": 38.7,
+        "high": 39.02,
+        "low": 38.5,
+        "volume": 593325
+      },
+      {
+        "timestamp": "2026-02-27",
+        "open": 38.75,
+        "close": 38.75,
+        "high": 38.95,
+        "low": 38.64,
+        "volume": 637035
+      },
+      {
+        "timestamp": "2026-03-02",
+        "open": 38.6,
+        "close": 38.67,
+        "high": 38.87,
+        "low": 38.42,
+        "volume": 685473
+      },
+      {
+        "timestamp": "2026-03-03",
+        "open": 38.66,
+        "close": 39.18,
+        "high": 39.55,
+        "low": 38.56,
+        "volume": 1384656
+      },
+      {
+        "timestamp": "2026-03-04",
+        "open": 39.01,
+        "close": 38.6,
+        "high": 39.03,
+        "low": 38.01,
+        "volume": 1151939
+      },
+      {
+        "timestamp": "2026-03-05",
+        "open": 38.66,
+        "close": 39.15,
+        "high": 39.24,
+        "low": 38.63,
+        "volume": 783370
+      },
+      {
+        "timestamp": "2026-03-06",
+        "open": 39.1,
+        "close": 39.2,
+        "high": 39.32,
+        "low": 38.95,
+        "volume": 465957
+      },
+      {
+        "timestamp": "2026-03-09",
+        "open": 38.9,
+        "close": 38.79,
+        "high": 39.18,
+        "low": 38.75,
+        "volume": 766775
+      },
+      {
+        "timestamp": "2026-03-10",
+        "open": 38.94,
+        "close": 39.22,
+        "high": 39.24,
+        "low": 38.8,
+        "volume": 613717
+      },
+      {
+        "timestamp": "2026-03-11",
+        "open": 39.3,
+        "close": 39.5,
+        "high": 39.5,
+        "low": 38.95,
+        "volume": 689407
+      },
+      {
+        "timestamp": "2026-03-12",
+        "open": 39.45,
+        "close": 39.5,
+        "high": 39.58,
+        "low": 39.33,
+        "volume": 527723
+      },
+      {
+        "timestamp": "2026-03-13",
+        "open": 39.46,
+        "close": 39.76,
+        "high": 40.05,
+        "low": 39.35,
+        "volume": 765277
+      },
+      {
+        "timestamp": "2026-03-16",
+        "open": 39.77,
+        "close": 39.91,
+        "high": 40.04,
+        "low": 39.64,
+        "volume": 610945
+      },
+      {
+        "timestamp": "2026-03-17",
+        "open": 39.89,
+        "close": 40.12,
+        "high": 40.36,
+        "low": 39.83,
+        "volume": 656229
+      },
+      {
+        "timestamp": "2026-03-18",
+        "open": 40.13,
+        "close": 39.92,
+        "high": 40.32,
+        "low": 39.79,
+        "volume": 705831
+      },
+      {
+        "timestamp": "2026-03-19",
+        "open": 39.88,
+        "close": 39.77,
+        "high": 40.04,
+        "low": 39.7,
+        "volume": 650247
+      },
+      {
+        "timestamp": "2026-03-20",
+        "open": 39.85,
+        "close": 39.75,
+        "high": 40.08,
+        "low": 39.66,
+        "volume": 615803
+      },
+      {
+        "timestamp": "2026-03-23",
+        "open": 39.58,
+        "close": 38.68,
+        "high": 39.7,
+        "low": 38.55,
+        "volume": 957738
+      },
+      {
+        "timestamp": "2026-03-24",
+        "open": 38.8,
+        "close": 39.25,
+        "high": 39.32,
+        "low": 38.73,
+        "volume": 616336
+      },
+      {
+        "timestamp": "2026-03-25",
+        "open": 39.33,
+        "close": 39.26,
+        "high": 39.4,
+        "low": 38.94,
+        "volume": 653817
+      },
+      {
+        "timestamp": "2026-03-26",
+        "open": 39.15,
+        "close": 39.56,
+        "high": 39.69,
+        "low": 39.14,
+        "volume": 616790
+      },
+      {
+        "timestamp": "2026-03-27",
+        "open": 39.5,
+        "close": 39.44,
+        "high": 39.7,
+        "low": 39.25,
+        "volume": 468007
+      },
+      {
+        "timestamp": "2026-03-30",
+        "open": 39.24,
+        "close": 39.48,
+        "high": 39.57,
+        "low": 39.13,
+        "volume": 646054
+      },
+      {
+        "timestamp": "2026-03-31",
+        "open": 39.54,
+        "close": 39.32,
+        "high": 39.73,
+        "low": 39.28,
+        "volume": 663097
+      },
+      {
+        "timestamp": "2026-04-01",
+        "open": 39.56,
+        "close": 39.82,
+        "high": 40.04,
+        "low": 39.42,
+        "volume": 881526
+      },
+      {
+        "timestamp": "2026-04-02",
+        "open": 39.86,
+        "close": 39.76,
+        "high": 39.92,
+        "low": 39.58,
+        "volume": 534630
+      },
+      {
+        "timestamp": "2026-04-03",
+        "open": 39.76,
+        "close": 39.4,
+        "high": 39.82,
+        "low": 39.36,
+        "volume": 464485
+      },
+      {
+        "timestamp": "2026-04-07",
+        "open": 39.39,
+        "close": 38.99,
+        "high": 39.6,
+        "low": 38.96,
+        "volume": 528367
+      },
+      {
+        "timestamp": "2026-04-08",
+        "open": 39.5,
+        "close": 39.62,
+        "high": 39.64,
+        "low": 39.19,
+        "volume": 669498
+      },
+      {
+        "timestamp": "2026-04-09",
+        "open": 39.48,
+        "close": 39.26,
+        "high": 39.52,
+        "low": 39.12,
+        "volume": 535854
+      },
+      {
+        "timestamp": "2026-04-10",
+        "open": 39.32,
+        "close": 39.21,
+        "high": 39.38,
+        "low": 39.13,
+        "volume": 543202
+      },
+      {
+        "timestamp": "2026-04-13",
+        "open": 39.13,
+        "close": 38.98,
+        "high": 39.16,
+        "low": 38.92,
+        "volume": 525145
+      },
+      {
+        "timestamp": "2026-04-14",
+        "open": 39,
+        "close": 39.13,
+        "high": 39.18,
+        "low": 38.95,
+        "volume": 503999
+      },
+      {
+        "timestamp": "2026-04-15",
+        "open": 39.25,
+        "close": 39.9,
+        "high": 39.92,
+        "low": 39.22,
+        "volume": 1052104
+      },
+      {
+        "timestamp": "2026-04-16",
+        "open": 39.9,
+        "close": 39.91,
+        "high": 40.15,
+        "low": 39.75,
+        "volume": 617258
+      },
+      {
+        "timestamp": "2026-04-17",
+        "open": 39.85,
+        "close": 39.52,
+        "high": 39.9,
+        "low": 39.5,
+        "volume": 587925
+      },
+      {
+        "timestamp": "2026-04-20",
+        "open": 39.5,
+        "close": 39.87,
+        "high": 39.9,
+        "low": 39.33,
+        "volume": 588776
+      },
+      {
+        "timestamp": "2026-04-21",
+        "open": 39.91,
+        "close": 39.87,
+        "high": 40.15,
+        "low": 39.86,
+        "volume": 545949
+      },
+      {
+        "timestamp": "2026-04-22",
+        "open": 39.87,
+        "close": 39.74,
+        "high": 40.03,
+        "low": 39.62,
+        "volume": 507595
+      },
+      {
+        "timestamp": "2026-04-23",
+        "open": 39.72,
+        "close": 39.81,
+        "high": 39.86,
+        "low": 39.52,
+        "volume": 569489
+      },
+      {
+        "timestamp": "2026-04-24",
+        "open": 39.74,
+        "close": 39.38,
+        "high": 39.8,
+        "low": 39.36,
+        "volume": 629414
+      },
+      {
+        "timestamp": "2026-04-27",
+        "open": 39.52,
+        "close": 39.38,
+        "high": 39.99,
+        "low": 39.32,
+        "volume": 926168
+      },
+      {
+        "timestamp": "2026-04-28",
+        "open": 39.38,
+        "close": 39.6,
+        "high": 39.63,
+        "low": 39.26,
+        "volume": 669305
+      },
+      {
+        "timestamp": "2026-04-29",
+        "open": 38.91,
+        "close": 38.5,
+        "high": 39.02,
+        "low": 38.34,
+        "volume": 2533117
+      },
+      {
+        "timestamp": "2026-04-30",
+        "open": 38.4,
+        "close": 38.27,
+        "high": 38.51,
+        "low": 38.12,
+        "volume": 1169574
+      },
+      {
+        "timestamp": "2026-05-06",
+        "open": 38.29,
+        "close": 38,
+        "high": 38.35,
+        "low": 37.82,
+        "volume": 1431771
+      },
+      {
+        "timestamp": "2026-05-07",
+        "open": 38.05,
+        "close": 37.95,
+        "high": 38.16,
+        "low": 37.94,
+        "volume": 790090
+      },
+      {
+        "timestamp": "2026-05-08",
+        "open": 38.03,
+        "close": 37.94,
+        "high": 38.18,
+        "low": 37.9,
+        "volume": 869539
+      },
+      {
+        "timestamp": "2026-05-11",
+        "open": 37.95,
+        "close": 37.97,
+        "high": 37.98,
+        "low": 37.7,
+        "volume": 925489
+      },
+      {
+        "timestamp": "2026-05-12",
+        "open": 37.98,
+        "close": 37.9,
+        "high": 38.14,
+        "low": 37.86,
+        "volume": 967299
+      },
+      {
+        "timestamp": "2026-05-13",
+        "open": 37.96,
+        "close": 37.88,
+        "high": 38.09,
+        "low": 37.85,
+        "volume": 718304
+      },
+      {
+        "timestamp": "2026-05-14",
+        "open": 37.81,
+        "close": 37.81,
+        "high": 38.02,
+        "low": 37.73,
+        "volume": 867868
+      },
+      {
+        "timestamp": "2026-05-15",
+        "open": 37.81,
+        "close": 37.65,
+        "high": 37.97,
+        "low": 37.61,
+        "volume": 821738
+      },
+      {
+        "timestamp": "2026-05-18",
+        "open": 37.65,
+        "close": 37.47,
+        "high": 37.66,
+        "low": 37.35,
+        "volume": 707684
+      },
+      {
+        "timestamp": "2026-05-19",
+        "open": 37.48,
+        "close": 37.37,
+        "high": 37.74,
+        "low": 37.34,
+        "volume": 719910
+      },
+      {
+        "timestamp": "2026-05-20",
+        "open": 37.37,
+        "close": 37.17,
+        "high": 37.44,
+        "low": 37.17,
+        "volume": 693184
+      },
+      {
+        "timestamp": "2026-05-21",
+        "open": 37.18,
+        "close": 37.15,
+        "high": 37.34,
+        "low": 37.11,
+        "volume": 725200
+      },
+      {
+        "timestamp": "2026-05-22",
+        "open": 37.1,
+        "close": 37.02,
+        "high": 37.33,
+        "low": 36.97,
+        "volume": 797617
+      },
+      {
+        "timestamp": "2026-05-25",
+        "open": 37.01,
+        "close": 36.94,
+        "high": 37.26,
+        "low": 36.9,
+        "volume": 710668
+      }
+    ],
+    "profile": null,
+    "financials": {
+      "periods": [
+        {
+          "fiscalPeriod": "TTM-as-of-Q1-FY2026",
+          "kind": "TTM",
+          "fiscalYearEnd": "2026-03-31",
+          "filed": "2026-04-29",
+          "formType": "derived-TTM",
+          "income": {
+            "revenue": {
+              "value": 340721000000,
+              "unit": "CNY"
+            },
+            "operatingIncome": {
+              "value": 179655000000,
+              "unit": "CNY"
+            },
+            "netIncome": {
+              "value": 150747000000,
+              "unit": "CNY"
+            }
+          },
+          "balance": {
+            "totalAssets": {
+              "value": 13484882000000,
+              "unit": "CNY"
+            },
+            "totalLiabilities": {
+              "value": 12194297000000,
+              "unit": "CNY"
+            },
+            "totalStockholdersEquity": {
+              "value": 1290585000000,
+              "unit": "CNY"
+            },
+            "cashAndCashEquivalents": {
+              "value": 583682000000,
+              "unit": "CNY"
+            }
+          },
+          "cashFlow": {
+            "operatingCashFlow": {
+              "value": 482280000000,
+              "unit": "CNY"
+            },
+            "investingCashFlow": {
+              "value": -212417000000,
+              "unit": "CNY"
+            },
+            "financingCashFlow": {
+              "value": -147953000000,
+              "unit": "CNY"
+            },
+            "capitalExpenditures": {
+              "value": 30469000000,
+              "unit": "CNY"
+            },
+            "freeCashFlow": {
+              "value": 451811000000,
+              "unit": "CNY"
+            }
+          },
+          "derivedFromPeriods": [
+            "Q1-FY2026",
+            "Q4-FY2025",
+            "Q3-FY2025",
+            "Q2-FY2025"
+          ]
+        },
+        {
+          "fiscalPeriod": "Q1-FY2026",
+          "kind": "Q",
+          "fiscalYearEnd": "2026-03-31",
+          "filed": "2026-04-29",
+          "income": {
+            "revenue": {
+              "value": 86940000000,
+              "unit": "CNY"
+            },
+            "operatingIncome": {
+              "value": 44665000000,
+              "unit": "CNY"
+            },
+            "netIncome": {
+              "value": 37852000000,
+              "unit": "CNY"
+            }
+          },
+          "balance": {
+            "totalAssets": {
+              "value": 13484882000000,
+              "unit": "CNY"
+            },
+            "totalLiabilities": {
+              "value": 12194297000000,
+              "unit": "CNY"
+            },
+            "totalStockholdersEquity": {
+              "value": 1290585000000,
+              "unit": "CNY"
+            },
+            "cashAndCashEquivalents": {
+              "value": 583682000000,
+              "unit": "CNY"
+            }
+          },
+          "cashFlow": {
+            "operatingCashFlow": {
+              "value": 125849000000,
+              "unit": "CNY"
+            },
+            "investingCashFlow": {
+              "value": -87430000000,
+              "unit": "CNY"
+            },
+            "financingCashFlow": {
+              "value": -26670000000,
+              "unit": "CNY"
+            },
+            "capitalExpenditures": {
+              "value": 5424000000,
+              "unit": "CNY"
+            },
+            "freeCashFlow": {
+              "value": 120425000000,
+              "unit": "CNY"
+            }
+          }
+        },
+        {
+          "fiscalPeriod": "FY2025",
+          "kind": "FY",
+          "fiscalYearEnd": "2025-12-31",
+          "filed": "2026-03-28",
+          "income": {
+            "revenue": {
+              "value": 337532000000,
+              "unit": "CNY"
+            },
+            "operatingIncome": {
+              "value": 179252000000,
+              "unit": "CNY"
+            },
+            "netIncome": {
+              "value": 150181000000,
+              "unit": "CNY"
+            }
+          },
+          "balance": {
+            "totalAssets": {
+              "value": 13070523000000,
+              "unit": "CNY"
+            },
+            "totalLiabilities": {
+              "value": 11789624000000,
+              "unit": "CNY"
+            },
+            "totalStockholdersEquity": {
+              "value": 1280899000000,
+              "unit": "CNY"
+            },
+            "cashAndCashEquivalents": {
+              "value": 575015000000,
+              "unit": "CNY"
+            }
+          },
+          "cashFlow": {
+            "operatingCashFlow": {
+              "value": 451457000000,
+              "unit": "CNY"
+            },
+            "investingCashFlow": {
+              "value": -324920000000,
+              "unit": "CNY"
+            },
+            "financingCashFlow": {
+              "value": -169938000000,
+              "unit": "CNY"
+            },
+            "capitalExpenditures": {
+              "value": 28141000000,
+              "unit": "CNY"
+            },
+            "freeCashFlow": {
+              "value": 423316000000,
+              "unit": "CNY"
+            }
+          }
+        },
+        {
+          "fiscalPeriod": "Q4-FY2025",
+          "kind": "Q",
+          "fiscalYearEnd": "2025-12-31",
+          "filed": "2026-03-28",
+          "income": {
+            "revenue": {
+              "value": 86112000000,
+              "unit": "CNY"
+            },
+            "operatingIncome": {
+              "value": 44025000000,
+              "unit": "CNY"
+            },
+            "netIncome": {
+              "value": 36409000000,
+              "unit": "CNY"
+            }
+          },
+          "balance": {
+            "totalAssets": {
+              "value": 13070523000000,
+              "unit": "CNY"
+            },
+            "totalLiabilities": {
+              "value": 11789624000000,
+              "unit": "CNY"
+            },
+            "totalStockholdersEquity": {
+              "value": 1280899000000,
+              "unit": "CNY"
+            },
+            "cashAndCashEquivalents": {
+              "value": 575015000000,
+              "unit": "CNY"
+            }
+          },
+          "cashFlow": {
+            "operatingCashFlow": {
+              "value": 275323000000,
+              "unit": "CNY"
+            },
+            "investingCashFlow": {
+              "value": 559000000,
+              "unit": "CNY"
+            },
+            "financingCashFlow": {
+              "value": -27292000000,
+              "unit": "CNY"
+            },
+            "capitalExpenditures": {
+              "value": 12422000000,
+              "unit": "CNY"
+            },
+            "freeCashFlow": {
+              "value": 262901000000,
+              "unit": "CNY"
+            }
+          }
+        },
+        {
+          "fiscalPeriod": "Q3-FY2025",
+          "kind": "Q",
+          "fiscalYearEnd": "2025-09-30",
+          "filed": "2025-10-30",
+          "income": {
+            "revenue": {
+              "value": 81451000000,
+              "unit": "CNY"
+            },
+            "operatingIncome": {
+              "value": 46275000000,
+              "unit": "CNY"
+            },
+            "netIncome": {
+              "value": 38842000000,
+              "unit": "CNY"
+            }
+          },
+          "balance": {
+            "totalAssets": {
+              "value": 12644075000000,
+              "unit": "CNY"
+            },
+            "totalLiabilities": {
+              "value": 11368939000000,
+              "unit": "CNY"
+            },
+            "totalStockholdersEquity": {
+              "value": 1275136000000,
+              "unit": "CNY"
+            },
+            "cashAndCashEquivalents": {
+              "value": 545298000000,
+              "unit": "CNY"
+            }
+          },
+          "cashFlow": {
+            "operatingCashFlow": {
+              "value": 41673000000,
+              "unit": "CNY"
+            },
+            "investingCashFlow": {
+              "value": -151088000000,
+              "unit": "CNY"
+            },
+            "financingCashFlow": {
+              "value": -121281000000,
+              "unit": "CNY"
+            },
+            "capitalExpenditures": {
+              "value": 8518000000,
+              "unit": "CNY"
+            },
+            "freeCashFlow": {
+              "value": 33155000000,
+              "unit": "CNY"
+            }
+          }
+        },
+        {
+          "fiscalPeriod": "Q2-FY2025",
+          "kind": "Q",
+          "fiscalYearEnd": "2025-06-30",
+          "filed": "2025-08-30",
+          "income": {
+            "revenue": {
+              "value": 86218000000,
+              "unit": "CNY"
+            },
+            "operatingIncome": {
+              "value": 44690000000,
+              "unit": "CNY"
+            },
+            "netIncome": {
+              "value": 37644000000,
+              "unit": "CNY"
+            }
+          },
+          "balance": {
+            "totalAssets": {
+              "value": 12657151000000,
+              "unit": "CNY"
+            },
+            "totalLiabilities": {
+              "value": 11360291000000,
+              "unit": "CNY"
+            },
+            "totalStockholdersEquity": {
+              "value": 1296860000000,
+              "unit": "CNY"
+            },
+            "cashAndCashEquivalents": {
+              "value": 553187000000,
+              "unit": "CNY"
+            }
+          },
+          "cashFlow": {
+            "operatingCashFlow": {
+              "value": 39435000000,
+              "unit": "CNY"
+            },
+            "investingCashFlow": {
+              "value": 25542000000,
+              "unit": "CNY"
+            },
+            "financingCashFlow": {
+              "value": 27290000000,
+              "unit": "CNY"
+            },
+            "capitalExpenditures": {
+              "value": 4105000000,
+              "unit": "CNY"
+            },
+            "freeCashFlow": {
+              "value": 35330000000,
+              "unit": "CNY"
+            }
+          }
+        },
+        {
+          "fiscalPeriod": "Q1-FY2025",
+          "kind": "Q",
+          "fiscalYearEnd": "2025-03-31",
+          "filed": "2026-04-29",
+          "income": {
+            "revenue": {
+              "value": 83751000000,
+              "unit": "CNY"
+            },
+            "operatingIncome": {
+              "value": 44262000000,
+              "unit": "CNY"
+            },
+            "netIncome": {
+              "value": 37286000000,
+              "unit": "CNY"
+            }
+          },
+          "balance": {
+            "totalAssets": {
+              "value": 12529792000000,
+              "unit": "CNY"
+            },
+            "totalLiabilities": {
+              "value": 11275928000000,
+              "unit": "CNY"
+            },
+            "totalStockholdersEquity": {
+              "value": 1253864000000,
+              "unit": "CNY"
+            },
+            "cashAndCashEquivalents": {
+              "value": 576043000000,
+              "unit": "CNY"
+            }
+          },
+          "cashFlow": {
+            "operatingCashFlow": {
+              "value": 95026000000,
+              "unit": "CNY"
+            },
+            "investingCashFlow": {
+              "value": -199933000000,
+              "unit": "CNY"
+            },
+            "financingCashFlow": {
+              "value": -48655000000,
+              "unit": "CNY"
+            },
+            "capitalExpenditures": {
+              "value": 3096000000,
+              "unit": "CNY"
+            },
+            "freeCashFlow": {
+              "value": 91930000000,
+              "unit": "CNY"
+            }
+          }
+        },
+        {
+          "fiscalPeriod": "FY2024",
+          "kind": "FY",
+          "fiscalYearEnd": "2024-12-31",
+          "filed": "2026-03-28",
+          "income": {
+            "revenue": {
+              "value": 337488000000,
+              "unit": "CNY"
+            },
+            "operatingIncome": {
+              "value": 179019000000,
+              "unit": "CNY"
+            },
+            "netIncome": {
+              "value": 148391000000,
+              "unit": "CNY"
+            }
+          },
+          "balance": {
+            "totalAssets": {
+              "value": 12152036000000,
+              "unit": "CNY"
+            },
+            "totalLiabilities": {
+              "value": 10918561000000,
+              "unit": "CNY"
+            },
+            "totalStockholdersEquity": {
+              "value": 1233475000000,
+              "unit": "CNY"
+            },
+            "cashAndCashEquivalents": {
+              "value": 574065000000,
+              "unit": "CNY"
+            }
+          },
+          "cashFlow": {
+            "operatingCashFlow": {
+              "value": 447023000000,
+              "unit": "CNY"
+            },
+            "investingCashFlow": {
+              "value": -292859000000,
+              "unit": "CNY"
+            },
+            "financingCashFlow": {
+              "value": 2149000000,
+              "unit": "CNY"
+            },
+            "capitalExpenditures": {
+              "value": 34930000000,
+              "unit": "CNY"
+            },
+            "freeCashFlow": {
+              "value": 412093000000,
+              "unit": "CNY"
+            }
+          }
+        },
+        {
+          "fiscalPeriod": "Q4-FY2024",
+          "kind": "Q",
+          "fiscalYearEnd": "2024-12-31",
+          "filed": "2026-03-28",
+          "income": {
+            "revenue": {
+              "value": 84779000000,
+              "unit": "CNY"
+            },
+            "operatingIncome": {
+              "value": 44839000000,
+              "unit": "CNY"
+            },
+            "netIncome": {
+              "value": 35207000000,
+              "unit": "CNY"
+            }
+          },
+          "balance": {
+            "totalAssets": {
+              "value": 12152036000000,
+              "unit": "CNY"
+            },
+            "totalLiabilities": {
+              "value": 10918561000000,
+              "unit": "CNY"
+            },
+            "totalStockholdersEquity": {
+              "value": 1233475000000,
+              "unit": "CNY"
+            },
+            "cashAndCashEquivalents": {
+              "value": 574065000000,
+              "unit": "CNY"
+            }
+          },
+          "cashFlow": {
+            "operatingCashFlow": {
+              "value": 159790000000,
+              "unit": "CNY"
+            },
+            "investingCashFlow": {
+              "value": -171354000000,
+              "unit": "CNY"
+            },
+            "financingCashFlow": {
+              "value": -4067000000,
+              "unit": "CNY"
+            },
+            "capitalExpenditures": {
+              "value": 8875000000,
+              "unit": "CNY"
+            },
+            "freeCashFlow": {
+              "value": 150915000000,
+              "unit": "CNY"
+            }
+          }
+        },
+        {
+          "fiscalPeriod": "Q3-FY2024",
+          "kind": "Q",
+          "fiscalYearEnd": "2024-09-30",
+          "filed": "2025-10-30",
+          "income": {
+            "revenue": {
+              "value": 79764000000,
+              "unit": "CNY"
+            },
+            "operatingIncome": {
+              "value": 44516000000,
+              "unit": "CNY"
+            },
+            "netIncome": {
+              "value": 38441000000,
+              "unit": "CNY"
+            }
+          },
+          "balance": {
+            "totalAssets": {
+              "value": 11654763000000,
+              "unit": "CNY"
+            },
+            "totalLiabilities": {
+              "value": 10495128000000,
+              "unit": "CNY"
+            },
+            "totalStockholdersEquity": {
+              "value": 1159635000000,
+              "unit": "CNY"
+            },
+            "cashAndCashEquivalents": {
+              "value": 629471000000,
+              "unit": "CNY"
+            }
+          },
+          "cashFlow": {
+            "operatingCashFlow": {
+              "value": 179053000000,
+              "unit": "CNY"
+            },
+            "investingCashFlow": {
+              "value": -66483000000,
+              "unit": "CNY"
+            },
+            "financingCashFlow": {
+              "value": -76237000000,
+              "unit": "CNY"
+            },
+            "capitalExpenditures": {
+              "value": 7480000000,
+              "unit": "CNY"
+            },
+            "freeCashFlow": {
+              "value": 171573000000,
+              "unit": "CNY"
+            }
+          }
+        },
+        {
+          "fiscalPeriod": "Q2-FY2024",
+          "kind": "Q",
+          "fiscalYearEnd": "2024-06-30",
+          "filed": "2025-08-30",
+          "income": {
+            "revenue": {
+              "value": 86528000000,
+              "unit": "CNY"
+            },
+            "operatingIncome": {
+              "value": 44479000000,
+              "unit": "CNY"
+            },
+            "netIncome": {
+              "value": 36666000000,
+              "unit": "CNY"
+            }
+          },
+          "balance": {
+            "totalAssets": {
+              "value": 11574783000000,
+              "unit": "CNY"
+            },
+            "totalLiabilities": {
+              "value": 10457758000000,
+              "unit": "CNY"
+            },
+            "totalStockholdersEquity": {
+              "value": 1117025000000,
+              "unit": "CNY"
+            },
+            "cashAndCashEquivalents": {
+              "value": 599520000000,
+              "unit": "CNY"
+            }
+          },
+          "cashFlow": {
+            "operatingCashFlow": {
+              "value": 109388000000,
+              "unit": "CNY"
+            },
+            "investingCashFlow": {
+              "value": -56141000000,
+              "unit": "CNY"
+            },
+            "financingCashFlow": {
+              "value": -47501000000,
+              "unit": "CNY"
+            },
+            "capitalExpenditures": {
+              "value": 7604000000,
+              "unit": "CNY"
+            },
+            "freeCashFlow": {
+              "value": 101784000000,
+              "unit": "CNY"
+            }
+          }
+        },
+        {
+          "fiscalPeriod": "Q1-FY2024",
+          "kind": "Q",
+          "fiscalYearEnd": "2024-03-31",
+          "filed": "2025-04-30",
+          "income": {
+            "revenue": {
+              "value": 86417000000,
+              "unit": "CNY"
+            },
+            "operatingIncome": {
+              "value": 45185000000,
+              "unit": "CNY"
+            },
+            "netIncome": {
+              "value": 38077000000,
+              "unit": "CNY"
+            }
+          },
+          "balance": {
+            "totalAssets": {
+              "value": 11520226000000,
+              "unit": "CNY"
+            },
+            "totalLiabilities": {
+              "value": 10394735000000,
+              "unit": "CNY"
+            },
+            "totalStockholdersEquity": {
+              "value": 1125491000000,
+              "unit": "CNY"
+            },
+            "cashAndCashEquivalents": {
+              "value": 813340000000,
+              "unit": "CNY"
+            }
+          },
+          "cashFlow": {
+            "operatingCashFlow": {
+              "value": -1208000000,
+              "unit": "CNY"
+            },
+            "investingCashFlow": {
+              "value": 1119000000,
+              "unit": "CNY"
+            },
+            "financingCashFlow": {
+              "value": 129954000000,
+              "unit": "CNY"
+            },
+            "capitalExpenditures": {
+              "value": 10971000000,
+              "unit": "CNY"
+            },
+            "freeCashFlow": {
+              "value": -12179000000,
+              "unit": "CNY"
+            }
+          }
+        },
+        {
+          "fiscalPeriod": "FY2023",
+          "kind": "FY",
+          "fiscalYearEnd": "2023-12-31",
+          "filed": "2025-03-26",
+          "income": {
+            "revenue": {
+              "value": 339123000000,
+              "unit": "CNY"
+            },
+            "operatingIncome": {
+              "value": 176663000000,
+              "unit": "CNY"
+            },
+            "netIncome": {
+              "value": 146602000000,
+              "unit": "CNY"
+            }
+          },
+          "balance": {
+            "totalAssets": {
+              "value": 11028483000000,
+              "unit": "CNY"
+            },
+            "totalLiabilities": {
+              "value": 9942754000000,
+              "unit": "CNY"
+            },
+            "totalStockholdersEquity": {
+              "value": 1085729000000,
+              "unit": "CNY"
+            },
+            "cashAndCashEquivalents": {
+              "value": 682802000000,
+              "unit": "CNY"
+            }
+          },
+          "cashFlow": {
+            "operatingCashFlow": {
+              "value": 357753000000,
+              "unit": "CNY"
+            },
+            "investingCashFlow": {
+              "value": -255107000000,
+              "unit": "CNY"
+            },
+            "financingCashFlow": {
+              "value": -72989000000,
+              "unit": "CNY"
+            },
+            "capitalExpenditures": {
+              "value": 30161000000,
+              "unit": "CNY"
+            },
+            "freeCashFlow": {
+              "value": 327592000000,
+              "unit": "CNY"
+            }
+          }
+        },
+        {
+          "fiscalPeriod": "Q4-FY2023",
+          "kind": "Q",
+          "fiscalYearEnd": "2023-12-31",
+          "filed": "2025-03-26",
+          "income": {
+            "revenue": {
+              "value": 78844000000,
+              "unit": "CNY"
+            },
+            "operatingIncome": {
+              "value": 41430000000,
+              "unit": "CNY"
+            },
+            "netIncome": {
+              "value": 32712000000,
+              "unit": "CNY"
+            }
+          },
+          "balance": {
+            "totalAssets": {
+              "value": 11028483000000,
+              "unit": "CNY"
+            },
+            "totalLiabilities": {
+              "value": 9942754000000,
+              "unit": "CNY"
+            },
+            "totalStockholdersEquity": {
+              "value": 1085729000000,
+              "unit": "CNY"
+            },
+            "cashAndCashEquivalents": {
+              "value": 682802000000,
+              "unit": "CNY"
+            }
+          },
+          "cashFlow": {
+            "operatingCashFlow": {
+              "value": 304105000000,
+              "unit": "CNY"
+            },
+            "investingCashFlow": {
+              "value": -63153000000,
+              "unit": "CNY"
+            },
+            "financingCashFlow": {
+              "value": -36929000000,
+              "unit": "CNY"
+            },
+            "capitalExpenditures": {
+              "value": 9544000000,
+              "unit": "CNY"
+            },
+            "freeCashFlow": {
+              "value": 294561000000,
+              "unit": "CNY"
+            }
+          }
+        },
+        {
+          "fiscalPeriod": "Q3-FY2023",
+          "kind": "Q",
+          "fiscalYearEnd": "2023-09-30",
+          "filed": "2024-10-30",
+          "income": {
+            "revenue": {
+              "value": 81819000000,
+              "unit": "CNY"
+            },
+            "operatingIncome": {
+              "value": 44354000000,
+              "unit": "CNY"
+            },
+            "netIncome": {
+              "value": 38138000000,
+              "unit": "CNY"
+            }
+          },
+          "balance": {
+            "totalAssets": {
+              "value": 10668009000000,
+              "unit": "CNY"
+            },
+            "totalLiabilities": {
+              "value": 9646670000000,
+              "unit": "CNY"
+            },
+            "totalStockholdersEquity": {
+              "value": 1021339000000,
+              "unit": "CNY"
+            },
+            "cashAndCashEquivalents": {
+              "value": 599969000000,
+              "unit": "CNY"
+            }
+          },
+          "cashFlow": {
+            "operatingCashFlow": {
+              "value": -40704000000,
+              "unit": "CNY"
+            },
+            "investingCashFlow": {
+              "value": -75047000000,
+              "unit": "CNY"
+            },
+            "financingCashFlow": {
+              "value": -72828000000,
+              "unit": "CNY"
+            },
+            "capitalExpenditures": {
+              "value": 5234000000,
+              "unit": "CNY"
+            },
+            "freeCashFlow": {
+              "value": -45938000000,
+              "unit": "CNY"
+            }
+          }
+        },
+        {
+          "fiscalPeriod": "Q2-FY2023",
+          "kind": "Q",
+          "fiscalYearEnd": "2023-06-30",
+          "filed": "2024-08-30",
+          "income": {
+            "revenue": {
+              "value": 87824000000,
+              "unit": "CNY"
+            },
+            "operatingIncome": {
+              "value": 43987000000,
+              "unit": "CNY"
+            },
+            "netIncome": {
+              "value": 36913000000,
+              "unit": "CNY"
+            }
+          },
+          "balance": {
+            "totalAssets": {
+              "value": 10739836000000,
+              "unit": "CNY"
+            },
+            "totalLiabilities": {
+              "value": 9753923000000,
+              "unit": "CNY"
+            },
+            "totalStockholdersEquity": {
+              "value": 985913000000,
+              "unit": "CNY"
+            },
+            "cashAndCashEquivalents": {
+              "value": 590855000000,
+              "unit": "CNY"
+            }
+          },
+          "cashFlow": {
+            "operatingCashFlow": {
+              "value": 106970000000,
+              "unit": "CNY"
+            },
+            "investingCashFlow": {
+              "value": -25032000000,
+              "unit": "CNY"
+            },
+            "financingCashFlow": {
+              "value": -7176000000,
+              "unit": "CNY"
+            },
+            "capitalExpenditures": {
+              "value": 6070000000,
+              "unit": "CNY"
+            },
+            "freeCashFlow": {
+              "value": 100900000000,
+              "unit": "CNY"
+            }
+          }
+        },
+        {
+          "fiscalPeriod": "Q1-FY2023",
+          "kind": "Q",
+          "fiscalYearEnd": "2023-03-31",
+          "filed": "2024-04-30",
+          "income": {
+            "revenue": {
+              "value": 90636000000,
+              "unit": "CNY"
+            },
+            "operatingIncome": {
+              "value": 46892000000,
+              "unit": "CNY"
+            },
+            "netIncome": {
+              "value": 38839000000,
+              "unit": "CNY"
+            }
+          },
+          "balance": {
+            "totalAssets": {
+              "value": 10508752000000,
+              "unit": "CNY"
+            },
+            "totalLiabilities": {
+              "value": 9518990000000,
+              "unit": "CNY"
+            },
+            "totalStockholdersEquity": {
+              "value": 989762000000,
+              "unit": "CNY"
+            },
+            "cashAndCashEquivalents": {
+              "value": 597640000000,
+              "unit": "CNY"
+            }
+          },
+          "cashFlow": {
+            "operatingCashFlow": {
+              "value": -12618000000,
+              "unit": "CNY"
+            },
+            "investingCashFlow": {
+              "value": -91875000000,
+              "unit": "CNY"
+            },
+            "financingCashFlow": {
+              "value": 43944000000,
+              "unit": "CNY"
+            },
+            "capitalExpenditures": {
+              "value": 9313000000,
+              "unit": "CNY"
+            },
+            "freeCashFlow": {
+              "value": -21931000000,
+              "unit": "CNY"
+            }
+          }
+        },
+        {
+          "fiscalPeriod": "FY2022",
+          "kind": "FY",
+          "fiscalYearEnd": "2022-12-31",
+          "filed": "2024-03-26",
+          "income": {
+            "revenue": {
+              "value": 344783000000,
+              "unit": "CNY"
+            },
+            "operatingIncome": {
+              "value": 165156000000,
+              "unit": "CNY"
+            },
+            "netIncome": {
+              "value": 138012000000,
+              "unit": "CNY"
+            }
+          },
+          "balance": {
+            "totalAssets": {
+              "value": 10138912000000,
+              "unit": "CNY"
+            },
+            "totalLiabilities": {
+              "value": 9184674000000,
+              "unit": "CNY"
+            },
+            "totalStockholdersEquity": {
+              "value": 954238000000,
+              "unit": "CNY"
+            },
+            "cashAndCashEquivalents": {
+              "value": 603027000000,
+              "unit": "CNY"
+            }
+          },
+          "cashFlow": {
+            "operatingCashFlow": {
+              "value": 570143000000,
+              "unit": "CNY"
+            },
+            "investingCashFlow": {
+              "value": -513926000000,
+              "unit": "CNY"
+            },
+            "financingCashFlow": {
+              "value": -297032000000,
+              "unit": "CNY"
+            },
+            "capitalExpenditures": {
+              "value": 34892000000,
+              "unit": "CNY"
+            },
+            "freeCashFlow": {
+              "value": 535251000000,
+              "unit": "CNY"
+            }
+          }
+        },
+        {
+          "fiscalPeriod": "Q4-FY2022",
+          "kind": "Q",
+          "fiscalYearEnd": "2022-12-31",
+          "filed": "2024-03-26",
+          "income": {
+            "revenue": {
+              "value": 79950000000,
+              "unit": "CNY"
+            },
+            "operatingIncome": {
+              "value": 35781000000,
+              "unit": "CNY"
+            },
+            "netIncome": {
+              "value": 31090000000,
+              "unit": "CNY"
+            }
+          },
+          "balance": {
+            "totalAssets": {
+              "value": 10138912000000,
+              "unit": "CNY"
+            },
+            "totalLiabilities": {
+              "value": 9184674000000,
+              "unit": "CNY"
+            },
+            "totalStockholdersEquity": {
+              "value": 954238000000,
+              "unit": "CNY"
+            },
+            "cashAndCashEquivalents": {
+              "value": 603027000000,
+              "unit": "CNY"
+            }
+          },
+          "cashFlow": {
+            "operatingCashFlow": {
+              "value": 423649000000,
+              "unit": "CNY"
+            },
+            "investingCashFlow": {
+              "value": -240730000000,
+              "unit": "CNY"
+            },
+            "financingCashFlow": {
+              "value": -27160000000,
+              "unit": "CNY"
+            },
+            "capitalExpenditures": {
+              "value": 9566000000,
+              "unit": "CNY"
+            },
+            "freeCashFlow": {
+              "value": 414083000000,
+              "unit": "CNY"
+            }
+          }
+        },
+        {
+          "fiscalPeriod": "Q3-FY2022",
+          "kind": "Q",
+          "fiscalYearEnd": "2022-09-30",
+          "filed": "2023-10-28",
+          "income": {
+            "revenue": {
+              "value": 85742000000,
+              "unit": "CNY"
+            },
+            "operatingIncome": {
+              "value": 45737000000,
+              "unit": "CNY"
+            },
+            "netIncome": {
+              "value": 37502000000,
+              "unit": "CNY"
+            }
+          },
+          "balance": {
+            "totalAssets": {
+              "value": 9707111000000,
+              "unit": "CNY"
+            },
+            "totalLiabilities": {
+              "value": 8779344000000,
+              "unit": "CNY"
+            },
+            "totalStockholdersEquity": {
+              "value": 927767000000,
+              "unit": "CNY"
+            },
+            "cashAndCashEquivalents": {
+              "value": 598478000000,
+              "unit": "CNY"
+            }
+          },
+          "cashFlow": {
+            "operatingCashFlow": {
+              "value": 15870000000,
+              "unit": "CNY"
+            },
+            "investingCashFlow": {
+              "value": -22109000000,
+              "unit": "CNY"
+            },
+            "financingCashFlow": {
+              "value": -142472000000,
+              "unit": "CNY"
+            },
+            "capitalExpenditures": {
+              "value": 3187000000,
+              "unit": "CNY"
+            },
+            "freeCashFlow": {
+              "value": 12683000000,
+              "unit": "CNY"
+            }
+          }
+        },
+        {
+          "fiscalPeriod": "Q2-FY2022",
+          "kind": "Q",
+          "fiscalYearEnd": "2022-06-30",
+          "filed": "2023-08-26",
+          "income": {
+            "revenue": {
+              "value": 87101000000,
+              "unit": "CNY"
+            },
+            "operatingIncome": {
+              "value": 39280000000,
+              "unit": "CNY"
+            },
+            "netIncome": {
+              "value": 33398000000,
+              "unit": "CNY"
+            }
+          },
+          "balance": {
+            "totalAssets": {
+              "value": 9724996000000,
+              "unit": "CNY"
+            },
+            "totalLiabilities": {
+              "value": 8829330000000,
+              "unit": "CNY"
+            },
+            "totalStockholdersEquity": {
+              "value": 895666000000,
+              "unit": "CNY"
+            },
+            "cashAndCashEquivalents": {
+              "value": 585102000000,
+              "unit": "CNY"
+            }
+          },
+          "cashFlow": {
+            "operatingCashFlow": {
+              "value": 125073000000,
+              "unit": "CNY"
+            },
+            "investingCashFlow": {
+              "value": -87697000000,
+              "unit": "CNY"
+            },
+            "financingCashFlow": {
+              "value": -62634000000,
+              "unit": "CNY"
+            },
+            "capitalExpenditures": {
+              "value": 13126000000,
+              "unit": "CNY"
+            },
+            "freeCashFlow": {
+              "value": 111947000000,
+              "unit": "CNY"
+            }
+          }
+        },
+        {
+          "fiscalPeriod": "Q1-FY2022",
+          "kind": "Q",
+          "fiscalYearEnd": "2022-03-31",
+          "filed": "2023-04-27",
+          "income": {
+            "revenue": {
+              "value": 91990000000,
+              "unit": "CNY"
+            },
+            "operatingIncome": {
+              "value": 44358000000,
+              "unit": "CNY"
+            },
+            "netIncome": {
+              "value": 36022000000,
+              "unit": "CNY"
+            }
+          },
+          "balance": {
+            "totalAssets": {
+              "value": 9415379000000,
+              "unit": "CNY"
+            },
+            "totalLiabilities": {
+              "value": 8514645000000,
+              "unit": "CNY"
+            },
+            "totalStockholdersEquity": {
+              "value": 900734000000,
+              "unit": "CNY"
+            },
+            "cashAndCashEquivalents": {
+              "value": 615099000000,
+              "unit": "CNY"
+            }
+          },
+          "cashFlow": {
+            "operatingCashFlow": {
+              "value": 5551000000,
+              "unit": "CNY"
+            },
+            "investingCashFlow": {
+              "value": -163390000000,
+              "unit": "CNY"
+            },
+            "financingCashFlow": {
+              "value": -64766000000,
+              "unit": "CNY"
+            },
+            "capitalExpenditures": {
+              "value": 9013000000,
+              "unit": "CNY"
+            },
+            "freeCashFlow": {
+              "value": -3462000000,
+              "unit": "CNY"
+            }
+          }
+        }
+      ],
+      "currency": "CNY",
+      "sourceUrl": "https://emweb.eastmoney.com/PC_HSF10/NewFinanceAnalysis/index?type=web&code=600036",
+      "retrievedAt": "2026-05-26T01:11:06.035Z",
+      "provider": "eastmoney-financials",
+      "qualityTier": "B"
+    },
+    "filings": null,
+    "consensusEps": null,
+    "northboundFlow": null,
+    "lhb": null,
+    "unlockCalendar": null,
+    "shareholders": null,
+    "webSearch": null,
+    "macro": null
+  },
+  "citations": [],
+  "dataAvailability": {
+    "available": [
+      "quote",
+      "history",
+      "financials"
+    ],
+    "missing": [
+      {
+        "field": "profile",
+        "reason": "not_configured"
+      },
+      {
+        "field": "filings",
+        "reason": "not_configured"
+      },
+      {
+        "field": "consensusEps",
+        "reason": "not_configured"
+      },
+      {
+        "field": "northboundFlow",
+        "reason": "not_configured"
+      },
+      {
+        "field": "lhb",
+        "reason": "not_configured"
+      },
+      {
+        "field": "unlockCalendar",
+        "reason": "not_configured"
+      },
+      {
+        "field": "shareholders",
+        "reason": "not_configured"
+      },
+      {
+        "field": "webSearch",
+        "reason": "not_configured"
+      },
+      {
+        "field": "macro",
+        "reason": "not_configured"
+      }
+    ],
+    "warnings": []
+  }
+}

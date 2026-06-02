@@ -1,0 +1,25 @@
+{
+  "id": "HK_0700_20260526",
+  "rawHash": "f458497e8b3d3d19",
+  "computedFacts": {
+    "ratios": null,
+    "technicalIndicators": {
+      "sma20": 460.97281341552736,
+      "sma50": 489.0238482666016,
+      "sma200": 570.4861636352539,
+      "rsi14": 36.25635029928503,
+      "macdTrend": "bearish",
+      "trend": "downtrend"
+    },
+    "redFlagsCount": 0,
+    "redFlagRules": [],
+    "valuation": null,
+    "availability": {
+      "available": [
+        "history",
+        "quote"
+      ],
+      "missingCount": 10
+    }
+  }
+}

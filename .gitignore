@@ -1,0 +1,18 @@
+node_modules/
+dist/
+.next/
+.turbo/
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+.env.production
+.DS_Store
+
+# Local Claude Code settings (contains machine-local paths / session tokens)
+.claude/settings.local.json
+
+# Internal-only — not open-sourced (kept on disk for local/agent use)
+docs/
+CLAUDE.md
+AGENTS.md

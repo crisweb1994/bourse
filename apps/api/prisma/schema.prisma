@@ -1,0 +1,338 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                     String   @id @default(cuid())
+  githubId               String   @unique
+  email                  String?
+  name                   String
+  avatarUrl              String?
+  // RFC rfc-evidence-pack-web-search-fallback: opt-in flag. When true and
+  // the CN EvidencePack v2 tool path hard-fails (AUTH / NETWORK /
+  // RATE_LIMIT_HARD), the workflow retries with the v1 LLM web_search
+  // builder instead of failing the whole run.
+  allowWebSearchFallback Boolean  @default(false)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  aiProviderSettings AiProviderSetting[]
+  watchlistItems     WatchlistItem[]
+  analyses           Analysis[]
+  webSearchSetting   WebSearchSetting?
+}
+
+model Stock {
+  id          String   @id @default(cuid())
+  symbol      String
+  name        String
+  market      String
+  exchange    String
+  currency    String   @default("USD")
+  yahooSymbol String?
+  // plan-v2 §11.1: sector filled by connector on first ingest (US: yahoo.sector
+  // / CN: eastmoney BOARD_NAME / HK: yahoo.sector). Used by compute/relative.ts
+  // for peer-group lookups.
+  sector      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  watchlistItems WatchlistItem[]
+  analyses       Analysis[]
+
+  @@unique([symbol, market])
+  @@index([sector])
+}
+
+model WatchlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  stockId   String
+  notes     String?
+  // plan-v2 §13.1.1: workspace Watchlist widget renders by order asc; user
+  // drag-sort persists here. Default 0 puts new items at the top.
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stock Stock @relation(fields: [stockId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, stockId])
+  @@index([userId, order])
+}
+
+// plan-v2 Wave 4.2 — InvestorProfile removed. plan-v2 §15.1 "用户画像放
+// URL params + localStorage，beta 无需持久化".
+
+model AiProviderSetting {
+  id     String @id @default(cuid())
+  userId String
+
+  // multi-config fields (Phase 1)
+  label             String? // 用户起的名字，e.g. "我的 DeepSeek"
+  providerType      AiProviderType? // ANTHROPIC | OPENAI_COMPATIBLE
+  enabledModels     String[]        @default([])
+  supportsWebSearch Boolean         @default(false)
+  supportsTools     Boolean         @default(true)
+  isDefault         Boolean         @default(false)
+
+  baseUrl         String?
+  apiKey          String? // 明文存储（用户可在 Settings 页查看/编辑）
+  apiKeyEncrypted String? // 旧字段：保留供历史数据兼容读取
+  enabled         Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // deprecated — 保留供旧 Analysis.aiProvider 回放兼容
+  provider       String?
+  model          String?
+  /**
+   * 主模型 (Primary). 主分析流式 / 主报告生成 / web_search 工具调用 /
+   * 证据归一化 / debate。留空 → fallback 到 enabledModels[0] → 旧 model。
+   * UI 上必填; 后端校验须 ∈ enabledModels。
+   */
+  primaryModel   String?
+  /**
+   * 次模型 (Utility). 用于不需要强推理的辅助任务: structured JSON
+   * 抽取/修复、COMPREHENSIVE summary、搜索查询改写。留空 → fallback
+   * 到主 `model`。典型用法: model='gpt-5.5' + utilityModel='gpt-5.5-mini'。
+   * 注意: web_search 工具调用 + 证据归一化仍走主 model 以保证引用准确性。
+   */
+  utilityModel   String?
+  modelCatalogId String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+enum AiProviderType {
+  ANTHROPIC
+  OPENAI_COMPATIBLE
+}
+
+// plan-v2 §17.4.4 (2026-05-27) — WebSearchSetting reinstated. RFC:
+// docs/web-search-per-user.md. Wave 4.5 had removed the table in favor
+// of env-only config; reverted because users need to bring their own
+// Tavily/SearXNG keys without re-deploying.
+enum WebSearchProviderType {
+  TAVILY
+  SEARXNG
+  // future: SERPER, BRAVE, GOOGLE_PSE
+}
+
+enum WebSearchPrimaryMode {
+  NATIVE_FIRST // 优先用 provider 自带（Anthropic SDK / OpenAI Responses）
+  CUSTOM_ONLY  // 强制走 user adapter（Anthropic 在 UI 隐藏；OpenAI 切到 chat.completions）
+}
+
+model WebSearchSetting {
+  id              String                @id @default(cuid())
+  userId          String                @unique
+  providerType    WebSearchProviderType
+  apiKey          String?
+  baseUrl         String?               // SearXNG only
+  primaryMode     WebSearchPrimaryMode  @default(NATIVE_FIRST)
+  timeoutMs       Int?
+  budgetUsdPerRun Decimal?              @db.Decimal(10, 4)
+  cacheTtlMs      Int?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Analysis {
+  id                  String         @id @default(cuid())
+  userId              String
+  stockId             String
+  symbol              String
+  market              String
+  analysisType        AnalysisType
+  status              AnalysisStatus @default(PENDING)
+  aiProvider          String?
+  aiModel             String?
+  aiProviderSettingId String?
+  promptVersion       String?
+  dataAsOf            String?
+  generatedAt         DateTime?
+  summaryMarkdown     String?
+  summaryJson         Json?
+  overallSignal       Signal?
+  overallConfidence   Confidence?
+  // RFC rfc-evidence-pack-web-search-fallback: null = normal run; set to
+  // 'WEB_SEARCH_FALLBACK' when EvidencePack came from the v1 web_search
+  // builder after v2 hard-failed. Indexed for history filtering.
+  degradedSource      String?
+
+  // plan-v2 §11.1: telemetry folded from the deleted RunAggregate table.
+  // Populated by stream-comprehensive-adapter at terminal write.
+  totalTokensIn        Int?
+  totalTokensOut       Int?
+  durationMs           Int?
+
+  // plan-v2 §11.1: snapshot metadata captured at fetchSnapshot time. Full
+  // snapshot is not persisted (see §1.3 "snapshot is a value, not state");
+  // only these summary fields land on Analysis so history/detail can render
+  // "data as of X · 缺失 Y" without rehydrating.
+  snapshotCapturedAt   DateTime?
+  snapshotAvailability Json?      // { available: string[]; missing: { field, reason }[]; warnings: string[] }
+
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stock    Stock             @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  sections AnalysisSection[]
+
+  @@index([userId, degradedSource])
+}
+
+model AnalysisSection {
+  id             String         @id @default(cuid())
+  analysisId     String
+  type           SectionType
+  status         AnalysisStatus @default(PENDING)
+  reportMarkdown String?
+  structuredJson Json?
+  citations      Json?
+  errorMessage   String?
+  order          Int
+
+  // plan-v2 §11.1: per-section telemetry folded from the deleted
+  // SectionTrace table. Defaults so older rows / FAILED sections without
+  // recorded LLM activity stay non-NULL.
+  tokensIn       Int            @default(0)
+  tokensOut      Int            @default(0)
+  durationMs     Int?
+  // plan-v2 §10.1: section_done event emits signal/confidence directly;
+  // mirroring on the row lets history/list views render badges without
+  // parsing structuredJson.
+  signal         Signal?
+  confidence     Confidence?
+  // plan-v2 §10.1: citation-policy / cross-dim-validate warnings surfaced
+  // to UI. Json so each entry can carry { rule, message, severity }.
+  warnings       Json?
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  analysis Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+}
+
+// plan-v2 §8.2: L2 connector cache. L1 in-memory LRU lives in
+// ToolCacheService; L2 spans processes so cold-start / multi-instance
+// deployments don't pay full upstream latency. TTL enforced at read time
+// (expiresAt < now() → miss). Vacuum is index lookup on expiresAt.
+model SnapshotCache {
+  id        String   @id @default(cuid())
+  cacheKey  String   @unique          // e.g. "yahoo:quote:AAPL"
+  market    String                    // US | CN | HK
+  symbol    String?
+  factKey   String                    // quote | history | profile | financials | filings | consensusEps | lhb | northboundFlow | unlockCalendar | shareholders | macro
+  payload   Json
+  fetchedAt DateTime
+  expiresAt DateTime
+
+  @@index([expiresAt])
+  @@index([market, symbol, factKey])
+}
+
+// RFC-02 §10: tool result cache. Keyed by (toolName, market, symbol,
+// argsHash). Cross-process shared so multiple analyze() invocations of
+// the same stock in a short window only pay one upstream call. TTL
+// enforced at read time (`expiresAt` < now() → cache miss). Vacuum/cleanup
+// is done by index lookup on expiresAt (future cron job; not in RFC-02).
+// plan-v2 Wave 4.3 — ToolResultCache removed. In-memory LRU in
+// ToolCacheService is sufficient for the SnapshotV2 path.
+
+// RFC-01: per-section telemetry trace. One row per dimension execution.
+// Separate from AnalysisSection so business reads (apps/web) stay light and
+// telemetry can be truncated/archived independently. All cache/source-tier
+// columns default to 0 / NULL until Phase 3 / Phase 5 light them up.
+// plan-v2 Wave 4.4 — SectionTrace + RunAggregate removed. Telemetry folds
+// into AnalysisSection.tokensIn/Out/durationMs + Analysis.totalTokensIn/Out
+// /durationMs (single source of truth, no separate trace plumbing).
+
+// plan-v2 Wave 4.1 — BatchJob removed. plan-v2 §15.1 "beta 不需要".
+
+// =============================================================================
+// research-core persistence (PRD §12.2)
+// Owned by apps/api as the only Prisma-aware layer. Implements
+// research-core ResearchRepositoryPort.
+// =============================================================================
+
+// plan-v2 Wave 2.6g — research/planning Prisma models deleted with the
+// planner package. Tables dropped from the schema:
+//   - SourceDocument
+//   - SourceDocumentInstrument
+//   - ResearchSnapshot
+//   - ResearchSnapshotDocument
+//   - ResearchPlan
+//   - AnalysisResearchSnapshot
+//   - AnalysisResearchPlan
+// EvidencePack now comes from @bourse/analysis fetchSnapshot;
+// connector responses are not persisted (snapshot is an in-memory value).
+
+enum Sensitivity {
+  public
+  restricted
+  private
+}
+
+enum AnalysisType {
+  FUNDAMENTAL
+  VALUATION
+  INDUSTRY
+  RISK
+  TECHNICAL
+  SENTIMENT
+  SCENARIO
+  PORTFOLIO
+  GOVERNANCE
+  COMPREHENSIVE
+  DEBATE
+}
+
+enum SectionType {
+  FUNDAMENTAL
+  VALUATION
+  INDUSTRY
+  RISK
+  TECHNICAL
+  SENTIMENT
+  SCENARIO
+  PORTFOLIO
+  GOVERNANCE
+}
+
+enum AnalysisStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  PARTIAL_FAILED
+  FAILED
+  CANCELLED
+}
+
+// plan-v2 Wave 4.1 — BatchJobStatus enum removed alongside BatchJob model.
+
+enum Signal {
+  BULLISH
+  NEUTRAL
+  BEARISH
+}
+
+enum Confidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+// plan-v2 Wave 4.2 — RiskTolerance / InvestmentHorizon / PreferredStyle
+// enums removed alongside InvestorProfile.

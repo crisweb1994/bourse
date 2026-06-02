@@ -1,0 +1,103 @@
+{
+  "scenarioName": "comprehensive-tavily-disabled",
+  "kind": "comprehensive",
+  "result": {
+    "terminalStatus": "COMPLETED",
+    "factConflictCount": 0,
+    "failedSectionTypes": []
+  },
+  "sendEvents": [
+    {
+      "type": "section_start",
+      "data": {
+        "sectionType": "FUNDAMENTAL",
+        "sectionId": "sec-fund",
+        "order": 0
+      }
+    },
+    {
+      "type": "report_complete",
+      "data": {
+        "sectionType": "FUNDAMENTAL"
+      }
+    },
+    {
+      "type": "structured_data",
+      "data": {
+        "json": {
+          "schemaVersion": "agent-result-v1",
+          "conclusion": {
+            "signal": "NEUTRAL",
+            "confidence": "LOW",
+            "oneLiner": "no web evidence",
+            "evidence": []
+          },
+          "evidence": [],
+          "dataAvailability": {
+            "missingFields": [
+              "webSearch"
+            ],
+            "reason": "web_search capability disabled"
+          },
+          "dataAsOf": "2026-05-21",
+          "disclaimer": "fixture"
+        },
+        "sectionType": "FUNDAMENTAL"
+      }
+    },
+    {
+      "type": "section_complete",
+      "data": {
+        "sectionType": "FUNDAMENTAL",
+        "status": "COMPLETED"
+      }
+    },
+    {
+      "type": "done",
+      "data": {
+        "analysisId": "a-test",
+        "status": "COMPLETED"
+      }
+    }
+  ],
+  "prismaWrites": [
+    {
+      "table": "analysisSection",
+      "method": "updateMany",
+      "whereKeys": [
+        "id"
+      ],
+      "dataKeys": [
+        "status"
+      ],
+      "dataStatus": "IN_PROGRESS"
+    },
+    {
+      "table": "analysisSection",
+      "method": "update",
+      "whereKeys": [
+        "id"
+      ],
+      "dataKeys": [
+        "citations",
+        "reportMarkdown",
+        "status",
+        "structuredJson"
+      ],
+      "dataStatus": "COMPLETED"
+    },
+    {
+      "table": "analysis",
+      "method": "update",
+      "whereKeys": [
+        "id"
+      ],
+      "dataKeys": [
+        "aiModel",
+        "generatedAt",
+        "status"
+      ],
+      "dataStatus": "COMPLETED"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Bourse">
+  <defs>
+    <linearGradient id="bourse-fav" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#e11d1d"/>
+      <stop offset="1" stop-color="#ff4040"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bourse-fav)"/>
+  <g transform="translate(10,9)" fill="none" stroke="#fbfbf8" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="5" y1="39" x2="39" y2="39" stroke-opacity="0.4" stroke-width="1.8"/>
+    <polyline points="6,33 15,26 22,29 37,9" stroke-width="3"/>
+    <polyline points="29.5,10.5 37,9 35.5,16.5" stroke-width="3"/>
+  </g>
+</svg>

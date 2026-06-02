@@ -1,0 +1,97 @@
+# =============================================================================
+# Bourse — single unified compose file.
+#
+# Local dev (only need the DB; api/web run via `pnpm dev`):
+#     docker compose up -d
+#
+# Full deploy (postgres + api + web):
+#     cp .env.example .env       # fill in JWT_SECRET / GITHUB_* / AI keys
+#     docker compose --profile app up -d --build
+#
+# Stop:
+#     docker compose down            # keeps pgdata
+#     docker compose down -v         # also wipes the DB volume
+#
+# The `app` profile gates api + web so the dev workflow (`docker compose up`
+# brings up just postgres) stays one command, and the prod workflow is one
+# command plus a `--profile app` flag.
+# =============================================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      # Exposed for local `pnpm dev` to reach the DB from the host.
+      - "${POSTGRES_HOST_PORT:-5434}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-bourse}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    profiles: [app]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${API_HOST_PORT:-3001}:3001"
+    environment:
+      NODE_ENV: production
+      # api talks to postgres over the compose network (internal hostname).
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-bourse}
+      JWT_SECRET: ${JWT_SECRET}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+      # GitHub OAuth — leave blank for AUTH_REQUIRED=false single-user mode.
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GITHUB_CALLBACK_URL: ${GITHUB_CALLBACK_URL:-}
+      # AI providers.
+      AI_PROVIDER: ${AI_PROVIDER:-openai}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      OPENAI_USE_CHAT_COMPLETIONS: ${OPENAI_USE_CHAT_COMPLETIONS:-}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      AUTH_REQUIRED: ${AUTH_REQUIRED:-true}
+      # Web search — global env fallback. Per-user config lives in
+      # /settings/ai and overrides these when set.
+      WEB_SEARCH_PROVIDER: ${WEB_SEARCH_PROVIDER:-}
+      SEARXNG_BASE_URL: ${SEARXNG_BASE_URL:-}
+      SEARXNG_API_KEY: ${SEARXNG_API_KEY:-}
+      WEB_SEARCH_TIMEOUT_MS: ${WEB_SEARCH_TIMEOUT_MS:-}
+      WEB_SEARCH_BUDGET_PER_RUN_USD: ${WEB_SEARCH_BUDGET_PER_RUN_USD:-}
+      WEB_SEARCH_CACHE_TTL_MS: ${WEB_SEARCH_CACHE_TTL_MS:-}
+
+  web:
+    profiles: [app]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+      args:
+        # NEXT_PUBLIC_* are baked into the JS bundle at build time, so they
+        # must be ARGs — env vars at runtime won't reach the browser.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${WEB_HOST_PORT:-3000}:3000"
+
+volumes:
+  pgdata:

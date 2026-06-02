@@ -1,0 +1,38 @@
+{
+  "id": "CN_600036_20260526",
+  "rawHash": "946b77f4e7fa3ced",
+  "computedFacts": {
+    "ratios": {
+      "pe": 6.180030116685572,
+      "pb": 0.7218594668309332,
+      "ps": 2.734263517658142,
+      "grossMargin": null,
+      "netMargin": 0.44243530630633277,
+      "roe": 0.11680516974860237,
+      "fcfYield": 0.4849729664745643
+    },
+    "technicalIndicators": {
+      "sma20": 38.05799999999999,
+      "sma50": 38.94720000000001,
+      "sma200": 40.420199999999994,
+      "rsi14": 23.029408961305904,
+      "macdTrend": "bearish",
+      "trend": "downtrend"
+    },
+    "redFlagsCount": 0,
+    "redFlagRules": [],
+    "valuation": {
+      "marketCap": 931620999999.9999,
+      "impliedGrowthRate": -0.28177785873413086,
+      "pe5yPercentile": null
+    },
+    "availability": {
+      "available": [
+        "financials",
+        "history",
+        "quote"
+      ],
+      "missingCount": 9
+    }
+  }
+}

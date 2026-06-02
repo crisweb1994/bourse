@@ -1,0 +1,161 @@
+{
+  "scenarioName": "comprehensive-section-failed",
+  "kind": "comprehensive",
+  "result": {
+    "terminalStatus": "PARTIAL_FAILED",
+    "factConflictCount": 0,
+    "failedSectionTypes": [
+      "FUNDAMENTAL",
+      "FUNDAMENTAL"
+    ]
+  },
+  "sendEvents": [
+    {
+      "type": "section_start",
+      "data": {
+        "sectionType": "FUNDAMENTAL",
+        "sectionId": "sec-fund",
+        "order": 0
+      }
+    },
+    {
+      "type": "report_chunk",
+      "data": {
+        "text": "partial ",
+        "sectionType": "FUNDAMENTAL"
+      }
+    },
+    {
+      "type": "error",
+      "data": {
+        "message": "upstream rate-limited",
+        "failedSections": [
+          "FUNDAMENTAL"
+        ]
+      }
+    },
+    {
+      "type": "section_complete",
+      "data": {
+        "sectionType": "FUNDAMENTAL",
+        "status": "FAILED"
+      }
+    },
+    {
+      "type": "section_start",
+      "data": {
+        "sectionType": "VALUATION",
+        "sectionId": "sec-val",
+        "order": 1
+      }
+    },
+    {
+      "type": "report_complete",
+      "data": {
+        "sectionType": "VALUATION"
+      }
+    },
+    {
+      "type": "structured_data",
+      "data": {
+        "json": {
+          "schemaVersion": "agent-result-v1",
+          "conclusion": {
+            "signal": "BULLISH",
+            "confidence": "HIGH",
+            "oneLiner": "fixture conclusion",
+            "evidence": []
+          },
+          "evidence": [],
+          "dataAvailability": {
+            "missingFields": [],
+            "reason": "ok"
+          },
+          "dataAsOf": "2026-05-21",
+          "disclaimer": "fixture disclaimer"
+        },
+        "sectionType": "VALUATION"
+      }
+    },
+    {
+      "type": "section_complete",
+      "data": {
+        "sectionType": "VALUATION",
+        "status": "COMPLETED"
+      }
+    },
+    {
+      "type": "done",
+      "data": {
+        "analysisId": "a-test",
+        "status": "PARTIAL_FAILED"
+      }
+    }
+  ],
+  "prismaWrites": [
+    {
+      "table": "analysisSection",
+      "method": "updateMany",
+      "whereKeys": [
+        "id"
+      ],
+      "dataKeys": [
+        "status"
+      ],
+      "dataStatus": "IN_PROGRESS"
+    },
+    {
+      "table": "analysisSection",
+      "method": "update",
+      "whereKeys": [
+        "id"
+      ],
+      "dataKeys": [
+        "errorMessage",
+        "status"
+      ],
+      "dataStatus": "FAILED"
+    },
+    {
+      "table": "analysisSection",
+      "method": "update",
+      "whereKeys": [
+        "id"
+      ],
+      "dataKeys": [
+        "citations",
+        "reportMarkdown",
+        "status",
+        "structuredJson"
+      ],
+      "dataStatus": "FAILED"
+    },
+    {
+      "table": "analysisSection",
+      "method": "update",
+      "whereKeys": [
+        "id"
+      ],
+      "dataKeys": [
+        "citations",
+        "reportMarkdown",
+        "status",
+        "structuredJson"
+      ],
+      "dataStatus": "COMPLETED"
+    },
+    {
+      "table": "analysis",
+      "method": "update",
+      "whereKeys": [
+        "id"
+      ],
+      "dataKeys": [
+        "aiModel",
+        "generatedAt",
+        "status"
+      ],
+      "dataStatus": "PARTIAL_FAILED"
+    }
+  ]
+}

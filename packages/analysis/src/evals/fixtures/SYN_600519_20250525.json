@@ -1,0 +1,109 @@
+{
+  "meta": {
+    "id": "SYN_600519_20250525",
+    "symbol": "600519",
+    "market": "CN",
+    "vendoredAt": "2025-05-25T00:00:00.000Z",
+    "description": "Synthetic 茅台-shaped CN fixture (单位归一化回归 + 5 CN-only fact keys)",
+    "category": "synthetic"
+  },
+  "rawFacts": {
+    "quote": {
+      "instrument": { "instrumentId": "CN:600519", "market": "CN", "symbol": "600519" },
+      "price": 1685,
+      "currency": "CNY",
+      "timestamp": "2025-05-25T00:00:00.000Z",
+      "marketCap": 21000
+    },
+    "history": null,
+    "profile": null,
+    "financials": {
+      "periods": [
+        {
+          "fiscalPeriod": "TTM",
+          "kind": "TTM",
+          "fiscalYearEnd": "2025-03-31",
+          "filed": "2025-04-30",
+          "income": {
+            "revenue": { "value": 17414000, "unit": "万元" },
+            "netIncome": { "value": 8572000, "unit": "万元" },
+            "eps": { "value": 68.5, "unit": "元" }
+          },
+          "balance": {
+            "totalAssets": { "value": 28000000, "unit": "万元" },
+            "totalLiabilities": { "value": 5000000, "unit": "万元" },
+            "totalStockholdersEquity": { "value": 23000000, "unit": "万元" },
+            "cashAndCashEquivalents": { "value": 18000000, "unit": "万元" }
+          },
+          "cashFlow": {
+            "operatingCashFlow": { "value": 7800000, "unit": "万元" },
+            "freeCashFlow": { "value": 6500000, "unit": "万元" }
+          }
+        }
+      ],
+      "currency": "CNY",
+      "sourceUrl": "https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_DMSK_FN_INCOME",
+      "retrievedAt": "2025-05-25T00:00:00.000Z",
+      "provider": "eastmoney-financials",
+      "qualityTier": "B"
+    },
+    "filings": null,
+    "consensusEps": {
+      "forecasts": [
+        { "year": 2026, "value": 68.96 },
+        { "year": 2027, "value": 72.75 }
+      ]
+    },
+    "northboundFlow": {
+      "rows": [
+        { "date": "2026-05-22", "hgt": 5.5, "sgt": 0 },
+        { "date": "2026-05-21", "hgt": -3.2, "sgt": 0 }
+      ]
+    },
+    "lhb": {
+      "appearances": [
+        {
+          "date": "2026-05-10",
+          "reason": "换手率达20%",
+          "topBuySeats": [
+            { "name": "国泰君安上海江苏路", "buyAmount": 12000000, "sellAmount": 0, "netAmount": 12000000 }
+          ],
+          "topSellSeats": [],
+          "topBuySeatNames": ["国泰君安上海江苏路"],
+          "topSellSeatNames": []
+        }
+      ]
+    },
+    "unlockCalendar": {
+      "events": [{ "date": "2026-06-15", "shares": 5000000, "type": "首发原股东限售股" }]
+    },
+    "shareholders": {
+      "rows": [
+        {
+          "endDate": "2026-03-31",
+          "holderTotalNum": 242750,
+          "holderTotalNumChange": -13220,
+          "holderTotalNumChangePct": -0.0517,
+          "avgHoldAmount": 7320000,
+          "avgHoldShares": 4500,
+          "concentrationLabel": "集中"
+        }
+      ],
+      "latestTrend": "falling"
+    },
+    "webSearch": null,
+    "macro": null
+  },
+  "citations": [],
+  "dataAvailability": {
+    "available": ["quote", "financials", "consensusEps", "northboundFlow", "lhb", "unlockCalendar", "shareholders"],
+    "missing": [
+      { "field": "history", "reason": "no_data" },
+      { "field": "profile", "reason": "not_configured" },
+      { "field": "filings", "reason": "not_configured" },
+      { "field": "webSearch", "reason": "not_configured" },
+      { "field": "macro", "reason": "not_configured" }
+    ],
+    "warnings": []
+  }
+}
