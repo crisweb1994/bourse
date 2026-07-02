@@ -7,6 +7,8 @@ import { DigestController } from './digest.controller';
 import { DigestSubscriptionService } from './digest.service';
 import { DigestGeneratorService } from './brief.generator';
 import { DigestDeliveryService } from './delivery.service';
+import { DigestTriggerService } from './trigger.service';
+import { DigestTriggerController } from './trigger.controller';
 import { WebhookAdapter } from './channel/webhook.adapter';
 import { FeishuAdapter } from './channel/feishu.adapter';
 import { TelegramAdapter } from './channel/telegram.adapter';
@@ -27,16 +29,22 @@ import { TelegramAdapter } from './channel/telegram.adapter';
  */
 @Module({
   imports: [AuthModule, AnalysisModule, AiSettingsModule],
-  controllers: [DigestController],
+  controllers: [DigestController, DigestTriggerController],
   providers: [
     DigestSubscriptionService,
     DigestGeneratorService,
     DigestDeliveryService,
+    DigestTriggerService,
     ProviderFactoryService,
     WebhookAdapter,
     FeishuAdapter,
     TelegramAdapter,
   ],
-  exports: [DigestSubscriptionService, DigestGeneratorService, DigestDeliveryService],
+  exports: [
+    DigestSubscriptionService,
+    DigestGeneratorService,
+    DigestDeliveryService,
+    DigestTriggerService,
+  ],
 })
 export class DigestModule {}

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { BriefPayload } from '@bourse/analysis';
 import { ChannelAdapter } from './types';
 import { renderMarkdown } from './render';
+import { reanalyzeUrl } from './button-url';
 
 /**
  * 飞书 adapter（PRD DB.6）。
@@ -58,6 +59,8 @@ function cardHeader(payload: BriefPayload): {
 function actionButtons(payload: BriefPayload): { tag: 'action'; actions: unknown[] }[] {
   const reanalyze = payload.watchlist.reanalyzeHints[0];
   if (!reanalyze) return [];
+  const btnUrl = reanalyzeUrl(reanalyze.symbol);
+  if (!btnUrl) return []; // dev/未配 FRONTEND_URL → 不发按钮（飞书也拒 localhost url）
   return [
     {
       tag: 'action',
@@ -65,7 +68,7 @@ function actionButtons(payload: BriefPayload): { tag: 'action'; actions: unknown
         {
           tag: 'button',
           text: { tag: 'plain_text', content: `复研 ${reanalyze.symbol}` },
-          url: `/stock/${reanalyze.symbol}?reanalyze=1`,
+          url: btnUrl,
           type: 'primary',
         },
       ],
