@@ -21,10 +21,12 @@ model User {
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
-  aiProviderSettings AiProviderSetting[]
-  watchlistItems     WatchlistItem[]
-  analyses           Analysis[]
-  webSearchSetting   WebSearchSetting?
+  aiProviderSettings  AiProviderSetting[]
+  watchlistItems      WatchlistItem[]
+  analyses            Analysis[]
+  webSearchSetting    WebSearchSetting?
+  digestSubscription  DigestSubscription?
+  deliveryRecords     DeliveryRecord[]
 }
 
 model Stock {
@@ -145,6 +147,37 @@ model WebSearchSetting {
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
   user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Daily Brief (docs/prd-daily-brief.md v1.5) — 定时行情简报订阅 + IM/Webhook
+// 投递记录。完整简报只在 IM，不落库（BriefPayload 是运行时内存结构）。
+model DigestSubscription {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  markets    String[]              // ["US","CN","HK"] 子集
+  sessions   String[]              // ["PRE","POST"] 子集
+  channels   Json                  // ChannelConfig[]（discriminated union，含凭证）
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model DeliveryRecord {
+  id          String   @id @default(cuid())
+  userId      String
+  market      String                  // US | CN | HK
+  session     String                  // PRE | POST
+  channelType String                  // FEISHU|TELEGRAM|SLACK|DINGTALK|WECOM|WEBHOOK
+  target      String                  // 脱敏：url 域名 / chatId 末四位
+  status      String                  // SENT | FAILED | RETRYING
+  httpStatus  Int?
+  error       String?
+  attemptedAt DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, attemptedAt])
+  @@index([market, session, attemptedAt])
 }
 
 model Analysis {

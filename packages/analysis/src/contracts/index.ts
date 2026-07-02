@@ -19,3 +19,6 @@ export * from './evidence-pack';
 export * from './evidence-pack-v2';
 export * from './judge-result';
 export * from './sse-events';
+
+// Daily Brief (docs/prd-daily-brief.md) — 定时行情简报契约
+export * from './brief-payload';

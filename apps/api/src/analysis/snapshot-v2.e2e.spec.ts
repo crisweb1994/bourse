@@ -124,6 +124,11 @@ function aaplFilings(): FilingSummary[] {
 }
 
 const SECONDS_IN_MS = 1_000;
+// 动态近期日期：lhb/northbound 有 daysBack(30) 窗口过滤，硬编码日期会随时间
+// 落出窗外 → appearances 被过滤 → facts 空（曾硬编码 '2026-05-10'，30 天后
+// fail）。用 now-5d / now-3d 保持窗口内，测试不再时间敏感。
+const lhbDate = new Date(Date.now() - 5 * 86_400_000).toISOString().slice(0, 10);
+const nbDate = new Date(Date.now() - 3 * 86_400_000).toISOString().slice(0, 10);
 
 // ============================================================================
 // Fetch mock that responds to CN tool URLs
@@ -339,7 +344,7 @@ describe('SnapshotV2 · E2E (CN 600519 with mocked CN tools)', () => {
             result: {
               data: [
                 {
-                  TRADE_DATE: '2026-05-10 00:00:00',
+                  TRADE_DATE: `${lhbDate} 00:00:00`,
                   EXPLANATION: '换手率达20%',
                   OPERATEDEPT_NAME: '国泰君安上海江苏路',
                   BUY: 1.2e7,
@@ -365,7 +370,7 @@ describe('SnapshotV2 · E2E (CN 600519 with mocked CN tools)', () => {
             result: {
               data: [
                 {
-                  HOLD_DATE: '2026-05-22',
+                  HOLD_DATE: nbDate,
                   MUTUAL_TYPE: '1',
                   ADD_MARKET_CAP: 5.5,
                   HOLD_SHARES_NUM: 4_800_000,
@@ -445,7 +450,7 @@ describe('SnapshotV2 · E2E (CN 600519 with mocked CN tools)', () => {
     // CN tool data shape sanity
     assert.equal(pack.facts.consensusEps?.value?.[0]?.year, 2026);
     assert.equal(pack.facts.consensusEps?.value?.[0]?.value, 68.96);
-    assert.equal(pack.facts.lhbAppearances?.value?.[0]?.date, '2026-05-10');
+    assert.equal(pack.facts.lhbAppearances?.value?.[0]?.date, lhbDate);
     assert.deepEqual(pack.facts.lhbAppearances?.value?.[0]?.topBuySeats, [
       '国泰君安上海江苏路',
     ]);
