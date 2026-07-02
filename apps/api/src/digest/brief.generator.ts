@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   type AgentProvider,
@@ -53,10 +53,11 @@ export class DigestGeneratorService {
     /**
      * 指数数据层 + 技术指标计算钩子，仅用于单测注入 stub；生产环境留空走
      * `@bourse/analysis` 默认实现（fetchIndexQuote / fetchIndexHistory /
-     * computeTechnicalIndicators）。与 stream-comprehensive-adapter 的
+     * computeTechnicalIndicators）。@Optional() 让真实 Nest DI 不注入（生产
+     * 不传），单测直接 new 时手动传。与 stream-comprehensive-adapter 的
      * `_streamFactory` 同款 test hook 风格。
      */
-    deps?: {
+    @Optional() deps?: {
       index?: IndexLayer;
       computeTech?: typeof computeTechnicalIndicators;
     },

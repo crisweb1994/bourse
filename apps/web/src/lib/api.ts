@@ -463,3 +463,73 @@ export function testWebSearchSetting(
     body: JSON.stringify(payload),
   });
 }
+
+// ============================================================================
+// Daily Brief subscription（docs/prd-daily-brief.md · task4 后端）
+// 单条 per-user 整体替换（PUT 语义，同 web-search-settings）。channels 的
+// 敏感字段（secret/botToken）在后端已 mask，前端拿不到真凭证；编辑时留空 =
+// keep-existing（后端 mergeSecrets 处理）。
+// ============================================================================
+
+export type DigestMarket = 'US' | 'CN' | 'HK';
+export type DigestSession = 'PRE' | 'POST';
+export type DigestChannelType =
+  | 'WEBHOOK'
+  | 'FEISHU'
+  | 'DINGTALK'
+  | 'WECOM'
+  | 'TELEGRAM'
+  | 'SLACK';
+
+export type DigestChannel =
+  | { type: 'WEBHOOK'; url: string; secret: string }
+  | { type: 'FEISHU'; url: string; secret?: string }
+  | { type: 'DINGTALK'; url: string; secret: string }
+  | { type: 'WECOM'; url: string }
+  | { type: 'TELEGRAM'; botToken: string; chatId: string }
+  | { type: 'SLACK'; url: string };
+
+export interface DigestSubscriptionDto {
+  markets: DigestMarket[];
+  sessions: DigestSession[];
+  /** 后端 mask 过的 channels（secret/botToken 显示 •••• 末四位）。 */
+  channels: DigestChannel[];
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertDigestSubscriptionPayload {
+  markets: DigestMarket[];
+  sessions: DigestSession[];
+  /** 真凭证（新建）或 mask 形态（编辑 keep-existing）。 */
+  channels: DigestChannel[];
+  enabled?: boolean;
+}
+
+export function getDigestSubscription(): Promise<DigestSubscriptionDto | null> {
+  return fetchApi('/api/digest/subscription');
+}
+
+export function putDigestSubscription(
+  payload: UpsertDigestSubscriptionPayload,
+): Promise<DigestSubscriptionDto> {
+  return fetchApi('/api/digest/subscription', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteDigestSubscription(): Promise<void> {
+  // DELETE 204 No Content（同 deleteWebSearchSetting，绕过 fetchApi 的 JSON 假设）。
+  const res = await fetch(`${API_URL}/api/digest/subscription`, {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: csrfHeaders(),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, body.message || res.statusText);
+  }
+}
