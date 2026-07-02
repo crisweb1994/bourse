@@ -691,3 +691,152 @@ function emptyQuote(): Quote {
     timestamp: new Date(0).toISOString(),
   };
 }
+
+// ============================================================================
+// Index market data (Daily Brief · DB.4)
+// 指数符号（^GSPC / 000001.SS / ^HSI）不经 getQuote 的 parseInstrumentId /
+// YAHOO_SUPPORTED / toYahooSymbol —— CN 会被 UNSUPPORTED_MARKET 拒、HK/CN 后缀
+// 规则会拼错（HK ^HSI → ^HSI.HK；CN 按首字母 6/非6 判 SS/SZ 对上证 000001
+// 会错给 .SZ）。直接用原始 Yahoo symbol 打 chart endpoint（plain UA，无 crumb；
+// crumb 只服务 quoteSummary 的 marketCap/PE，对指数无意义）。
+// 已验证可拉（2026-06-27）：^GSPC / ^IXIC / 000001.SS / ^HSI；^HSTECH Yahoo
+// 返回 delisted（HK 暂只用 ^HSI）。
+// ============================================================================
+
+/** Daily Brief 大盘指数清单（per-market，Yahoo 符号，已验证）。 */
+export const INDEX_SYMBOLS: Record<'US' | 'CN' | 'HK', readonly string[]> = {
+  US: ['^GSPC', '^IXIC'],
+  CN: ['000001.SS', '399001.SZ', '399006.SZ'],
+  HK: ['^HSI'],
+};
+
+/** 显示名（chart meta 不含指数名，静态映射）。 */
+export const INDEX_NAMES: Readonly<Record<string, string>> = {
+  '^GSPC': 'S&P 500',
+  '^IXIC': 'Nasdaq',
+  '000001.SS': '上证综指',
+  '399001.SZ': '深证成指',
+  '399006.SZ': '创业板指',
+  '^HSI': '恒生指数',
+};
+
+export interface IndexQuote {
+  symbol: string;
+  name: string;
+  price: number;
+  previousClose: number;
+  change: number;
+  changePct: number;
+  currency: string;
+  exchange: string;
+  timestamp: string;
+}
+
+/**
+ * 拉 index quote（chart range=1d，plain UA，无 crumb）。fail-soft → null
+ * （指数拉不到不阻塞 Brief 的自选股段）。
+ */
+export async function fetchIndexQuote(
+  yahooSymbol: string,
+  ctx: ConnectorRunContext = {},
+): Promise<IndexQuote | null> {
+  const fetchLike = resolveFetch(ctx);
+  const timeoutMs = ctx.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  try {
+    return await withTimeout(ctx, timeoutMs, async (signal) => {
+      const url = `${QUOTE_URL}/${encodeURIComponent(yahooSymbol)}?interval=1d&range=1d`;
+      const res = await fetchLike(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal });
+      if (!res.ok) return null;
+      const data = (await res.json()) as YahooChartResponse;
+      if (data.chart?.error) return null;
+      const meta = data.chart?.result?.[0]?.meta;
+      if (!meta || meta.regularMarketPrice == null) return null;
+      const prev = meta.previousClose ?? meta.chartPreviousClose;
+      if (prev == null) return null;
+      const change = meta.regularMarketPrice - prev;
+      const asOf = meta.regularMarketTime
+        ? new Date(meta.regularMarketTime * 1000).toISOString()
+        : new Date().toISOString();
+      return {
+        symbol: yahooSymbol,
+        name: INDEX_NAMES[yahooSymbol] ?? yahooSymbol,
+        price: meta.regularMarketPrice,
+        previousClose: prev,
+        change,
+        changePct: (change / prev) * 100,
+        currency: meta.currency ?? 'USD',
+        exchange: meta.exchangeName ?? '',
+        timestamp: asOf,
+      };
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 拉 index daily bars（给 compute/technical-indicators 算 SMA/RSI）。
+ * fail-soft → null。建议 from ≥ 1 年前以满足 SMA200。
+ */
+export async function fetchIndexHistory(
+  yahooSymbol: string,
+  from: string,
+  to: string,
+  ctx: ConnectorRunContext = {},
+): Promise<PriceBar[] | null> {
+  const period1 = Math.floor(new Date(from).getTime() / 1000);
+  const period2 = Math.floor(new Date(to).getTime() / 1000);
+  if (!Number.isFinite(period1) || !Number.isFinite(period2) || period1 >= period2) {
+    return null;
+  }
+  const fetchLike = resolveFetch(ctx);
+  const timeoutMs = ctx.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  try {
+    return await withTimeout(ctx, timeoutMs, async (signal) => {
+      const url =
+        `${QUOTE_URL}/${encodeURIComponent(yahooSymbol)}` +
+        `?period1=${period1}&period2=${period2}&interval=1d`;
+      const res = await fetchLike(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal });
+      if (!res.ok) return null;
+      const data = (await res.json()) as YahooChartResponse & {
+        chart?: {
+          result?: Array<{
+            timestamp?: number[];
+            indicators?: {
+              quote?: Array<{
+                open?: (number | null)[];
+                high?: (number | null)[];
+                low?: (number | null)[];
+                close?: (number | null)[];
+                volume?: (number | null)[];
+              }>;
+              adjclose?: Array<{ adjclose?: (number | null)[] }>;
+            };
+          }>;
+        };
+      };
+      if (data.chart?.error) return null;
+      const result = data.chart?.result?.[0];
+      const timestamps = result?.timestamp ?? [];
+      const q = result?.indicators?.quote?.[0];
+      const adj = result?.indicators?.adjclose?.[0]?.adjclose;
+      const bars: PriceBar[] = [];
+      for (let i = 0; i < timestamps.length; i += 1) {
+        const close = q?.close?.[i];
+        if (close == null) continue; // Yahoo emits null for non-trading days
+        bars.push({
+          timestamp: new Date(timestamps[i]! * 1000).toISOString(),
+          open: q?.open?.[i] ?? close,
+          high: q?.high?.[i] ?? close,
+          low: q?.low?.[i] ?? close,
+          close,
+          adjustedClose: adj?.[i] ?? undefined,
+          volume: q?.volume?.[i] ?? undefined,
+        });
+      }
+      return bars;
+    });
+  } catch {
+    return null;
+  }
+}

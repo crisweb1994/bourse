@@ -62,13 +62,15 @@ const WEEKDAY_INDEX: Record<string, number> = {
   Sat: 6,
 };
 
-interface LocalParts {
+export interface LocalParts {
   weekday: number; // 0=Sun .. 6=Sat
   minutes: number; // minutes from midnight
   ymd: string; // YYYY-MM-DD in exchange tz
 }
 
-function localParts(tz: string, at: Date): LocalParts {
+/** Exchange-local calendar parts (weekday / minutes / ymd) via Intl, DST-correct.
+ *  Exported for Daily Brief window logic (PRD DB.1) so DST stays collected here. */
+export function localParts(tz: string, at: Date): LocalParts {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: tz,
     hourCycle: 'h23',

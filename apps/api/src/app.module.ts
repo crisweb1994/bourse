@@ -8,6 +8,7 @@ import { WatchlistModule } from './watchlist/watchlist.module';
 import { AnalysisModule } from './analysis/analysis.module';
 import { AiSettingsModule } from './ai-settings/ai-settings.module';
 import { WebSearchSettingsModule } from './web-search-settings/web-search-settings.module';
+import { DigestModule } from './digest/digest.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { WebSearchSettingsModule } from './web-search-settings/web-search-settin
     UserModule,
     AiSettingsModule,
     WebSearchSettingsModule,
+    DigestModule,
     StockModule,
     WatchlistModule,
     AnalysisModule,

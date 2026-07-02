@@ -29,6 +29,7 @@ import {
 import { API_URL } from '@/lib/utils';
 import { BUILTIN_PROVIDER_CATALOG } from '@/lib/ai-provider-catalog';
 import { WebSearchSettingCard } from './web-search-card';
+import { DigestSubscriptionCard } from './digest-card';
 import {
   Button,
   Card,
@@ -821,6 +822,9 @@ export default function AiSettingsPage() {
           (s) => s.enabled && s.providerType === 'ANTHROPIC',
         )}
       />
+
+      {/* Daily Brief（docs/prd-daily-brief.md）：行情简报订阅 + 推送渠道。 */}
+      <DigestSubscriptionCard />
 
       {/* RFC rfc-evidence-pack-web-search-fallback: page-level preference.
           Sits below the per-provider grid so it's clearly separate from
