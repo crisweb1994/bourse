@@ -69,9 +69,6 @@ model WatchlistItem {
   @@index([userId, order])
 }
 
-// plan-v2 Wave 4.2 — InvestorProfile removed. plan-v2 §15.1 "用户画像放
-// URL params + localStorage，beta 无需持久化".
-
 model AiProviderSetting {
   id     String @id @default(cuid())
   userId String
@@ -276,41 +273,11 @@ model SnapshotCache {
   @@index([market, symbol, factKey])
 }
 
-// RFC-02 §10: tool result cache. Keyed by (toolName, market, symbol,
-// argsHash). Cross-process shared so multiple analyze() invocations of
-// the same stock in a short window only pay one upstream call. TTL
-// enforced at read time (`expiresAt` < now() → cache miss). Vacuum/cleanup
-// is done by index lookup on expiresAt (future cron job; not in RFC-02).
-// plan-v2 Wave 4.3 — ToolResultCache removed. In-memory LRU in
-// ToolCacheService is sufficient for the SnapshotV2 path.
-
-// RFC-01: per-section telemetry trace. One row per dimension execution.
-// Separate from AnalysisSection so business reads (apps/web) stay light and
-// telemetry can be truncated/archived independently. All cache/source-tier
-// columns default to 0 / NULL until Phase 3 / Phase 5 light them up.
-// plan-v2 Wave 4.4 — SectionTrace + RunAggregate removed. Telemetry folds
-// into AnalysisSection.tokensIn/Out/durationMs + Analysis.totalTokensIn/Out
-// /durationMs (single source of truth, no separate trace plumbing).
-
-// plan-v2 Wave 4.1 — BatchJob removed. plan-v2 §15.1 "beta 不需要".
-
 // =============================================================================
 // research-core persistence (PRD §12.2)
 // Owned by apps/api as the only Prisma-aware layer. Implements
 // research-core ResearchRepositoryPort.
 // =============================================================================
-
-// plan-v2 Wave 2.6g — research/planning Prisma models deleted with the
-// planner package. Tables dropped from the schema:
-//   - SourceDocument
-//   - SourceDocumentInstrument
-//   - ResearchSnapshot
-//   - ResearchSnapshotDocument
-//   - ResearchPlan
-//   - AnalysisResearchSnapshot
-//   - AnalysisResearchPlan
-// EvidencePack now comes from @bourse/analysis fetchSnapshot;
-// connector responses are not persisted (snapshot is an in-memory value).
 
 enum Sensitivity {
   public
@@ -353,8 +320,6 @@ enum AnalysisStatus {
   CANCELLED
 }
 
-// plan-v2 Wave 4.1 — BatchJobStatus enum removed alongside BatchJob model.
-
 enum Signal {
   BULLISH
   NEUTRAL
@@ -366,6 +331,3 @@ enum Confidence {
   MEDIUM
   LOW
 }
-
-// plan-v2 Wave 4.2 — RiskTolerance / InvestmentHorizon / PreferredStyle
-// enums removed alongside InvestorProfile.
