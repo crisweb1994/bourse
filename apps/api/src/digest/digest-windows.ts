@@ -1,4 +1,5 @@
 import { localParts } from '../stock/market-hours';
+import type { Market, DigestSession } from '@bourse/shared-types';
 
 /**
  * Daily Brief 投递窗口判断（PRD DB.1 · 模式 C）。
@@ -24,7 +25,7 @@ interface Window {
   post: readonly [number, number];
 }
 
-const WINDOWS: Record<'US' | 'CN' | 'HK', Window> = {
+const WINDOWS: Record<Market, Window> = {
   // 开盘 09:30 / 收盘 16:00 ET
   US: {
     tz: 'America/New_York',
@@ -45,11 +46,12 @@ const WINDOWS: Record<'US' | 'CN' | 'HK', Window> = {
   },
 };
 
-export type DigestMarket = 'US' | 'CN' | 'HK';
-export type DigestSession = 'PRE' | 'POST';
+// Market / DigestSession 从 @bourse/shared-types 复用（与 Prisma enum 同源）。
+export type DigestMarket = Market;
+export type { DigestSession };
 
 export interface DigestWindowHit {
-  market: DigestMarket;
+  market: Market;
   session: DigestSession;
   /** 当地交易所时区 ymd（幂等键组成部分，PRD DB.1 line 236）。 */
   localYmd: string;

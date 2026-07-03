@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { StockSearchResult } from '@bourse/shared-types';
+import { Market, type StockSearchResult } from '@bourse/shared-types';
 import type { FinancePort } from '@bourse/analysis';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpsertStockDto } from './stock.dto';
@@ -81,9 +81,10 @@ export class StockService {
   }
 
   async upsert(dto: UpsertStockDto) {
+    const market = dto.market as Market;
     return this.prisma.stock.upsert({
       where: {
-        symbol_market: { symbol: dto.symbol, market: dto.market },
+        symbol_market: { symbol: dto.symbol, market },
       },
       update: {
         name: dto.name,
@@ -91,7 +92,14 @@ export class StockService {
         currency: dto.currency,
         yahooSymbol: dto.yahooSymbol,
       },
-      create: dto,
+      create: {
+        symbol: dto.symbol,
+        market,
+        name: dto.name,
+        exchange: dto.exchange,
+        currency: dto.currency,
+        yahooSymbol: dto.yahooSymbol,
+      },
     });
   }
 
@@ -113,10 +121,10 @@ export class StockService {
     // those links resolve instead of silently 404'ing the quote panel.
     return (
       (await this.prisma.stock.findUnique({
-        where: { symbol_market: { symbol: s, market: m } },
+        where: { symbol_market: { symbol: s, market: m as Market } },
       })) ??
       (await this.prisma.stock.findFirst({
-        where: { yahooSymbol: s, market: m },
+        where: { yahooSymbol: s, market: m as Market },
       }))
     );
   }

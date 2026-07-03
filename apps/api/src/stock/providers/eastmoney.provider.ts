@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { StockSearchResult } from '@bourse/shared-types';
+import type { Market, StockSearchResult } from '@bourse/shared-types';
 
 interface EastMoneyItem {
   Code: string;
@@ -18,7 +18,7 @@ const SEARCH_TIMEOUT_MS = 5000;
 // MktNum → market profile. Anything not in this map is filtered out.
 const MARKET_BY_MKTNUM: Record<
   string,
-  { market: string; exchange: string; currency: string; yahooSuffix: string }
+  { market: Market; exchange: string; currency: string; yahooSuffix: string }
 > = {
   '0':   { market: 'CN', exchange: 'SZSE',   currency: 'CNY', yahooSuffix: '.SZ' },
   '1':   { market: 'CN', exchange: 'SSE',    currency: 'CNY', yahooSuffix: '.SS' },
