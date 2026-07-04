@@ -8,7 +8,6 @@ import type { Dimension, DimensionRunResult } from '../dimensions/types';
 import { computeUsd } from '../primitives/pricing';
 import type { AgentProvider } from '../primitives/provider';
 import { ToolMiddlewareRunner } from '../tools/middleware';
-import { streamDimension } from '../primitives/stream-dimension';
 import { runJudge, shouldJudge } from '../primitives/judge';
 import { formatEvidencePackBlock } from '../primitives/dimension-prompts';
 import {
@@ -32,22 +31,17 @@ import type {
   DimensionInput,
 } from './types';
 
-// refactor-v1 Wave 4: 纯函数 helpers + DimAccumulator 类型抽到 ./comprehensive-helpers
+// refactor-v1 Wave 4: 纯函数 helpers 抽到 ./comprehensive-helpers
 import {
-  accumulate,
   applyConfidenceDowngrade,
   assertLegacyParallelCompatible,
   buildResult,
   buildSectionsForValidation,
   checkBudget,
   deriveMarketRouting,
-  finalizeDim,
   filterDegradedDims,
-  makePerDimTraceEntry,
   selectJudgeTriggers,
   toAnalysisResult,
-  type BuildResultArgs,
-  type DimAccumulator,
 } from './comprehensive-helpers';
 
 // 异步 IO + 解析链 helpers (evidence pack 重建 / summary 结构化解析)
@@ -56,13 +50,16 @@ import {
   resolveEvidencePack,
 } from './comprehensive-async-helpers';
 
-// 执行策略 helpers (wave / parallel 共享的 harvest + drain 核心)
+// 执行策略 helpers (wave / parallel harvest + drain / sequential stream-through)
 import {
   applyHarvest,
+  emitTerminalDone,
   harvestDimBuffered,
+  runSequentialStrategy,
   type HarvestCollections,
   type HarvestContext,
   type HarvestTotals,
+  type SeqHandle,
 } from './comprehensive-strategies';
 
 /**
@@ -171,11 +168,6 @@ export async function* streamComprehensive(
     }
   >();
   const workflowStartedAt = Date.now();
-
-  // Helper: bump seq from yielded event
-  const bumpSeq = (eventSeq: number): void => {
-    seq = eventSeq + 1;
-  };
 
   // Evidence pack resolution:
   //  1. options.evidencePack — Path A: the consumer (apps/api) pre-builds it via
@@ -418,53 +410,47 @@ export async function* streamComprehensive(
       // (buildResult derives partialDimensions internally from
       // dimResults + failures; we don't pass them explicitly here.)
       void abortReason;
-      const result = buildResult({
-        status: 'BUDGET_EXHAUSTED' as RunStatus,
-        dimResults,
-        failures,
-        summary: null,
-        allCitations,
-        allWarnings,
-        aggregatedTokensIn,
-        aggregatedTokensOut,
-        aggregatedLlmCalls,
-        aggregatedToolCalls,
-        aggregatedCostUsd,
-        perDimTrace,
-        workflowStartedAt,
-      });
-      yield {
-        type: 'done',
+      const result = yield* emitTerminalDone(
+        {
+          status: 'BUDGET_EXHAUSTED' as RunStatus,
+          dimResults,
+          failures,
+          summary: null,
+          allCitations,
+          allWarnings,
+          aggregatedTokensIn,
+          aggregatedTokensOut,
+          aggregatedLlmCalls,
+          aggregatedToolCalls,
+          aggregatedCostUsd,
+          perDimTrace,
+          workflowStartedAt,
+        },
         runId,
-        seq: seq++,
-        status: 'BUDGET_EXHAUSTED',
-        result: toAnalysisResult(result),
-      };
+        nextSeq,
+      );
       return result;
     }
     if (waveAborted === 'fail-run') {
-      const result = buildResult({
-        status: 'FAILED',
-        dimResults,
-        failures,
-        summary: null,
-        allCitations,
-        allWarnings,
-        aggregatedTokensIn,
-        aggregatedTokensOut,
-        aggregatedLlmCalls,
-        aggregatedToolCalls,
-        aggregatedCostUsd,
-        perDimTrace,
-        workflowStartedAt,
-      });
-      yield {
-        type: 'done',
+      const result = yield* emitTerminalDone(
+        {
+          status: 'FAILED' as RunStatus,
+          dimResults,
+          failures,
+          summary: null,
+          allCitations,
+          allWarnings,
+          aggregatedTokensIn,
+          aggregatedTokensOut,
+          aggregatedLlmCalls,
+          aggregatedToolCalls,
+          aggregatedCostUsd,
+          perDimTrace,
+          workflowStartedAt,
+        },
         runId,
-        seq: seq++,
-        status: 'FAILED',
-        result: toAnalysisResult(result),
-      };
+        nextSeq,
+      );
       return result;
     }
     // All waves done — fall through to summary phase.
@@ -480,29 +466,39 @@ export async function* streamComprehensive(
     // Fall through to summary phase (parallel mode skips sequential loop).
   } else {
     // ===== Sequential mode (default) =====
-    // ===== Per-dimension streaming with retry-once + fail-run support =====
-    for (let i = 0; i < dims.length; i++) {
-    const dim = dims[i]!;
+    // Per-dimension streaming with retry-once + fail-run support. Isolated
+    // in runSequentialStrategy (./comprehensive-strategies) because, unlike
+    // wave/parallel, it streams events through inline (no buffering) and
+    // checks budget at dim granularity.
+    const seqHandle: SeqHandle = {
+      get: () => seq,
+      set: (v) => {
+        seq = v;
+      },
+      next: () => seq++,
+    };
+    const outcome = yield* runSequentialStrategy({
+      dims,
+      harvestCtx,
+      collections: harvestCollections,
+      totals: harvestTotals,
+      budget,
+      workflowStartedAt,
+      overBudget,
+      seq: seqHandle,
+    });
+    if (outcome.status === 'terminal') {
+      return outcome.result;
+    }
+  }
 
-    // Budget check BEFORE next dim starts
-    const breach = overBudget();
-    if (breach) {
-      yield {
-        type: 'error',
-        runId,
-        seq: seq++,
-        message: `Budget exhausted (${breach}); halting before ${dim.type}`,
-        recoverable: false,
-      };
-      // Day 11.5a P1 #4: include all dims that never ran in
-      // partialDimensions so the consumer can show "X/8 completed,
-      // Y waiting".
-      const unrunDims = dims.slice(i).map((d) => d.type);
-      const result = buildResult({
-        status: 'BUDGET_EXHAUSTED',
+  // ===== Summary phase =====
+  if (dimResults.size === 0) {
+    const result = yield* emitTerminalDone(
+      {
+        status: 'FAILED' as RunStatus,
         dimResults,
         failures,
-        unrunDimensions: unrunDims,
         summary: null,
         allCitations,
         allWarnings,
@@ -513,152 +509,10 @@ export async function* streamComprehensive(
         aggregatedCostUsd,
         perDimTrace,
         workflowStartedAt,
-      });
-      yield {
-        type: 'done',
-        runId,
-        seq: seq++,
-        status: 'BUDGET_EXHAUSTED',
-        result: toAnalysisResult(result),
-      };
-      return result;
-    }
-
-    const maxAttempts = dim.onFailure === 'retry-once' ? 2 : 1;
-    let dimSucceeded = false;
-    let lastError: Error | null = null;
-
-    for (let attempt = 0; attempt < maxAttempts && !dimSucceeded; attempt++) {
-      const acc: DimAccumulator = {
-        markdown: '',
-        json: null,
-        citations: [],
-        usage: { tokensIn: 0, tokensOut: 0 },
-        llmCalls: 0,
-        toolCalls: 0,
-        durationMs: 0,
-        citationsCount: 0,
-        costUsd: 0,
-      };
-      try {
-        for await (const event of streamDimension(provider, dim, input, {
-          runId,
-          startSeq: seq,
-          order: i,
-          todayDate,
-          signal: options.signal,
-          // RFC-02 T9: plumb pack through (T10 wires into prompt body).
-          ...(evidencePack ? { evidencePack } : {}),
-          ...(marketAllowedDomains && marketAllowedDomains.length > 0
-            ? { allowedDomains: marketAllowedDomains }
-            : {}),
-          ...(marketDomainTiers ? { domainTiers: marketDomainTiers } : {}),
-        })) {
-          bumpSeq(event.seq);
-          yield event;
-          accumulate(event, acc);
-        }
-        const result = finalizeDim(dim, acc);
-        dimResults.set(dim.type, result);
-        aggregatedTokensIn += acc.usage.tokensIn;
-        aggregatedTokensOut += acc.usage.tokensOut;
-        aggregatedLlmCalls += acc.llmCalls;
-        aggregatedToolCalls += acc.toolCalls;
-        aggregatedCostUsd += acc.costUsd;
-        // Day 11.5b: route tool invocations through middleware
-        // (walking-skeleton only knows webSearch; future tools will
-        // surface their breakdown via section_complete extensions).
-        if (acc.toolCalls > 0) {
-          recordToolUses(
-            { webSearch: acc.toolCalls },
-            { tokensIn: acc.usage.tokensIn, tokensOut: acc.usage.tokensOut },
-          );
-        }
-        perDimTrace.set(dim.type, makePerDimTraceEntry(acc));
-        allCitations.push(...acc.citations);
-        allWarnings.push(...result.warnings);
-        dimSucceeded = true;
-        // Emit cost_update with run-wide cumulative totals (Day 11.5a P1 #2).
-        yield {
-          type: 'cost_update',
-          runId,
-          seq: seq++,
-          totalUsd: aggregatedCostUsd,
-          totalTokens: aggregatedTokensIn + aggregatedTokensOut,
-          toolCalls: aggregatedToolCalls,
-        };
-      } catch (e) {
-        lastError = e as Error;
-        const willRetry = attempt < maxAttempts - 1;
-        yield {
-          type: 'error',
-          runId,
-          seq: seq++,
-          sectionType: dim.type,
-          message: lastError.message,
-          recoverable: willRetry,
-        };
-      }
-    }
-
-    if (!dimSucceeded) {
-      failures.push({
-        type: dim.type,
-        error: lastError?.message ?? 'unknown',
-      });
-      if (dim.onFailure === 'fail-run') {
-        const result = buildResult({
-          status: 'FAILED',
-          dimResults,
-          failures,
-          summary: null,
-          allCitations,
-          allWarnings,
-          aggregatedTokensIn,
-          aggregatedTokensOut,
-          aggregatedLlmCalls,
-          aggregatedToolCalls,
-          aggregatedCostUsd,
-          perDimTrace,
-          workflowStartedAt,
-        });
-        yield {
-          type: 'done',
-          runId,
-          seq: seq++,
-          status: 'FAILED',
-          result: toAnalysisResult(result),
-        };
-        return result;
-      }
-    }
-    }
-  }
-
-  // ===== Summary phase =====
-  if (dimResults.size === 0) {
-    const result = buildResult({
-      status: 'FAILED',
-      dimResults,
-      failures,
-      summary: null,
-      allCitations,
-      allWarnings,
-      aggregatedTokensIn,
-      aggregatedTokensOut,
-      aggregatedLlmCalls,
-      aggregatedToolCalls,
-      aggregatedCostUsd,
-      perDimTrace,
-      workflowStartedAt,
-    });
-    yield {
-      type: 'done',
+      },
       runId,
-      seq: seq++,
-      status: 'FAILED',
-      result: toAnalysisResult(result),
-    };
+      nextSeq,
+    );
     return result;
   }
 
@@ -702,28 +556,25 @@ export async function* streamComprehensive(
           message: `Cross-dim validator detected ${validatorReport.summary.severityCounts.FAIL} FAIL conflict(s); summary skipped to surface the discrepancy`,
           recoverable: false,
         };
-        const result = buildResult({
-          status: 'PARTIAL_FAILED',
-          dimResults,
-          failures,
-          summary: null,
-          allCitations,
-          allWarnings,
-          aggregatedTokensIn,
-          aggregatedTokensOut,
-          aggregatedLlmCalls,
-          aggregatedToolCalls,
-          aggregatedCostUsd,
-          perDimTrace,
-          workflowStartedAt,
-        });
-        yield {
-          type: 'done',
+        const result = yield* emitTerminalDone(
+          {
+            status: 'PARTIAL_FAILED' as RunStatus,
+            dimResults,
+            failures,
+            summary: null,
+            allCitations,
+            allWarnings,
+            aggregatedTokensIn,
+            aggregatedTokensOut,
+            aggregatedLlmCalls,
+            aggregatedToolCalls,
+            aggregatedCostUsd,
+            perDimTrace,
+            workflowStartedAt,
+          },
           runId,
-          seq: seq++,
-          status: 'PARTIAL_FAILED',
-          result: toAnalysisResult(result),
-        };
+          nextSeq,
+        );
         return result;
       }
 
