@@ -10,6 +10,7 @@ import type { Citation } from '../contracts/citation';
 import type { AnalysisType, RunStatus } from '../contracts/enums';
 import type { SseEvent } from '../contracts/sse-events';
 import type { Dimension, DimensionRunResult } from '../dimensions/types';
+import type { BudgetLimits } from './types';
 import type {
   ComprehensiveResult,
   DimensionFailure,
@@ -252,4 +253,39 @@ export function inferMissingPrivateFieldsComp(
     }
   }
   return Array.from(out);
+}
+
+/**
+ * Detect whether the run has exhausted any configured budget cap. Shared by
+ * `streamSingle` and `streamComprehensive` (previously two near-identical
+ * copies — `workflows/single.ts` and the `overBudget` closure in
+ * `comprehensive.ts`).
+ *
+ * Comparison semantics differ between the two callers and are preserved
+ * exactly via `inclusive`:
+ *  - `inclusive: false` (single.ts) → trips when usage STRICTLY EXCEEDS the
+ *    cap (`used.x > cap`). Used because single.ts checks AFTER a dim runs.
+ *  - `inclusive: true` (comprehensive.ts) → trips when usage REACHES the cap
+ *    (`used.x >= cap`). Used because comprehensive checks BEFORE the next dim
+ *    starts, so hitting the cap exactly must halt.
+ *
+ * Returns the first breached cap label (tokens → cost → toolCalls order), or
+ * `false` when no cap is configured or none is breached.
+ */
+export function checkBudget(
+  budget: BudgetLimits | undefined,
+  used: {
+    tokens: number;
+    costUsd: number;
+    toolCalls: number;
+  },
+  inclusive: boolean,
+): false | 'maxTokens' | 'maxCostUsd' | 'maxToolCalls' {
+  if (!budget) return false;
+  const hit = (cap: number | undefined, value: number): boolean =>
+    cap !== undefined && (inclusive ? value >= cap : value > cap);
+  if (hit(budget.maxTokens, used.tokens)) return 'maxTokens';
+  if (hit(budget.maxCostUsd, used.costUsd)) return 'maxCostUsd';
+  if (hit(budget.maxToolCalls, used.toolCalls)) return 'maxToolCalls';
+  return false;
 }

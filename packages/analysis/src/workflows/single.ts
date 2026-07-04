@@ -9,6 +9,7 @@ import { computeUsd } from '../primitives/pricing';
 import type { AgentProvider } from '../primitives/provider';
 import { streamDimension } from '../primitives/stream-dimension';
 import { ToolMiddlewareRunner } from '../tools/middleware';
+import { checkBudget } from './comprehensive-helpers';
 import type { BudgetLimits } from './types';
 
 export interface SingleOptions {
@@ -172,12 +173,17 @@ export async function* streamSingle(
       : computeUsd(undefined, acc.usage.tokensIn, acc.usage.tokensOut);
 
   // Post-hoc budget check (CLAUDE.md §3 #16 — single dim: section already
-  // ran, so we report overshoot rather than prevent it).
-  const breach = checkBudget(options.budget, {
-    tokens: acc.usage.tokensIn + acc.usage.tokensOut,
-    costUsd: computedCostUsd,
-    toolCalls: acc.toolCalls,
-  });
+  // ran, so we report overshoot rather than prevent it). inclusive=false
+  // preserves the strict `>` semantics: overshoot, not reach.
+  const breach = checkBudget(
+    options.budget,
+    {
+      tokens: acc.usage.tokensIn + acc.usage.tokensOut,
+      costUsd: computedCostUsd,
+      toolCalls: acc.toolCalls,
+    },
+    false,
+  );
 
   const status: RunStatus = dimError
     ? 'FAILED'
@@ -223,26 +229,6 @@ export async function* streamSingle(
     result,
   };
   return result;
-}
-
-function checkBudget(
-  budget: BudgetLimits | undefined,
-  used: { tokens: number; costUsd: number; toolCalls: number },
-): false | 'maxTokens' | 'maxCostUsd' | 'maxToolCalls' {
-  if (!budget) return false;
-  if (budget.maxTokens !== undefined && used.tokens > budget.maxTokens) {
-    return 'maxTokens';
-  }
-  if (budget.maxCostUsd !== undefined && used.costUsd > budget.maxCostUsd) {
-    return 'maxCostUsd';
-  }
-  if (
-    budget.maxToolCalls !== undefined &&
-    used.toolCalls > budget.maxToolCalls
-  ) {
-    return 'maxToolCalls';
-  }
-  return false;
 }
 
 /** Convenience wrapper: drains streamSingle and returns the AnalysisResult. */

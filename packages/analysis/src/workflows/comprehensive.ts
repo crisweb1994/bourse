@@ -43,6 +43,7 @@ import {
   accumulate,
   applyConfidenceDowngrade,
   buildResult,
+  checkBudget,
   finalizeDim,
   inferMissingPrivateFieldsComp,
   toAnalysisResult,
@@ -307,32 +308,22 @@ export async function* streamComprehensive(
     }
   }
 
-  // Helper: detect budget exhaustion
+  // Helper: detect budget exhaustion (inclusive: a cap reached exactly
+  // must halt before the next dim starts — comprehensive checks pre-dim).
   const overBudget = ():
     | false
     | 'maxTokens'
     | 'maxCostUsd'
-    | 'maxToolCalls' => {
-    if (
-      budget.maxTokens !== undefined &&
-      aggregatedTokensIn + aggregatedTokensOut >= budget.maxTokens
-    ) {
-      return 'maxTokens';
-    }
-    if (
-      budget.maxCostUsd !== undefined &&
-      aggregatedCostUsd >= budget.maxCostUsd
-    ) {
-      return 'maxCostUsd';
-    }
-    if (
-      budget.maxToolCalls !== undefined &&
-      aggregatedToolCalls >= budget.maxToolCalls
-    ) {
-      return 'maxToolCalls';
-    }
-    return false;
-  };
+    | 'maxToolCalls' =>
+    checkBudget(
+      budget,
+      {
+        tokens: aggregatedTokensIn + aggregatedTokensOut,
+        costUsd: aggregatedCostUsd,
+        toolCalls: aggregatedToolCalls,
+      },
+      true,
+    );
 
   // RFC-05: wave mode. Takes precedence over legacy `parallel`.
   // - waveMode 'auto': group dims by wave, run with semaphore, gate
