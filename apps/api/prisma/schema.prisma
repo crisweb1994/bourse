@@ -83,7 +83,6 @@ model AiProviderSetting {
 
   baseUrl         String?
   apiKey          String? // 明文存储（用户可在 Settings 页查看/编辑）
-  apiKeyEncrypted String? // 旧字段：保留供历史数据兼容读取
   enabled         Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -104,7 +103,6 @@ model AiProviderSetting {
    * 注意: web_search 工具调用 + 证据归一化仍走主 model 以保证引用准确性。
    */
   utilityModel   String?
-  modelCatalogId String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -200,19 +198,6 @@ model Analysis {
   // builder after v2 hard-failed. Indexed for history filtering.
   degradedSource      String?
 
-  // plan-v2 §11.1: telemetry folded from the deleted RunAggregate table.
-  // Populated by stream-comprehensive-adapter at terminal write.
-  totalTokensIn        Int?
-  totalTokensOut       Int?
-  durationMs           Int?
-
-  // plan-v2 §11.1: snapshot metadata captured at fetchSnapshot time. Full
-  // snapshot is not persisted (see §1.3 "snapshot is a value, not state");
-  // only these summary fields land on Analysis so history/detail can render
-  // "data as of X · 缺失 Y" without rehydrating.
-  snapshotCapturedAt   DateTime?
-  snapshotAvailability Json?      // { available: string[]; missing: { field, reason }[]; warnings: string[] }
-
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
 
@@ -253,24 +238,6 @@ model AnalysisSection {
   updatedAt      DateTime       @updatedAt
 
   analysis Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
-}
-
-// plan-v2 §8.2: L2 connector cache. L1 in-memory LRU lives in
-// ToolCacheService; L2 spans processes so cold-start / multi-instance
-// deployments don't pay full upstream latency. TTL enforced at read time
-// (expiresAt < now() → miss). Vacuum is index lookup on expiresAt.
-model SnapshotCache {
-  id        String   @id @default(cuid())
-  cacheKey  String   @unique          // e.g. "yahoo:quote:AAPL"
-  market    Market
-  symbol    String?
-  factKey   String                    // quote | history | profile | financials | filings | consensusEps | lhb | northboundFlow | unlockCalendar | shareholders | macro
-  payload   Json
-  fetchedAt DateTime
-  expiresAt DateTime
-
-  @@index([expiresAt])
-  @@index([market, symbol, factKey])
 }
 
 // =============================================================================

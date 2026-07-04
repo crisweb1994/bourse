@@ -15,7 +15,7 @@ import {
   ProviderTypeStr,
   UpdateAiProviderSettingDto,
 } from './ai-settings.dto';
-import { decryptSecret } from './secrets';
+
 import { BUILTIN_PROVIDER_CATALOG } from './builtin-catalog';
 
 export interface AiProviderRuntime {
@@ -356,26 +356,9 @@ export class AiSettingsService {
     };
   }
 
-  /** 优先读明文 apiKey；旧行兼容：尝试解密 apiKeyEncrypted。 */
+  /** 读明文 apiKey（删 apiKeyEncrypted 后明文是唯一来源）。 */
   private readApiKey(row: any): string | null {
-    if (row.apiKey) return row.apiKey;
-    if (!row.apiKeyEncrypted) return null;
-    try {
-      return decryptSecret(row.apiKeyEncrypted, this.encryptionSecret);
-    } catch (err: any) {
-      this.logger.warn(
-        `Legacy apiKeyEncrypted decrypt failed (rowId=${row.id}): ${err.message} — user should re-enter key`,
-      );
-      return null;
-    }
-  }
-
-  private get encryptionSecret(): string {
-    return (
-      this.config.get<string>('AI_SETTINGS_ENCRYPTION_KEY')
-      || this.config.get<string>('JWT_SECRET')
-      || 'bourse-local-ai-settings'
-    );
+    return row.apiKey ?? null;
   }
 
   private emptyToNull(value?: string | null): string | null {
