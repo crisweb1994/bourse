@@ -56,6 +56,15 @@ import {
   resolveEvidencePack,
 } from './comprehensive-async-helpers';
 
+// 执行策略 helpers (wave / parallel 共享的 harvest + drain 核心)
+import {
+  applyHarvest,
+  harvestDimBuffered,
+  type HarvestCollections,
+  type HarvestContext,
+  type HarvestTotals,
+} from './comprehensive-strategies';
+
 /**
  * RFC-10 §7.2: cap on parallel judge invocations. Selective judge phase
  * runs after the validator and before summary; capping concurrency keeps
@@ -282,73 +291,66 @@ export async function* streamComprehensive(
       : options.waveMode;
   const waveSemaphore = options.waveSemaphore ?? 4;
 
-  if (resolvedWaveMode === 'auto') {
-    // Shared per-dim harvester — same accumulator + retry-once contract
-    // as the legacy parallel path, but isolated so the wave-loop can
-    // schedule it with bounded concurrency.
-    const harvestDim = async (
-      dim: (typeof dims)[number],
-      i: number,
-    ): Promise<{
-      dim: (typeof dims)[number];
-      events: SseEvent[];
-      acc: DimAccumulator;
-      error: Error | null;
-    }> => {
-      const acc: DimAccumulator = {
-        markdown: '',
-        json: null,
-        citations: [],
-        usage: { tokensIn: 0, tokensOut: 0 },
-        llmCalls: 0,
-        toolCalls: 0,
-        durationMs: 0,
-        citationsCount: 0,
-        costUsd: 0,
-      };
-      const events: SseEvent[] = [];
-      let lastError: Error | null = null;
-      const maxAttempts = dim.onFailure === 'retry-once' ? 2 : 1;
-      for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        try {
-          const subGen = streamDimension(provider, dim, input, {
-            runId,
-            startSeq: 0, // global re-numbering happens during drain
-            order: i,
-            todayDate,
-            signal: options.signal,
-            ...(evidencePack ? { evidencePack } : {}),
-            ...(marketAllowedDomains && marketAllowedDomains.length > 0
-              ? { allowedDomains: marketAllowedDomains }
-              : {}),
-            ...(marketDomainTiers ? { domainTiers: marketDomainTiers } : {}),
-          });
-          Object.assign(acc, {
-            markdown: '',
-            json: null,
-            citations: [],
-            usage: { tokensIn: 0, tokensOut: 0 },
-            llmCalls: 0,
-            toolCalls: 0,
-            durationMs: 0,
-            citationsCount: 0,
-            costUsd: 0,
-          });
-          const attemptEvents: SseEvent[] = [];
-          for await (const event of subGen) {
-            attemptEvents.push(event);
-            accumulate(event, acc);
-          }
-          events.splice(0, events.length, ...attemptEvents);
-          lastError = null;
-          break;
-        } catch (e) {
-          lastError = e as Error;
-        }
-      }
-      return { dim, events, acc, error: lastError };
-    };
+  // Shared harvest context — wave and parallel modes both feed per-dim
+  // harvests through the helpers in ./comprehensive-strategies.
+  const harvestCtx: HarvestContext = {
+    provider,
+    input,
+    runId,
+    todayDate,
+    signal: options.signal,
+    evidencePack,
+    marketAllowedDomains,
+    marketDomainTiers,
+  };
+  // Collections are passed by reference (applyHarvest mutates them in place).
+  const harvestCollections: HarvestCollections = {
+    dimResults,
+    failures,
+    allCitations,
+    allWarnings,
+    perDimTrace,
+    toolMiddleware,
+  };
+  // Running totals are bound to the generator's local accumulators via
+  // get/set so applyHarvest's `totals.x += ...` updates the locals directly
+  // — keeping a single source of truth (the locals) without rewriting every
+  // downstream reference in the summary / buildResult phases.
+  const harvestTotals: HarvestTotals = {
+    get tokensIn() {
+      return aggregatedTokensIn;
+    },
+    set tokensIn(v) {
+      aggregatedTokensIn = v;
+    },
+    get tokensOut() {
+      return aggregatedTokensOut;
+    },
+    set tokensOut(v) {
+      aggregatedTokensOut = v;
+    },
+    get llmCalls() {
+      return aggregatedLlmCalls;
+    },
+    set llmCalls(v) {
+      aggregatedLlmCalls = v;
+    },
+    get toolCalls() {
+      return aggregatedToolCalls;
+    },
+    set toolCalls(v) {
+      aggregatedToolCalls = v;
+    },
+    get costUsd() {
+      return aggregatedCostUsd;
+    },
+    set costUsd(v) {
+      aggregatedCostUsd = v;
+    },
+  };
+  const nextSeq = (): number => seq++;
 
+  if (resolvedWaveMode === 'auto') {
     // Global order is preserved by feeding each dim its original index
     // from the canonical dims[] array — events drained per-wave still
     // sort the same as the legacy parallel path.
@@ -374,7 +376,7 @@ export async function* streamComprehensive(
 
       const tasks = group.dims.map((dim) => {
         const i = dims.indexOf(dim);
-        return () => harvestDim(dim, i);
+        return () => harvestDimBuffered(harvestCtx, dim, i);
       });
       const settled = await runWithSemaphore(tasks, waveSemaphore);
       const harvests = settled.flatMap((r) =>
@@ -383,52 +385,13 @@ export async function* streamComprehensive(
 
       // Drain in dim order, renumber seq globally, accumulate state.
       for (const h of harvests) {
-        for (const event of h.events) {
-          yield { ...event, seq: seq++ };
-        }
-        if (h.error) {
-          failures.push({ type: h.dim.type, error: h.error.message });
-          yield {
-            type: 'error',
-            runId,
-            seq: seq++,
-            sectionType: h.dim.type,
-            message: h.error.message,
-            recoverable: false,
-          };
-          continue;
-        }
-        try {
-          const result = finalizeDim(h.dim, h.acc);
-          dimResults.set(h.dim.type, result);
-          aggregatedTokensIn += h.acc.usage.tokensIn;
-          aggregatedTokensOut += h.acc.usage.tokensOut;
-          aggregatedLlmCalls += h.acc.llmCalls;
-          aggregatedToolCalls += h.acc.toolCalls;
-          aggregatedCostUsd += h.acc.costUsd;
-          perDimTrace.set(h.dim.type, makePerDimTraceEntry(h.acc));
-          allCitations.push(...h.acc.citations);
-          allWarnings.push(...result.warnings);
-          if (h.acc.toolCalls > 0) {
-            recordToolUses(
-              { webSearch: h.acc.toolCalls },
-              {
-                tokensIn: h.acc.usage.tokensIn,
-                tokensOut: h.acc.usage.tokensOut,
-              },
-            );
-          }
-          yield {
-            type: 'cost_update',
-            runId,
-            seq: seq++,
-            totalUsd: aggregatedCostUsd,
-            totalTokens: aggregatedTokensIn + aggregatedTokensOut,
-            toolCalls: aggregatedToolCalls,
-          };
-        } catch (e) {
-          failures.push({ type: h.dim.type, error: (e as Error).message });
-        }
+        yield* applyHarvest(
+          h,
+          harvestCollections,
+          harvestTotals,
+          runId,
+          nextSeq,
+        );
       }
 
       // Fail-run gate (RFC-05 §7): if any fail-run dim in this wave
@@ -507,113 +470,12 @@ export async function* streamComprehensive(
     // All waves done — fall through to summary phase.
   } else if (options.parallel && resolvedWaveMode !== 'disabled') {
     const harvests = await Promise.all(
-      dims.map(async (dim, i) => {
-        const acc: DimAccumulator = {
-          markdown: '',
-          json: null,
-          citations: [],
-          usage: { tokensIn: 0, tokensOut: 0 },
-          llmCalls: 0,
-          toolCalls: 0,
-          durationMs: 0,
-          citationsCount: 0,
-          costUsd: 0,
-        };
-        const events: SseEvent[] = [];
-        let lastError: Error | null = null;
-        const maxAttempts = dim.onFailure === 'retry-once' ? 2 : 1;
-        for (let attempt = 0; attempt < maxAttempts; attempt++) {
-          try {
-            const subGen = streamDimension(provider, dim, input, {
-              runId,
-              startSeq: 0, // re-numbered after Promise.all
-              order: i,
-              todayDate,
-              signal: options.signal,
-              // RFC-02 T9: plumb pack through (T10 wires into prompt body).
-              ...(evidencePack ? { evidencePack } : {}),
-              ...(marketAllowedDomains && marketAllowedDomains.length > 0
-                ? { allowedDomains: marketAllowedDomains }
-                : {}),
-              ...(marketDomainTiers ? { domainTiers: marketDomainTiers } : {}),
-            });
-            // Reset acc on each attempt
-            Object.assign(acc, {
-              markdown: '',
-              json: null,
-              citations: [],
-              usage: { tokensIn: 0, tokensOut: 0 },
-              llmCalls: 0,
-              toolCalls: 0,
-              durationMs: 0,
-              citationsCount: 0,
-              costUsd: 0,
-            });
-            const attemptEvents: SseEvent[] = [];
-            for await (const event of subGen) {
-              attemptEvents.push(event);
-              accumulate(event, acc);
-            }
-            // Success — replace events with this attempt's
-            events.splice(0, events.length, ...attemptEvents);
-            lastError = null;
-            break;
-          } catch (e) {
-            lastError = e as Error;
-          }
-        }
-        return { dim, events, acc, error: lastError };
-      }),
+      dims.map((dim, i) => harvestDimBuffered(harvestCtx, dim, i)),
     );
 
     // Drain in dim order, renumber seq globally, accumulate state.
     for (const h of harvests) {
-      for (const event of h.events) {
-        const renumbered = { ...event, seq: seq++ };
-        yield renumbered;
-      }
-      if (h.error) {
-        failures.push({ type: h.dim.type, error: h.error.message });
-        yield {
-          type: 'error',
-          runId,
-          seq: seq++,
-          sectionType: h.dim.type,
-          message: h.error.message,
-          recoverable: false,
-        };
-        continue;
-      }
-      try {
-        const result = finalizeDim(h.dim, h.acc);
-        dimResults.set(h.dim.type, result);
-        aggregatedTokensIn += h.acc.usage.tokensIn;
-        aggregatedTokensOut += h.acc.usage.tokensOut;
-        aggregatedLlmCalls += h.acc.llmCalls;
-        aggregatedToolCalls += h.acc.toolCalls;
-        aggregatedCostUsd += h.acc.costUsd;
-        perDimTrace.set(h.dim.type, makePerDimTraceEntry(h.acc));
-        allCitations.push(...h.acc.citations);
-        allWarnings.push(...result.warnings);
-        // Day 11.5b: parallel-mode tool middleware recording.
-        if (h.acc.toolCalls > 0) {
-          recordToolUses(
-            { webSearch: h.acc.toolCalls },
-            { tokensIn: h.acc.usage.tokensIn, tokensOut: h.acc.usage.tokensOut },
-          );
-        }
-        // Per-dim cost_update with cumulative totals (parallel mode).
-        yield {
-          type: 'cost_update',
-          runId,
-          seq: seq++,
-          totalUsd: aggregatedCostUsd,
-          totalTokens: aggregatedTokensIn + aggregatedTokensOut,
-          toolCalls: aggregatedToolCalls,
-        };
-      } catch (e) {
-        failures.push({ type: h.dim.type, error: (e as Error).message });
-      }
+      yield* applyHarvest(h, harvestCollections, harvestTotals, runId, nextSeq);
     }
     // Fall through to summary phase (parallel mode skips sequential loop).
   } else {
