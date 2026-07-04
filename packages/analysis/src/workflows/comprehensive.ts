@@ -5,13 +5,10 @@ import type { EvidencePackAny } from '../contracts/evidence-pack';
 import type { SseEvent } from '../contracts/sse-events';
 import { ALL_DIMENSIONS } from '../dimensions';
 import type { Dimension, DimensionRunResult } from '../dimensions/types';
-import { applyFixedDisclaimerToSummary } from '../primitives/disclaimer';
-import { buildEvidencePack } from '../primitives/evidence-pack-builder';
 import { computeUsd } from '../primitives/pricing';
 import type { AgentProvider } from '../primitives/provider';
 import { ToolMiddlewareRunner } from '../tools/middleware';
 import { streamDimension } from '../primitives/stream-dimension';
-import { structuredOutputWithRepair } from '../primitives/structured-output';
 import { runJudge, shouldJudge } from '../primitives/judge';
 import { formatEvidencePackBlock } from '../primitives/dimension-prompts';
 import {
@@ -25,10 +22,7 @@ import {
 } from './wave-executor';
 import {
   buildSectionReports,
-  buildSummaryJsonPrompts,
   buildSummaryPrompts,
-  ComprehensiveSummaryLenient,
-  hydrateSummaryCitations,
 } from '../primitives/summary-prompts';
 import type {
   BudgetLimits,
@@ -49,13 +43,18 @@ import {
   deriveMarketRouting,
   finalizeDim,
   filterDegradedDims,
-  inferMissingPrivateFieldsComp,
   makePerDimTraceEntry,
   selectJudgeTriggers,
   toAnalysisResult,
   type BuildResultArgs,
   type DimAccumulator,
 } from './comprehensive-helpers';
+
+// 异步 IO + 解析链 helpers (evidence pack 重建 / summary 结构化解析)
+import {
+  parseSummaryStructured,
+  resolveEvidencePack,
+} from './comprehensive-async-helpers';
 
 /**
  * RFC-10 §7.2: cap on parallel judge invocations. Selective judge phase
@@ -84,24 +83,6 @@ const JUDGE_CONCURRENCY = 3;
  * Returns ComprehensiveResult via TReturn so callers using explicit
  * generator iteration can consume it.
  */
-/**
- * A snapshot/v2 pack is "critically degraded" only when there is nothing worth
- * keeping — NEITHER quote NOR financials landed. Only then is the whole-pack v1
- * web_search rebuild warranted (it can't discard anything useful). Partial
- * degradation (e.g. quote/history present but financials missing) is NOT
- * critical: the V2 pack + its computedFacts are kept, and each dim may
- * surgically web_search the missing fields (marked) rather than throwing away
- * good code-verified data. v1 packs (already a web_search
- * fallback) use a different dataAvailability shape (no `complete` array) and are
- * left as-is.
- */
-function isPackCriticallyDegraded(pack: EvidencePackAny): boolean {
-  const complete = (pack as { dataAvailability?: { complete?: unknown } })
-    .dataAvailability?.complete;
-  if (!Array.isArray(complete)) return false;
-  return !complete.includes('quote') && !complete.includes('financials');
-}
-
 export async function* streamComprehensive(
   provider: AgentProvider,
   input: DimensionInput,
@@ -207,28 +188,17 @@ export async function* streamComprehensive(
   // is stamped degradedSource=WEB_SEARCH_FALLBACK, so its web-sourced numbers are
   // clearly marked non-authoritative (never fed to compute as if code-verified —
   // hard invariant #1) and private-data dims skip.
-  if (
-    options.allowWebSearchFallback &&
-    (!evidencePack || isPackCriticallyDegraded(evidencePack))
-  ) {
-    const fbProvider = options.fallbackProvider ?? provider;
-    const v1 = await buildEvidencePack(fbProvider, input, {
+  evidencePack = await resolveEvidencePack(
+    provider,
+    options.fallbackProvider,
+    input,
+    {
+      evidencePack,
+      allowWebSearchFallback: options.allowWebSearchFallback === true,
       ...(options.todayDate ? { todayDate: options.todayDate } : {}),
       ...(options.signal ? { signal: options.signal } : {}),
-    });
-    evidencePack = {
-      ...v1,
-      dataAvailability: {
-        degradedSource: 'WEB_SEARCH_FALLBACK' as const,
-        fallbackReason: {
-          kind: 'OTHER',
-          failedTools: [],
-          message: 'no usable structured data (neither quote nor financials)',
-        },
-        missingPrivateFields: inferMissingPrivateFieldsComp([]),
-      },
-    };
-  }
+    },
+  );
 
   // plan-v2 Wave 3.3: evidence_source_degraded SSE event removed. Frontends
   // derive degraded state from this event's pack.dataAvailability.degradedSource.
@@ -1055,29 +1025,17 @@ export async function* streamComprehensive(
   // ComprehensiveSummary. Incident: 000725.SZ / 002714.SZ (2026-05-26),
   // every COMPREHENSIVE run was failing with
   // `Structured output failed after one repair pass: …citations[].sourceType…`.
-  const jsonPrompts = buildSummaryJsonPrompts(summaryStream.text);
-  const summaryStructured = await structuredOutputWithRepair(
+  const { fixedSummary, trace: summaryTrace } = await parseSummaryStructured(
     provider,
-    jsonPrompts.system,
-    jsonPrompts.user,
-    ComprehensiveSummaryLenient,
-    { signal: options.signal },
-  );
-  aggregatedTokensIn += summaryStructured.usage.tokensIn;
-  aggregatedTokensOut += summaryStructured.usage.tokensOut;
-  aggregatedLlmCalls += summaryStructured.llmCalls;
-  aggregatedCostUsd += computeUsd(
-    summaryStructured.model,
-    summaryStructured.usage.tokensIn,
-    summaryStructured.usage.tokensOut,
-  );
-
-  const strictSummary = hydrateSummaryCitations(
-    summaryStructured.data,
+    summaryStream.text,
     allCitations,
     todayDate,
+    options.signal,
   );
-  const fixedSummary = applyFixedDisclaimerToSummary(strictSummary);
+  aggregatedTokensIn += summaryTrace.tokensIn;
+  aggregatedTokensOut += summaryTrace.tokensOut;
+  aggregatedLlmCalls += summaryTrace.llmCalls;
+  aggregatedCostUsd += summaryTrace.costUsd;
 
   yield {
     type: 'summary_complete',
