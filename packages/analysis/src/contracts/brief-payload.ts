@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import {
+  ChannelType as SharedChannelType,
+  DigestSession as SharedDigestSession,
+  Market as SharedMarket,
+} from '@bourse/shared-types';
 
 /**
  * Daily Brief 契约（docs/prd-daily-brief.md v1.5）。
@@ -10,21 +15,16 @@ import { z } from 'zod';
  * 放在 analysis/contracts 是因为 zod 依赖在 analysis 包（api 不直接依赖 zod，
  * pnpm strict）。指数数据层（fetchIndexQuote 等）也在 analysis 包，契约同包一致。
  * api digest module 从 @bourse/analysis 消费这些类型。
+ *
+ * Market / DigestSession / ChannelType 通过 z.nativeEnum 复用 @bourse/shared-types
+ * 的 const-object（与 enums.ts 的 AnalysisType/Signal 同款桥接），单一来源。
  */
 
 // ============================================================================
 // 渠道配置（订阅凭证，存 DigestSubscription.channels JSON）
 // ============================================================================
 
-export const ChannelType = z.enum([
-  'WEBHOOK',
-  'FEISHU',
-  'DINGTALK',
-  'WECOM',
-  'TELEGRAM',
-  'SLACK',
-  // Phase C: EMAIL
-]);
+export const ChannelType = z.nativeEnum(SharedChannelType);
 export type ChannelType = z.infer<typeof ChannelType>;
 
 /**
@@ -106,8 +106,8 @@ export const ReanalyzeHint = z.object({
 export type ReanalyzeHint = z.infer<typeof ReanalyzeHint>;
 
 export const BriefPayload = z.object({
-  market: z.enum(['US', 'CN', 'HK']),
-  session: z.enum(['PRE', 'POST']),
+  market: z.nativeEnum(SharedMarket),
+  session: z.nativeEnum(SharedDigestSession),
   generatedAt: z.string().datetime(),
   /** Provenance（不变式 #5）：简报数据时点。 */
   dataAsOf: z.string(),

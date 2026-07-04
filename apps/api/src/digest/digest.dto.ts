@@ -1,10 +1,12 @@
 import { IsArray, IsBoolean, IsOptional } from 'class-validator';
+import { Market, DigestSession } from '@bourse/shared-types';
 
-export const DIGEST_MARKETS = ['US', 'CN', 'HK'] as const;
-export type DigestMarket = (typeof DIGEST_MARKETS)[number];
-
-export const DIGEST_SESSIONS = ['PRE', 'POST'] as const;
-export type DigestSession = (typeof DIGEST_SESSIONS)[number];
+// Market / DigestSession 单一来源：@bourse/shared-types（mirror Prisma enum）。
+// 这里的运行时数组用于 service 内的 markets/sessions 校验（zod.enum 已在
+// ChannelConfig 严验，markets/sessions 是 enum 数组，class-validator 不便表达
+// enum 元素，故 service 内 .includes 兜底）。
+export const DIGEST_MARKETS: readonly Market[] = ['US', 'CN', 'HK'];
+export const DIGEST_SESSIONS: readonly DigestSession[] = ['PRE', 'POST'];
 
 /**
  * Upsert payload — PUT /api/digest/subscription. 单条 per-user 整体替换
@@ -16,10 +18,10 @@ export type DigestSession = (typeof DIGEST_SESSIONS)[number];
  */
 export class UpsertDigestSubscriptionDto {
   @IsArray()
-  markets!: string[];
+  markets!: Market[];
 
   @IsArray()
-  sessions!: string[];
+  sessions!: DigestSession[];
 
   @IsArray()
   channels!: unknown[];
@@ -31,8 +33,8 @@ export class UpsertDigestSubscriptionDto {
 
 /** GET / PUT response. channels 的敏感字段（secret/botToken）已 mask。 */
 export interface DigestSubscriptionDto {
-  markets: string[];
-  sessions: string[];
+  markets: Market[];
+  sessions: DigestSession[];
   channels: unknown[];
   enabled: boolean;
   createdAt: Date;

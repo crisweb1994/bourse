@@ -71,6 +71,44 @@ export const PreferredStyle = {
 export type PreferredStyle =
   (typeof PreferredStyle)[keyof typeof PreferredStyle];
 
+// Markets + Daily Brief enums (mirror Prisma enums; shared-types stays
+// Prisma-free so apps/web can consume without @prisma/client).
+export const Market = {
+  US: 'US',
+  CN: 'CN',
+  HK: 'HK',
+} as const;
+
+export type Market = (typeof Market)[keyof typeof Market];
+
+export const DigestSession = {
+  PRE: 'PRE',
+  POST: 'POST',
+} as const;
+
+export type DigestSession =
+  (typeof DigestSession)[keyof typeof DigestSession];
+
+export const DeliveryStatus = {
+  SENT: 'SENT',
+  FAILED: 'FAILED',
+  RETRYING: 'RETRYING',
+} as const;
+
+export type DeliveryStatus =
+  (typeof DeliveryStatus)[keyof typeof DeliveryStatus];
+
+export const ChannelType = {
+  WEBHOOK: 'WEBHOOK',
+  FEISHU: 'FEISHU',
+  DINGTALK: 'DINGTALK',
+  WECOM: 'WECOM',
+  TELEGRAM: 'TELEGRAM',
+  SLACK: 'SLACK',
+} as const;
+
+export type ChannelType = (typeof ChannelType)[keyof typeof ChannelType];
+
 // ===== Structured JSON Types =====
 
 export type CitationQualityTier = 'A' | 'B' | 'C' | 'D' | 'E';
@@ -159,7 +197,7 @@ export interface StockDto {
   id: string;
   symbol: string;
   name: string;
-  market: string;
+  market: Market;
   exchange: string;
   currency: string;
   yahooSymbol: string | null;
@@ -168,6 +206,8 @@ export interface StockDto {
 export interface StockSearchResult {
   symbol: string;
   name: string;
+  // 搜索可能返回 JP/UK 等 Phase-1.4 暂不支持的市场（resolveMarket 兜底 exchange），
+  // 故保持 string；落库时由 StockDto.market(Market) 把关。
   market: string;
   exchange: string;
   currency: string;

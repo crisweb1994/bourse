@@ -31,17 +31,9 @@ const ALL_SECTION_TYPES = [
   'TECHNICAL', 'SENTIMENT', 'SCENARIO', 'PORTFOLIO',
 ] as const;
 
-// Day 11.C: SECTION_SEARCH_CONTEXT (per-section searchContextSize hint)
-// removed — `@bourse/analysis`'s ClaudeProvider doesn't accept a
-// per-call searchContextSize today (uses Anthropic's default depth);
-// OpenAIProvider hard-codes 'high'. Worth re-introducing as a Dimension
-// freshness extension when the package's tool middleware grows
-// per-section configuration.
-
 @Injectable()
 export class AnalysisService implements OnModuleInit {
   private readonly logger = new Logger(AnalysisService.name);
-  // plan-v2 Wave 4.1 — cancelledBatches / batchAbortControllers state removed.
 
   constructor(
     private prisma: PrismaService,
@@ -242,11 +234,6 @@ export class AnalysisService implements OnModuleInit {
     };
   }
 
-  // plan-v2 Wave 3.1 — DEBATE analysisType + createDebate +
-  // resolveDebateRoleModels removed. Bull/bear/judge persona workflow
-  // is plan-v2 cut; will be reintroduced as a separate analysisType
-  // in v1.x if user demand materializes.
-
   private logTag(analysisId: string, sectionType?: string) {
     const short = analysisId.slice(-8);
     return sectionType ? `[${short}][${sectionType}]` : `[${short}]`;
@@ -288,9 +275,6 @@ export class AnalysisService implements OnModuleInit {
     return analysis;
   }
 
-  // plan-v2 Wave 4.1 — createBatch / getBatch / cancelBatch + BatchJob
-  // table removed. plan-v2 §15.1 "BatchJob 砍 — beta 不需要".
-
   async getById(userId: string, id: string) {
     const analysis = await this.prisma.analysis.findFirst({
       where: { id, userId },
@@ -300,8 +284,6 @@ export class AnalysisService implements OnModuleInit {
       },
     });
     if (!analysis) throw new NotFoundException('Analysis not found');
-    // plan-v2 Wave 2.6d — research summary removed with planner. UI no longer
-    // gets plan/snapshot ids on the analysis row.
     return analysis;
   }
 
@@ -361,10 +343,6 @@ export class AnalysisService implements OnModuleInit {
       }),
       this.prisma.analysis.count({ where }),
     ]);
-    // plan-v2 Wave 2.6d — research summary + analysisResearchPlan /
-    // analysisResearchSnapshot link tables removed with planner. Every
-    // analysis is now 'legacy' mode in the surface; UI badge stays
-    // compatible with old shape.
     const itemsWithResearch = items.map((it) => {
       return {
         ...it,
@@ -377,9 +355,6 @@ export class AnalysisService implements OnModuleInit {
     });
     return { items: itemsWithResearch, total, page, limit };
   }
-
-  // plan-v2 Wave 2.6d — buildResearchSummary removed; getById no longer
-  // attaches research summary (planner / plan / snapshot tables gone).
 
   async delete(userId: string, id: string) {
     const analysis = await this.prisma.analysis.findFirst({
@@ -493,11 +468,6 @@ export class AnalysisService implements OnModuleInit {
       send('error', { message: 'Analysis cannot be started in its current state' });
       return;
     }
-
-    // plan-v2 Wave 2.6d — planner-driven research context removed.
-    // EvidencePack now comes from SnapshotV2 (built later in this method);
-    // confidenceCap / planDisclaimer / SSE research events are gone with
-    // the planner. `researchContext` stays undefined throughout.
 
     const isComprehensive = analysis.analysisType === 'COMPREHENSIVE';
     const {
@@ -618,9 +588,6 @@ export class AnalysisService implements OnModuleInit {
     send('done', { analysisId: analysis.id });
   }
 
-  // plan-v2 Wave 3.1 — replayDebate / runDebateAnalysis /
-  // resolveDebateRoleProviders removed alongside the DEBATE workflow.
-
   private replaySection(section: any, send: SseCallback) {
     send('section_start', { sectionType: section.type, sectionId: section.id, order: section.order });
 
@@ -649,10 +616,4 @@ export class AnalysisService implements OnModuleInit {
       error: section.errorMessage ?? null,
     });
   }
-
-  // Day 11.C: generateStructuredJson / extractJsonText / validateStructuredJson
-  // removed — `@bourse/analysis`'s structuredOutputWithRepair (zod-validated,
-  // disclaimer-overriding, repair-on-failure) replaces all three.
-
-  // plan-v2 Wave 4.1 — runBatchJob + updateBatchProgress removed.
 }

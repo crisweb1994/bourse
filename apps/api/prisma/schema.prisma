@@ -33,7 +33,7 @@ model Stock {
   id          String   @id @default(cuid())
   symbol      String
   name        String
-  market      String
+  market      Market
   exchange    String
   currency    String   @default("USD")
   yahooSymbol String?
@@ -68,9 +68,6 @@ model WatchlistItem {
   @@unique([userId, stockId])
   @@index([userId, order])
 }
-
-// plan-v2 Wave 4.2 — InvestorProfile removed. plan-v2 §15.1 "用户画像放
-// URL params + localStorage，beta 无需持久化".
 
 model AiProviderSetting {
   id     String @id @default(cuid())
@@ -154,8 +151,8 @@ model WebSearchSetting {
 model DigestSubscription {
   id         String   @id @default(cuid())
   userId     String   @unique
-  markets    String[]              // ["US","CN","HK"] 子集
-  sessions   String[]              // ["PRE","POST"] 子集
+  markets    Market[]              // ["US","CN","HK"] 子集
+  sessions   DigestSession[]      // ["PRE","POST"] 子集
   channels   Json                  // ChannelConfig[]（discriminated union，含凭证）
   enabled    Boolean  @default(true)
   createdAt  DateTime @default(now())
@@ -166,11 +163,11 @@ model DigestSubscription {
 model DeliveryRecord {
   id          String   @id @default(cuid())
   userId      String
-  market      String                  // US | CN | HK
-  session     String                  // PRE | POST
-  channelType String                  // FEISHU|TELEGRAM|SLACK|DINGTALK|WECOM|WEBHOOK
+  market      Market
+  session     DigestSession
+  channelType ChannelType
   target      String                  // 脱敏：url 域名 / chatId 末四位
-  status      String                  // SENT | FAILED | RETRYING
+  status      DeliveryStatus
   httpStatus  Int?
   error       String?
   attemptedAt DateTime @default(now())
@@ -185,7 +182,7 @@ model Analysis {
   userId              String
   stockId             String
   symbol              String
-  market              String
+  market              Market
   analysisType        AnalysisType
   status              AnalysisStatus @default(PENDING)
   aiProvider          String?
@@ -265,7 +262,7 @@ model AnalysisSection {
 model SnapshotCache {
   id        String   @id @default(cuid())
   cacheKey  String   @unique          // e.g. "yahoo:quote:AAPL"
-  market    String                    // US | CN | HK
+  market    Market
   symbol    String?
   factKey   String                    // quote | history | profile | financials | filings | consensusEps | lhb | northboundFlow | unlockCalendar | shareholders | macro
   payload   Json
@@ -276,46 +273,42 @@ model SnapshotCache {
   @@index([market, symbol, factKey])
 }
 
-// RFC-02 §10: tool result cache. Keyed by (toolName, market, symbol,
-// argsHash). Cross-process shared so multiple analyze() invocations of
-// the same stock in a short window only pay one upstream call. TTL
-// enforced at read time (`expiresAt` < now() → cache miss). Vacuum/cleanup
-// is done by index lookup on expiresAt (future cron job; not in RFC-02).
-// plan-v2 Wave 4.3 — ToolResultCache removed. In-memory LRU in
-// ToolCacheService is sufficient for the SnapshotV2 path.
-
-// RFC-01: per-section telemetry trace. One row per dimension execution.
-// Separate from AnalysisSection so business reads (apps/web) stay light and
-// telemetry can be truncated/archived independently. All cache/source-tier
-// columns default to 0 / NULL until Phase 3 / Phase 5 light them up.
-// plan-v2 Wave 4.4 — SectionTrace + RunAggregate removed. Telemetry folds
-// into AnalysisSection.tokensIn/Out/durationMs + Analysis.totalTokensIn/Out
-// /durationMs (single source of truth, no separate trace plumbing).
-
-// plan-v2 Wave 4.1 — BatchJob removed. plan-v2 §15.1 "beta 不需要".
-
 // =============================================================================
 // research-core persistence (PRD §12.2)
 // Owned by apps/api as the only Prisma-aware layer. Implements
 // research-core ResearchRepositoryPort.
 // =============================================================================
 
-// plan-v2 Wave 2.6g — research/planning Prisma models deleted with the
-// planner package. Tables dropped from the schema:
-//   - SourceDocument
-//   - SourceDocumentInstrument
-//   - ResearchSnapshot
-//   - ResearchSnapshotDocument
-//   - ResearchPlan
-//   - AnalysisResearchSnapshot
-//   - AnalysisResearchPlan
-// EvidencePack now comes from @bourse/analysis fetchSnapshot;
-// connector responses are not persisted (snapshot is an in-memory value).
-
 enum Sensitivity {
   public
   restricted
   private
+}
+
+enum Market {
+  US
+  CN
+  HK
+}
+
+enum DigestSession {
+  PRE
+  POST
+}
+
+enum DeliveryStatus {
+  SENT
+  FAILED
+  RETRYING
+}
+
+enum ChannelType {
+  WEBHOOK
+  FEISHU
+  DINGTALK
+  WECOM
+  TELEGRAM
+  SLACK
 }
 
 enum AnalysisType {
@@ -353,8 +346,6 @@ enum AnalysisStatus {
   CANCELLED
 }
 
-// plan-v2 Wave 4.1 — BatchJobStatus enum removed alongside BatchJob model.
-
 enum Signal {
   BULLISH
   NEUTRAL
@@ -366,6 +357,3 @@ enum Confidence {
   MEDIUM
   LOW
 }
-
-// plan-v2 Wave 4.2 — RiskTolerance / InvestmentHorizon / PreferredStyle
-// enums removed alongside InvestorProfile.

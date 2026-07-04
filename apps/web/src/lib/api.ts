@@ -1,3 +1,4 @@
+import { Market, DigestSession, ChannelType } from '@bourse/shared-types';
 import type {
   StockSearchResult,
   WatchlistItemDto,
@@ -471,15 +472,11 @@ export function testWebSearchSetting(
 // keep-existing（后端 mergeSecrets 处理）。
 // ============================================================================
 
-export type DigestMarket = 'US' | 'CN' | 'HK';
-export type DigestSession = 'PRE' | 'POST';
-export type DigestChannelType =
-  | 'WEBHOOK'
-  | 'FEISHU'
-  | 'DINGTALK'
-  | 'WECOM'
-  | 'TELEGRAM'
-  | 'SLACK';
+// Market / DigestSession / ChannelType 从 @bourse/shared-types 复用（与 Prisma
+// enum 同源），单一来源。别名保留以减少 digest-card 等消费方的 import 改动。
+export type DigestMarket = Market;
+export type { DigestSession };
+export type DigestChannelType = ChannelType;
 
 export type DigestChannel =
   | { type: 'WEBHOOK'; url: string; secret: string }
