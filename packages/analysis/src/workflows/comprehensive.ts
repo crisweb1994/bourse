@@ -42,10 +42,16 @@ import type {
 import {
   accumulate,
   applyConfidenceDowngrade,
+  assertLegacyParallelCompatible,
   buildResult,
+  buildSectionsForValidation,
   checkBudget,
+  deriveMarketRouting,
   finalizeDim,
+  filterDegradedDims,
   inferMissingPrivateFieldsComp,
+  makePerDimTraceEntry,
+  selectJudgeTriggers,
   toAnalysisResult,
   type BuildResultArgs,
   type DimAccumulator,
@@ -114,28 +120,7 @@ export async function* streamComprehensive(
   // RFC-05: waveMode takes precedence — when caller sets waveMode (any value),
   // we skip the legacy parallel validation and let the wave / sequential
   // branches decide.
-  if (options.parallel && options.waveMode === undefined) {
-    const hasBudget =
-      options.budget !== undefined &&
-      (options.budget.maxTokens !== undefined ||
-        options.budget.maxCostUsd !== undefined ||
-        options.budget.maxToolCalls !== undefined);
-    if (hasBudget) {
-      throw new Error(
-        'streamComprehensive: parallel mode does not support budget enforcement. ' +
-          'Use sequential (parallel: false) when any of maxTokens / maxCostUsd / maxToolCalls is set.',
-      );
-    }
-    const failRunDims = dims.filter((d) => d.onFailure === 'fail-run');
-    if (failRunDims.length > 0) {
-      throw new Error(
-        `streamComprehensive: parallel mode incompatible with fail-run dimensions: ${failRunDims
-          .map((d) => d.type)
-          .join(', ')}. ` +
-          'Use sequential or change those dims to skip / retry-once.',
-      );
-    }
-  }
+  assertLegacyParallelCompatible(options, dims);
 
   // RFC-06: derive source-routing config once. When `marketProfile.domainTiers`
   // is set (currently CN only), we (a) constrain provider web_search to those
@@ -144,13 +129,8 @@ export async function* streamComprehensive(
   // is intentionally A|B|C|D only — E is implicit absence — so a bare
   // `Object.keys(...)` already excludes E. We still filter explicitly so a
   // future market that lists E entries (e.g. as a denylist) is safe.
-  const marketDomainTiers = options.marketProfile?.domainTiers;
-  const marketAllowedDomains =
-    marketDomainTiers !== undefined
-      ? Object.keys(marketDomainTiers).filter(
-          (host) => marketDomainTiers[host] !== 'E',
-        )
-      : undefined;
+  const { domainTiers: marketDomainTiers, allowedDomains: marketAllowedDomains } =
+    deriveMarketRouting(options.marketProfile);
 
   const dimResults = new Map<AnalysisType, DimensionRunResult>();
   const failures: DimensionFailure[] = [];
@@ -283,26 +263,20 @@ export async function* streamComprehensive(
       da.missingPrivateFields.length > 0
     ) {
       const missing = new Set(da.missingPrivateFields);
-      const kept: typeof dims[number][] = [];
-      for (const d of dims) {
-        const req = d.requiresPrivateData;
-        const overlap = req?.filter((f) => missing.has(f)) ?? [];
-        if (req && overlap.length > 0) {
-          yield {
-            type: 'section_skipped',
-            runId,
-            seq: seq++,
-            sectionType: d.type,
-            reason: 'DEGRADED_SOURCE_MISSING_PRIVATE_DATA',
-            missingFields: overlap as never,
-          };
-          failures.push({
-            type: d.type,
-            error: `degraded-source-missing-${overlap.join(',')}`,
-          });
-          continue;
-        }
-        kept.push(d);
+      const { kept, skipped } = filterDegradedDims(dims, missing);
+      for (const { dim, missingFields } of skipped) {
+        yield {
+          type: 'section_skipped',
+          runId,
+          seq: seq++,
+          sectionType: dim.type,
+          reason: 'DEGRADED_SOURCE_MISSING_PRIVATE_DATA',
+          missingFields: missingFields as never,
+        };
+        failures.push({
+          type: dim.type,
+          error: `degraded-source-missing-${missingFields.join(',')}`,
+        });
       }
       dims = kept as readonly Dimension[];
     }
@@ -462,14 +436,7 @@ export async function* streamComprehensive(
           aggregatedLlmCalls += h.acc.llmCalls;
           aggregatedToolCalls += h.acc.toolCalls;
           aggregatedCostUsd += h.acc.costUsd;
-          perDimTrace.set(h.dim.type, {
-            durationMs: h.acc.durationMs,
-            citationsCount: h.acc.citationsCount,
-            tokensIn: h.acc.usage.tokensIn,
-            tokensOut: h.acc.usage.tokensOut,
-            llmCalls: h.acc.llmCalls,
-            toolCalls: h.acc.toolCalls,
-          });
+          perDimTrace.set(h.dim.type, makePerDimTraceEntry(h.acc));
           allCitations.push(...h.acc.citations);
           allWarnings.push(...result.warnings);
           if (h.acc.toolCalls > 0) {
@@ -655,14 +622,7 @@ export async function* streamComprehensive(
         aggregatedLlmCalls += h.acc.llmCalls;
         aggregatedToolCalls += h.acc.toolCalls;
         aggregatedCostUsd += h.acc.costUsd;
-        perDimTrace.set(h.dim.type, {
-          durationMs: h.acc.durationMs,
-          citationsCount: h.acc.citationsCount,
-          tokensIn: h.acc.usage.tokensIn,
-          tokensOut: h.acc.usage.tokensOut,
-          llmCalls: h.acc.llmCalls,
-          toolCalls: h.acc.toolCalls,
-        });
+        perDimTrace.set(h.dim.type, makePerDimTraceEntry(h.acc));
         allCitations.push(...h.acc.citations);
         allWarnings.push(...result.warnings);
         // Day 11.5b: parallel-mode tool middleware recording.
@@ -782,14 +742,7 @@ export async function* streamComprehensive(
             { tokensIn: acc.usage.tokensIn, tokensOut: acc.usage.tokensOut },
           );
         }
-        perDimTrace.set(dim.type, {
-          durationMs: acc.durationMs,
-          citationsCount: acc.citationsCount,
-          tokensIn: acc.usage.tokensIn,
-          tokensOut: acc.usage.tokensOut,
-          llmCalls: acc.llmCalls,
-          toolCalls: acc.toolCalls,
-        });
+        perDimTrace.set(dim.type, makePerDimTraceEntry(acc));
         allCitations.push(...acc.citations);
         allWarnings.push(...result.warnings);
         dimSucceeded = true;
@@ -888,15 +841,8 @@ export async function* streamComprehensive(
       evidencePack?.schemaVersion === 'evidence-pack-v2'
         ? evidencePack
         : undefined;
-    const sectionsForValidation: SectionForValidation[] = Array.from(
-      dimResults.values(),
-    )
-      .filter((r) => r.status === 'COMPLETED')
-      .map((r) => ({
-        type: r.type,
-        reportMarkdown: r.reportMarkdown,
-        structuredJson: r.structuredJson,
-      }));
+    const sectionsForValidation: SectionForValidation[] =
+      buildSectionsForValidation(dimResults);
 
     if (sectionsForValidation.length > 0) {
       const validatorReport = validateCrossDim(sectionsForValidation, {
@@ -957,42 +903,13 @@ export async function* streamComprehensive(
       // to dim.structuredJson.conclusion.confidence + dim.confidence in
       // place before summary phase reads them. Judge failures degrade
       // gracefully (warning, no adjustment) and don't block summary.
-      const judgeTriggers: Array<{
-        type: AnalysisType;
-        dim: Dimension;
-        dimResult: DimensionRunResult;
-        severity?: 'WARNING' | 'DOWNGRADE';
-      }> = [];
-      for (const sec of sectionsForValidation) {
-        const dim = ALL_DIMENSIONS.find((d) => d.type === sec.type);
-        if (!dim) continue;
-        const dimResult = dimResults.get(sec.type);
-        if (!dimResult) continue;
-        const conflict = validatorReport.conflicts.find((c) =>
-          c.observations.some((o) => o.sectionType === sec.type),
-        );
-        const severity =
-          conflict?.severity === 'WARNING' || conflict?.severity === 'DOWNGRADE'
-            ? conflict.severity
-            : undefined;
-        if (
-          shouldJudge({
-            dimension: dim,
-            structuredJson: sec.structuredJson as {
-              conclusion?: { signal?: string; confidence?: string };
-            },
-            citations: dimResult.citations,
-            ...(severity ? { crossDimSeverity: severity } : {}),
-          })
-        ) {
-          judgeTriggers.push({
-            type: sec.type,
-            dim,
-            dimResult,
-            ...(severity ? { severity } : {}),
-          });
-        }
-      }
+      const judgeTriggers = selectJudgeTriggers(
+        sectionsForValidation,
+        dimResults,
+        ALL_DIMENSIONS,
+        validatorReport.conflicts,
+        shouldJudge,
+      );
 
       if (judgeTriggers.length > 0) {
         // Pre-fire all judge_start so consumers see the audit underway

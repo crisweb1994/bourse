@@ -5,13 +5,16 @@
  * 主文件 `comprehensive.ts` 保留 streamComprehensive async generator + 各 phase
  * 之间共享 state；本文件存"输入 → 输出无副作用"helpers，让两边都更易读。
  */
-import type { AnalysisResult } from '../contracts/analysis-result';
+import type { AnalysisResult, StructuredJson } from '../contracts/analysis-result';
 import type { Citation } from '../contracts/citation';
 import type { AnalysisType, RunStatus } from '../contracts/enums';
 import type { SseEvent } from '../contracts/sse-events';
 import type { Dimension, DimensionRunResult } from '../dimensions/types';
+import type { JudgeTriggerContext } from '../primitives/judge';
+import type { MarketProfile } from '../markets/types';
 import type { BudgetLimits } from './types';
 import type {
+  ComprehensiveOptions,
   ComprehensiveResult,
   DimensionFailure,
 } from './types';
@@ -288,4 +291,215 @@ export function checkBudget(
   if (hit(budget.maxCostUsd, used.costUsd)) return 'maxCostUsd';
   if (hit(budget.maxToolCalls, used.toolCalls)) return 'maxToolCalls';
   return false;
+}
+
+/**
+ * Day 11.5a P1 #3: legacy `parallel: true` mode is incompatible with budget
+ * enforcement and fail-run semantics — Promise.all can't synchronously halt
+ * sibling dims. Fail loudly rather than silently downgrade.
+ *
+ * RFC-05: waveMode takes precedence — when the caller sets `waveMode` (any
+ * value), this check is skipped and the wave / sequential branches decide.
+ * Throws the original error strings verbatim (existing tests assert them).
+ */
+export function assertLegacyParallelCompatible(
+  options: Pick<ComprehensiveOptions, 'parallel' | 'waveMode' | 'budget'>,
+  dims: readonly Dimension[],
+): void {
+  if (!(options.parallel && options.waveMode === undefined)) return;
+  const hasBudget =
+    options.budget !== undefined &&
+    (options.budget.maxTokens !== undefined ||
+      options.budget.maxCostUsd !== undefined ||
+      options.budget.maxToolCalls !== undefined);
+  if (hasBudget) {
+    throw new Error(
+      'streamComprehensive: parallel mode does not support budget enforcement. ' +
+        'Use sequential (parallel: false) when any of maxTokens / maxCostUsd / maxToolCalls is set.',
+    );
+  }
+  const failRunDims = dims.filter((d) => d.onFailure === 'fail-run');
+  if (failRunDims.length > 0) {
+    throw new Error(
+      `streamComprehensive: parallel mode incompatible with fail-run dimensions: ${failRunDims
+        .map((d) => d.type)
+        .join(', ')}. ` +
+        'Use sequential or change those dims to skip / retry-once.',
+    );
+  }
+}
+
+/**
+ * RFC-06: derive source-routing config from the market profile once.
+ * Returns the A|B|C|D host allowlist (E is implicit absence) for provider
+ * web_search plus the full tier table for evidence-gate downgrades.
+ * `undefined` when the market has no domainTiers configured.
+ */
+export function deriveMarketRouting(
+  marketProfile: MarketProfile | undefined,
+): {
+  domainTiers: MarketProfile['domainTiers'];
+  allowedDomains: string[] | undefined;
+} {
+  const domainTiers = marketProfile?.domainTiers;
+  const allowedDomains =
+    domainTiers !== undefined
+      ? Object.keys(domainTiers).filter((host) => domainTiers[host] !== 'E')
+      : undefined;
+  return { domainTiers, allowedDomains };
+}
+
+/**
+ * Build a per-dim trace entry from a streaming accumulator. This shape was
+ * duplicated 3× in streamComprehensive (wave drain, parallel drain, sequential
+ * drain) — extracted to keep the three execution paths in lockstep.
+ */
+export function makePerDimTraceEntry(acc: DimAccumulator): {
+  durationMs: number;
+  citationsCount: number;
+  tokensIn: number;
+  tokensOut: number;
+  llmCalls: number;
+  toolCalls: number;
+} {
+  return {
+    durationMs: acc.durationMs,
+    citationsCount: acc.citationsCount,
+    tokensIn: acc.usage.tokensIn,
+    tokensOut: acc.usage.tokensOut,
+    llmCalls: acc.llmCalls,
+    toolCalls: acc.toolCalls,
+  };
+}
+
+/**
+ * RFC rfc-evidence-pack-web-search-fallback §2.4: when the resolved pack is
+ * web_search-degraded, dims whose `requiresPrivateData` overlaps the pack's
+ * `missingPrivateFields` must be SKIPPED (not run on incomplete data). Splits
+ * the dim list into `{ kept, skipped }` where each skipped entry carries the
+ * overlapping missing fields for the SSE `section_skipped` event.
+ *
+ * Pure: the caller still owns emitting `section_skipped` + pushing failures.
+ */
+export function filterDegradedDims(
+  dims: readonly Dimension[],
+  missing: ReadonlySet<
+    'northboundFlow' | 'lhb' | 'unlockCalendar' | 'consensusEps'
+  >,
+): {
+  kept: Dimension[];
+  skipped: Array<{
+    dim: Dimension;
+    missingFields: Array<
+      'northboundFlow' | 'lhb' | 'unlockCalendar' | 'consensusEps'
+    >;
+  }>;
+} {
+  const kept: Dimension[] = [];
+  const skipped: Array<{
+    dim: Dimension;
+    missingFields: Array<
+      'northboundFlow' | 'lhb' | 'unlockCalendar' | 'consensusEps'
+    >;
+  }> = [];
+  for (const d of dims) {
+    const req = d.requiresPrivateData;
+    const overlap = req?.filter((f) => missing.has(f)) ?? [];
+    if (req && overlap.length > 0) {
+      skipped.push({ dim: d, missingFields: overlap });
+    } else {
+      kept.push(d);
+    }
+  }
+  return { kept, skipped };
+}
+
+/**
+ * Build the validator input from completed dims (RFC-03 §7). The validator
+ * only sees COMPLETED dims — FAILED/skipped dims have no structuredJson to
+ * cross-check. Mirrors the `SectionForValidation` shape from
+ * `primitives/validate-cross-dim` but defined inline to avoid coupling
+ * helpers to the validator module.
+ */
+export function buildSectionsForValidation(
+  dimResults: Map<AnalysisType, DimensionRunResult>,
+): Array<{
+  type: AnalysisType;
+  reportMarkdown: string;
+  structuredJson: StructuredJson;
+}> {
+  return Array.from(dimResults.values())
+    .filter((r) => r.status === 'COMPLETED')
+    .map((r) => ({
+      type: r.type,
+      reportMarkdown: r.reportMarkdown,
+      structuredJson: r.structuredJson,
+    }));
+}
+
+/**
+ * JudgeTriggerEntry mirrors the inline type that lived in streamComprehensive.
+ * Exported so the strategy / phase functions can share it without redefinition.
+ */
+export interface JudgeTriggerEntry {
+  type: AnalysisType;
+  dim: Dimension;
+  dimResult: DimensionRunResult;
+  severity?: 'WARNING' | 'DOWNGRADE';
+}
+
+/**
+ * RFC-10 P3 selective-judge trigger selection. For each completed dim, decide
+ * whether it should be audited by the judge based on `shouldJudge` (strong
+ * signal: HIGH+BULLISH/BEARISH) plus any cross-dim conflict severity attached
+ * to that dim by the validator.
+ *
+ * `dims` is the lookup table (ALL_DIMENSIONS) so this helper stays pure and
+ * doesn't import the dimension registry itself.
+ */
+export function selectJudgeTriggers(
+  sectionsForValidation: Array<{
+    type: AnalysisType;
+    structuredJson: StructuredJson;
+  }>,
+  dimResults: Map<AnalysisType, DimensionRunResult>,
+  dims: readonly Dimension[],
+  conflicts: Array<{
+    severity?: string;
+    observations: Array<{ sectionType: AnalysisType }>;
+  }>,
+  shouldJudgeFn: (ctx: JudgeTriggerContext) => boolean,
+): JudgeTriggerEntry[] {
+  const triggers: JudgeTriggerEntry[] = [];
+  for (const sec of sectionsForValidation) {
+    const dim = dims.find((d) => d.type === sec.type);
+    if (!dim) continue;
+    const dimResult = dimResults.get(sec.type);
+    if (!dimResult) continue;
+    const conflict = conflicts.find((c) =>
+      c.observations.some((o) => o.sectionType === sec.type),
+    );
+    const severity =
+      conflict?.severity === 'WARNING' || conflict?.severity === 'DOWNGRADE'
+        ? (conflict.severity as 'WARNING' | 'DOWNGRADE')
+        : undefined;
+    if (
+      shouldJudgeFn({
+        dimension: dim,
+        structuredJson: sec.structuredJson as {
+          conclusion?: { signal?: string; confidence?: string };
+        },
+        citations: dimResult.citations,
+        ...(severity ? { crossDimSeverity: severity } : {}),
+      })
+    ) {
+      triggers.push({
+        type: sec.type,
+        dim,
+        dimResult,
+        ...(severity ? { severity } : {}),
+      });
+    }
+  }
+  return triggers;
 }
