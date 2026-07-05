@@ -3,7 +3,33 @@
  * Completions route of the OpenAI provider. Vendor-neutral (no SDK types),
  * so they can live outside the route files.
  */
-import type { SystemPromptInput } from '../types';
+import type {
+  ProviderCompleteOptions,
+  ProviderCompleteResult,
+  ProviderStreamChunk,
+  ProviderStreamOptions,
+  ProviderStreamResult,
+  SystemPromptInput,
+} from '../types';
+
+/**
+ * Contract both OpenAI routes implement so the orchestrator (OpenAIProvider)
+ * can delegate `stream`/`complete` without caring which endpoint is in use.
+ * Lives here (not in either route file) so neither route depends on the other.
+ */
+export interface OpenAIRoute {
+  stream(
+    systemPrompt: SystemPromptInput,
+    userPrompt: string,
+    onChunk: (chunk: ProviderStreamChunk) => void,
+    options: ProviderStreamOptions,
+  ): Promise<ProviderStreamResult>;
+  complete(
+    systemPrompt: SystemPromptInput,
+    userPrompt: string,
+    options: ProviderCompleteOptions,
+  ): Promise<ProviderCompleteResult>;
+}
 
 /**
  * RFC-04: OpenAI Responses API doesn't surface Anthropic-style

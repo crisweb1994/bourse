@@ -19,22 +19,8 @@ import {
   extractUrlsFromText,
   flattenSystem,
   ROUND_SEPARATOR,
+  type OpenAIRoute,
 } from './helpers';
-
-/** Contract both OpenAI routes implement so the orchestrator can delegate. */
-export interface OpenAIRoute {
-  stream(
-    systemPrompt: SystemPromptInput,
-    userPrompt: string,
-    onChunk: (chunk: ProviderStreamChunk) => void,
-    options: ProviderStreamOptions,
-  ): Promise<ProviderStreamResult>;
-  complete(
-    systemPrompt: SystemPromptInput,
-    userPrompt: string,
-    options: ProviderCompleteOptions,
-  ): Promise<ProviderCompleteResult>;
-}
 
 interface UrlCitation {
   title?: string;
