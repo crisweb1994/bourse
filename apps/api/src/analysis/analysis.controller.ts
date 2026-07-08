@@ -15,6 +15,7 @@ import { CsrfGuard } from '../auth/csrf.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { AnalysisService } from './analysis.service';
 import { AnalysisLifecycleService } from './analysis-lifecycle.service';
+import { AnalysisRunnerService } from './analysis-runner.service';
 import { CreateAnalysisDto } from './analysis.dto';
 
 @Controller('analysis')
@@ -23,6 +24,7 @@ export class AnalysisController {
   constructor(
     private analysisService: AnalysisService,
     private lifecycleService: AnalysisLifecycleService,
+    private runnerService: AnalysisRunnerService,
   ) {}
 
   @Post()
@@ -114,7 +116,7 @@ export class AnalysisController {
     };
 
     try {
-      await this.analysisService.runAnalysis(id, wrappedSend);
+      await this.runnerService.runAnalysis(id, wrappedSend);
     } catch (err: any) {
       if (!disconnected) {
         send('error', { message: err.message });
