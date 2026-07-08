@@ -18,10 +18,12 @@ import { CreateAnalysisDto } from './analysis.dto';
 import { parseAnalysisConcurrency } from './concurrency';
 import { runStreamComprehensiveAdapter } from './stream-comprehensive-adapter';
 import { SnapshotV2Service } from './snapshot-v2.service';
+import type { SseCallback } from './types';
 
-export interface SseCallback {
-  (event: string, data: unknown): void;
-}
+// Re-export so existing imports from `./analysis.service` keep working
+// during the split (adapter, scenario-runner). New code should import from
+// `./types` directly.
+export type { SseCallback };
 
 // Canonical comprehensive-workflow order. Plan 3 §3.1: GOVERNANCE follows
 // FUNDAMENTAL so governance research builds on the financial picture.
