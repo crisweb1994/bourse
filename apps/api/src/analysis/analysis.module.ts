@@ -6,6 +6,7 @@ import { ToolCacheModule } from '../lifecycle/tool-cache.module';
 import { ConnectorsModule } from '../connectors/connectors.module';
 import { AnalysisController } from './analysis.controller';
 import { AnalysisService } from './analysis.service';
+import { AnalysisLifecycleService } from './analysis-lifecycle.service';
 import { ProviderResolverService } from './provider-resolver.service';
 import { ProviderFactoryService } from './provider-factory.service';
 import { SnapshotV2Service } from './snapshot-v2.service';
@@ -28,6 +29,7 @@ import { SnapshotV2Service } from './snapshot-v2.service';
   providers: [
     ProviderResolverService,
     AnalysisService,
+    AnalysisLifecycleService,
     ProviderFactoryService,
     SnapshotV2Service,
   ],

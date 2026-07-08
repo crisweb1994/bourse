@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger, OnModuleInit, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SCHEMA_VERSION } from '@bourse/analysis';
 import { ProviderResolverService } from './provider-resolver.service';
@@ -24,7 +24,7 @@ const ALL_SECTION_TYPES = [
 ] as const;
 
 @Injectable()
-export class AnalysisService implements OnModuleInit {
+export class AnalysisService {
   private readonly logger = new Logger(AnalysisService.name);
 
   constructor(
@@ -34,23 +34,6 @@ export class AnalysisService implements OnModuleInit {
     private toolCache: ToolCacheService,
     private snapshotV2: SnapshotV2Service,
   ) {}
-
-  async onModuleInit() {
-    // Mark any IN_PROGRESS records orphaned by a previous server restart as FAILED.
-    const orphanAnalyses = await this.prisma.analysis.updateMany({
-      where: { status: 'IN_PROGRESS' as any },
-      data: { status: 'FAILED' as any },
-    });
-    const orphanSections = await this.prisma.analysisSection.updateMany({
-      where: { status: { in: ['IN_PROGRESS', 'PENDING'] } as any, analysis: { status: 'FAILED' } },
-      data: { status: 'FAILED' as any, errorMessage: 'Server restarted while running' },
-    });
-    if (orphanAnalyses.count > 0 || orphanSections.count > 0) {
-      this.logger.warn(
-        `Reclaimed ${orphanAnalyses.count} orphan analyses and ${orphanSections.count} sections from previous run`,
-      );
-    }
-  }
 
   async create(userId: string, dto: CreateAnalysisDto) {
     return this.createAnalysisRecord(userId, dto);
@@ -185,62 +168,6 @@ export class AnalysisService implements OnModuleInit {
     if (!analysis) throw new NotFoundException('Analysis not found');
 
     await this.prisma.analysis.delete({ where: { id } });
-    return { ok: true };
-  }
-
-  async abort(userId: string, id: string) {
-    const analysis = await this.prisma.analysis.findFirst({
-      where: { id, userId },
-      include: { sections: true },
-    });
-    if (!analysis) throw new NotFoundException('Analysis not found');
-
-    if (!['PENDING', 'IN_PROGRESS'].includes(analysis.status)) {
-      throw new ForbiddenException('Only PENDING or IN_PROGRESS analyses can be aborted');
-    }
-
-    await this.prisma.analysisSection.updateMany({
-      where: { analysisId: id, status: { in: ['PENDING', 'IN_PROGRESS'] } as any },
-      data: { status: 'FAILED' as any, errorMessage: 'Manually aborted by user (suspected stuck)' },
-    });
-    await this.prisma.analysis.update({
-      where: { id },
-      data: { status: 'FAILED' as any },
-    });
-
-    return { ok: true };
-  }
-
-  async retrySection(userId: string, analysisId: string, sectionId: string) {
-    const analysis = await this.prisma.analysis.findFirst({
-      where: { id: analysisId, userId },
-      include: { sections: true },
-    });
-    if (!analysis) throw new NotFoundException('Analysis not found');
-
-    const section = analysis.sections.find((s) => s.id === sectionId);
-    if (!section) throw new NotFoundException('Section not found');
-
-    if (section.status !== 'FAILED') {
-      throw new Error('Only FAILED sections can be retried');
-    }
-
-    // Reset section and analysis status
-    await this.prisma.analysisSection.update({
-      where: { id: sectionId },
-      data: {
-        status: 'PENDING',
-        reportMarkdown: null,
-        structuredJson: null as any,
-        citations: null as any,
-        errorMessage: null,
-      },
-    });
-    await this.prisma.analysis.update({
-      where: { id: analysisId },
-      data: { status: 'PENDING' },
-    });
-
     return { ok: true };
   }
 
