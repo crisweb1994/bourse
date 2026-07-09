@@ -13,7 +13,7 @@ import {
 import type { ToolCacheService } from '../lifecycle/tool-cache.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { SnapshotV2Service } from './snapshot-v2.service';
-import type { SseCallback } from './analysis.service';
+import type { SseCallback } from './types';
 
 /**
  * Factory the adapter calls to obtain the event stream. Default uses
