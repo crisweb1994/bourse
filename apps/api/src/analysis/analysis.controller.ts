@@ -14,12 +14,18 @@ import { JwtCookieGuard } from '../auth/jwt-cookie.guard';
 import { CsrfGuard } from '../auth/csrf.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { AnalysisService } from './analysis.service';
+import { AnalysisLifecycleService } from './analysis-lifecycle.service';
+import { AnalysisRunnerService } from './analysis-runner.service';
 import { CreateAnalysisDto } from './analysis.dto';
 
 @Controller('analysis')
 @UseGuards(JwtCookieGuard)
 export class AnalysisController {
-  constructor(private analysisService: AnalysisService) {}
+  constructor(
+    private analysisService: AnalysisService,
+    private lifecycleService: AnalysisLifecycleService,
+    private runnerService: AnalysisRunnerService,
+  ) {}
 
   @Post()
   @UseGuards(CsrfGuard)
@@ -60,7 +66,7 @@ export class AnalysisController {
   @Post(':id/abort')
   @UseGuards(CsrfGuard)
   abort(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.analysisService.abort(user.id, id);
+    return this.lifecycleService.abort(user.id, id);
   }
 
   @Get(':id')
@@ -75,7 +81,7 @@ export class AnalysisController {
     @Param('id') id: string,
     @Param('sectionId') sectionId: string,
   ) {
-    return this.analysisService.retrySection(user.id, id, sectionId);
+    return this.lifecycleService.retrySection(user.id, id, sectionId);
   }
 
   @Get(':id/stream')
@@ -110,7 +116,7 @@ export class AnalysisController {
     };
 
     try {
-      await this.analysisService.runAnalysis(id, wrappedSend);
+      await this.runnerService.runAnalysis(id, wrappedSend);
     } catch (err: any) {
       if (!disconnected) {
         send('error', { message: err.message });

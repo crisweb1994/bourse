@@ -9,13 +9,9 @@
     "test": "find src -name '*.spec.ts' -print0 | xargs -0 tsx --test",
     "typecheck": "tsc --noEmit",
     "lint": "echo 'no lint configured'",
-    "parity:rfc08": "tsx scripts/rfc08-debate-parity.ts",
-    "gc:nightly": "tsx scripts/research-gc.ts",
-    "judge:smoke": "tsx scripts/rfc10-judge-smoke.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "db:migrate": "prisma migrate dev",
-    "telemetry": "tsx scripts/analyze-telemetry.ts"
+    "db:migrate": "prisma migrate dev"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.0",
