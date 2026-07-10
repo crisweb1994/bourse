@@ -4,10 +4,6 @@ import { type AnalysisDto } from '@/lib/api';
 import { Button, Dialog } from '@/components/ui';
 import { ANALYSIS_TYPES } from '../stock-page-ui';
 
-// ============================================================
-// ConflictDialog — ③ · "Analysis is already running" 预检拦截
-// ============================================================
-
 export function ConflictDialog({
   open,
   onClose,
@@ -83,10 +79,6 @@ export function ConflictDialog({
     </Dialog>
   );
 }
-
-// ============================================================
-// SwitchedNotice — ④ · 自动切到 ongoing 分析后的顶部条
-// ============================================================
 
 export function SwitchedNotice({
   ongoing,

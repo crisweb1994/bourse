@@ -54,7 +54,7 @@ export function useStockAnalysisLifecycle(params: Params) {
   const ref = useRef(params);
   ref.current = params;
 
-  // currentAnalysisMeta mirror for the terminal meta-sync guard.
+  // Latest loaded analysis for the terminal metadata refresh.
   const currentRef = useRef<AnalysisDto | null>(null);
   currentRef.current = state.current;
 
@@ -106,7 +106,7 @@ export function useStockAnalysisLifecycle(params: Params) {
     getAnalysisHistory(1, 5, { stockId: effectiveStockId })
       .then((res) => {
         if (cancelled) return;
-        // Always cache — conflict pre-flight, compare, header chip all read it,
+        // Always cache — conflict checks, compare view, and header chips read it,
         // including on ?analysisId= deep-links the loader above doesn't fill.
         dispatch({ t: 'recent', items: res.items });
         if (!analysisId) {
@@ -167,12 +167,8 @@ export function useStockAnalysisLifecycle(params: Params) {
       toast.error('缺少股票记录，请先添加到自选股后再进入分析。');
       return false;
     }
-    // ③ pre-flight — a cached ongoing run avoids the wasted roundtrip.
-    // Skipped on the cancel-and-replay paths: they just aborted the only
-    // ongoing run, but the dispatched cancellation isn't visible in this
-    // closure's `state` yet, so a pre-flight would re-detect the stale ongoing
-    // and re-open the conflict instead of creating. The backend 409 + the ④
-    // fallback below still guard against a genuinely concurrent run.
+    // Local conflict check avoids creating a second run when recent history
+    // already shows an active analysis for this stock.
     if (!opts?.skipPreflight) {
       const cachedOngoing = findOngoingAnalysis(state.recentAnalyses);
       if (cachedOngoing) {
@@ -193,8 +189,7 @@ export function useStockAnalysisLifecycle(params: Params) {
       return true;
     } catch (err: unknown) {
       dispatch({ t: 'loading', v: false });
-      // ④ post-error fallback — backend rejected because of a race. Refetch
-      // history, find the brand-new ongoing row, auto-switch to it.
+      // Server-side conflict: refresh history and attach to the active run.
       if (isAlreadyRunningError(err)) {
         try {
           const fresh = await getAnalysisHistory(1, 5, {
