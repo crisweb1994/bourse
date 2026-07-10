@@ -82,14 +82,12 @@ export const EvidencePack = z.object({
 });
 export type EvidencePack = z.infer<typeof EvidencePack>;
 
-// RFC-02: v1 + v2 discriminated union. v1 stays as 'EvidencePack' (kept
-// stable so existing debate/SSE/workflow consumers don't have to change).
-// v2 is imported separately for code-driven A-share Stage 0; callers that
-// need to accept either version use EvidencePackAny.
+// v1 + v2 discriminated union. v1 stays as 'EvidencePack' for recovery packs
+// and non-CN markets; v2 carries code-driven structured facts.
 import { EvidencePackV2 } from './evidence-pack-v2';
 
 export const EvidencePackAny = z.discriminatedUnion('schemaVersion', [
-  EvidencePack,    // 'evidence-pack-v1' — debate workflow, any market
-  EvidencePackV2,  // 'evidence-pack-v2' — comprehensive Stage 0, CN only
+  EvidencePack,    // 'evidence-pack-v1'
+  EvidencePackV2,  // 'evidence-pack-v2'
 ]);
 export type EvidencePackAny = z.infer<typeof EvidencePackAny>;
