@@ -7,6 +7,7 @@ import {
   applyAnalysisStreamEvent,
   INITIAL_ANALYSIS_STREAM_STATE,
   isAlreadyRunningStreamError,
+  isAnalysisStreamEventName,
   markAttachedElsewhere,
   markStreamConnectionError,
   startStreamState,
@@ -62,6 +63,7 @@ export function useAnalysisStream() {
           // see A's tail-end onmessage callbacks fire.
           if (reqIdRef.current !== myReqId) return;
           const data = JSON.parse(ev.data);
+          if (!isAnalysisStreamEventName(ev.event)) return;
 
           if (ev.event === 'error' && isAlreadyRunningStreamError(data.message)) {
             setState(markAttachedElsewhere);

@@ -3,11 +3,15 @@ import {
   applyAnalysisStreamEvent,
   INITIAL_ANALYSIS_STREAM_STATE,
   isAlreadyRunningStreamError,
+  isAnalysisStreamEventName,
   markAttachedElsewhere,
   markStreamConnectionError,
   startStreamState,
   stopWatchingStreamState,
 } from './analysis-stream-state';
+
+assert.equal(isAnalysisStreamEventName('section_start'), true);
+assert.equal(isAnalysisStreamEventName('judge_start'), false);
 
 let state = startStreamState(INITIAL_ANALYSIS_STREAM_STATE, 'analysis-1');
 state = applyAnalysisStreamEvent(state, 'section_start', {

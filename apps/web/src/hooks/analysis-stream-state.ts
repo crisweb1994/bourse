@@ -1,5 +1,5 @@
 import { isSectionType } from '@bourse/shared-types';
-import type { SectionType } from '@bourse/shared-types';
+import type { AnalysisStatus, SectionType } from '@bourse/shared-types';
 
 export interface AnalysisCitation {
   title: string;
@@ -20,6 +20,82 @@ export interface SectionData {
   errorMessage?: string | null;
   skipReason?: string;
   skipMissingFields?: string[];
+}
+
+export interface AnalysisStreamEventPayloadMap {
+  evidence_pack_ready: {
+    pack: unknown;
+  };
+  section_skipped: {
+    sectionType: SectionType;
+    reason: string;
+    missingFields: string[];
+  };
+  section_start: {
+    sectionType: SectionType;
+    sectionId: string;
+    order: number;
+  };
+  report_chunk: {
+    text: string;
+    sectionType?: SectionType;
+  };
+  citation: {
+    title: string;
+    url: string;
+    claim: string;
+    sectionType?: SectionType;
+    searchAdapter?: string;
+  };
+  structured_data: {
+    json: unknown;
+    sectionType: SectionType;
+  };
+  section_complete: {
+    sectionType: SectionType;
+    status: AnalysisStatus;
+    error?: string | null;
+  };
+  summary_chunk: {
+    text: string;
+  };
+  summary_complete: {
+    summaryJson: unknown;
+  };
+  done: {
+    analysisId: string;
+    status?: AnalysisStatus;
+  };
+  error: {
+    message: string;
+    failedSections?: SectionType[];
+  };
+}
+
+export type AnalysisStreamEventName = keyof AnalysisStreamEventPayloadMap;
+
+const ANALYSIS_STREAM_EVENT_NAMES = [
+  'evidence_pack_ready',
+  'section_skipped',
+  'section_start',
+  'report_chunk',
+  'citation',
+  'structured_data',
+  'section_complete',
+  'summary_chunk',
+  'summary_complete',
+  'done',
+  'error',
+] as const satisfies readonly AnalysisStreamEventName[];
+
+const ANALYSIS_STREAM_EVENT_NAME_SET = new Set<string>(
+  ANALYSIS_STREAM_EVENT_NAMES,
+);
+
+export function isAnalysisStreamEventName(
+  value: string,
+): value is AnalysisStreamEventName {
+  return ANALYSIS_STREAM_EVENT_NAME_SET.has(value);
 }
 
 /**
@@ -116,6 +192,26 @@ function parseSectionType(value: unknown): SectionType | null {
   return typeof value === 'string' && isSectionType(value) ? value : null;
 }
 
+function parseDegradedInfo(pack: unknown): DegradedInfo | null {
+  if (!pack || typeof pack !== 'object') return null;
+  const availability = (pack as { dataAvailability?: unknown }).dataAvailability;
+  if (!availability || typeof availability !== 'object') return null;
+  const dataAvailability = availability as {
+    degradedSource?: unknown;
+    fallbackReason?: {
+      kind?: DegradedInfo['kind'];
+      failedTools?: string[];
+      message?: string;
+    };
+  };
+  if (dataAvailability.degradedSource !== 'WEB_SEARCH_FALLBACK') return null;
+  return {
+    kind: dataAvailability.fallbackReason?.kind ?? 'OTHER',
+    failedTools: dataAvailability.fallbackReason?.failedTools ?? [],
+    message: dataAvailability.fallbackReason?.message ?? '',
+  };
+}
+
 export function applyAnalysisStreamEvent(
   state: AnalysisStreamState,
   event: string,
@@ -146,15 +242,11 @@ export function applyAnalysisStreamEvent(
     }
 
     case 'evidence_pack_ready': {
-      const availability = data?.pack?.dataAvailability;
-      if (availability?.degradedSource !== 'WEB_SEARCH_FALLBACK') return state;
+      const degraded = parseDegradedInfo(data.pack);
+      if (!degraded) return state;
       return {
         ...state,
-        degraded: state.degraded ?? {
-          kind: availability.fallbackReason?.kind ?? 'OTHER',
-          failedTools: availability.fallbackReason?.failedTools ?? [],
-          message: availability.fallbackReason?.message ?? '',
-        },
+        degraded: state.degraded ?? degraded,
       };
     }
 
