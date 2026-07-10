@@ -10,9 +10,6 @@ export const Budget = z.object({
 });
 export type Budget = z.infer<typeof Budget>;
 
-// Walking-skeleton scope (Day 2): symbol/market/type/locale required;
-// competitors/budget present as optional placeholders so downstream
-// signatures don't churn when V1 features land.
 export const AnalysisRequest = z.object({
   symbol: z.string().min(1),
   market: z.string().min(1),

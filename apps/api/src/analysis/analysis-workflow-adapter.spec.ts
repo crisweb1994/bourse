@@ -369,7 +369,7 @@ describe('runAnalysisWorkflowAdapter — partial / fail / cancel', () => {
     assert.equal(doneSend!.data.status, 'FAILED');
   });
 
-  it('orphan sweep (fix 2026-05-16): mid-stream throw → straggler sections marked FAILED + count honest', async () => {
+  it('marks unfinished sections as FAILED after a mid-stream throw', async () => {
     // 3 sections seeded. 1 completes normally, 1 starts but never completes,
     // 1 never starts. Then factory throws (mimics an upstream failure
     // mid-stream).
@@ -420,7 +420,7 @@ describe('runAnalysisWorkflowAdapter — partial / fail / cancel', () => {
     );
   });
 
-  it('section-scoped error event (fix 2026-05-16): writes real errorMessage to DB, not sweep fallback', async () => {
+  it('persists section-scoped error messages without sweep overwrite', async () => {
     // Mimics what comprehensive.ts emits when streamDimension throws
     // mid-wave: a top-level `error` event with sectionType + message,
     // followed by the workflow moving on (no section_complete for that
@@ -471,7 +471,7 @@ describe('runAnalysisWorkflowAdapter — partial / fail / cancel', () => {
     assert.equal(sweepRuns.length, 0, 'sweep should NOT overwrite real error');
   });
 
-  it('orphan sweep (fix 2026-05-16): mid-stream throw → IN_PROGRESS sections marked FAILED', async () => {
+  it('marks an in-progress orphan section as FAILED', async () => {
     const events: SseEvent[] = [
       evt('section_start', { sectionType: 'FUNDAMENTAL', order: 0 }, 1),
       // Never reaches section_complete — generator throws.
@@ -501,10 +501,6 @@ describe('runAnalysisWorkflowAdapter — partial / fail / cancel', () => {
   });
 });
 
-// plan-v2 Wave 3.3: cross_dim_warning SSE event removed. Validator still
-// runs inside the agent workflow; DOWNGRADE persistence no longer flows
-// through the adapter so the dedicated spec has been deleted.
-
 describe('runAnalysisWorkflowAdapter — non-CN market', () => {
   it('omits marketProfile for non-CN runs but still drives streaming', async () => {
     const events: SseEvent[] = [evt('done', { status: 'COMPLETED' } as never, 1)];
@@ -531,7 +527,7 @@ describe('runAnalysisWorkflowAdapter — non-CN market', () => {
   });
 });
 
-describe('runAnalysisWorkflowAdapter — selective judge (RFC-10 P4)', () => {
+describe('runAnalysisWorkflowAdapter — selective judge', () => {
   it('forwards judge_start/judge_complete + writes judgeResult to section', async () => {
     const judgeResult = {
       schemaVersion: 'judge-result-v1' as const,

@@ -36,28 +36,9 @@ import {
 } from '../connectors/connectors.module';
 
 /**
- * plan-v2 Wave 2.3 — apps/api integration surface for the new
- * `analysisPkg.fetchSnapshot` orchestrator.
- *
- * This service:
- *   1. Pulls the existing research-core port singletons out of DI.
- *   2. Wraps them into a static `MarketConfigMap` via `portToFetcher`.
- *   3. Exposes a single async `fetch(symbol, market)` that delegates to
- *      `analysisPkg.fetchSnapshot()`.
- *
- * Shadow-mode safe: nothing on the existing analysis path calls this
- * service yet. Wave 2.4 will route traffic; Wave 2.5 will delete the
- * old planning-backed path.
- *
- * Caller controls:
- *   - perConnectorTimeoutMs (default 8s inside fetchSnapshot)
- *   - historyDays (default 365)
- *   - filingsLimit (default 10)
- *
- * Connector availability follows research-module wiring:
- *   - US: yahoo finance + history + SEC EDGAR filings + SEC XBRL financials
- *   - CN: tencent/eastmoney quote + eastmoney financials + CNInfo filings
- *   - HK: yahoo finance (HK suffix) + eastmoney HK F10 financials
+ * API-side data preparation boundary. It wires the app connector ports into
+ * `@bourse/analysis` snapshot fetching, then projects snapshots into
+ * EvidencePackV2 for the analysis workflow.
  */
 @Injectable()
 export class SnapshotV2Service {
@@ -207,12 +188,8 @@ export class SnapshotV2Service {
           );
           return env?.data ?? null;
         },
-        // plan-v2 Wave 2.5 — CN-only fact tools, wired in for parity with
-        // the legacy cn-tool-driven-augmenter. All run via the same
-        // ToolDescriptor.run() with a minimal ToolContext (signal +
-        // CN MarketProfile). Failures are caught by the snapshot
-        // orchestrator and surface in dataAvailability with structured
-        // reason codes.
+        // CN-only fact tools run through the same snapshot orchestrator;
+        // failures surface in dataAvailability with structured reason codes.
         consensusEps: toolToFetcher(consensusEpsCN),
         lhb: toolToFetcher(lhbScanCN),
         northboundFlow: toolToFetcher(akshareNorthboundCN),
