@@ -1,17 +1,9 @@
 /**
- * v0.3 后遗留 ① Layer 1：5 个 regression scenario。
+ * Regression scenarios for the API workflow adapter.
  *
- * 设计：每个 scenario 是"灌进 adapter 的 SSE 事件序列 + 初始 section/config"。
- * 输出（send/prisma/telemetry/result）由 adapter 决定，被 scenario-runner 捕获
- * 后由 snapshot.diffFixture 与 __fixtures__/<name>.json 比对。
- *
- * 覆盖 Phase A 关心的边界：
- *  1. comprehensive-happy-2dim          —— 基线：2 维全 COMPLETED
- *  2. comprehensive-section-failed      —— FUNDAMENTAL 失败 → PARTIAL_FAILED
- *  3. comprehensive-tavily-disabled     —— provider.capabilities.webSearch=false，
- *                                          无 citation 事件（"UI 选了但 runtime 没有"路径）
- *  4. comprehensive-budget-exhausted    —— done with BUDGET_EXHAUSTED
- *  5. debate-heterogeneous              —— DEBATE workflow + 异构 provider
+ * Each scenario is a scripted domain SSE event sequence plus initial section
+ * rows. The scenario runner captures API SSE frames and Prisma writes, then
+ * compares them with the fixture snapshots.
  */
 import type {
   SseEvent,

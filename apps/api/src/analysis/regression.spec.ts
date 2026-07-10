@@ -1,7 +1,7 @@
 /**
- * v0.3 后遗留 ① Layer 1：8 维 + comprehensive + debate streaming 回归基线。
+ * Analysis workflow regression baseline.
  *
- * 跑 5 个 scenario，每个产出一份"运行时无关"的 snapshot，与 `__fixtures__/<name>.json`
+ * 跑一组 comprehensive scenario，每个产出一份"运行时无关"的 snapshot，与 `__fixtures__/<name>.json`
  * 比对。任何一个改了 SSE 事件序列 / Prisma 写入形状 / Telemetry 字段都会被抓出来。
  *
  * 重新 bless：UPDATE_FIXTURES=1 pnpm -F @bourse/api test
@@ -17,7 +17,7 @@ import { diffFixture } from './__testing__/snapshot';
 import { runScenario } from './__testing__/scenario-runner';
 import { SCENARIOS } from './__testing__/scenarios';
 
-describe('analysis regression baseline (v0.3 Phase E)', () => {
+describe('analysis regression baseline', () => {
   for (const scenario of SCENARIOS) {
     it(`scenario: ${scenario.name}`, async () => {
       const snapshot = await runScenario(scenario);
