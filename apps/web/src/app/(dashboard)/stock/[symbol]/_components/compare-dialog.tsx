@@ -1,20 +1,27 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getAnalysis, type AnalysisDto } from '@/lib/api';
+import {
+  getAnalysis,
+  type AnalysisDto,
+  type AnalysisHistoryItemDto,
+} from '@/lib/api';
 import { Button, Dialog } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { formatAnalysisTime } from '../stock-page-ui';
 import { SIGNAL_LABELS, CONFIDENCE_LABELS } from '@/lib/constants';
 
-// ============================================================
-// CompareDialog — S4+ · 上一次 vs 这次 diff
-// ============================================================
-// Reuses the user's recent-analyses list: find the most recent COMPLETED
-// analysis of the same type (other than `current`) and show side-by-side
-// signal / confidence / oneLiner / bull case / bear case + biggest risk
-// deltas. Detailed fields come from the previous run's `summaryJson`
-// which we fetch lazily on open (the list endpoint omits it).
+type ComparisonSummary = {
+  overallSignal?: string | null;
+  overallConfidence?: string | null;
+  oneLiner?: string | null;
+  bullCase?: string[] | null;
+  bearCase?: string[] | null;
+  biggestRisk?: string | null;
+};
+
+// Reuses the recent analysis list to find the previous completed run, then
+// refreshes that run on open so the comparison uses current detail data.
 
 export function CompareDialog({
   open,
@@ -25,9 +32,9 @@ export function CompareDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  current: AnalysisDto;
-  currentSummary: any;
-  recents: AnalysisDto[];
+  current: AnalysisHistoryItemDto;
+  currentSummary: unknown;
+  recents: AnalysisHistoryItemDto[];
 }) {
   const prev = recents.find(
     (a) =>
@@ -62,7 +69,10 @@ export function CompareDialog({
   const CONF = (c: string | null | undefined) =>
     CONFIDENCE_LABELS[c ?? ''] ?? c ?? '—';
 
-  const prevSummary = (prevDetail as any)?.summaryJson ?? null;
+  const currentSummaryData = asComparisonSummary(currentSummary);
+  const prevSummary = prev
+    ? asComparisonSummary(prevDetail?.summaryJson ?? prev.summaryJson)
+    : null;
 
   return (
     <Dialog
@@ -104,13 +114,16 @@ export function CompareDialog({
 
             <DiffRow
               label="信号"
-              cur={SIG(currentSummary?.overallSignal ?? current.overallSignal)}
+              cur={SIG(
+                currentSummaryData?.overallSignal ?? current.overallSignal,
+              )}
               prev={SIG(prevSummary?.overallSignal ?? prev.overallSignal)}
             />
             <DiffRow
               label="置信度"
               cur={CONF(
-                currentSummary?.overallConfidence ?? current.overallConfidence,
+                currentSummaryData?.overallConfidence ??
+                  current.overallConfidence,
               )}
               prev={CONF(
                 prevSummary?.overallConfidence ?? prev.overallConfidence,
@@ -127,22 +140,22 @@ export function CompareDialog({
               <>
                 <DiffText
                   label="一句话结论"
-                  cur={currentSummary?.oneLiner}
+                  cur={currentSummaryData?.oneLiner}
                   prev={prevSummary?.oneLiner}
                 />
                 <DiffList
                   label="看多理由"
-                  cur={currentSummary?.bullCase}
+                  cur={currentSummaryData?.bullCase}
                   prev={prevSummary?.bullCase}
                 />
                 <DiffList
                   label="看空理由"
-                  cur={currentSummary?.bearCase}
+                  cur={currentSummaryData?.bearCase}
                   prev={prevSummary?.bearCase}
                 />
                 <DiffText
                   label="最大风险"
-                  cur={currentSummary?.biggestRisk}
+                  cur={currentSummaryData?.biggestRisk}
                   prev={prevSummary?.biggestRisk}
                 />
               </>
@@ -156,6 +169,12 @@ export function CompareDialog({
       </div>
     </Dialog>
   );
+}
+
+function asComparisonSummary(value: unknown): ComparisonSummary | null {
+  return value && typeof value === 'object'
+    ? (value as ComparisonSummary)
+    : null;
 }
 
 function DiffRow({
@@ -228,8 +247,8 @@ function DiffList({
   prev,
 }: {
   label: string;
-  cur?: string[];
-  prev?: string[];
+  cur?: string[] | null;
+  prev?: string[] | null;
 }) {
   if (!cur?.length && !prev?.length) return null;
   const curSet = new Set(cur ?? []);

@@ -7,7 +7,7 @@ import { StockSearch } from '@/components/stock/stock-search';
 import { WatchlistTable } from '@/components/watchlist/watchlist-table';
 import { useWatchlist } from '@/hooks/use-watchlist';
 import { useAuth } from '@/hooks/use-auth';
-import { getAnalysisHistory, type AnalysisDto } from '@/lib/api';
+import { getAnalysisHistory, type AnalysisHistoryItemDto } from '@/lib/api';
 import {
   ANALYSIS_TYPE_LABELS,
   SIGNAL_LABELS_BILINGUAL,
@@ -27,7 +27,7 @@ import {
 export default function DashboardPage() {
   const { user } = useAuth();
   const { items: watchlist, loading: loadingWatch, refresh } = useWatchlist();
-  const [recent, setRecent] = useState<AnalysisDto[]>([]);
+  const [recent, setRecent] = useState<AnalysisHistoryItemDto[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(true);
 
   useEffect(() => {

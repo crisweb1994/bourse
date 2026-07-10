@@ -1,4 +1,4 @@
-import type { AnalysisDto } from '@/lib/api';
+import type { AnalysisDto, AnalysisHistoryItemDto } from '@/lib/api';
 import type { ActiveAnalysisType } from '@bourse/shared-types';
 
 export type CreatePayload = {
@@ -8,13 +8,13 @@ export type CreatePayload = {
 };
 
 export interface LifecycleState {
-  recentAnalyses: AnalysisDto[];
-  current: AnalysisDto | null;
+  recentAnalyses: AnalysisHistoryItemDto[];
+  current: AnalysisHistoryItemDto | null;
   checkingOngoing: boolean;
   loading: boolean;
-  conflict: AnalysisDto | null;
+  conflict: AnalysisHistoryItemDto | null;
   conflictPending: CreatePayload | null;
-  autoSwitchedFrom: AnalysisDto | null;
+  autoSwitchedFrom: AnalysisHistoryItemDto | null;
 }
 
 export const INITIAL_LIFECYCLE_STATE: LifecycleState = {
@@ -30,12 +30,16 @@ export const INITIAL_LIFECYCLE_STATE: LifecycleState = {
 export type LifecycleAction =
   | { t: 'checking'; v: boolean }
   | { t: 'loading'; v: boolean }
-  | { t: 'recent'; items: AnalysisDto[] }
-  | { t: 'current'; analysis: AnalysisDto | null }
-  | { t: 'conflict'; analysis: AnalysisDto | null; pending: CreatePayload | null }
+  | { t: 'recent'; items: AnalysisHistoryItemDto[] }
+  | { t: 'current'; analysis: AnalysisHistoryItemDto | null }
+  | {
+      t: 'conflict';
+      analysis: AnalysisHistoryItemDto | null;
+      pending: CreatePayload | null;
+    }
   | { t: 'clearConflict' }
   | { t: 'conflictPending'; pending: CreatePayload | null }
-  | { t: 'autoSwitched'; analysis: AnalysisDto | null }
+  | { t: 'autoSwitched'; analysis: AnalysisHistoryItemDto | null }
   | { t: 'markCancelled'; id: string };
 
 export function lifecycleReducer(
@@ -76,8 +80,8 @@ export function lifecycleReducer(
 }
 
 export function findOngoingAnalysis(
-  items: AnalysisDto[],
-): AnalysisDto | undefined {
+  items: AnalysisHistoryItemDto[],
+): AnalysisHistoryItemDto | undefined {
   return items.find(
     (analysis) =>
       analysis.status === 'IN_PROGRESS' || analysis.status === 'PENDING',

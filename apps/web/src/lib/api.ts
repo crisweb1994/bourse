@@ -177,6 +177,15 @@ export interface AnalysisSectionDto {
   order: number;
 }
 
+export interface AnalysisHistorySectionDto {
+  type: SectionType;
+  status: AnalysisStatus;
+}
+
+export type AnalysisHistoryItemDto = Omit<AnalysisDto, 'sections'> & {
+  sections: AnalysisHistorySectionDto[];
+};
+
 export async function createAnalysis(
   stockId: string,
   analysisType: ActiveAnalysisType,
@@ -212,7 +221,12 @@ export async function getAnalysisHistory(
     /** Filter to runs where structured evidence fell back to web_search. */
     degradedOnly?: boolean;
   },
-): Promise<{ items: AnalysisDto[]; total: number; page: number; limit: number }> {
+): Promise<{
+  items: AnalysisHistoryItemDto[];
+  total: number;
+  page: number;
+  limit: number;
+}> {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (filters?.analysisType) params.set('analysisType', filters.analysisType);
   if (filters?.status) params.set('status', filters.status);

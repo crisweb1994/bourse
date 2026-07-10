@@ -1,6 +1,6 @@
 'use client';
 
-import { type AnalysisDto } from '@/lib/api';
+import { type AnalysisHistoryItemDto } from '@/lib/api';
 import { Button, Dialog } from '@/components/ui';
 import { ANALYSIS_TYPES } from '../stock-page-ui';
 
@@ -13,7 +13,7 @@ export function ConflictDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  ongoing: AnalysisDto;
+  ongoing: AnalysisHistoryItemDto;
   onView: () => void;
   onCancelAndNew: () => void;
 }) {
@@ -85,7 +85,7 @@ export function SwitchedNotice({
   onCancelAndNew,
   onDismiss,
 }: {
-  ongoing: AnalysisDto;
+  ongoing: AnalysisHistoryItemDto;
   onCancelAndNew: () => void;
   onDismiss: () => void;
 }) {

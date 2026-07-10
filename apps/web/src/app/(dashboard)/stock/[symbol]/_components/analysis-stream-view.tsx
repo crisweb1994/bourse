@@ -11,7 +11,7 @@ import {
   Sparkles,
   Square,
 } from 'lucide-react';
-import type { AnalysisDto } from '@/lib/api';
+import type { AnalysisHistoryItemDto } from '@/lib/api';
 import type {
   SectionData,
   useAnalysisStream,
@@ -42,8 +42,8 @@ type RightInsightsSummary = ComponentProps<
 
 interface AnalysisStreamViewProps {
   stream: AnalysisStream;
-  currentAnalysisMeta: AnalysisDto | null;
-  recentAnalyses: AnalysisDto[];
+  currentAnalysisMeta: AnalysisHistoryItemDto | null;
+  recentAnalyses: AnalysisHistoryItemDto[];
   sectionList: SectionData[];
   isMultiSection: boolean;
   navItems: NavItem[];

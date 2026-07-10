@@ -1,16 +1,16 @@
 'use client';
 
-import { type AnalysisDto } from '@/lib/api';
+import { type AnalysisHistoryItemDto } from '@/lib/api';
 import { CompareDialog } from './compare-dialog';
 import { ConflictDialog } from './conflict-dialog';
 
 interface AnalysisDialogsProps {
   compareOpen: boolean;
   onCompareOpenChange: (open: boolean) => void;
-  currentAnalysis: AnalysisDto | null;
+  currentAnalysis: AnalysisHistoryItemDto | null;
   currentSummary: unknown;
-  recentAnalyses: AnalysisDto[];
-  conflictAnalysis: AnalysisDto | null;
+  recentAnalyses: AnalysisHistoryItemDto[];
+  conflictAnalysis: AnalysisHistoryItemDto | null;
   onDismissConflict: () => void;
   onViewConflict: () => void;
   onCancelAndNew: () => void;

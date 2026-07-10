@@ -15,7 +15,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Star, Loader2, ChevronDown, Clock, Share2 } from 'lucide-react';
 import {
-  type AnalysisDto,
+  type AnalysisHistoryItemDto,
   type StockQuoteDto,
   type StockProfileDto,
 } from '@/lib/api';
@@ -51,7 +51,7 @@ interface Props {
   onToggleWatchlist?: () => void;
   watchlistBusy?: boolean;
   /** Most recent 5 analyses for this stock. Empty when none. */
-  recentAnalyses: AnalysisDto[];
+  recentAnalyses: AnalysisHistoryItemDto[];
   /**
    * Quote + profile fetched by the parent page via getStockDetail so the
    * header doesn't issue a duplicate request. `null` = page still loading;
@@ -308,7 +308,7 @@ function LastAnalysisChip({
   recent,
   currentSymbol,
 }: {
-  recent: AnalysisDto[];
+  recent: AnalysisHistoryItemDto[];
   currentSymbol: string;
 }) {
   const router = useRouter();
@@ -337,7 +337,7 @@ function LastAnalysisChip({
 
   const activeId = searchParams.get('analysisId');
 
-  const switchTo = (a: AnalysisDto) => {
+  const switchTo = (a: AnalysisHistoryItemDto) => {
     setOpen(false);
     const params = new URLSearchParams(searchParams.toString());
     params.set('analysisId', a.id);

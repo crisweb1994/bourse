@@ -8,6 +8,7 @@ import {
   getAnalysisHistory,
   retrySection as apiRetrySection,
   type AnalysisDto,
+  type AnalysisHistoryItemDto,
 } from '@/lib/api';
 import { toast } from '@/components/ui';
 import type { useAnalysisStream } from '@/hooks/use-analysis-stream';
@@ -55,7 +56,7 @@ export function useStockAnalysisLifecycle(params: Params) {
   ref.current = params;
 
   // Latest loaded analysis for the terminal metadata refresh.
-  const currentRef = useRef<AnalysisDto | null>(null);
+  const currentRef = useRef<AnalysisHistoryItemDto | null>(null);
   currentRef.current = state.current;
 
   const { effectiveStockId, analysisId } = params;

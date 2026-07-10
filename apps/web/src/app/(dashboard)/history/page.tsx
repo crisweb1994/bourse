@@ -13,7 +13,7 @@ import {
 import {
   getAnalysisHistory,
   deleteAnalysis,
-  type AnalysisDto,
+  type AnalysisHistoryItemDto,
 } from '@/lib/api';
 import {
   ACTIVE_ANALYSIS_TYPES,
@@ -70,7 +70,7 @@ const STATUS_OPTIONS = [
 
 export default function HistoryPage() {
   const confirm = useConfirm();
-  const [items, setItems] = useState<AnalysisDto[]>([]);
+  const [items, setItems] = useState<AnalysisHistoryItemDto[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);

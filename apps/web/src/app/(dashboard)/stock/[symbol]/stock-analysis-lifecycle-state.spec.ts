@@ -6,10 +6,10 @@ import {
   isAlreadyRunningError,
   lifecycleReducer,
 } from './stock-analysis-lifecycle-state';
-import type { AnalysisDto } from '@/lib/api';
+import type { AnalysisHistoryItemDto } from '@/lib/api';
 import type { AnalysisStatus } from '@bourse/shared-types';
 
-function analysis(id: string, status: AnalysisStatus): AnalysisDto {
+function analysis(id: string, status: AnalysisStatus): AnalysisHistoryItemDto {
   return {
     id,
     userId: 'user-1',
