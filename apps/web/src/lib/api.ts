@@ -146,7 +146,6 @@ export interface AnalysisDto {
   status: AnalysisStatus;
   aiProvider: string | null;
   aiModel: string | null;
-  promptVersion: string | null;
   dataAsOf: string | null;
   generatedAt: string | null;
   overallSignal: Signal | null;

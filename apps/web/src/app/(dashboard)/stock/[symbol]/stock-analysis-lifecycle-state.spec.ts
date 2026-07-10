@@ -20,7 +20,6 @@ function analysis(id: string, status: AnalysisStatus): AnalysisHistoryItemDto {
     status,
     aiProvider: null,
     aiModel: null,
-    promptVersion: null,
     dataAsOf: null,
     generatedAt: null,
     overallSignal: null,

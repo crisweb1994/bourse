@@ -178,7 +178,6 @@ model Analysis {
   aiProvider          String?
   aiModel             String?
   aiProviderSettingId String?
-  promptVersion       String?
   dataAsOf            String?
   generatedAt         DateTime?
   summaryMarkdown     String?

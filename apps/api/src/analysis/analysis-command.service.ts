@@ -3,7 +3,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { SCHEMA_VERSION } from '@bourse/analysis';
 import {
   COMPREHENSIVE_DIMENSIONS,
   isSectionType,
@@ -60,7 +59,6 @@ export class AnalysisCommandService {
         aiProvider: providerName,
         aiModel,
         aiProviderSettingId: settingId,
-        promptVersion: SCHEMA_VERSION,
         sections: { create: sections },
       },
       include: { sections: { orderBy: { order: 'asc' } }, stock: true },
