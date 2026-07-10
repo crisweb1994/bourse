@@ -40,17 +40,6 @@ export interface AnalysisSsePayloadMap {
     status: AnalysisStatus;
     error?: string | null;
   };
-  judge_start: {
-    sectionType: SectionType;
-  };
-  judge_complete: {
-    sectionType: SectionType;
-    result: unknown;
-    traceTokensIn?: number;
-    traceTokensOut?: number;
-    traceCostUsd?: number;
-    traceDurationMs?: number;
-  };
   summary_chunk: {
     text: string;
   };

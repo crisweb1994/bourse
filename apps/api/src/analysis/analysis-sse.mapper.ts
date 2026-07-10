@@ -113,31 +113,6 @@ export function mapSectionCompleteEvent(
   };
 }
 
-export function mapJudgeStartEvent(
-  event: Extract<SseEvent, { type: 'judge_start' }>,
-): ApiSseFrame<'judge_start'> {
-  return {
-    event: 'judge_start',
-    data: { sectionType: event.sectionType },
-  };
-}
-
-export function mapJudgeCompleteEvent(
-  event: Extract<SseEvent, { type: 'judge_complete' }>,
-): ApiSseFrame<'judge_complete'> {
-  return {
-    event: 'judge_complete',
-    data: {
-      sectionType: event.sectionType,
-      result: event.result,
-      traceTokensIn: event.traceTokensIn,
-      traceTokensOut: event.traceTokensOut,
-      traceCostUsd: event.traceCostUsd,
-      traceDurationMs: event.traceDurationMs,
-    },
-  };
-}
-
 export function mapSummaryChunkEvent(
   event: Extract<SseEvent, { type: 'summary_chunk' }>,
 ): ApiSseFrame<'summary_chunk'> {

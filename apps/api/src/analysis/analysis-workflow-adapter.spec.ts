@@ -516,7 +516,7 @@ describe('runAnalysisWorkflowAdapter — non-CN market', () => {
 });
 
 describe('runAnalysisWorkflowAdapter — selective judge', () => {
-  it('forwards judge_start/judge_complete + writes judgeResult to section', async () => {
+  it('writes judgeResult to section without forwarding internal judge events', async () => {
     const judgeResult = {
       schemaVersion: 'judge-result-v1' as const,
       pass: false,
@@ -578,15 +578,8 @@ describe('runAnalysisWorkflowAdapter — selective judge', () => {
 
     assert.equal(result.terminalStatus, 'COMPLETED');
 
-    // SSE forwarded verbatim
-    const judgeStartCalls = sendCalls.filter((c) => c.type === 'judge_start');
-    const judgeCompleteCalls = sendCalls.filter((c) => c.type === 'judge_complete');
-    assert.equal(judgeStartCalls.length, 1);
-    assert.equal(judgeCompleteCalls.length, 1);
-    const jc = judgeCompleteCalls[0]!.data as Record<string, unknown>;
-    assert.equal(jc.sectionType, 'VALUATION');
-    assert.equal(jc.traceCostUsd, 0.005);
-    assert.equal((jc.result as { pass: boolean }).pass, false);
+    assert.equal(sendCalls.some((c) => c.type === 'judge_start'), false);
+    assert.equal(sendCalls.some((c) => c.type === 'judge_complete'), false);
 
     // structuredJson updated with judgeResult sub-field + downgraded confidence
     const sectionUpdates = prismaCalls.filter(

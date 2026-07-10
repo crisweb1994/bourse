@@ -20,8 +20,6 @@ import {
   mapDoneEvent,
   mapErrorEvent,
   mapEvidencePackReadyEvent,
-  mapJudgeCompleteEvent,
-  mapJudgeStartEvent,
   mapReportChunkEvent,
   mapSectionCompleteEvent,
   mapSectionSkippedEvent,
@@ -353,13 +351,10 @@ export async function runAnalysisWorkflowAdapter(
         }
 
         case 'judge_start': {
-          sendFrame(ctx.send, mapJudgeStartEvent(event));
           break;
         }
 
         case 'judge_complete': {
-          sendFrame(ctx.send, mapJudgeCompleteEvent(event));
-
           const acc = sectionAccs.get(event.sectionType);
           if (acc) {
             await persistence.persistJudgeResult(ctx.analysisId, event, acc);
