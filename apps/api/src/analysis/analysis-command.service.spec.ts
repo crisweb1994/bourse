@@ -22,7 +22,7 @@ function createService() {
       },
     } as never,
     {
-      resolveProvider: async () => ({
+      resolveAnalysisMetadata: async () => ({
         aiModel: 'claude-sonnet-4',
         providerName: 'anthropic',
         settingId: 'setting-1',

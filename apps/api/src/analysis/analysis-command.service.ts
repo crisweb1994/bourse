@@ -32,7 +32,7 @@ export class AnalysisCommandService {
     if (!stock) throw new NotFoundException('Stock not found');
 
     const { aiModel, providerName, settingId } =
-      await this.providerResolver.resolveProvider(userId, {
+      await this.providerResolver.resolveAnalysisMetadata(userId, {
         settingIdHint: dto.aiProviderSettingId,
         modelHint: dto.aiModel,
       });

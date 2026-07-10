@@ -36,15 +36,13 @@ export class ProviderResolverService {
    * Resolve the provider metadata persisted on a newly created analysis.
    * Priority: explicit setting, user's default setting, then env config.
    */
-  async resolveProvider(
+  async resolveAnalysisMetadata(
     userId: string,
     hints: {
       settingIdHint?: string | null;
-      providerNameHint?: string | null;
       modelHint?: string | null;
     },
   ): Promise<{
-    provider: ReturnType<ProviderFactoryService['buildProvider']>;
     aiModel: string;
     providerName: string;
     settingId: string | null;
@@ -57,17 +55,16 @@ export class ProviderResolverService {
         hints.modelHint || runtime.model || undefined,
       );
       return {
-        provider,
         aiModel,
         providerName: providerTypeToName(runtime.providerType),
         settingId: runtime.id,
       };
     }
 
-    const providerName = this.envProviderName(hints.providerNameHint);
+    const providerName = this.envProviderName();
     const provider = this.providerFactory.buildProvider(providerName);
     const aiModel = provider.getModel(hints.modelHint || undefined);
-    return { provider, aiModel, providerName, settingId: null };
+    return { aiModel, providerName, settingId: null };
   }
 
   /** Shared runtime lookup: explicit settingId hint, else the user's default. */
