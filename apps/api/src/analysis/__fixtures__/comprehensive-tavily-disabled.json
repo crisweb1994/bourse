@@ -74,9 +74,7 @@
       ],
       "dataKeys": [
         "citations",
-        "confidence",
         "reportMarkdown",
-        "signal",
         "status",
         "structuredJson"
       ],

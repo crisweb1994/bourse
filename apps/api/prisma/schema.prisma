@@ -210,11 +210,6 @@ model AnalysisSection {
   errorMessage   String?
   order          Int
 
-  // Mirrored from structuredJson.conclusion so list/history queries can render
-  // badges without parsing the JSON blob.
-  signal         Signal?
-  confidence     Confidence?
-
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 

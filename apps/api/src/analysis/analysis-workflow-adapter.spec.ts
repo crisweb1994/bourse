@@ -241,8 +241,9 @@ describe('runAnalysisWorkflowAdapter — happy path', () => {
     assert.equal(updateArgs.where.id, 'sec-1');
     assert.equal(updateArgs.data.status, 'COMPLETED');
     assert.equal(updateArgs.data.reportMarkdown, 'hello world');
-    assert.equal(updateArgs.data.signal, 'BULLISH');
-    assert.equal(updateArgs.data.confidence, 'HIGH');
+    assert.deepEqual(updateArgs.data.structuredJson, {
+      conclusion: { signal: 'BULLISH', confidence: 'HIGH' },
+    });
 
     // Analysis row written on done
     const analysisUpdate = prismaCalls.find((c) => c.table === 'analysis');

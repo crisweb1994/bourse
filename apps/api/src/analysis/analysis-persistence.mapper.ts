@@ -101,8 +101,6 @@ export class AnalysisPersistenceMapper {
     event: Extract<SseEvent, { type: 'section_complete' }>,
     accumulator: AnalysisSectionAccumulator,
   ) {
-    const sectionFields = this.pickSectionFields(event, accumulator);
-
     await this.prisma.analysisSection.update({
       where: { id: accumulator.sectionId },
       data: {
@@ -113,7 +111,6 @@ export class AnalysisPersistenceMapper {
           accumulator.citations.length > 0
             ? toPrismaJson(accumulator.citations)
             : undefined,
-        ...sectionFields,
       },
     });
   }
@@ -282,30 +279,6 @@ export class AnalysisPersistenceMapper {
       overallSignal: summaryRow?.overallSignal,
       overallConfidence: summaryRow?.overallConfidence,
       dataAsOf: input.summaryDataAsOf ?? undefined,
-    };
-  }
-
-  private pickSectionFields(
-    event: Extract<SseEvent, { type: 'section_complete' }>,
-    accumulator: AnalysisSectionAccumulator,
-  ) {
-    const structured =
-      accumulator.structuredJson && typeof accumulator.structuredJson === 'object'
-        ? (accumulator.structuredJson as {
-            conclusion?: {
-              signal?: string;
-              confidence?: string;
-            };
-          })
-        : null;
-    const signal = structured?.conclusion?.signal;
-    const confidence = structured?.conclusion?.confidence;
-
-    return {
-      ...(signal && isSignal(signal) ? { signal: toPrismaSignal(signal) } : {}),
-      ...(confidence && isConfidence(confidence)
-        ? { confidence: toPrismaConfidence(confidence) }
-        : {}),
     };
   }
 
