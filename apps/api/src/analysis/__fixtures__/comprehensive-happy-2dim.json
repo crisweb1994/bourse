@@ -179,9 +179,14 @@
       ],
       "dataKeys": [
         "citations",
+        "confidence",
+        "durationMs",
         "reportMarkdown",
+        "signal",
         "status",
-        "structuredJson"
+        "structuredJson",
+        "tokensIn",
+        "tokensOut"
       ],
       "dataStatus": "COMPLETED"
     },
@@ -193,9 +198,14 @@
       ],
       "dataKeys": [
         "citations",
+        "confidence",
+        "durationMs",
         "reportMarkdown",
+        "signal",
         "status",
-        "structuredJson"
+        "structuredJson",
+        "tokensIn",
+        "tokensOut"
       ],
       "dataStatus": "COMPLETED"
     },

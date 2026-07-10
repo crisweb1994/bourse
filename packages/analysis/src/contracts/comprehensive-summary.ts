@@ -1,13 +1,13 @@
 import { z } from 'zod';
 import { Evidence } from './citation';
-import { AnalysisType, Confidence, Signal } from './enums';
+import { Confidence, SectionType, Signal } from './enums';
 
 /**
  * Per-dimension signal block surfaced inside ComprehensiveSummary.
  * Mirrors shared-types ComprehensiveSummary.sectionSignals[].
  */
 export const SectionSignal = z.object({
-  type: AnalysisType,
+  type: SectionType,
   signal: Signal,
   confidence: Confidence,
   oneLiner: z.string().min(1),

@@ -17,10 +17,8 @@ import { WebSearchSettingsService } from '../web-search-settings/web-search-sett
  * model / market), produce the concrete `AgentProvider` pair (+ model id +
  * web_search executor) that the analysis runner needs.
  *
- * Extracted from AnalysisService so create-time resolution (createAnalysisRecord)
- * and run-time resolution (runAnalysis) share one home, and neither the CRUD
- * service nor the runner has to carry the provider-pair + web-search wiring
- * logic.
+ * Shared by create-time commands and run-time execution so neither command
+ * handling nor the runner carries provider-pair + web-search wiring logic.
  *
  * This is the bottom of the dependency stack — it injects no other analysis
  * service, so it cannot participate in a cycle.

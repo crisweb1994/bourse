@@ -141,8 +141,6 @@ async function seed(prisma: PrismaService, logger: Logger): Promise<string> {
           enabledModels: [primaryModel, ...(utilityModel && utilityModel !== primaryModel ? [utilityModel] : [])],
           primaryModel,
           utilityModel,
-          supportsWebSearch: providerType === 'OPENAI_COMPATIBLE',
-          supportsTools: true,
           isDefault: true,
           enabled: true,
         },

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Loader2, Sparkles } from 'lucide-react';
 import Link from 'next/link';
+import type { ActiveAnalysisType } from '@bourse/shared-types';
 import { type AiProviderSettingDto } from '@/lib/api';
 import {
   Button,
@@ -20,8 +21,8 @@ import { ANALYSIS_TYPES } from '../stock-page-ui';
 // ============================================================
 
 interface AnalysisFormProps {
-  selectedType: string;
-  setSelectedType: (v: string) => void;
+  selectedType: ActiveAnalysisType;
+  setSelectedType: (v: ActiveAnalysisType) => void;
   providerSettings: AiProviderSettingDto[];
   selectedSettingId: string;
   setSelectedSettingId: (v: string) => void;

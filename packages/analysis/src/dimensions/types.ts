@@ -1,7 +1,7 @@
 import type { ZodSchema } from 'zod';
 import type { StructuredJson } from '../contracts/analysis-result';
 import type { Citation } from '../contracts/citation';
-import type { AnalysisType, Confidence, Signal } from '../contracts/enums';
+import type { Confidence, SectionType, Signal } from '../contracts/enums';
 
 // Day 4 only knows about webSearch. Day 6+ will add peerLookup /
 // financialSnapshot / newsScan as the V1+ tool pack lands.
@@ -38,7 +38,7 @@ export interface BuiltPrompts {
 }
 
 export interface DimensionRunResult<T extends StructuredJson = StructuredJson> {
-  type: AnalysisType;
+  type: SectionType;
   reportMarkdown: string;
   structuredJson: T;
   citations: Citation[];
@@ -81,7 +81,7 @@ export interface MultiRoundPlan {
  * (`multiRoundPlan`) — see CLAUDE.md §3 #18 / MVP doc §3.1.
  */
 export interface Dimension<T extends StructuredJson = StructuredJson> {
-  type: AnalysisType;
+  type: SectionType;
   inputSchema: ZodSchema<DimensionInput>;
   buildPrompts(input: DimensionInput, ctx: DimensionRunContext): BuiltPrompts;
   allowedTools: readonly ToolName[];

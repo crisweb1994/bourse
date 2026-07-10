@@ -1,14 +1,11 @@
 import {
-  Body,
   Controller,
   Get,
-  Patch,
   Post,
   Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { IsBoolean } from 'class-validator';
 import { AuthGuard } from '@nestjs/passport';
 import { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
@@ -18,13 +15,6 @@ import { JwtCookieGuard } from './jwt-cookie.guard';
 import { OptionalGithubAuthGuard } from './optional-github.guard';
 import { CsrfGuard } from './csrf.guard';
 import { clearAuthCookieVariants } from './cookies';
-import { IsOptional } from 'class-validator';
-
-class UpdatePreferencesDto {
-  @IsOptional()
-  @IsBoolean()
-  allowWebSearchFallback?: boolean;
-}
 
 @Controller('auth')
 export class AuthController {
@@ -88,29 +78,6 @@ export class AuthController {
       email: user.email,
       name: user.name,
       avatarUrl: user.avatarUrl,
-      allowWebSearchFallback: user.allowWebSearchFallback ?? false,
-    };
-  }
-
-  /**
-   * RFC rfc-evidence-pack-web-search-fallback §3.1: user preference patch.
-   * Currently only carries the fallback opt-in; structured as a partial
-   * patch so future prefs can land here without a new route.
-   */
-  @Patch('preferences')
-  @UseGuards(JwtCookieGuard, CsrfGuard)
-  async updatePreferences(
-    @Req() req: Request,
-    @Body() body: UpdatePreferencesDto,
-  ) {
-    const user = (req as any).user;
-    const updated = await this.authService.updatePreferences(user.id, {
-      ...(body.allowWebSearchFallback !== undefined
-        ? { allowWebSearchFallback: body.allowWebSearchFallback }
-        : {}),
-    });
-    return {
-      allowWebSearchFallback: updated.allowWebSearchFallback,
     };
   }
 

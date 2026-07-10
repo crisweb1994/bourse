@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { Citation } from '../contracts/citation';
 import { ComprehensiveSummary } from '../contracts/comprehensive-summary';
-import type { AnalysisType } from '../contracts/enums';
+import type { SectionType } from '../contracts/enums';
 import type { DimensionRunResult } from '../dimensions/types';
 import { buildCommonSuffix, DEFAULT_FRESHNESS } from '../dimensions/freshness';
 
@@ -24,8 +24,8 @@ const NUMBERED_SECTIONS = `1. **总体投资信号**: BULLISH / NEUTRAL / BEARIS
 export function buildSummaryPrompts(
   sectionReports: string,
   todayDate: string,
-  availableTypes: readonly AnalysisType[],
-  failedTypes: readonly AnalysisType[] = [],
+  availableTypes: readonly SectionType[],
+  failedTypes: readonly SectionType[] = [],
 ): { system: string; user: string } {
   const count = availableTypes.length;
   const list = availableTypes.join('、');

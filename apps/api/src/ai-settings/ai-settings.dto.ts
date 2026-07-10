@@ -9,8 +9,8 @@ import {
 export const PROVIDER_TYPES = ['ANTHROPIC', 'OPENAI_COMPATIBLE'] as const;
 export type ProviderTypeStr = (typeof PROVIDER_TYPES)[number];
 
-// Single source of truth for the providerType ↔ short-name mapping (was
-// open-coded across analysis.service + provider-factory).
+// Single source of truth for the providerType ↔ short-name mapping used by
+// provider resolution and provider construction.
 export function providerTypeToName(t: ProviderTypeStr): 'claude' | 'openai' {
   return t === 'ANTHROPIC' ? 'claude' : 'openai';
 }
@@ -47,14 +47,6 @@ export class CreateAiProviderSettingDto {
   @IsOptional()
   @IsString()
   utilityModel?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  supportsWebSearch?: boolean;
-
-  @IsOptional()
-  @IsBoolean()
-  supportsTools?: boolean;
 
   @IsOptional()
   @IsBoolean()
@@ -97,14 +89,6 @@ export class UpdateAiProviderSettingDto {
 
   @IsOptional()
   @IsBoolean()
-  supportsWebSearch?: boolean;
-
-  @IsOptional()
-  @IsBoolean()
-  supportsTools?: boolean;
-
-  @IsOptional()
-  @IsBoolean()
   isDefault?: boolean;
 
   @IsOptional()
@@ -134,8 +118,6 @@ export interface AiProviderSettingDto {
   enabledModels: string[];
   primaryModel: string | null;
   utilityModel: string | null;
-  supportsWebSearch: boolean;
-  supportsTools: boolean;
   isDefault: boolean;
   enabled: boolean;
   createdAt: Date;

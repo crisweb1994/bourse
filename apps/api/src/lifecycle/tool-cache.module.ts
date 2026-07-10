@@ -3,7 +3,7 @@ import { ToolCacheService } from './tool-cache.service';
 
 /**
  * Provides ToolCacheService (in-memory LRU + TTL). Consumed by
- * AnalysisService → ToolGateway for explicit-tool result caching.
+ * analysis workflow adapters and ToolGateway for explicit-tool result caching.
  */
 @Module({
   providers: [ToolCacheService],

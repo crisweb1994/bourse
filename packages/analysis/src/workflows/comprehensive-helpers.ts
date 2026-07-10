@@ -7,7 +7,7 @@
  */
 import type { AnalysisResult, StructuredJson } from '../contracts/analysis-result';
 import type { Citation } from '../contracts/citation';
-import type { AnalysisType, RunStatus } from '../contracts/enums';
+import type { RunStatus, SectionType } from '../contracts/enums';
 import type { SseEvent } from '../contracts/sse-events';
 import type { Dimension, DimensionRunResult } from '../dimensions/types';
 import type { JudgeTriggerContext } from '../primitives/judge';
@@ -43,8 +43,8 @@ export interface DimAccumulator {
  * mutate; KEEP is a no-op (JudgeResult schema guarantees no UPGRADE).
  */
 export function applyConfidenceDowngrade(
-  dimResults: Map<AnalysisType, DimensionRunResult>,
-  type: AnalysisType,
+  dimResults: Map<SectionType, DimensionRunResult>,
+  type: SectionType,
   adjustment: 'KEEP' | 'DOWNGRADE_TO_MEDIUM' | 'DOWNGRADE_TO_LOW',
 ): void {
   if (adjustment === 'KEEP') return;
@@ -133,13 +133,13 @@ export function finalizeDim(
 
 export interface BuildResultArgs {
   status: RunStatus;
-  dimResults: Map<AnalysisType, DimensionRunResult>;
+  dimResults: Map<SectionType, DimensionRunResult>;
   failures: DimensionFailure[];
   /**
    * Dimensions skipped because the workflow halted (e.g., budget
    * exhausted). Merged with `failures` types into result.partialDimensions.
    */
-  unrunDimensions?: AnalysisType[];
+  unrunDimensions?: SectionType[];
   summary: ComprehensiveResult['summary'];
   allCitations: Citation[];
   allWarnings: string[];
@@ -149,7 +149,7 @@ export interface BuildResultArgs {
   aggregatedToolCalls: number;
   aggregatedCostUsd: number;
   perDimTrace: Map<
-    AnalysisType,
+    SectionType,
     {
       durationMs: number;
       citationsCount: number;
@@ -170,7 +170,7 @@ export function buildResult(args: BuildResultArgs): ComprehensiveResult {
   const perDimension =
     args.perDimTrace.size > 0
       ? (Object.fromEntries(args.perDimTrace) as Record<
-          AnalysisType,
+          SectionType,
           {
             durationMs: number;
             citationsCount: number;
@@ -422,9 +422,9 @@ export function filterDegradedDims(
  * helpers to the validator module.
  */
 export function buildSectionsForValidation(
-  dimResults: Map<AnalysisType, DimensionRunResult>,
+  dimResults: Map<SectionType, DimensionRunResult>,
 ): Array<{
-  type: AnalysisType;
+  type: SectionType;
   reportMarkdown: string;
   structuredJson: StructuredJson;
 }> {
@@ -442,7 +442,7 @@ export function buildSectionsForValidation(
  * Exported so the strategy / phase functions can share it without redefinition.
  */
 export interface JudgeTriggerEntry {
-  type: AnalysisType;
+  type: SectionType;
   dim: Dimension;
   dimResult: DimensionRunResult;
   severity?: 'WARNING' | 'DOWNGRADE';
@@ -459,14 +459,14 @@ export interface JudgeTriggerEntry {
  */
 export function selectJudgeTriggers(
   sectionsForValidation: Array<{
-    type: AnalysisType;
+    type: SectionType;
     structuredJson: StructuredJson;
   }>,
-  dimResults: Map<AnalysisType, DimensionRunResult>,
+  dimResults: Map<SectionType, DimensionRunResult>,
   dims: readonly Dimension[],
   conflicts: Array<{
     severity?: string;
-    observations: Array<{ sectionType: AnalysisType }>;
+    observations: Array<{ sectionType: SectionType }>;
   }>,
   shouldJudgeFn: (ctx: JudgeTriggerContext) => boolean,
 ): JudgeTriggerEntry[] {

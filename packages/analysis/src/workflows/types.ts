@@ -1,6 +1,6 @@
 import type { Citation } from '../contracts/citation';
 import type { ComprehensiveSummary } from '../contracts/comprehensive-summary';
-import type { AnalysisType, RunStatus } from '../contracts/enums';
+import type { RunStatus, SectionType } from '../contracts/enums';
 import type { EvidencePackAny } from '../contracts/evidence-pack';
 import type { Trace } from '../contracts/trace';
 import type { Dimension, DimensionInput, DimensionRunResult } from '../dimensions/types';
@@ -108,7 +108,7 @@ export interface ComprehensiveOptions {
 }
 
 export interface DimensionFailure {
-  type: AnalysisType;
+  type: SectionType;
   error: string;
 }
 
@@ -123,9 +123,9 @@ export interface DimensionFailure {
  */
 export interface ComprehensiveResult {
   status: RunStatus;
-  perDimension: Map<AnalysisType, DimensionRunResult>;
+  perDimension: Map<SectionType, DimensionRunResult>;
   failures: DimensionFailure[];
-  partialDimensions: AnalysisType[];
+  partialDimensions: SectionType[];
   /**
    * `null` when status === 'FAILED' before summary stage could run.
    */

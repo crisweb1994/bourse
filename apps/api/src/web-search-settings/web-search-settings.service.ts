@@ -142,7 +142,7 @@ export class WebSearchSettingsService {
   }
 
   /**
-   * Internal — used by AnalysisService to load the row (with real apiKey)
+   * Internal — used by ProviderResolverService to load the row (with real apiKey)
    * for executor construction. Not exposed via HTTP.
    */
   async getInternalForRuntime(userId: string) {

@@ -16,7 +16,7 @@
  *    directly — it returns the delta-folded result).
  */
 import type { Citation } from '../contracts/citation';
-import type { AnalysisType, RunStatus } from '../contracts/enums';
+import type { RunStatus, SectionType } from '../contracts/enums';
 import type { EvidencePackAny } from '../contracts/evidence-pack';
 import type { SseEvent } from '../contracts/sse-events';
 import type { Dimension, DimensionRunResult } from '../dimensions/types';
@@ -67,12 +67,12 @@ export interface HarvestTotals {
 
 /** Mutable collections the caller owns; passed by reference. */
 export interface HarvestCollections {
-  dimResults: Map<AnalysisType, DimensionRunResult>;
+  dimResults: Map<SectionType, DimensionRunResult>;
   failures: DimensionFailure[];
   allCitations: Citation[];
   allWarnings: string[];
   perDimTrace: Map<
-    AnalysisType,
+    SectionType,
     {
       durationMs: number;
       citationsCount: number;

@@ -80,9 +80,14 @@
       ],
       "dataKeys": [
         "citations",
+        "confidence",
+        "durationMs",
         "reportMarkdown",
+        "signal",
         "status",
-        "structuredJson"
+        "structuredJson",
+        "tokensIn",
+        "tokensOut"
       ],
       "dataStatus": "COMPLETED"
     },
@@ -111,7 +116,7 @@
         "errorMessage",
         "status"
       ],
-      "dataStatus": "FAILED"
+      "dataStatus": "BUDGET_EXHAUSTED"
     }
   ]
 }

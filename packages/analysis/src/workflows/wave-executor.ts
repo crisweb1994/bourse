@@ -1,4 +1,4 @@
-import type { AnalysisType } from '../contracts/enums';
+import type { SectionType } from '../contracts/enums';
 import type { Dimension } from '../dimensions/types';
 
 /**
@@ -99,7 +99,7 @@ export async function runWithSemaphore<T>(
  */
 export function findFailRunOffenders(
   dimsInWave: readonly Dimension[],
-  failedTypes: ReadonlySet<AnalysisType>,
+  failedTypes: ReadonlySet<SectionType>,
 ): readonly Dimension[] {
   return dimsInWave.filter(
     (d) => d.onFailure === 'fail-run' && failedTypes.has(d.type),

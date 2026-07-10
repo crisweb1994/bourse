@@ -1,5 +1,5 @@
 import type { Citation } from '../contracts/citation';
-import type { AnalysisType } from '../contracts/enums';
+import type { SectionType } from '../contracts/enums';
 import { JudgeResult } from '../contracts/judge-result';
 import type { Dimension } from '../dimensions/types';
 import { judgeNeutral } from '../personas/judge-neutral';
@@ -88,7 +88,7 @@ export function shouldJudge(ctx: JudgeTriggerContext): boolean {
 
 export interface RunJudgeInput {
   /** Which dim is under audit (used in prompt + telemetry tag). */
-  dimensionType: AnalysisType;
+  dimensionType: SectionType;
   /**
    * Pre-serialized EvidencePack block (markdown). Caller chooses the
    * format — typically `formatEvidencePackBlock(v2Pack)` for CN, or the

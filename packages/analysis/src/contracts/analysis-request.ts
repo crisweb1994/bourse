@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AnalysisType } from './enums';
+import { ActiveAnalysisType } from './enums';
 
 // Per-run cost limits. Hitting any limit triggers BUDGET_EXHAUSTED with
 // partial result; see MVP doc §四 cost guardrail.
@@ -16,7 +16,7 @@ export type Budget = z.infer<typeof Budget>;
 export const AnalysisRequest = z.object({
   symbol: z.string().min(1),
   market: z.string().min(1),
-  type: AnalysisType,
+  type: ActiveAnalysisType,
   locale: z.string().min(2).default('zh-CN'),
   competitors: z.array(z.string().min(1)).optional(),
   budget: Budget.optional(),

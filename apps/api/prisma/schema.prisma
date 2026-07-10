@@ -13,11 +13,6 @@ model User {
   email                  String?
   name                   String
   avatarUrl              String?
-  // RFC rfc-evidence-pack-web-search-fallback: opt-in flag. When true and
-  // the CN EvidencePack v2 tool path hard-fails (AUTH / NETWORK /
-  // RATE_LIMIT_HARD), the workflow retries with the v1 LLM web_search
-  // builder instead of failing the whole run.
-  allowWebSearchFallback Boolean  @default(false)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
@@ -77,8 +72,6 @@ model AiProviderSetting {
   label             String? // 用户起的名字，e.g. "我的 DeepSeek"
   providerType      AiProviderType? // ANTHROPIC | OPENAI_COMPATIBLE
   enabledModels     String[]        @default([])
-  supportsWebSearch Boolean         @default(false)
-  supportsTools     Boolean         @default(true)
   isDefault         Boolean         @default(false)
 
   baseUrl         String?
@@ -87,12 +80,11 @@ model AiProviderSetting {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  // deprecated — 保留供旧 Analysis.aiProvider 回放兼容
-  provider       String?
+  // Legacy model fallback for old rows created before primaryModel existed.
   model          String?
   /**
    * 主模型 (Primary). 主分析流式 / 主报告生成 / web_search 工具调用 /
-   * 证据归一化 / debate。留空 → fallback 到 enabledModels[0] → 旧 model。
+   * 证据归一化。留空 → fallback 到 enabledModels[0] → legacy model。
    * UI 上必填; 后端校验须 ∈ enabledModels。
    */
   primaryModel   String?
@@ -219,20 +211,15 @@ model AnalysisSection {
   errorMessage   String?
   order          Int
 
-  // plan-v2 §11.1: per-section telemetry folded from the deleted
-  // SectionTrace table. Defaults so older rows / FAILED sections without
-  // recorded LLM activity stay non-NULL.
+  // Per-section telemetry mirrored from section_complete. Defaults keep rows
+  // non-null when a section fails before usage exists.
   tokensIn       Int            @default(0)
   tokensOut      Int            @default(0)
   durationMs     Int?
-  // plan-v2 §10.1: section_done event emits signal/confidence directly;
-  // mirroring on the row lets history/list views render badges without
-  // parsing structuredJson.
+  // Mirrored from structuredJson.conclusion so list/history queries can render
+  // badges without parsing the JSON blob.
   signal         Signal?
   confidence     Confidence?
-  // plan-v2 §10.1: citation-policy / cross-dim-validate warnings surfaced
-  // to UI. Json so each entry can carry { rule, message, severity }.
-  warnings       Json?
 
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
@@ -311,6 +298,7 @@ enum AnalysisStatus {
   PARTIAL_FAILED
   FAILED
   CANCELLED
+  BUDGET_EXHAUSTED
 }
 
 enum Signal {

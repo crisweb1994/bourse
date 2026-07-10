@@ -16,13 +16,16 @@ import {
   type AnalysisDto,
 } from '@/lib/api';
 import {
+  ACTIVE_ANALYSIS_TYPES,
   ANALYSIS_TYPE_LABELS,
+  LEGACY_ANALYSIS_TYPES,
   PROVIDER_LABELS,
   SIGNAL_LABELS_BILINGUAL,
   STATUS_LABELS,
 } from '@/lib/constants';
 import { stockHref } from '@/lib/stock-href';
 import { statusPillVariant, signalPillVariant } from '@/lib/pills';
+import type { AnalysisStatus, AnalysisType } from '@bourse/shared-types';
 import {
   Button,
   Card,
@@ -43,23 +46,21 @@ import {
 
 const ANALYSIS_TYPE_OPTIONS = [
   { value: '', label: '全部类型' },
-  { value: 'COMPREHENSIVE', label: '综合分析' },
-  { value: 'FUNDAMENTAL', label: '基本面' },
-  { value: 'VALUATION', label: '估值' },
-  { value: 'INDUSTRY', label: '行业竞争' },
-  { value: 'RISK', label: '风险' },
-  { value: 'TECHNICAL', label: '技术面' },
-  { value: 'SENTIMENT', label: '情绪' },
-  { value: 'SCENARIO', label: '情景' },
-  { value: 'PORTFOLIO', label: '组合适配' },
-  { value: 'GOVERNANCE', label: '公司治理' },
-  { value: 'DEBATE', label: '多空合议' },
+  ...ACTIVE_ANALYSIS_TYPES.map((value) => ({
+    value,
+    label: ANALYSIS_TYPE_LABELS[value],
+  })),
+  ...LEGACY_ANALYSIS_TYPES.map((value) => ({
+    value,
+    label: ANALYSIS_TYPE_LABELS[value],
+  })),
 ];
 
 const STATUS_OPTIONS = [
   { value: '', label: '全部状态' },
   { value: 'COMPLETED', label: '已完成' },
   { value: 'PARTIAL_FAILED', label: '部分失败' },
+  { value: 'BUDGET_EXHAUSTED', label: '预算耗尽' },
   { value: 'IN_PROGRESS', label: '分析中' },
   { value: 'PENDING', label: '等待中' },
   { value: 'FAILED', label: '失败' },
@@ -75,8 +76,8 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  const [analysisType, setAnalysisType] = useState('');
-  const [status, setStatus] = useState('');
+  const [analysisType, setAnalysisType] = useState<AnalysisType | ''>('');
+  const [status, setStatus] = useState<AnalysisStatus | ''>('');
   const [symbol, setSymbol] = useState('');
   // RFC rfc-evidence-pack-web-search-fallback: filter to degraded runs.
   const [degradedOnly, setDegradedOnly] = useState(false);
@@ -88,8 +89,8 @@ export default function HistoryPage() {
     setLoading(true);
     try {
       const filters: {
-        analysisType?: string;
-        status?: string;
+        analysisType?: AnalysisType;
+        status?: AnalysisStatus;
         symbol?: string;
         degradedOnly?: boolean;
       } = {};
@@ -157,7 +158,9 @@ export default function HistoryPage() {
           </InputShell>
           <Select
             value={analysisType || '__all'}
-            onValueChange={(v) => setAnalysisType(v === '__all' ? '' : v)}
+            onValueChange={(v) =>
+              setAnalysisType(v === '__all' ? '' : (v as AnalysisType))
+            }
             sans
             className="min-w-[140px]"
           >
@@ -170,7 +173,9 @@ export default function HistoryPage() {
           </Select>
           <Select
             value={status || '__all'}
-            onValueChange={(v) => setStatus(v === '__all' ? '' : v)}
+            onValueChange={(v) =>
+              setStatus(v === '__all' ? '' : (v as AnalysisStatus))
+            }
             sans
             className="min-w-[140px]"
           >

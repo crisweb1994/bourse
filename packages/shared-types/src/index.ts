@@ -1,30 +1,123 @@
 // ===== Enums =====
 
-export const AnalysisType = {
-  FUNDAMENTAL: 'FUNDAMENTAL',
-  VALUATION: 'VALUATION',
-  INDUSTRY: 'INDUSTRY',
-  RISK: 'RISK',
-  TECHNICAL: 'TECHNICAL',
-  SENTIMENT: 'SENTIMENT',
-  SCENARIO: 'SCENARIO',
-  PORTFOLIO: 'PORTFOLIO',
-  GOVERNANCE: 'GOVERNANCE',
-  COMPREHENSIVE: 'COMPREHENSIVE',
-  DEBATE: 'DEBATE',
-} as const;
+function enumObject<const T extends readonly string[]>(
+  values: T,
+): { [K in T[number]]: K } {
+  return Object.fromEntries(values.map((value) => [value, value])) as {
+    [K in T[number]]: K;
+  };
+}
 
-export type AnalysisType = (typeof AnalysisType)[keyof typeof AnalysisType];
+export const ANALYSIS_DIMENSIONS = [
+  'FUNDAMENTAL',
+  'GOVERNANCE',
+  'VALUATION',
+  'INDUSTRY',
+  'RISK',
+  'TECHNICAL',
+  'SENTIMENT',
+  'SCENARIO',
+  'PORTFOLIO',
+] as const;
+
+export type AnalysisDimension = (typeof ANALYSIS_DIMENSIONS)[number];
+
+export const SECTION_TYPES = ANALYSIS_DIMENSIONS;
+export type SectionType = AnalysisDimension;
+
+const SECTION_TYPE_SET = new Set<string>(SECTION_TYPES);
+
+export function isSectionType(value: string): value is SectionType {
+  return SECTION_TYPE_SET.has(value);
+}
+
+export const COMPREHENSIVE_DIMENSIONS = ANALYSIS_DIMENSIONS;
+
+export const ACTIVE_ANALYSIS_TYPES = [
+  ...ANALYSIS_DIMENSIONS,
+  'COMPREHENSIVE',
+] as const;
+
+export type ActiveAnalysisType = (typeof ACTIVE_ANALYSIS_TYPES)[number];
+
+const ACTIVE_ANALYSIS_TYPE_SET = new Set<string>(ACTIVE_ANALYSIS_TYPES);
+
+export function isActiveAnalysisType(
+  value: string,
+): value is ActiveAnalysisType {
+  return ACTIVE_ANALYSIS_TYPE_SET.has(value);
+}
+
+export const LEGACY_ANALYSIS_TYPES = ['DEBATE'] as const;
+export type LegacyAnalysisType = (typeof LEGACY_ANALYSIS_TYPES)[number];
+
+export const ALL_ANALYSIS_TYPES = [
+  ...ACTIVE_ANALYSIS_TYPES,
+  ...LEGACY_ANALYSIS_TYPES,
+] as const;
+
+export const AnalysisType = enumObject(ALL_ANALYSIS_TYPES);
+export type AnalysisType = (typeof ALL_ANALYSIS_TYPES)[number];
+
+const ANALYSIS_TYPE_SET = new Set<string>(ALL_ANALYSIS_TYPES);
+
+export function isAnalysisType(value: string): value is AnalysisType {
+  return ANALYSIS_TYPE_SET.has(value);
+}
+
+export const ANALYSIS_TYPE_LABELS: Record<AnalysisType, string> = {
+  FUNDAMENTAL: '基本面',
+  GOVERNANCE: '公司治理',
+  VALUATION: '估值',
+  INDUSTRY: '行业竞争',
+  RISK: '风险',
+  TECHNICAL: '技术面',
+  SENTIMENT: '情绪',
+  SCENARIO: '情景',
+  PORTFOLIO: '组合适配',
+  COMPREHENSIVE: '综合分析',
+  DEBATE: 'AI 多空合议',
+};
 
 export const AnalysisStatus = {
   PENDING: 'PENDING',
   IN_PROGRESS: 'IN_PROGRESS',
   COMPLETED: 'COMPLETED',
+  PARTIAL_FAILED: 'PARTIAL_FAILED',
   FAILED: 'FAILED',
+  CANCELLED: 'CANCELLED',
+  BUDGET_EXHAUSTED: 'BUDGET_EXHAUSTED',
 } as const;
 
 export type AnalysisStatus =
   (typeof AnalysisStatus)[keyof typeof AnalysisStatus];
+
+const ANALYSIS_STATUS_SET = new Set<string>(Object.values(AnalysisStatus));
+
+export function isAnalysisStatus(value: string): value is AnalysisStatus {
+  return ANALYSIS_STATUS_SET.has(value);
+}
+
+export const TERMINAL_ANALYSIS_STATUSES = [
+  AnalysisStatus.COMPLETED,
+  AnalysisStatus.PARTIAL_FAILED,
+  AnalysisStatus.FAILED,
+  AnalysisStatus.CANCELLED,
+  AnalysisStatus.BUDGET_EXHAUSTED,
+] as const;
+
+export type AnalysisTerminalStatus =
+  (typeof TERMINAL_ANALYSIS_STATUSES)[number];
+
+const TERMINAL_ANALYSIS_STATUS_SET = new Set<string>(
+  TERMINAL_ANALYSIS_STATUSES,
+);
+
+export function isTerminalAnalysisStatus(
+  status: string,
+): status is AnalysisTerminalStatus {
+  return TERMINAL_ANALYSIS_STATUS_SET.has(status);
+}
 
 export const Signal = {
   BULLISH: 'BULLISH',
@@ -34,6 +127,12 @@ export const Signal = {
 
 export type Signal = (typeof Signal)[keyof typeof Signal];
 
+const SIGNAL_SET = new Set<string>(Object.values(Signal));
+
+export function isSignal(value: string): value is Signal {
+  return SIGNAL_SET.has(value);
+}
+
 export const Confidence = {
   HIGH: 'HIGH',
   MEDIUM: 'MEDIUM',
@@ -41,6 +140,12 @@ export const Confidence = {
 } as const;
 
 export type Confidence = (typeof Confidence)[keyof typeof Confidence];
+
+const CONFIDENCE_SET = new Set<string>(Object.values(Confidence));
+
+export function isConfidence(value: string): value is Confidence {
+  return CONFIDENCE_SET.has(value);
+}
 
 export const RiskTolerance = {
   CONSERVATIVE: 'CONSERVATIVE',
@@ -162,7 +267,7 @@ export interface ComprehensiveSummary {
   suitableInvestorType: string;
   watchlistWorthy: boolean;
   sectionSignals: Array<{
-    type: AnalysisType;
+    type: SectionType;
     signal: Signal;
     confidence: Confidence;
     oneLiner: string;
@@ -180,8 +285,6 @@ export interface UserDto {
   email: string | null;
   name: string;
   avatarUrl: string | null;
-  /** RFC rfc-evidence-pack-web-search-fallback: per-user opt-in. */
-  allowWebSearchFallback?: boolean;
 }
 
 export interface InvestorProfileDto {
@@ -223,27 +326,3 @@ export interface WatchlistItemDto {
   updatedAt: string;
   stock: StockDto;
 }
-
-// ===== SSE Event Types =====
-
-export interface SseEvent {
-  type:
-    | 'section_start'
-    | 'report_chunk'
-    | 'report_complete'
-    | 'structured_data'
-    | 'citation'
-    | 'section_complete'
-    | 'summary_chunk'
-    | 'summary_complete'
-    | 'done'
-    | 'error';
-  data: unknown;
-}
-
-// plan-v2 Wave 3.2 — AnalysisResearchMode / AnalysisResearchSummaryDto and the
-// research SSE event union (research_plan_ready / research_job_started /
-// research_slot_update / research_snapshot_ready / confidence_cap_applied /
-// research_fallback / ResearchEvidencePackReadyEvent) removed. The actual
-// `evidence_pack_ready` SSE event is now defined as a zod schema in
-// packages/analysis/src/contracts/sse-events.ts (EvidencePackReadyEvent).

@@ -6,6 +6,7 @@ export function statusPillVariant(status: string): PillProps['variant'] {
     case 'COMPLETED':
       return 'emerald';
     case 'PARTIAL_FAILED':
+    case 'BUDGET_EXHAUSTED':
       return 'warn';
     case 'FAILED':
     case 'CANCELLED':

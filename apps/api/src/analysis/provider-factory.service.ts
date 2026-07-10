@@ -39,10 +39,8 @@ export interface AgentProviderRuntime extends AgentProviderOverrides {
 
 /**
  * NestJS-injectable factory for `@bourse/analysis` AgentProvider
- * instances. plan-v2 §12.3 collapses the standalone `ai/` module into the
- * analysis module: per-request, AnalysisService calls `buildProvider()` to
- * get an AgentProvider then drives the package's streamDimension /
- * structuredOutputWithRepair / buildSummaryPrompts directly.
+ * instances. ProviderResolverService supplies per-user runtime settings;
+ * this factory only constructs concrete provider objects.
  */
 @Injectable()
 export class ProviderFactoryService {

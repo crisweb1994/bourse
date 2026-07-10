@@ -77,15 +77,9 @@ export class SnapshotV2Service {
   }
 
   /**
-   * Fetch a complete StockSnapshot for the given (symbol, market). Pure
-   * delegation to analysisPkg.fetchSnapshot with the DI-injected port
-   * fetchers; safe to call concurrently.
-   */
-  /**
-   * Wave 2.4 — fetch a snapshot AND project it to an EvidencePackV2.
-   * Convenience method for callers (AnalysisService) that want to keep
-   * feeding the existing LLM dimension agents with the legacy pack
-   * shape. The adapter bridges; nothing on the LLM side changes.
+   * Fetch a snapshot and project it to an EvidencePackV2. EvidencePackService
+   * owns the analysis-facing build policy; this method keeps the connector
+   * fetch + projection step reusable and safe to call concurrently.
    */
   async fetchAsEvidencePack(
     symbol: string,

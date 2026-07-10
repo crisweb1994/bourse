@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { AnalysisResult } from './analysis-result';
 import { Citation } from './citation';
-import { AnalysisType, RunStatus } from './enums';
+import { RunStatus, SectionType } from './enums';
 import { EvidencePack } from './evidence-pack';
 import { EvidencePackV2 } from './evidence-pack-v2';
 import { JudgeResult } from './judge-result';
@@ -15,38 +15,38 @@ const baseEvent = z.object({
 
 export const SectionStartEvent = baseEvent.extend({
   type: z.literal('section_start'),
-  sectionType: AnalysisType,
+  sectionType: SectionType,
   order: z.number().int().nonnegative(),
 });
 
 export const ReportChunkEvent = baseEvent.extend({
   type: z.literal('report_chunk'),
-  sectionType: AnalysisType,
+  sectionType: SectionType,
   deltaText: z.string(),
 });
 
 export const ReportCompleteEvent = baseEvent.extend({
   type: z.literal('report_complete'),
-  sectionType: AnalysisType,
+  sectionType: SectionType,
   fullMarkdown: z.string(),
 });
 
 export const StructuredDataEvent = baseEvent.extend({
   type: z.literal('structured_data'),
-  sectionType: AnalysisType,
+  sectionType: SectionType,
   // Strongly typed at the dimension layer; here we only know it's JSON.
   json: z.unknown(),
 });
 
 export const CitationEvent = baseEvent.extend({
   type: z.literal('citation'),
-  sectionType: AnalysisType,
+  sectionType: SectionType,
   citation: Citation,
 });
 
 export const SectionCompleteEvent = baseEvent.extend({
   type: z.literal('section_complete'),
-  sectionType: AnalysisType,
+  sectionType: SectionType,
   status: RunStatus,
   // Optional per-section usage, populated by streamDimension so callers can
   // accumulate run-wide totals without subscribing to every cost_update.
@@ -78,7 +78,7 @@ export const SectionCompleteEvent = baseEvent.extend({
  */
 export const SectionSkippedEvent = baseEvent.extend({
   type: z.literal('section_skipped'),
-  sectionType: AnalysisType,
+  sectionType: SectionType,
   reason: z.literal('DEGRADED_SOURCE_MISSING_PRIVATE_DATA'),
   /** Which private fields are missing (subset of dim.requiresPrivateData). */
   missingFields: z.array(
@@ -114,7 +114,7 @@ export const CostUpdateEvent = baseEvent.extend({
 // also accumulate into SectionCompleteEvent.usage.webSearchErrorsCount.
 export const WebSearchWarningEvent = baseEvent.extend({
   type: z.literal('web_search_warning'),
-  sectionType: AnalysisType.optional(),
+  sectionType: SectionType.optional(),
   code: z.enum([
     'too_many_requests',
     'invalid_input',
@@ -140,7 +140,7 @@ export const DoneEvent = baseEvent.extend({
 
 export const ErrorEvent = baseEvent.extend({
   type: z.literal('error'),
-  sectionType: AnalysisType.optional(),
+  sectionType: SectionType.optional(),
   message: z.string().min(1),
   recoverable: z.boolean(),
 });
@@ -193,12 +193,12 @@ export const EvidencePackReadyEvent = baseEvent.extend({
  */
 export const JudgeStartEvent = baseEvent.extend({
   type: z.literal('judge_start'),
-  sectionType: AnalysisType,
+  sectionType: SectionType,
 });
 
 export const JudgeCompleteEvent = baseEvent.extend({
   type: z.literal('judge_complete'),
-  sectionType: AnalysisType,
+  sectionType: SectionType,
   result: JudgeResult,
   /** Token + USD breakdown for telemetry attribution. */
   traceTokensIn: z.number().int().nonnegative(),

@@ -33,6 +33,10 @@ describe('contracts/AnalysisRequest', () => {
       AnalysisRequest.parse({ ...minimal, type: 'NOT_A_TYPE' }),
     ).toThrow();
   });
+
+  it('rejects legacy analysis types for new run requests', () => {
+    expect(() => AnalysisRequest.parse({ ...minimal, type: 'DEBATE' })).toThrow();
+  });
 });
 
 describe('contracts/Budget', () => {

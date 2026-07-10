@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { StructuredJson } from '../contracts/analysis-result';
-import type { AnalysisType } from '../contracts/enums';
+import type { SectionType } from '../contracts/enums';
 import { InvalidContractError } from '../primitives/errors';
 import { DEFAULT_FRESHNESS } from './freshness';
 import { defaultScore } from './score';
@@ -18,7 +18,7 @@ export const STANDARD_INPUT_SCHEMA = z.object({
 });
 
 export interface StandardDimensionConfig {
-  type: AnalysisType;
+  type: SectionType;
   systemPrompt: string;
   userPromptTemplate: (input: DimensionInput) => string;
   /**

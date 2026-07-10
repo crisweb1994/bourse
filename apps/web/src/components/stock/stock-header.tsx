@@ -20,21 +20,8 @@ import {
   type StockProfileDto,
 } from '@/lib/api';
 import { Pill, SectionTag } from '@/components/ui';
+import { ANALYSIS_TYPE_LABELS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
-
-const TYPE_LABEL: Record<string, string> = {
-  FUNDAMENTAL: '基本面',
-  VALUATION: '估值',
-  INDUSTRY: '行业竞争',
-  RISK: '风险',
-  TECHNICAL: '技术面',
-  SENTIMENT: '情绪',
-  SCENARIO: '情景',
-  PORTFOLIO: '组合适配',
-  GOVERNANCE: '公司治理',
-  COMPREHENSIVE: '综合',
-  DEBATE: '多空合议',
-};
 
 const SIGNAL_LABEL: Record<string, string> = {
   BULLISH: '看多',
@@ -352,10 +339,6 @@ function LastAnalysisChip({
 
   const switchTo = (a: AnalysisDto) => {
     setOpen(false);
-    if (a.analysisType === 'DEBATE') {
-      router.push(`/stock/${encodeURIComponent(currentSymbol)}/debate/${a.id}`);
-      return;
-    }
     const params = new URLSearchParams(searchParams.toString());
     params.set('analysisId', a.id);
     router.replace(`?${params.toString()}`);
@@ -377,7 +360,9 @@ function LastAnalysisChip({
         <span>上次分析 · {timeAgo(latest.generatedAt ?? latest.createdAt)}</span>
         {latest.overallSignal && (
           <span className="text-[var(--color-accent-600)] font-medium">
-            {TYPE_LABEL[latest.analysisType] ?? latest.analysisType} ·{' '}
+            {ANALYSIS_TYPE_LABELS[latest.analysisType] ??
+              latest.analysisType}{' '}
+            ·{' '}
             {SIGNAL_LABEL[latest.overallSignal] ?? latest.overallSignal}
             {latest.overallConfidence
               ? `·${CONF_LABEL[latest.overallConfidence] ?? latest.overallConfidence}`
@@ -415,7 +400,7 @@ function LastAnalysisChip({
             {recent.map((a) => {
               const isActive = a.id === activeId;
               const typeLabel =
-                TYPE_LABEL[a.analysisType] ?? a.analysisType;
+                ANALYSIS_TYPE_LABELS[a.analysisType] ?? a.analysisType;
               const sigLabel = a.overallSignal
                 ? SIGNAL_LABEL[a.overallSignal] ?? a.overallSignal
                 : null;

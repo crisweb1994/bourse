@@ -1,6 +1,6 @@
 import type { AnalysisResult } from '../contracts/analysis-result';
 import type { Citation } from '../contracts/citation';
-import type { AnalysisType, RunStatus } from '../contracts/enums';
+import type { RunStatus, SectionType } from '../contracts/enums';
 import type { EvidencePackAny } from '../contracts/evidence-pack';
 import type { SseEvent } from '../contracts/sse-events';
 import { ALL_DIMENSIONS } from '../dimensions';
@@ -119,7 +119,7 @@ export async function* streamComprehensive(
   const { domainTiers: marketDomainTiers, allowedDomains: marketAllowedDomains } =
     deriveMarketRouting(options.marketProfile);
 
-  const dimResults = new Map<AnalysisType, DimensionRunResult>();
+  const dimResults = new Map<SectionType, DimensionRunResult>();
   const failures: DimensionFailure[] = [];
   const allCitations: Citation[] = [];
   const allWarnings: string[] = [];
@@ -157,7 +157,7 @@ export async function* streamComprehensive(
     }
   };
   const perDimTrace = new Map<
-    AnalysisType,
+    SectionType,
     {
       durationMs: number;
       citationsCount: number;
@@ -809,4 +809,3 @@ export async function runComprehensive(
     if (next.done) return next.value;
   }
 }
-

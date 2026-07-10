@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import {
+  ACTIVE_ANALYSIS_TYPES,
   AnalysisType as SharedAnalysisType,
   Confidence as SharedConfidence,
+  SECTION_TYPES,
   Signal as SharedSignal,
 } from '@bourse/shared-types';
 
@@ -11,6 +13,12 @@ import {
 export const AnalysisType = z.nativeEnum(SharedAnalysisType);
 export type AnalysisType = z.infer<typeof AnalysisType>;
 
+export const ActiveAnalysisType = z.enum(ACTIVE_ANALYSIS_TYPES);
+export type ActiveAnalysisType = z.infer<typeof ActiveAnalysisType>;
+
+export const SectionType = z.enum(SECTION_TYPES);
+export type SectionType = z.infer<typeof SectionType>;
+
 export const Signal = z.nativeEnum(SharedSignal);
 export type Signal = z.infer<typeof Signal>;
 
@@ -19,9 +27,8 @@ export type Confidence = z.infer<typeof Confidence>;
 
 // ===== Agent-only enums (additions over shared-types) =====
 
-// RunStatus is a SUPERSET of Prisma's AnalysisStatus (6 states) + BUDGET_EXHAUSTED.
-// shared-types currently exposes only 4 states; mapping to either layer is the
-// integration boundary's responsibility (Day 11 wiring), not this package.
+// RunStatus mirrors shared-types/Prisma analysis terminal states while keeping
+// the workflow package Prisma-free.
 export const RunStatus = z.enum([
   'PENDING',
   'IN_PROGRESS',
