@@ -49,7 +49,7 @@ interface AnalysisRun {
  * SSE run loop: drives the analysis from PENDING → IN_PROGRESS → terminal.
  * The actual dim/summary orchestration lives in
  * `@bourse/analysis` (streamComprehensive/streamSingle); this service is
- * the apps/api glue that claims the row and resolves the provider pair. The
+ * the apps/api glue that claims the row and resolves the workflow provider. The
  * adapter translates workflow events into API SSE events and persistence.
  *
  * Reads analysis rows straight from prisma (not via query/command services)
@@ -131,7 +131,7 @@ export class AnalysisRunnerService {
     const {
       primary: provider,
       aiModel,
-    } = await this.providerResolver.resolveProviderPair(analysis.userId, {
+    } = await this.providerResolver.resolveWorkflowProvider(analysis.userId, {
       settingIdHint: analysis.aiProviderSettingId,
       providerNameHint: analysis.aiProvider,
       modelHint: analysis.aiModel,

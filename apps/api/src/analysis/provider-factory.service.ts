@@ -16,20 +16,9 @@ export interface AgentProviderOverrides {
   baseUrl?: string | null;
   model?: string | null;
   utilityModel?: string | null;
-  /**
-   * RFC rfc-web-search-backend-config: per-user web_search executor.
-   *   - `WebSearchExecutor` → inject this adapter (pluggable path)
-   *   - `null` → user explicitly chose NATIVE; disable pluggable
-   *   - `undefined` → fall through to env-based default factory
-   */
+  /** Per-user web-search adapter. Undefined keeps the provider env default. */
   webSearchExecutor?: WebSearchExecutor | null;
-  /**
-   * Per-user web search CUSTOM_ONLY mode (plan-v2 §17.4.4): forces the
-   * OpenAI provider onto chat.completions so the pluggable web_search
-   * function tool actually fires (Responses API has its own native
-   * web_search that ignores webSearchExecutorFactory). Only respected by
-   * the OpenAI branch; ignored by Claude.
-   */
+  /** OpenAI-only: route through chat.completions so custom web search runs. */
   forceChatCompletions?: boolean;
 }
 
@@ -109,10 +98,6 @@ export class ProviderFactoryService {
         overrides?.utilityModel ??
         this.config.get<string>('OPENAI_UTILITY_MODEL') ??
         undefined,
-      // RFC rfc-web-search-backend-config: when caller supplied an
-      // executor (or `null` for NATIVE), inject a fixed factory. When
-      // `undefined`, leave the field unset so the provider falls back
-      // to its env-based defaultWebSearchExecutorFactory.
       ...(overrides?.webSearchExecutor !== undefined
         ? { webSearchExecutorFactory: () => overrides.webSearchExecutor ?? null }
         : {}),

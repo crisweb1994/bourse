@@ -13,9 +13,7 @@ import {
 import { WebSearchSettingsService } from '../web-search-settings/web-search-settings.service';
 
 /**
- * Provider resolution: given a user + hints (settingId / providerName /
- * model / market), produce the concrete `AgentProvider` pair (+ model id +
- * web_search executor) that the analysis runner needs.
+ * Provider resolution for analysis creation and workflow execution.
  *
  * Shared by create-time commands and run-time execution so neither command
  * handling nor the runner carries provider-pair + web-search wiring logic.
@@ -35,10 +33,8 @@ export class ProviderResolverService {
   ) {}
 
   /**
-   * Phase 1 — 统一的 provider 解析。优先级：
-   *   1. settingIdHint（dto / analysis.aiProviderSettingId）
-   *   2. 用户默认 setting（isDefault=true）
-   *   3. 回退到 env（用 providerNameHint 决定 Claude/OpenAI，ProviderFactory 自己读 env）
+   * Resolve the provider metadata persisted on a newly created analysis.
+   * Priority: explicit setting, user's default setting, then env config.
    */
   async resolveProvider(
     userId: string,
@@ -91,7 +87,7 @@ export class ProviderResolverService {
    * Resolve the provider used by the workflow, with the user's web-search
    * settings wired into the provider when applicable.
    */
-  async resolveProviderPair(
+  async resolveWorkflowProvider(
     userId: string,
     hints: {
       settingIdHint?: string | null;
@@ -104,10 +100,6 @@ export class ProviderResolverService {
   }> {
     const runtime = await this.resolveRuntime(userId, hints.settingIdHint);
 
-    // Resolve the effective provider type BEFORE consulting the web-search
-    // setting — `resolveWebSearchRuntime` needs it to apply the Anthropic
-    // CUSTOM_ONLY downgrade correctly, and to avoid wiring overrides into
-    // a provider that doesn't read them.
     const effectiveProviderType =
       runtime?.providerType ??
       nameToProviderType(this.envProviderName(hints.providerNameHint));
@@ -164,9 +156,6 @@ export class ProviderResolverService {
       return {};
     }
 
-    // OpenAI-compatible branch:
-    //   NATIVE_FIRST → let Responses API native handle it; don't inject
-    //   CUSTOM_ONLY  → build executor + force chat.completions path
     if (!customOnly) return {};
 
     const executor = buildWebSearchExecutorFromSetting({
