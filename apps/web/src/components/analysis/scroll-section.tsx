@@ -57,7 +57,6 @@ export function ScrollSection({
         </div>
 
         <div className="px-6 py-5">
-          {/* RFC rfc-evidence-pack-web-search-fallback §2.4: skip body */}
           {section.status === 'skipped' && (
             <div className="rounded-[8px] border border-[var(--color-warn-line)] bg-[var(--color-warn-soft)] p-3 text-[13px] leading-[1.65]">
               <div className="font-medium mb-1">本维度已主动跳过</div>

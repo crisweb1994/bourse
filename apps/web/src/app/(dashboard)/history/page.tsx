@@ -79,7 +79,6 @@ export default function HistoryPage() {
   const [analysisType, setAnalysisType] = useState<AnalysisType | ''>('');
   const [status, setStatus] = useState<AnalysisStatus | ''>('');
   const [symbol, setSymbol] = useState('');
-  // RFC rfc-evidence-pack-web-search-fallback: filter to degraded runs.
   const [degradedOnly, setDegradedOnly] = useState(false);
 
   const limit = 15;
@@ -256,8 +255,6 @@ export default function HistoryPage() {
                               ⚠
                             </span>
                           )}
-                          {/* plan-v2 Wave 2: ResearchSnapshot + planner badges
-                              removed alongside the planning pipeline. */}
                         </div>
                       </td>
                       <td>

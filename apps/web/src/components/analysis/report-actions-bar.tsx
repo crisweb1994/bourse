@@ -1,12 +1,5 @@
 'use client';
 
-/**
- * S2-1 + S2-3 · Report bottom actions bar.
- *
- * plan-v2 Wave 3.1b — debate launcher + DebatePicker removed alongside the
- * DEBATE workflow. Remaining surface: copy / export markdown / export PDF
- * / compare with last / re-run / add to watchlist.
- */
 import { useMemo, useState } from 'react';
 import {
   Copy,
