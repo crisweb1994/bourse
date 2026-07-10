@@ -230,7 +230,7 @@ export async function runAnalysisWorkflowAdapter(
       ...(ctx.waveSemaphore ? { waveSemaphore: ctx.waveSemaphore } : {}),
       ...(marketProfile ? { marketProfile } : {}),
       ...(prebuiltPack ? { evidencePack: prebuiltPack } : {}),
-      allowWebSearchFallback: true,
+      recoverMissingEvidence: true,
     });
   }
 

@@ -148,7 +148,7 @@ describe('streamComprehensive — skip dims on degraded pack', () => {
         runId,
         todayDate: TODAY,
         evidencePack: pack,
-        allowWebSearchFallback: true,
+        recoverMissingEvidence: true,
       }),
     );
     expect(vi.mocked(buildEvidencePack)).not.toHaveBeenCalled();
@@ -168,7 +168,7 @@ describe('streamComprehensive — skip dims on degraded pack', () => {
         runId,
         todayDate: TODAY,
         evidencePack: partial,
-        allowWebSearchFallback: true,
+        recoverMissingEvidence: true,
       }),
     );
     expect(vi.mocked(buildEvidencePack)).not.toHaveBeenCalled();
@@ -198,7 +198,7 @@ describe('streamComprehensive — skip dims on degraded pack', () => {
         runId,
         todayDate: TODAY,
         evidencePack: degraded,
-        allowWebSearchFallback: true,
+        recoverMissingEvidence: true,
       }),
     );
 
@@ -220,7 +220,7 @@ describe('streamComprehensive — skip dims on degraded pack', () => {
         runId,
         todayDate: TODAY,
         evidencePack: pack,
-        allowWebSearchFallback: true,
+        recoverMissingEvidence: true,
       }),
     );
 

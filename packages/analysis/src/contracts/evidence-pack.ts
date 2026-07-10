@@ -34,13 +34,11 @@ export const ValuationSnapshot = z.object({
 export type ValuationSnapshot = z.infer<typeof ValuationSnapshot>;
 
 /**
- * RFC rfc-evidence-pack-web-search-fallback: per-pack data-source quality
- * marker. Absent / `NONE` = pack was built normally; `WEB_SEARCH_FALLBACK`
- * = v2 CN tool path failed on a non-transient error AND user had
- * `allowWebSearchFallback` on, so the LLM web_search v1 builder produced
- * this pack. Downstream consumers (dims / debate Judge / UI) MUST treat
- * any degraded pack as reduced reliability — Judge.confidence is clamped
- * to MEDIUM and dims listed in `missingPrivateFields` may be skipped.
+ * Per-pack data-source quality marker. Absent / `NONE` = pack was built
+ * normally; `WEB_SEARCH_FALLBACK` = structured data was unusable and evidence
+ * recovery rebuilt the pack through the LLM web_search v1 builder. Downstream
+ * consumers must treat degraded packs as reduced reliability: confidence may
+ * be clamped and dims listed in `missingPrivateFields` may be skipped.
  */
 export const EvidencePackDegradeMeta = z.object({
   degradedSource: z.enum(['NONE', 'WEB_SEARCH_FALLBACK']).default('NONE'),

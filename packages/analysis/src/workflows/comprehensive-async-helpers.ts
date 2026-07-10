@@ -51,13 +51,13 @@ export async function resolveEvidencePack(
   input: DimensionInput,
   init: {
     evidencePack: EvidencePackAny | undefined;
-    allowWebSearchFallback: boolean;
+    recoverMissingEvidence: boolean;
     todayDate?: string;
     signal?: AbortSignal;
   },
 ): Promise<EvidencePackAny | undefined> {
   if (
-    !init.allowWebSearchFallback ||
+    !init.recoverMissingEvidence ||
     (init.evidencePack && !isPackCriticallyDegraded(init.evidencePack))
   ) {
     return init.evidencePack;

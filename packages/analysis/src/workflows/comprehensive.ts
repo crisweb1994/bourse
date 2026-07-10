@@ -184,7 +184,7 @@ export async function* streamComprehensive(
     input,
     {
       evidencePack,
-      allowWebSearchFallback: options.allowWebSearchFallback === true,
+      recoverMissingEvidence: options.recoverMissingEvidence === true,
       ...(options.todayDate ? { todayDate: options.todayDate } : {}),
       ...(options.signal ? { signal: options.signal } : {}),
     },

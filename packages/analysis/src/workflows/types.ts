@@ -59,7 +59,7 @@ export interface ComprehensiveOptions {
    * Internal recovery switch. apps/api enables it for production runs; tests
    * leave it off when they need to exercise the no-pack path directly.
    */
-  allowWebSearchFallback?: boolean;
+  recoverMissingEvidence?: boolean;
   /**
    * Path A: a pre-built evidence pack supplied by the consumer (apps/api builds
    * it via connector → compute → snapshotToEvidencePack, merging the CN tool
