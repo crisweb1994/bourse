@@ -145,22 +145,11 @@ export const ErrorEvent = baseEvent.extend({
   recoverable: z.boolean(),
 });
 
-// plan-v2 Wave 3.3 — debate workflow events (debate_round_start /
-// debate_chunk / debate_round_complete / judge_chunk / debate_complete)
-// + EvidenceSourceDegradedEvent + CrossDimWarningEvent removed. DEBATE
-// workflow is gone; web_search v1 fallback / cross-dim downgrades still
-// run internally but no longer emit dedicated SSE frames.
-
 /**
  * v0.6 PRD §11.1 — `evidence_pack_ready` carries either a v2 or v1 pack
  * (discriminated on `pack.schemaVersion`). v1 packs lack the field entirely;
  * v2 packs carry `schemaVersion: 'evidence-pack-v2'`. Planner-driven analysis
  * additionally emits `planId / snapshotId / originCounts` for observability.
- *
- * Wire compat:
- *   - existing v1 debate/legacy consumers see no shape change (extra optional
- *     fields are ignored under z.object passthrough);
- *   - new v0.6 consumers route on `pack.schemaVersion` to decode v2 facts.
  *
  * zod's `discriminatedUnion` requires a literal discriminator on every member.
  * v1 EvidencePack has no `schemaVersion`, so we use `z.union` (v2 first, v1
@@ -186,9 +175,8 @@ export const EvidencePackReadyEvent = baseEvent.extend({
  * Flow per dim that `shouldJudge` selects:
  *   judge_start { sectionType } → runJudge() → judge_complete { sectionType, result, trace* }
  *
- * Frontends that don't care can ignore both events (no contract break).
- * apps/api adapter folds `result` into `Section.structuredJson.judgeResult`
- * for replay and surfaces concerns in UI. Comprehensive judge uses
+ * apps/api keeps these domain events internal and folds `result` into
+ * `Section.structuredJson.judgeResult` for replay. Comprehensive judge uses
  * `provider.complete` and emits one start+complete pair per audited dim.
  */
 export const JudgeStartEvent = baseEvent.extend({

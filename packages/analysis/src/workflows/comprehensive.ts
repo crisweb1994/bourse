@@ -199,8 +199,7 @@ export async function* streamComprehensive(
     },
   );
 
-  // plan-v2 Wave 3.3: evidence_source_degraded SSE event removed. Frontends
-  // derive degraded state from this event's pack.dataAvailability.degradedSource.
+  // Consumers derive degraded state from pack.dataAvailability.degradedSource.
   if (evidencePack) {
     yield {
       type: 'evidence_pack_ready',
