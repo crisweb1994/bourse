@@ -56,20 +56,16 @@ export interface ComprehensiveOptions {
    */
   marketProfile?: MarketProfile;
   /**
-   * RFC rfc-evidence-pack-web-search-fallback: when v2 builder fails on
-   * hard (AUTH / NETWORK / RATE_LIMIT_HARD) errors, fall back to v1 LLM
-   * web_search builder so the workflow can complete instead of FAILED.
-   * Default false; callers enable it when degraded runs should recover through
-   * the current workflow provider.
+   * Internal recovery switch. apps/api enables it for production runs; tests
+   * leave it off when they need to exercise the no-pack path directly.
    */
   allowWebSearchFallback?: boolean;
   /**
    * Path A: a pre-built evidence pack supplied by the consumer (apps/api builds
    * it via connector → compute → snapshotToEvidencePack, merging the CN tool
    * signals). When present the workflow uses it directly and skips the internal
-   * Stage-0 builder. A critically-degraded pack (missing BOTH quote and
-   * financials) still triggers the market-agnostic web_search fallback below
-   * when `allowWebSearchFallback` is set.
+   * Stage-0 builder. A critically-degraded pack (neither quote nor financials)
+   * still triggers market-agnostic web_search recovery when enabled.
    */
   evidencePack?: EvidencePackAny;
 }

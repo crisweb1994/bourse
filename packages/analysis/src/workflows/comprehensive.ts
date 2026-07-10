@@ -174,8 +174,8 @@ export async function* streamComprehensive(
   // result instead of an empty/failed analysis. Partial degradation (some data
   // present, e.g. quote present but financials missing) is NOT recovered this
   // way: the V2 pack is kept and each dim fills the gaps per-field
-  // (marked) — we never discard good code-verified data. `allowWebSearchFallback`
-  // is the recovery-enabled switch; apps/api turns it on for production runs.
+  // (marked) — we never discard good code-verified data. apps/api enables this
+  // recovery path for production runs.
   // The rebuilt pack is stamped degradedSource=WEB_SEARCH_FALLBACK, so its
   // web-sourced numbers are clearly marked non-authoritative (never fed to
   // compute as if code-verified — hard invariant #1) and private-data dims skip.

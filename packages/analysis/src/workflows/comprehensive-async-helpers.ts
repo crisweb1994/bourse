@@ -43,8 +43,8 @@ export function isPackCriticallyDegraded(pack: EvidencePackAny): boolean {
  * web-sourced numbers are clearly marked non-authoritative (never fed to
  * compute as code-verified — hard invariant #1) and private-data dims skip.
  *
- * Returns the rebuilt pack, or `undefined` when recovery is disabled
- * (`allowWebSearchFallback` false) or the existing pack is healthy.
+ * Returns the rebuilt pack, or the existing pack when it is healthy or
+ * recovery is disabled.
  */
 export async function resolveEvidencePack(
   provider: AgentProvider,

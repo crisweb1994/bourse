@@ -157,8 +157,8 @@ flowchart TB
 
 - **严重降级** = `isPackCriticallyDegraded`:`dataAvailability.complete` 缺 `financials`
   (核心基本面输入)。
-- 恢复是 **market-agnostic** 且**生产恒开**(apps/api 对每次 run 启用;原 per-user
-  opt-in 已废弃,见 improve.md)。单元测试通过 `allowWebSearchFallback` 显式开关隔离。
+- 恢复是 **market-agnostic** 且**生产恒开**(apps/api 对每次 run 启用)。单元测试通过
+  `allowWebSearchFallback` 隔离 no-pack 路径。
 
 > ✅ **B 已落地 + 按字段自主补抓(flagged)**:整包恢复触发已放宽为「缺 financials 即
 > 触发」且生产恒开。另:`allowWebSearchGaps`(env,默认关)开启后,维度 LLM 可对 pack
