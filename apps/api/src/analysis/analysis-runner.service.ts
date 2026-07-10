@@ -136,7 +136,6 @@ export class AnalysisRunnerService {
       settingIdHint: analysis.aiProviderSettingId,
       providerNameHint: analysis.aiProvider,
       modelHint: analysis.aiModel,
-      market: analysis.market,
     });
     const tag = this.logTag(analysisId);
 
@@ -152,7 +151,6 @@ export class AnalysisRunnerService {
       toolCache: this.toolCache,
       evidencePackService: this.evidencePackService,
       modelId: aiModel,
-      providerName: analysis.aiProvider || 'claude',
       waveSemaphore: parseAnalysisConcurrency(
         this.config.get('ANALYSIS_PARALLEL_CONCURRENCY'),
       ),

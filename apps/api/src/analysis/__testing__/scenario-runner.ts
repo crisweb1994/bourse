@@ -107,7 +107,6 @@ async function runComprehensive(
     prisma: makePrismaStub(prismaWrites),
     toolCache: {} as AdapterContext['toolCache'],
     modelId: 'fixture-model',
-    providerName: 'fixture-provider',
     _streamFactory: factory,
   };
 

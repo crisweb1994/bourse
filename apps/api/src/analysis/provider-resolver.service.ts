@@ -88,10 +88,8 @@ export class ProviderResolverService {
   }
 
   /**
-   * RFC rfc-web-search-backend-config: resolve provider pair (primary +
-   * optional fallback) with per-user web_search executors wired. Returns
-   * `fallback === undefined` when user hasn't configured a separate
-   * fallback adapter — workflow then reuses `primary` for the v1 builder.
+   * Resolve the provider used by the workflow, with the user's web-search
+   * settings wired into the provider when applicable.
    */
   async resolveProviderPair(
     userId: string,
@@ -99,19 +97,11 @@ export class ProviderResolverService {
       settingIdHint?: string | null;
       providerNameHint?: string | null;
       modelHint?: string | null;
-      /**
-       * RFC rfc-web-search-backend-config §2.4: when provided, the
-       * web_search executor is wired with this market's domainTiers so
-       * low-tier hosts get filtered post-search.
-       */
-      market?: string;
     },
   ): Promise<{
     primary: ReturnType<ProviderFactoryService['buildProvider']>;
     fallback?: ReturnType<ProviderFactoryService['buildProvider']>;
     aiModel: string;
-    providerName: string;
-    settingId: string | null;
   }> {
     const runtime = await this.resolveRuntime(userId, hints.settingIdHint);
 
@@ -123,8 +113,6 @@ export class ProviderResolverService {
       runtime?.providerType ??
       nameToProviderType(this.envProviderName(hints.providerNameHint));
 
-    // plan-v2 §17.4.4 — per-user WebSearchSetting reinstated. Apply override
-    // when a row exists; absence still falls through to env / native.
     const { webSearchExecutor, forceChatCompletions } =
       await this.resolveWebSearchRuntime(userId, effectiveProviderType);
 
@@ -140,8 +128,6 @@ export class ProviderResolverService {
       return {
         primary,
         aiModel,
-        providerName: providerTypeToName(runtime.providerType),
-        settingId: runtime.id,
       };
     }
 
@@ -151,19 +137,13 @@ export class ProviderResolverService {
       ...(forceChatCompletions !== undefined ? { forceChatCompletions } : {}),
     });
     const aiModel = primary.getModel(hints.modelHint || undefined);
-    return { primary, aiModel, providerName, settingId: null };
+    return { primary, aiModel };
   }
 
   /**
-   * plan-v2 §17.4.4 — read the user's WebSearchSetting and translate it to
-   * the (`webSearchExecutor`, `forceChatCompletions`) pair consumed by
-   * ProviderFactoryService. Returns both undefined when the user has no
-   * row (fall through to env / native).
-   *
-   * Anthropic + CUSTOM_ONLY combination is silently downgraded to
-   * NATIVE_FIRST — the Claude SDK runs web_search server-side and can't
-   * accept a custom-shaped tool. UI hides the option, this is the
-   * defense-in-depth check for direct PUT.
+   * Translate the user's web-search setting into provider factory options.
+   * Anthropic cannot host a custom web-search adapter, so CUSTOM_ONLY falls
+   * back to native provider search.
    */
   private async resolveWebSearchRuntime(
     userId: string,

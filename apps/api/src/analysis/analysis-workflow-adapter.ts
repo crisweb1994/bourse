@@ -94,8 +94,6 @@ export interface AdapterContext {
   evidencePackService?: EvidencePackService;
   /** Resolved model id for telemetry tagging. */
   modelId: string;
-  /** Provider name for telemetry tagging — 'claude' / 'openai'. */
-  providerName: string;
   /** Per-wave concurrency cap forwarded into streamComprehensive. */
   waveSemaphore?: number;
   /**
