@@ -133,7 +133,7 @@ function buildCtx(opts: {
         },
       },
     } as unknown as AdapterContext['prisma'],
-    modelId: 'claude-sonnet-4-test',
+    aiModel: 'claude-sonnet-4-test',
     _streamFactory: fakeFactory,
     _singleStreamFactory: fakeSingleFactory,
     ...(opts.mode ? { mode: opts.mode } : {}),

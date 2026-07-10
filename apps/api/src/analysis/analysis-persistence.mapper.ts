@@ -69,7 +69,7 @@ export interface AnalysisSectionAccumulator {
 export interface PersistRunDoneInput {
   analysisId: string;
   mode?: 'comprehensive' | 'single';
-  modelId: string;
+  aiModel: string;
   terminalStatus: AnalysisTerminalStatus;
   summaryMarkdown: string;
   summaryJson: unknown;
@@ -194,7 +194,7 @@ export class AnalysisPersistenceMapper {
       where: { id: input.analysisId },
       data: {
         status: toPrismaAnalysisStatus(input.terminalStatus),
-        aiModel: input.modelId,
+        aiModel: input.aiModel,
         generatedAt: new Date(),
         ...(input.mode !== 'single' && input.summaryMarkdown
           ? { summaryMarkdown: input.summaryMarkdown }

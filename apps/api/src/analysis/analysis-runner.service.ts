@@ -146,7 +146,7 @@ export class AnalysisRunnerService {
       send,
       prisma: this.prisma,
       evidencePackService: this.evidencePackService,
-      modelId: aiModel,
+      aiModel,
       waveSemaphore: parseAnalysisConcurrency(
         this.config.get('ANALYSIS_PARALLEL_CONCURRENCY'),
       ),

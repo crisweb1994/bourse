@@ -90,8 +90,8 @@ export interface AdapterContext {
    * execution. Optional so tests with scripted stream factories can omit it.
    */
   evidencePackService?: EvidencePackService;
-  /** Resolved model id for telemetry tagging. */
-  modelId: string;
+  /** Resolved model written back to the Analysis row. */
+  aiModel: string;
   /** Per-wave concurrency cap forwarded into streamComprehensive. */
   waveSemaphore?: number;
   /**
@@ -439,7 +439,7 @@ export async function runAnalysisWorkflowAdapter(
           await persistence.persistRunDone({
             analysisId: ctx.analysisId,
             mode: ctx.mode,
-            modelId: ctx.modelId,
+            aiModel: ctx.aiModel,
             terminalStatus,
             summaryMarkdown,
             summaryJson,
