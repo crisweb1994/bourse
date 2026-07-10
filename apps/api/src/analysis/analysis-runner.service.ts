@@ -5,7 +5,6 @@ import {
   type AnalysisStatus,
   type SectionType,
 } from '@bourse/shared-types';
-import { ToolCacheService } from '../lifecycle/tool-cache.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { parseAnalysisConcurrency } from './concurrency';
 import { AnalysisReplayService } from './analysis-replay.service';
@@ -63,7 +62,6 @@ export class AnalysisRunnerService {
     private prisma: PrismaService,
     private providerResolver: ProviderResolverService,
     private config: ConfigService,
-    private toolCache: ToolCacheService,
     private evidencePackService: EvidencePackService,
     private replayService: AnalysisReplayService,
   ) {}
@@ -147,7 +145,6 @@ export class AnalysisRunnerService {
       provider,
       send,
       prisma: this.prisma,
-      toolCache: this.toolCache,
       evidencePackService: this.evidencePackService,
       modelId: aiModel,
       waveSemaphore: parseAnalysisConcurrency(

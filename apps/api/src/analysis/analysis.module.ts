@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { AiSettingsModule } from '../ai-settings/ai-settings.module';
 import { WebSearchSettingsModule } from '../web-search-settings/web-search-settings.module';
-import { ToolCacheModule } from '../lifecycle/tool-cache.module';
 import { ConnectorsModule } from '../connectors/connectors.module';
 import { AnalysisController } from './analysis.controller';
 import { AnalysisCommandService } from './analysis-command.service';
@@ -22,7 +21,6 @@ import { EvidencePackService } from './evidence-pack.service';
     AuthModule,
     AiSettingsModule,
     WebSearchSettingsModule,
-    ToolCacheModule,
     ConnectorsModule,
   ],
   controllers: [AnalysisController],

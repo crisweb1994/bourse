@@ -97,7 +97,6 @@ async function runComprehensive(
       sendEvents.push({ type, data: data as Record<string, unknown> });
     },
     prisma: makePrismaStub(prismaWrites),
-    toolCache: {} as AdapterContext['toolCache'],
     modelId: 'fixture-model',
     _streamFactory: factory,
   };

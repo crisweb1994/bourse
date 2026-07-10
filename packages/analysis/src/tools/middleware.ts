@@ -42,11 +42,7 @@ export interface ToolMiddlewareConfig {
   maxTotalCalls?: number;
   /** Optional cost calculator (Day 11e wires Claude pricing here). */
   pricing?: PricingFn;
-  /**
-   * RFC-02: optional Postgres-backed cache for explicit-tool results.
-   * apps/api wires this via ToolCacheService; tests pass an in-memory
-   * stub. Absent → cache is fully skipped.
-   */
+  /** Optional explicit-tool result cache. Absent means cache is skipped. */
   cache?: ToolCachePort;
 }
 

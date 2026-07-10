@@ -106,11 +106,7 @@ export interface ToolPolicy {
   traceTag?: string;
 }
 
-/**
- * RFC-02 §10: cache port the apps layer implements (e.g.
- * apps/api ToolCacheService). packages/agent declares the shape
- * here so it stays decoupled from @prisma/client.
- */
+/** Optional cache port for callers that want explicit-tool result caching. */
 export interface ToolCacheKey {
   toolName: string;
   market: string;

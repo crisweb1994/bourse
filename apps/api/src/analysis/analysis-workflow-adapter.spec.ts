@@ -133,7 +133,6 @@ function buildCtx(opts: {
         },
       },
     } as unknown as AdapterContext['prisma'],
-    toolCache: {} as AdapterContext['toolCache'],
     modelId: 'claude-sonnet-4-test',
     _streamFactory: fakeFactory,
     _singleStreamFactory: fakeSingleFactory,

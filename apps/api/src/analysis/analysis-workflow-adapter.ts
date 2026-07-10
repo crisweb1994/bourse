@@ -10,7 +10,6 @@ import {
   streamComprehensive,
   streamSingle,
 } from '@bourse/analysis';
-import type { ToolCacheService } from '../lifecycle/tool-cache.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import {
   AnalysisPersistenceMapper,
@@ -85,7 +84,6 @@ export interface AdapterContext {
   /** apps/api SSE callback — translation target. */
   send: SseCallback;
   prisma: PrismaService;
-  toolCache: ToolCacheService;
   /**
    * Explicit data-preparation stage. Builds the evidence pack (connector →
    * compute → snapshotToEvidencePack + CN tool signals) before workflow
