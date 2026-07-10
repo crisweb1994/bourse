@@ -337,8 +337,8 @@ export async function* runSequentialStrategy(
         message: `Budget exhausted (${breach}); halting before ${dim.type}`,
         recoverable: false,
       };
-      // Day 11.5a P1 #4: include all dims that never ran so the consumer
-      // can show "X/8 completed, Y waiting".
+      // Include all dims that never ran so the consumer can show
+      // "X/8 completed, Y waiting".
       const unrunDims = dims.slice(i).map((d) => d.type);
       const result = yield* emitTerminalDone(
         {

@@ -1,8 +1,7 @@
 import { z } from 'zod';
 
-// MVP doc §4.4.3: immutable fact pack consumed by debate workflow.
-// Bull/Bear personas may ONLY cite urls in `allowedUrls`; the pack is
-// frozen at Stage A end and never mutated afterwards.
+// Immutable fact pack consumed by analysis workflows. Model output may only
+// cite URLs present in `allowedUrls`.
 
 export const FinancialSnapshot = z.object({
   price: z.number().optional(),

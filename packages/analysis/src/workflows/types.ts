@@ -131,6 +131,3 @@ export interface ComprehensiveResult {
  * '@bourse/analysis'` and pass into ComprehensiveOptions.dimensions.
  */
 export type { Dimension, DimensionInput };
-
-// plan-v2 Wave 3.2 — debate workflow types removed (DebateInput / DebateOptions
-// / DebateRoleTrace / DebateWorkflowResult). See plan-v2 §1.3 + §17.4.

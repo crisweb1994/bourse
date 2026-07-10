@@ -533,10 +533,8 @@ export async function* streamComprehensive(
         marketProfile: options.marketProfile,
       });
 
-      // plan-v2 Wave 3.3: cross_dim_warning SSE event removed. Validator
-      // still runs and downgrades confidence in-place; conflict messages
-      // still fold into `allWarnings` so the final ComprehensiveResult
-      // carries an auditable trace.
+      // Cross-dim validation is internal: it can downgrade confidence in place
+      // and records conflict messages in the final result warnings.
       if (validatorReport.conflicts.length > 0) {
         for (const c of validatorReport.conflicts) {
           allWarnings.push(`[cross-dim:${c.severity}] ${c.message}`);
