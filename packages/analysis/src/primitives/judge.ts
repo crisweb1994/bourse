@@ -184,7 +184,7 @@ function buildJudgeSystemPrompt(judge: Persona): string {
   return `${judge.styleDescription}
 
 【RFC-10 单维审计任务】
-你不是在重新分析这个维度，也不是在加一轮辩论。任务是**审计**一个已经完成的维度输出（structuredJson + report），针对以下要点给出结构化反馈：
+你不是在重新分析这个维度，也不是补充生成报告。任务是**审计**一个已经完成的维度输出（structuredJson + report），针对以下要点给出结构化反馈：
 
 1. **结论支撑度**：structuredJson.conclusion 的 signal/confidence 是否被 EvidencePack 内的事实直接支持？是否依赖了 EvidencePack 之外的推断？
 2. **引用质量**：报告引用的 URL 是否在 allowedUrls 内？引用来源的 tier（A=官方/交易所、B=主流财经媒体、C=研究机构、D=博客论坛、E=社交）分布是否与结论强度匹配？强 BULLISH/BEARISH + 多 Tier D/E 是危险信号。
