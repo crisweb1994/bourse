@@ -33,35 +33,16 @@ export interface ComprehensiveOptions {
    */
   budget?: BudgetLimits;
   /**
-   * When true, run dimensions concurrently (Promise.all on their LLM
-   * calls). Events are still drained in dim order after all complete —
-   * realtime interleaved streaming with monotonic seq is V1+. In
-   * parallel mode, between-dim budget checks are disabled and
-   * `fail-run` is downgraded to `skip` (semantic limitation: parallel
-   * dims can't synchronously halt the others).
+   * Execution mode.
    *
-   * RFC-05: still supported as a legacy shortcut. `parallel: true`
-   * with budget / fail-run dims continues to throw; callers who want
-   * budget-aware concurrency must opt in via `waveMode: 'auto'`.
-   */
-  parallel?: boolean;
-  /**
-   * RFC-05: wave-based execution mode.
-   *
-   *   - undefined (default): legacy behavior — `parallel` controls the
-   *     path. `parallel: true` → all-or-nothing Promise.all (with the
-   *     existing budget/fail-run rejection). `parallel: false` or
-   *     undefined → sequential for-loop.
-   *   - `'auto'`: opt-in wave execution. Dimensions group by their
+   *   - undefined (default): sequential streaming.
+   *   - `'auto'`: wave execution. Dimensions group by their
    *     `wave` field (defaulting to 1). Wave-internal dims run with
    *     `waveSemaphore` concurrency; waves are gated synchronously so
    *     budget checks and fail-run halts work between waves.
-   *   - `'disabled'` / `'sequential'`: explicit single-thread loop;
-   *     equivalent to legacy `parallel: false`.
-   *
-   * When both `parallel` and `waveMode` are set, `waveMode` wins.
+   *   - `'sequential'`: explicit sequential streaming.
    */
-  waveMode?: 'auto' | 'disabled' | 'sequential';
+  waveMode?: 'auto' | 'sequential';
   /**
    * RFC-05: per-wave concurrency cap. Only meaningful when
    * `waveMode === 'auto'`. Default 4 — matches the apps/api

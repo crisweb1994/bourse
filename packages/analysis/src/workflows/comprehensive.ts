@@ -34,7 +34,6 @@ import type {
 // refactor-v1 Wave 4: 纯函数 helpers 抽到 ./comprehensive-helpers
 import {
   applyConfidenceDowngrade,
-  assertLegacyParallelCompatible,
   buildResult,
   buildSectionsForValidation,
   checkBudget,
@@ -50,7 +49,7 @@ import {
   resolveEvidencePack,
 } from './comprehensive-async-helpers';
 
-// 执行策略 helpers (wave / parallel harvest + drain / sequential stream-through)
+// 执行策略 helpers (wave harvest + drain / sequential stream-through)
 import {
   applyHarvest,
   emitTerminalDone,
@@ -100,14 +99,6 @@ export async function* streamComprehensive(
     options.todayDate ?? new Date().toISOString().slice(0, 10);
   const budget: BudgetLimits = options.budget ?? {};
   let seq = options.startSeq ?? 0;
-
-  // Parallel mode is incompatible with budget enforcement and fail-run
-  // semantics — Promise.all can't synchronously halt sibling dims.
-  // Fail loudly rather than silently downgrade.
-  // RFC-05: waveMode takes precedence — when caller sets waveMode (any value),
-  // we skip the legacy parallel validation and let the wave / sequential
-  // branches decide.
-  assertLegacyParallelCompatible(options, dims);
 
   // RFC-06: derive source-routing config once. When `marketProfile.domainTiers`
   // is set (currently CN only), we (a) constrain provider web_search to those
@@ -267,21 +258,14 @@ export async function* streamComprehensive(
       true,
     );
 
-  // RFC-05: wave mode. Takes precedence over legacy `parallel`.
   // - waveMode 'auto': group dims by wave, run with semaphore, gate
   //   budget/fail-run between waves. Default semaphore = 4.
-  // - waveMode 'disabled' or 'sequential': skip both wave + parallel
-  //   branches, drop into the for-loop sequential path below.
-  // - waveMode undefined: fall through to legacy `parallel`/sequential
-  //   logic (keeps RFC-05 a backward-compat opt-in).
-  const resolvedWaveMode: 'auto' | 'disabled' | undefined =
-    options.waveMode === 'sequential'
-      ? 'disabled'
-      : options.waveMode;
+  // - waveMode 'sequential' or undefined: stream dimensions one at a time.
+  const useWaveMode = options.waveMode === 'auto';
   const waveSemaphore = options.waveSemaphore ?? 4;
 
-  // Shared harvest context — wave and parallel modes both feed per-dim
-  // harvests through the helpers in ./comprehensive-strategies.
+  // Shared harvest context — wave mode feeds per-dim harvests through the
+  // helpers in ./comprehensive-strategies.
   const harvestCtx: HarvestContext = {
     provider,
     input,
@@ -339,10 +323,9 @@ export async function* streamComprehensive(
   };
   const nextSeq = (): number => seq++;
 
-  if (resolvedWaveMode === 'auto') {
+  if (useWaveMode) {
     // Global order is preserved by feeding each dim its original index
-    // from the canonical dims[] array — events drained per-wave still
-    // sort the same as the legacy parallel path.
+    // from the canonical dims[] array.
     const waveGroups = groupByWave(dims);
     let waveAborted: 'budget' | 'fail-run' | null = null;
     let abortReason = '';
@@ -450,23 +433,13 @@ export async function* streamComprehensive(
       );
       return result;
     }
-    // All waves done — fall through to summary phase.
-  } else if (options.parallel && resolvedWaveMode !== 'disabled') {
-    const harvests = await Promise.all(
-      dims.map((dim, i) => harvestDimBuffered(harvestCtx, dim, i)),
-    );
-
-    // Drain in dim order, renumber seq globally, accumulate state.
-    for (const h of harvests) {
-      yield* applyHarvest(h, harvestCollections, harvestTotals, runId, nextSeq);
-    }
-    // Fall through to summary phase (parallel mode skips sequential loop).
+    // All waves done; fall through to summary phase.
   } else {
     // ===== Sequential mode (default) =====
     // Per-dimension streaming with retry-once + fail-run support. Isolated
     // in runSequentialStrategy (./comprehensive-strategies) because, unlike
-    // wave/parallel, it streams events through inline (no buffering) and
-    // checks budget at dim granularity.
+    // wave mode, it streams events through inline (no buffering) and checks
+    // budget at dim granularity.
     const seqHandle: SeqHandle = {
       get: () => seq,
       set: (v) => {

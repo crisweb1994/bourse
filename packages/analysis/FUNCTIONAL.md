@@ -212,9 +212,9 @@ flowchart TB
 
 - **失败语义**:`skip`(记失败、继续)/ `retry-once`(重试一次再跳)/ `fail-run`
   (在 summary 前停,status=FAILED)。
-- **预算**:`budget.maxTokens` 在维度边界检查,超限 → `BUDGET_EXHAUSTED`(顺序模式)。
-- **并发与预算互斥**:`parallel:true` 配 budget / fail-run 会显式抛错;要并发又要
-  预算请用 `waveMode:'auto'`。
+- **预算**:`budget.maxTokens / maxCostUsd / maxToolCalls` 在维度边界检查,超限 →
+  `BUDGET_EXHAUSTED`。
+- **执行模式**:默认顺序流式执行;需要并发时使用 `waveMode:'auto'` 分波执行。
 - `single` workflow(`streamSingle`)是单维精简版,跳过 wave / 校验 / judge。
 
 ---

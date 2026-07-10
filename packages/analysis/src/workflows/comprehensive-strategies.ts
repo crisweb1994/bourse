@@ -1,10 +1,8 @@
 /**
  * Execution-strategy helpers for `streamComprehensive`.
  *
- * Wave (RFC-05) and legacy parallel modes share the same per-dim harvest +
- * drain + accumulate contract — previously inlined twice in
- * `comprehensive.ts` (~150 lines of near-verbatim duplication). This file
- * holds the shared core:
+ * Wave mode uses a buffered per-dim harvest + drain + accumulate contract.
+ * Sequential mode streams inline. This file holds both execution cores:
  *
  *  - `harvestDimBuffered`: run one dim's streamDimension with retry-once,
  *    buffer its SSE events, return the accumulator + events + last error.
@@ -91,8 +89,8 @@ export interface HarvestCollections {
  * are kept). Returns the final accumulator + buffered events + last error
  * (null when the dim succeeded within `maxAttempts`).
  *
- * Buffering is required because wave/parallel modes must renumber event seq
- * globally during drain — the events can't be yielded inline.
+ * Buffering is required because wave mode must renumber event seq globally
+ * during drain — the events can't be yielded inline.
  */
 export async function harvestDimBuffered(
   ctx: HarvestContext,
@@ -214,7 +212,7 @@ export async function* applyHarvest(
     collections.allCitations.push(...h.acc.citations);
     collections.allWarnings.push(...result.warnings);
     if (h.acc.toolCalls > 0) {
-      // Day 11.5b: route per-dim tool invocations through middleware.
+      // Route per-dim tool invocations through middleware.
       for (let n = 0; n < h.acc.toolCalls; n++) {
         collections.toolMiddleware.record({
           toolName: 'webSearch',
@@ -403,7 +401,7 @@ export async function* runSequentialStrategy(
         totals.toolCalls += acc.toolCalls;
         totals.costUsd += acc.costUsd;
         if (acc.toolCalls > 0) {
-          // Day 11.5b: route tool invocations through middleware.
+          // Route tool invocations through middleware.
           for (let n = 0; n < acc.toolCalls; n++) {
             collections.toolMiddleware.record({
               toolName: 'webSearch',

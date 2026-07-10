@@ -94,10 +94,7 @@ export interface Dimension<T extends StructuredJson = StructuredJson> {
   /**
    * RFC-05: which wave this dim belongs to (1-3). Same-wave dims run
    * concurrently under `waveSemaphore`; later waves wait for earlier
-   * waves to fully settle. Default 1 (single-wave = current
-   * `parallel: true` behavior). Higher wave numbers are reserved for
-   * RFC-06+ cross-dim composition (dims that read prior-wave outputs);
-   * RFC-05 only ships the executor scaffolding.
+   * waves to fully settle. Default 1.
    */
   wave?: 1 | 2 | 3;
 

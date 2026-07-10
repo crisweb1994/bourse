@@ -13,11 +13,7 @@ import type { Dimension, DimensionRunResult } from '../dimensions/types';
 import type { JudgeTriggerContext } from '../primitives/judge';
 import type { MarketProfile } from '../markets/types';
 import type { BudgetLimits } from './types';
-import type {
-  ComprehensiveOptions,
-  ComprehensiveResult,
-  DimensionFailure,
-} from './types';
+import type { ComprehensiveResult, DimensionFailure } from './types';
 
 /**
  * Per-dimension state accumulated from SSE events while a single dimension
@@ -291,42 +287,6 @@ export function checkBudget(
   if (hit(budget.maxCostUsd, used.costUsd)) return 'maxCostUsd';
   if (hit(budget.maxToolCalls, used.toolCalls)) return 'maxToolCalls';
   return false;
-}
-
-/**
- * Day 11.5a P1 #3: legacy `parallel: true` mode is incompatible with budget
- * enforcement and fail-run semantics — Promise.all can't synchronously halt
- * sibling dims. Fail loudly rather than silently downgrade.
- *
- * RFC-05: waveMode takes precedence — when the caller sets `waveMode` (any
- * value), this check is skipped and the wave / sequential branches decide.
- * Throws the original error strings verbatim (existing tests assert them).
- */
-export function assertLegacyParallelCompatible(
-  options: Pick<ComprehensiveOptions, 'parallel' | 'waveMode' | 'budget'>,
-  dims: readonly Dimension[],
-): void {
-  if (!(options.parallel && options.waveMode === undefined)) return;
-  const hasBudget =
-    options.budget !== undefined &&
-    (options.budget.maxTokens !== undefined ||
-      options.budget.maxCostUsd !== undefined ||
-      options.budget.maxToolCalls !== undefined);
-  if (hasBudget) {
-    throw new Error(
-      'streamComprehensive: parallel mode does not support budget enforcement. ' +
-        'Use sequential (parallel: false) when any of maxTokens / maxCostUsd / maxToolCalls is set.',
-    );
-  }
-  const failRunDims = dims.filter((d) => d.onFailure === 'fail-run');
-  if (failRunDims.length > 0) {
-    throw new Error(
-      `streamComprehensive: parallel mode incompatible with fail-run dimensions: ${failRunDims
-        .map((d) => d.type)
-        .join(', ')}. ` +
-        'Use sequential or change those dims to skip / retry-once.',
-    );
-  }
 }
 
 /**
