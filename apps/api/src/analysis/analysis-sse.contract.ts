@@ -1,7 +1,5 @@
 import type { AnalysisStatus, SectionType } from '@bourse/shared-types';
 
-export type AnalysisReportCompleteSectionType = SectionType | 'COMPREHENSIVE';
-
 export interface AnalysisSsePayloadMap {
   evidence_pack_ready: {
     pack: unknown;
@@ -19,9 +17,6 @@ export interface AnalysisSsePayloadMap {
   report_chunk: {
     text: string;
     sectionType?: SectionType;
-  };
-  report_complete: {
-    sectionType: AnalysisReportCompleteSectionType;
   };
   citation: {
     title: string;

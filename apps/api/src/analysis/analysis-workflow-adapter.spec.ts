@@ -216,14 +216,14 @@ describe('runAnalysisWorkflowAdapter — happy path', () => {
     assert.equal(result.terminalStatus, 'COMPLETED');
     assert.equal(result.failedSectionTypes.length, 0);
 
-    // SSE: every agent event mapped to a client event
+    // SSE: report_complete is domain-internal; the client relies on
+    // report_chunk + section_complete.
     const sendTypes = sendCalls.map((c) => c.type);
     assert.deepEqual(sendTypes, [
       'section_start',
       'report_chunk',
       'report_chunk',
       'citation',
-      'report_complete',
       'structured_data',
       'section_complete',
       'done',
@@ -285,21 +285,14 @@ describe('runAnalysisWorkflowAdapter — happy path', () => {
 
     await runAnalysisWorkflowAdapter(ctx);
 
-    // Two summary_chunk events + the synthetic `report_complete{COMPREHENSIVE}`
-    // + summary_complete + done
+    // Two summary_chunk events + summary_complete + done.
     const sendTypes = sendCalls.map((c) => c.type);
     assert.deepEqual(sendTypes, [
       'summary_chunk',
       'summary_chunk',
-      'report_complete',
       'summary_complete',
       'done',
     ]);
-
-    const reportCompleteCall = sendCalls.find(
-      (c) => c.type === 'report_complete',
-    );
-    assert.equal(reportCompleteCall!.data.sectionType, 'COMPREHENSIVE');
 
     const summaryComplete = sendCalls.find(
       (c) => c.type === 'summary_complete',

@@ -23,7 +23,6 @@ import {
   mapJudgeCompleteEvent,
   mapJudgeStartEvent,
   mapReportChunkEvent,
-  mapReportCompleteEvent,
   mapSectionCompleteEvent,
   mapSectionSkippedEvent,
   mapSectionStartEvent,
@@ -317,7 +316,6 @@ export async function runAnalysisWorkflowAdapter(
         case 'report_complete': {
           const acc = sectionAccs.get(event.sectionType);
           if (acc) acc.markdown = event.fullMarkdown || acc.markdown;
-          sendFrame(ctx.send, mapReportCompleteEvent(event.sectionType));
           break;
         }
 
@@ -379,9 +377,6 @@ export async function runAnalysisWorkflowAdapter(
           summaryJson = event.json;
           summaryDataAsOf = (event.json as { dataAsOf?: string }).dataAsOf
             ?? null;
-          // Preserve the synthetic COMPREHENSIVE report_complete frame that
-          // the frontend uses to finalize summary rendering.
-          sendFrame(ctx.send, mapReportCompleteEvent('COMPREHENSIVE'));
           sendFrame(ctx.send, mapSummaryCompleteEvent(event));
           break;
 

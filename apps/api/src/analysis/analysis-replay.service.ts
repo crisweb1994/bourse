@@ -71,7 +71,6 @@ export class AnalysisReplayService {
 
     if (analysis.analysisType === 'COMPREHENSIVE' && analysis.summaryMarkdown) {
       send('summary_chunk', { text: analysis.summaryMarkdown });
-      send('report_complete', { sectionType: 'COMPREHENSIVE' });
       if (analysis.summaryJson) {
         send('summary_complete', { summaryJson: analysis.summaryJson });
       }
@@ -93,7 +92,6 @@ export class AnalysisReplayService {
         sectionType: section.type,
       });
     }
-    send('report_complete', { sectionType: section.type });
 
     this.replaySectionDetails(section, send);
     send('section_complete', {

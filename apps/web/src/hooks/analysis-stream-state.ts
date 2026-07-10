@@ -212,9 +212,6 @@ export function applyAnalysisStreamEvent(
       };
     }
 
-    case 'report_complete':
-      return state;
-
     case 'structured_data': {
       const sectionType = parseSectionType(data.sectionType);
       if (!sectionType || !data.json || !state.sections[sectionType]) {

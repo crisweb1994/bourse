@@ -4,7 +4,6 @@ import type { SseEvent } from '@bourse/analysis';
 import {
   mapCitationEvent,
   mapErrorEvent,
-  mapReportCompleteEvent,
   mapSectionStartEvent,
   mapSummaryCompleteEvent,
   mapSummaryChunkEvent,
@@ -78,7 +77,6 @@ describe('analysis SSE mapper', () => {
         json: { overallSignal: 'BULLISH' },
       }),
     );
-    const syntheticReportComplete = mapReportCompleteEvent('COMPREHENSIVE');
 
     assert.deepEqual(chunk, {
       event: 'summary_chunk',
@@ -87,10 +85,6 @@ describe('analysis SSE mapper', () => {
     assert.deepEqual(complete, {
       event: 'summary_complete',
       data: { summaryJson: { overallSignal: 'BULLISH' } },
-    });
-    assert.deepEqual(syntheticReportComplete, {
-      event: 'report_complete',
-      data: { sectionType: 'COMPREHENSIVE' },
     });
   });
 

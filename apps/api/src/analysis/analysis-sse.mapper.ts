@@ -2,7 +2,6 @@ import type { SseEvent } from '@bourse/analysis';
 import type {
   AnalysisSseEventName,
   AnalysisSsePayloadMap,
-  AnalysisReportCompleteSectionType,
 } from './analysis-sse.contract';
 
 export type ApiSseFrame<T extends AnalysisSseEventName = AnalysisSseEventName> =
@@ -73,15 +72,6 @@ export function mapCitationEvent(
         ? { searchAdapter: event.citation.searchAdapter }
         : {}),
     },
-  };
-}
-
-export function mapReportCompleteEvent(
-  sectionType: AnalysisReportCompleteSectionType,
-): ApiSseFrame<'report_complete'> {
-  return {
-    event: 'report_complete',
-    data: { sectionType },
   };
 }
 
