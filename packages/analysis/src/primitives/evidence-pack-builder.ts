@@ -105,8 +105,8 @@ export async function buildEvidencePack(
   const streamResult = await provider.stream(
     COLLECTION_SYSTEM,
     userPrompt,
-    // No streaming UI for EvidencePack collection — debate.ts only cares
-    // about the final structured result + citations.
+    // No streaming UI for EvidencePack collection; workflows only need the
+    // final structured result + citations.
     () => {},
     {
       signal: options.signal,
@@ -132,8 +132,7 @@ export async function buildEvidencePack(
     allowedUrls,
   };
 
-  // Freeze the pack so Bull/Bear can't accidentally mutate shared state
-  // (defensive against future workflow refactors).
+  // Freeze the pack so workflow consumers cannot mutate shared facts.
   return Object.freeze({
     ...pack,
     financialSnapshot: Object.freeze(pack.financialSnapshot),
