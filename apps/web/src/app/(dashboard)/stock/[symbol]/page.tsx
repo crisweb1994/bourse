@@ -1,21 +1,24 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
-import { Loader2, ChevronLeft } from 'lucide-react';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
 import { abortAnalysis } from '@/lib/api';
 import { useAnalysisStream } from '@/hooks/use-analysis-stream';
 import { useStuckWatchdog } from '@/hooks/use-stuck-watchdog';
 import { StockHeader } from '@/components/stock/stock-header';
 import { Card, toast } from '@/components/ui';
-import { getRequestedAnalysisId } from './stock-page-ui';
-import { ResolutionRecovery, ResolutionEmpty } from './_components/resolution';
 import { AnalysisDialogs } from './_components/analysis-dialogs';
 import { AnalysisLauncher } from './_components/analysis-launcher';
 import { AnalysisStreamView } from './_components/analysis-stream-view';
 import { SwitchedNotice } from './_components/conflict-dialog';
+import {
+  StockPageBackButton,
+  StockResolutionStatus,
+} from './_components/stock-page-chrome';
 import { useAnalysisLauncherState } from './use-analysis-launcher-state';
 import { useAnalysisResultLayout } from './use-analysis-result-layout';
+import { useStockPageParams } from './use-stock-page-params';
 import { useStockAnalysisLifecycle } from './use-stock-analysis-lifecycle';
 import { useStockResolution } from './use-stock-resolution';
 
@@ -24,11 +27,9 @@ export default function StockAnalysisPage({
 }: {
   params: Promise<{ symbol: string }>;
 }) {
-  const [resolvedParams, setResolvedParams] = useState<{
-    symbol: string;
-  } | null>(null);
-  const searchParams = useSearchParams();
   const router = useRouter();
+  const { symbol, stockId, market, name, analysisId } =
+    useStockPageParams(params);
   const {
     selectedType,
     setSelectedType,
@@ -43,27 +44,6 @@ export default function StockAnalysisPage({
   const [showAnalysisForm, setShowAnalysisForm] = useState(false);
 
   const stream = useAnalysisStream();
-
-  useEffect(() => {
-    params.then(setResolvedParams);
-  }, [params]);
-
-  const symbol = resolvedParams
-    ? decodeURIComponent(resolvedParams.symbol)
-    : null;
-  const stockId = searchParams.get('stockId');
-  const market = searchParams.get('market') || '';
-  const name = searchParams.get('name') || symbol || '';
-  const analysisId = getRequestedAnalysisId(searchParams);
-
-  useEffect(() => {
-    if (!symbol) return;
-    const prev = document.title;
-    document.title = name && name !== symbol ? `${symbol} · ${name}` : symbol;
-    return () => {
-      document.title = prev;
-    };
-  }, [symbol, name]);
 
   const {
     detail,
@@ -151,22 +131,7 @@ export default function StockAnalysisPage({
 
   return (
     <>
-      <div className="mb-2">
-        <button
-          type="button"
-          onClick={() => {
-            if (typeof window !== 'undefined' && window.history.length > 1) {
-              router.back();
-            } else {
-              router.push('/watchlist');
-            }
-          }}
-          className="inline-flex items-center gap-1 text-[12.5px] text-[var(--color-fg-2)] hover:text-[var(--color-fg)] transition-colors"
-        >
-          <ChevronLeft className="w-3.5 h-3.5" strokeWidth={1.5} />
-          返回
-        </button>
-      </div>
+      <StockPageBackButton router={router} />
       {autoSwitchedFrom && (
         <SwitchedNotice
           ongoing={autoSwitchedFrom}
@@ -193,37 +158,19 @@ export default function StockAnalysisPage({
         />
       )}
 
-      {!stockId &&
-        !effectiveStockId &&
-        !resolvingStock &&
-        detail &&
-        detail.candidates.length > 0 && (
-          <ResolutionRecovery
-            symbol={symbol ?? ''}
-            candidates={detail.candidates}
-            onAddAndAnalyze={async () => {
-              await handleAddToWatchlist();
-              setShowAnalysisForm(true);
-            }}
-            onAddOnly={handleAddToWatchlist}
-            busy={watchlistBusy}
-          />
-        )}
-      {!stockId &&
-        !effectiveStockId &&
-        !resolvingStock &&
-        detail &&
-        detail.candidates.length === 0 && (
-          <ResolutionEmpty symbol={symbol ?? ''} />
-        )}
-      {!stockId && !effectiveStockId && resolvingStock && (
-        <Card className="mb-6">
-          <div className="flex items-center gap-2 px-5 py-3.5 text-[13px] text-[var(--color-fg-2)]">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.5} />
-            正在识别股票…
-          </div>
-        </Card>
-      )}
+      <StockResolutionStatus
+        requestedStockId={stockId}
+        effectiveStockId={effectiveStockId}
+        resolvingStock={resolvingStock}
+        detail={detail}
+        symbol={symbol ?? ''}
+        watchlistBusy={watchlistBusy}
+        onAddAndAnalyze={async () => {
+          await handleAddToWatchlist();
+          setShowAnalysisForm(true);
+        }}
+        onAddOnly={handleAddToWatchlist}
+      />
 
       {/* Checking status */}
       {stream.status === 'idle' && checkingOngoing && (
