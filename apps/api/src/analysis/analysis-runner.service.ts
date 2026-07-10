@@ -153,7 +153,6 @@ export class AnalysisRunnerService {
       waveSemaphore: parseAnalysisConcurrency(
         this.config.get('ANALYSIS_PARALLEL_CONCURRENCY'),
       ),
-      allowWebSearchFallback: true,
     });
   }
 

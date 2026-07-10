@@ -97,12 +97,6 @@ export interface AdapterContext {
   /** Per-wave concurrency cap forwarded into streamComprehensive. */
   waveSemaphore?: number;
   /**
-   * Internal workflow recovery switch. When true and EvidencePack v2
-   * hard-fails, agent retries with the v1 LLM web_search builder instead
-   * of throwing.
-   */
-  allowWebSearchFallback?: boolean;
-  /**
    * Test-only: substitute `streamComprehensive`. Production callers MUST
    * pass undefined; the adapter then uses the real agent workflow.
    */
@@ -242,9 +236,7 @@ export async function runAnalysisWorkflowAdapter(
       ...(ctx.waveSemaphore ? { waveSemaphore: ctx.waveSemaphore } : {}),
       ...(marketProfile ? { marketProfile } : {}),
       ...(prebuiltPack ? { evidencePack: prebuiltPack } : {}),
-      ...(ctx.allowWebSearchFallback
-        ? { allowWebSearchFallback: true }
-        : {}),
+      allowWebSearchFallback: true,
     });
   }
 
