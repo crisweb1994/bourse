@@ -29,11 +29,7 @@ import {
 } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
-/**
- * plan-v2 §17.4.4 — per-user web search adapter config. Variant C UI:
- * left adapter list + right config panel. Single row per user; switching
- * adapter in the left column replaces the current row on save.
- */
+/** Per-user web search adapter config. One saved adapter can override deployment defaults. */
 interface AdapterMeta {
   id: WebSearchProviderType | 'NONE';
   name: string;

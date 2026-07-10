@@ -751,9 +751,6 @@ export default function AiSettingsPage() {
         </section>
       </div>
 
-      {/* plan-v2 §17.4.4 — per-user web search adapter config. Restored
-          table; UI consumes hasAnthropic to disable CUSTOM_ONLY when the
-          user is on Claude (SDK can't host a pluggable web_search tool). */}
       <WebSearchSettingCard
         hasAnthropic={settings.some(
           (s) => s.enabled && s.providerType === 'ANTHROPIC',

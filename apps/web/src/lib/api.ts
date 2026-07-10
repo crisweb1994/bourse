@@ -236,10 +236,6 @@ export async function abortAnalysis(id: string): Promise<{ ok: boolean }> {
   });
 }
 
-// plan-v2 Wave 4.2 — InvestorProfileDto + getInvestorProfile +
-// updateInvestorProfile removed. plan-v2 §15.1 "用户画像放 URL params +
-// localStorage, beta 无需持久化".
-
 export async function retrySection(
   analysisId: string,
   sectionId: string,
@@ -250,10 +246,6 @@ export async function retrySection(
   });
 }
 
-// plan-v2 Wave 4.1 — BatchJobDto + createBatchAnalysis / getBatchAnalysis /
-// cancelBatchAnalysis removed alongside the BatchJob backend.
-
-// AI settings APIs — Phase 1: multi-config + builtin catalog
 export type ProviderTypeStr = 'ANTHROPIC' | 'OPENAI_COMPATIBLE';
 
 export interface AiProviderSettingDto {
@@ -358,10 +350,6 @@ export function testProviderConnection(input: {
     body: JSON.stringify(input),
   });
 }
-
-// ============================================================================
-// Web Search Setting (plan-v2 §17.4.4)
-// ============================================================================
 
 export type WebSearchProviderType = 'TAVILY' | 'SEARXNG';
 export type WebSearchPrimaryMode = 'NATIVE_FIRST' | 'CUSTOM_ONLY';
