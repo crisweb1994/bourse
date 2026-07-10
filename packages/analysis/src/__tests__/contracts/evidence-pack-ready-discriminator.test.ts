@@ -2,7 +2,7 @@
  * v0.6 PRD §11.1 — `evidence_pack_ready` discriminator regression.
  *
  * Goals:
- *  - v1 pack payloads (legacy debate workflow) decode unchanged.
+ *  - v1 pack payloads decode unchanged.
  *  - v2 pack payloads (v0.6 snapshot-backed wrapper) decode and surface
  *    optional `systemContext` + `planId / snapshotId / originCounts`.
  *  - Packs missing `schemaVersion` fall through to v1 decode (v1 carries
