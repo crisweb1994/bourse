@@ -86,10 +86,7 @@ function buildCtx(opts: {
     analysisId: 'a1',
     analysis: {
       id: 'a1',
-      symbol: 'AAPL',
-      market: opts.market ?? 'CN',
       analysisType: opts.analysisType ?? 'COMPREHENSIVE',
-      userId: 'u1',
       sections,
       stock: {
         symbol: 'AAPL',

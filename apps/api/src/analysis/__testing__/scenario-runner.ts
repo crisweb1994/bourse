@@ -93,10 +93,7 @@ async function runComprehensive(
     analysisId: 'a-test',
     analysis: {
       id: 'a-test',
-      symbol: 'TEST',
-      market: input.market ?? 'CN',
       analysisType: 'COMPREHENSIVE',
-      userId: 'u-test',
       sections: input.sections,
       stock: { symbol: 'TEST', market: input.market ?? 'CN', name: 'Test Co.' },
     },

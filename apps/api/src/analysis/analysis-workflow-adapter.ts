@@ -114,12 +114,7 @@ export interface AdapterContext {
 /** Minimal shape of the Analysis row + relations the adapter touches. */
 interface AnalysisLike {
   id: string;
-  symbol: string;
-  market: string;
   analysisType: string;
-  userId: string;
-  aiProvider?: string | null;
-  aiModel?: string | null;
   sections: ReadonlyArray<AnalysisSectionLike>;
   stock: { symbol: string; market: string; name?: string | null };
 }
