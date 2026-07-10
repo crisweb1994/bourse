@@ -13,10 +13,6 @@ export class CreateAnalysisDto {
 
   @IsOptional()
   @IsString()
-  aiProvider?: string;
-
-  @IsOptional()
-  @IsString()
   aiModel?: string;
 
   @IsOptional()

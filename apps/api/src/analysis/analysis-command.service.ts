@@ -34,7 +34,6 @@ export class AnalysisCommandService {
     const { aiModel, providerName, settingId } =
       await this.providerResolver.resolveProvider(userId, {
         settingIdHint: dto.aiProviderSettingId,
-        providerNameHint: dto.aiProvider,
         modelHint: dto.aiModel,
       });
 
