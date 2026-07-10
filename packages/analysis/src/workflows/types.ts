@@ -10,15 +10,9 @@ import type { AgentProvider } from '../primitives/provider';
 export interface BudgetLimits {
   /** Hard cap on cumulative LLM tokens (input+output). */
   maxTokens?: number;
-  /**
-   * Reserved — requires per-model pricing table. Currently parsed but
-   * not enforced; cost_update events emit `totalUsd: 0` until V1+.
-   */
+  /** Hard cap on cumulative estimated LLM cost in USD. */
   maxCostUsd?: number;
-  /**
-   * Reserved — requires ToolMiddleware to count tool calls. Currently
-   * parsed but not enforced; cost_update events emit `toolCalls: 0`.
-   */
+  /** Hard cap on cumulative tool calls. */
   maxToolCalls?: number;
 }
 

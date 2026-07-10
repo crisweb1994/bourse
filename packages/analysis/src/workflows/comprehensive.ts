@@ -83,8 +83,8 @@ const JUDGE_CONCURRENCY = 3;
  *   - 'retry-once'  → re-run streamDimension once; on second failure, skip
  *   - 'fail-run'    → halt before summary, emit done with status=FAILED
  *
- * Honors `options.budget.maxTokens` between sections: when cumulative
- * tokens exceed the cap, halt before next dim with status=BUDGET_EXHAUSTED.
+ * Honors configured budget caps between sections: when cumulative usage
+ * reaches a cap, halt before the next dim with status=BUDGET_EXHAUSTED.
  *
  * Returns ComprehensiveResult via TReturn so callers using explicit
  * generator iteration can consume it.
@@ -103,7 +103,7 @@ export async function* streamComprehensive(
 
   // Parallel mode is incompatible with budget enforcement and fail-run
   // semantics — Promise.all can't synchronously halt sibling dims.
-  // Fail loudly rather than silently downgrade (Day 11.5a P1 #3).
+  // Fail loudly rather than silently downgrade.
   // RFC-05: waveMode takes precedence — when caller sets waveMode (any value),
   // we skip the legacy parallel validation and let the wave / sequential
   // branches decide.
