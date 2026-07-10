@@ -243,9 +243,6 @@ export interface SectionConclusion {
   evidence: Evidence[];
 }
 
-// ===== Section-specific types (Phase 3) =====
-// Defined here as stubs; full implementation in Phase 3
-
 export interface BaseSectionData {
   conclusion: SectionConclusion;
   evidence: Evidence[];
@@ -309,8 +306,8 @@ export interface StockDto {
 export interface StockSearchResult {
   symbol: string;
   name: string;
-  // 搜索可能返回 JP/UK 等 Phase-1.4 暂不支持的市场（resolveMarket 兜底 exchange），
-  // 故保持 string；落库时由 StockDto.market(Market) 把关。
+  // Search can return markets outside the persisted Market enum; stock
+  // creation resolves or rejects them at the API boundary.
   market: string;
   exchange: string;
   currency: string;
