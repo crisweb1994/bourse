@@ -1,19 +1,9 @@
 'use client';
 
-/**
- * 数据质量 notice — a single user-readable line under the analysis header.
- *
- * Shows only when a `degraded` event arrived (a realtime data source fell
- * back to web search); renders nothing on a clean run.
- *
- * plan-v2 Wave 3.2 removed the planner/slot research SSE events, so the old
- * full/partial confidence levels + `?dev=1` slot drawer are gone — this is
- * now degraded-or-nothing.
- */
 import { AlertCircle } from 'lucide-react';
 import type { DegradedInfo } from '@/hooks/use-analysis-stream';
 
-export function ResearchProgressStrip({
+export function DataQualityNotice({
   degraded,
 }: {
   degraded?: DegradedInfo | null;

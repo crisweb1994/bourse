@@ -25,7 +25,7 @@ import {
 import { ScrollSection } from '@/components/analysis/scroll-section';
 import { RightInsightsPanel } from '@/components/analysis/right-insights-panel';
 import { ReportActionsBar } from '@/components/analysis/report-actions-bar';
-import { ResearchProgressStrip } from '@/components/analysis/research-progress-strip';
+import { DataQualityNotice } from '@/components/analysis/data-quality-notice';
 import { Button, Card, Pill, SectionTag } from '@/components/ui';
 import { ANALYSIS_TYPE_LABELS as SECTION_LABELS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
@@ -211,7 +211,7 @@ export function AnalysisStreamView({
         </div>
       )}
 
-      <ResearchProgressStrip degraded={stream.degraded} />
+      <DataQualityNotice degraded={stream.degraded} />
 
       {stream.summaryJson && (
         <ConclusionBanner
