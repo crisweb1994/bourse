@@ -141,9 +141,9 @@ export interface AdapterResult {
   failedSectionTypes: string[];
 }
 
-const logger = new Logger('StreamComprehensiveAdapter');
+const logger = new Logger('AnalysisWorkflowAdapter');
 
-export async function runStreamComprehensiveAdapter(
+export async function runAnalysisWorkflowAdapter(
   ctx: AdapterContext,
 ): Promise<AdapterResult> {
   const tag = `[${ctx.analysisId}]`;

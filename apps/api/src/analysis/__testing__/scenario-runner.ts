@@ -1,7 +1,7 @@
 /**
  * v0.3 后遗留 ① Layer 1：scenario runner.
  *
- * 把一段预录的 SSE 事件序列灌进 `runStreamComprehensiveAdapter`
+ * 把一段预录的 SSE 事件序列灌进 `runAnalysisWorkflowAdapter`
  * / `runStreamDebateAdapter`，捕获两类可观测产物（send / prisma），
  * 转成一份可 snapshot 的 ScenarioSnapshot。
  *
@@ -24,10 +24,10 @@ export interface TestProviderCapabilities {
 }
 
 import {
-  runStreamComprehensiveAdapter,
+  runAnalysisWorkflowAdapter,
   type AdapterContext,
   type AdapterResult,
-} from '../stream-comprehensive-adapter';
+} from '../analysis-workflow-adapter';
 
 export interface CapturedSend {
   type: string;
@@ -111,7 +111,7 @@ async function runComprehensive(
     _streamFactory: factory,
   };
 
-  const result = await runStreamComprehensiveAdapter(ctx);
+  const result = await runAnalysisWorkflowAdapter(ctx);
 
   return {
     scenarioName: input.name,

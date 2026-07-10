@@ -11,7 +11,7 @@ import { parseAnalysisConcurrency } from './concurrency';
 import { AnalysisReplayService } from './analysis-replay.service';
 import { EvidencePackService } from './evidence-pack.service';
 import { ProviderResolverService } from './provider-resolver.service';
-import { runStreamComprehensiveAdapter } from './stream-comprehensive-adapter';
+import { runAnalysisWorkflowAdapter } from './analysis-workflow-adapter';
 import type { SseCallback } from './types';
 
 interface AnalysisRunSection {
@@ -138,20 +138,12 @@ export class AnalysisRunnerService {
       modelHint: analysis.aiModel,
       market: analysis.market,
     });
-    // Web_search recovery is always enabled for production runs. It only
-    // fires when the structured fetch yields no usable data (no pack / missing
-    // financials), where it's the sole path to a non-empty result.
-    const allowWebSearchFallback = true;
     const tag = this.logTag(analysisId);
 
-    // B1 step 3: the adapter (packages/analysis streamComprehensive /
-    // streamSingle) is the single orchestration path for ALL analyses —
-    // comprehensive → all dims + summary, single → one dim via streamSingle,
-    // every market. The legacy hand-rolled path and its feature flag are gone.
     const mode = isComprehensive ? 'comprehensive' : 'single';
     this.logger.log(`${tag} adapter path engaged (mode=${mode})`);
     try {
-      await runStreamComprehensiveAdapter({
+      await runAnalysisWorkflowAdapter({
         mode,
         analysisId,
         analysis,
@@ -165,7 +157,7 @@ export class AnalysisRunnerService {
         waveSemaphore: parseAnalysisConcurrency(
           this.config.get('ANALYSIS_PARALLEL_CONCURRENCY'),
         ),
-        ...(allowWebSearchFallback ? { allowWebSearchFallback: true } : {}),
+        allowWebSearchFallback: true,
         ...(fallbackProvider ? { fallbackProvider } : {}),
       });
     } catch (err) {

@@ -6,7 +6,7 @@
  *
  * 重新 bless：UPDATE_FIXTURES=1 pnpm -F @bourse/api test
  *
- * 与 stream-comprehensive-adapter.spec.ts 的关系：那个 spec 测 adapter 内部
+ * 与 analysis-workflow-adapter.spec.ts 的关系：那个 spec 测 adapter 内部
  * 的细粒度行为（事件到 send 的字段映射），本 spec 测"整段 pipeline 的契约面"
  * 是否稳定，互补不重复。
  */
