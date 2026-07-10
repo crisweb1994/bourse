@@ -54,7 +54,7 @@ export function useAnalysisStream() {
     try {
       await fetchEventSource(`${API_URL}/api/analysis/${analysisId}/stream`, {
         signal: ctrl.signal,
-        credentials: 'include' as any,
+        credentials: 'include',
         onmessage(ev) {
           // Drop events from a stale SSE attempt — abort() doesn't flush
           // already-parsed events out of @microsoft/fetch-event-source's
