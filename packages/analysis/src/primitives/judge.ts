@@ -91,10 +91,10 @@ export interface RunJudgeInput {
   dimensionType: SectionType;
   /**
    * Pre-serialized EvidencePack block (markdown). Caller chooses the
-   * format — typically `formatEvidencePackBlock(v2Pack)` for CN, or the
-   * v1 debate-style formatter for other markets. Judge never touches the
-   * raw EvidencePack object; isolating serialization here keeps the
-   * primitive independent of v1/v2 schema choices.
+   * format — typically `formatEvidencePackBlock(v2Pack)` for CN, or a v1
+   * EvidencePack formatter for recovery packs / other markets. Judge never
+   * touches the raw EvidencePack object; isolating serialization here keeps
+   * the primitive independent of v1/v2 schema choices.
    */
   evidencePackText: string;
   /** The dim's structuredJson output. JSON-stringified into prompt. */

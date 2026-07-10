@@ -8,8 +8,8 @@ import type { AgentProvider } from './provider';
  * financials, and risk facts; output is JSON that we parse, validate, and
  * freeze.
  *
- * Why not reuse full dim Round 1 output: user chose "独立轻量收集" — debate
- * shouldn't require a comprehensive run to have been done.
+ * Kept standalone so evidence recovery can run before any dimension report
+ * exists and without requiring a comprehensive run to have completed.
  */
 export interface BuildEvidencePackOptions {
   /** YYYY-MM-DD; defaults to today (UTC). */

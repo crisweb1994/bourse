@@ -1,9 +1,6 @@
 /**
- * Comprehensive workflow 的纯函数 helpers + 内部类型。
- *
- * refactor-v1 Wave 4：从 `comprehensive.ts` (1447 LOC) 抽出 ~210 LOC 纯函数。
- * 主文件 `comprehensive.ts` 保留 streamComprehensive async generator + 各 phase
- * 之间共享 state；本文件存"输入 → 输出无副作用"helpers，让两边都更易读。
+ * Pure helpers and internal types for the comprehensive workflow.
+ * The generator owns orchestration; this file owns synchronous transforms.
  */
 import type { AnalysisResult, StructuredJson } from '../contracts/analysis-result';
 import type { Citation } from '../contracts/citation';

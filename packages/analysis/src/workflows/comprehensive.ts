@@ -31,7 +31,6 @@ import type {
   DimensionInput,
 } from './types';
 
-// refactor-v1 Wave 4: 纯函数 helpers 抽到 ./comprehensive-helpers
 import {
   applyConfidenceDowngrade,
   buildResult,

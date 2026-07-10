@@ -104,10 +104,9 @@ export async function* streamDimension(
   const ctx = { todayDate };
   const { system, user } = dimension.buildPrompts(normalizedInput, ctx);
 
-  // RFC-02 §13: when caller passed an EvidencePack v2 via options
-  // (Stage 0 produced it in comprehensive workflow), prepend a fact-block
-  // to the dim's system prompt. v1 packs (debate workflow) are ignored —
-  // they're consumed in-tree by debate's own builder, not by streamDimension.
+  // When caller passed an EvidencePack v2, prepend a fact block to the dim's
+  // system prompt. v1 packs do not have the structured fact-block shape this
+  // formatter expects, so they are ignored here.
   const evidenceBlock =
     options.evidencePack &&
     options.evidencePack.schemaVersion === 'evidence-pack-v2'
