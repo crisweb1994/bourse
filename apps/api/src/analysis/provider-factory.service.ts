@@ -17,7 +17,7 @@ export interface AgentProviderOverrides {
   model?: string | null;
   utilityModel?: string | null;
   /** Per-user web-search adapter. Undefined keeps the provider env default. */
-  webSearchExecutor?: WebSearchExecutor | null;
+  webSearchExecutor?: WebSearchExecutor;
   /** OpenAI-only: route through chat.completions so custom web search runs. */
   forceChatCompletions?: boolean;
 }
@@ -84,6 +84,7 @@ export class ProviderFactoryService {
     if (!apiKey) {
       this.logger.warn('No OPENAI_API_KEY configured');
     }
+    const webSearchExecutor = overrides?.webSearchExecutor;
     return new OpenAIProvider({
       apiKey: apiKey ?? 'unset',
       baseUrl:
@@ -98,8 +99,8 @@ export class ProviderFactoryService {
         overrides?.utilityModel ??
         this.config.get<string>('OPENAI_UTILITY_MODEL') ??
         undefined,
-      ...(overrides?.webSearchExecutor !== undefined
-        ? { webSearchExecutorFactory: () => overrides.webSearchExecutor ?? null }
+      ...(webSearchExecutor
+        ? { webSearchExecutorFactory: () => webSearchExecutor }
         : {}),
       ...(overrides?.forceChatCompletions !== undefined
         ? { forceChatCompletions: overrides.forceChatCompletions }

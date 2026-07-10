@@ -110,7 +110,7 @@ export class ProviderResolverService {
     if (runtime) {
       const primary = this.providerFactory.buildFromRuntime({
         ...runtime,
-        ...(webSearchExecutor !== undefined ? { webSearchExecutor } : {}),
+        ...(webSearchExecutor ? { webSearchExecutor } : {}),
         ...(forceChatCompletions !== undefined ? { forceChatCompletions } : {}),
       });
       const aiModel = primary.getModel(
@@ -124,7 +124,7 @@ export class ProviderResolverService {
 
     const providerName = this.envProviderName(hints.providerNameHint);
     const primary = this.providerFactory.buildProvider(providerName, {
-      ...(webSearchExecutor !== undefined ? { webSearchExecutor } : {}),
+      ...(webSearchExecutor ? { webSearchExecutor } : {}),
       ...(forceChatCompletions !== undefined ? { forceChatCompletions } : {}),
     });
     const aiModel = primary.getModel(hints.modelHint || undefined);
@@ -140,7 +140,7 @@ export class ProviderResolverService {
     userId: string,
     providerType: 'ANTHROPIC' | 'OPENAI_COMPATIBLE',
   ): Promise<{
-    webSearchExecutor?: WebSearchExecutor | null;
+    webSearchExecutor?: WebSearchExecutor;
     forceChatCompletions?: boolean;
   }> {
     const row = await this.webSearchSettings.getInternalForRuntime(userId);
@@ -168,6 +168,7 @@ export class ProviderResolverService {
         : {}),
       ...(row.cacheTtlMs !== null ? { cacheTtlMs: row.cacheTtlMs } : {}),
     });
+    if (!executor) return {};
     return {
       webSearchExecutor: executor,
       forceChatCompletions: true,
