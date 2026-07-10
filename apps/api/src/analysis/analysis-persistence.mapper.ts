@@ -302,15 +302,6 @@ export class AnalysisPersistenceMapper {
     const confidence = structured?.conclusion?.confidence;
 
     return {
-      ...(typeof event.usage?.tokensIn === 'number'
-        ? { tokensIn: event.usage.tokensIn }
-        : {}),
-      ...(typeof event.usage?.tokensOut === 'number'
-        ? { tokensOut: event.usage.tokensOut }
-        : {}),
-      ...(typeof event.usage?.durationMs === 'number'
-        ? { durationMs: Math.round(event.usage.durationMs) }
-        : {}),
       ...(signal && isSignal(signal) ? { signal: toPrismaSignal(signal) } : {}),
       ...(confidence && isConfidence(confidence)
         ? { confidence: toPrismaConfidence(confidence) }

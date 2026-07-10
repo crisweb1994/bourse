@@ -210,11 +210,6 @@ model AnalysisSection {
   errorMessage   String?
   order          Int
 
-  // Per-section telemetry mirrored from section_complete. Defaults keep rows
-  // non-null when a section fails before usage exists.
-  tokensIn       Int            @default(0)
-  tokensOut      Int            @default(0)
-  durationMs     Int?
   // Mirrored from structuredJson.conclusion so list/history queries can render
   // badges without parsing the JSON blob.
   signal         Signal?

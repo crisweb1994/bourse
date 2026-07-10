@@ -50,12 +50,6 @@
       }
     },
     {
-      "type": "report_complete",
-      "data": {
-        "sectionType": "VALUATION"
-      }
-    },
-    {
       "type": "structured_data",
       "data": {
         "json": {
@@ -124,12 +118,9 @@
       ],
       "dataKeys": [
         "citations",
-        "durationMs",
         "reportMarkdown",
         "status",
-        "structuredJson",
-        "tokensIn",
-        "tokensOut"
+        "structuredJson"
       ],
       "dataStatus": "FAILED"
     },
@@ -142,13 +133,10 @@
       "dataKeys": [
         "citations",
         "confidence",
-        "durationMs",
         "reportMarkdown",
         "signal",
         "status",
-        "structuredJson",
-        "tokensIn",
-        "tokensOut"
+        "structuredJson"
       ],
       "dataStatus": "COMPLETED"
     },

@@ -18,12 +18,6 @@
       }
     },
     {
-      "type": "report_complete",
-      "data": {
-        "sectionType": "FUNDAMENTAL"
-      }
-    },
-    {
       "type": "structured_data",
       "data": {
         "json": {
@@ -81,13 +75,10 @@
       "dataKeys": [
         "citations",
         "confidence",
-        "durationMs",
         "reportMarkdown",
         "signal",
         "status",
-        "structuredJson",
-        "tokensIn",
-        "tokensOut"
+        "structuredJson"
       ],
       "dataStatus": "COMPLETED"
     },

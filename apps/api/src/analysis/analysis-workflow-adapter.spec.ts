@@ -241,9 +241,6 @@ describe('runAnalysisWorkflowAdapter — happy path', () => {
     assert.equal(updateArgs.where.id, 'sec-1');
     assert.equal(updateArgs.data.status, 'COMPLETED');
     assert.equal(updateArgs.data.reportMarkdown, 'hello world');
-    assert.equal(updateArgs.data.tokensIn, 100);
-    assert.equal(updateArgs.data.tokensOut, 50);
-    assert.equal(updateArgs.data.durationMs, 1234);
     assert.equal(updateArgs.data.signal, 'BULLISH');
     assert.equal(updateArgs.data.confidence, 'HIGH');
 
