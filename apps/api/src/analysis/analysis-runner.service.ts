@@ -142,31 +142,23 @@ export class AnalysisRunnerService {
 
     const mode = isComprehensive ? 'comprehensive' : 'single';
     this.logger.log(`${tag} adapter path engaged (mode=${mode})`);
-    try {
-      await runAnalysisWorkflowAdapter({
-        mode,
-        analysisId,
-        analysis,
-        provider,
-        send,
-        prisma: this.prisma,
-        toolCache: this.toolCache,
-        evidencePackService: this.evidencePackService,
-        modelId: aiModel,
-        providerName: analysis.aiProvider || 'claude',
-        waveSemaphore: parseAnalysisConcurrency(
-          this.config.get('ANALYSIS_PARALLEL_CONCURRENCY'),
-        ),
-        allowWebSearchFallback: true,
-        ...(fallbackProvider ? { fallbackProvider } : {}),
-      });
-    } catch (err) {
-      // The adapter already writes terminal Analysis state + sends `done`
-      // on its own error branch; this catch is a last-resort safety net
-      // for unexpected throws outside the adapter's try/catch.
-      const msg = err instanceof Error ? err.message : String(err);
-      this.logger.error(`${tag} adapter unexpected throw: ${msg}`);
-    }
+    await runAnalysisWorkflowAdapter({
+      mode,
+      analysisId,
+      analysis,
+      provider,
+      send,
+      prisma: this.prisma,
+      toolCache: this.toolCache,
+      evidencePackService: this.evidencePackService,
+      modelId: aiModel,
+      providerName: analysis.aiProvider || 'claude',
+      waveSemaphore: parseAnalysisConcurrency(
+        this.config.get('ANALYSIS_PARALLEL_CONCURRENCY'),
+      ),
+      allowWebSearchFallback: true,
+      ...(fallbackProvider ? { fallbackProvider } : {}),
+    });
   }
 
   private logTag(analysisId: string, sectionType?: string) {
