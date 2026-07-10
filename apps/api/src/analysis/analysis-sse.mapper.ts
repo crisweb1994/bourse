@@ -87,20 +87,6 @@ export function mapStructuredDataEvent(
   };
 }
 
-export function mapWebSearchWarningEvent(
-  event: Extract<SseEvent, { type: 'web_search_warning' }>,
-): ApiSseFrame<'web_search_warning'> {
-  return {
-    event: 'web_search_warning',
-    data: {
-      sectionType: event.sectionType,
-      code: event.code,
-      occurredAt: event.occurredAt,
-      round: event.round,
-    },
-  };
-}
-
 export function mapSectionCompleteEvent(
   event: Extract<SseEvent, { type: 'section_complete' }>,
 ): ApiSseFrame<'section_complete'> {

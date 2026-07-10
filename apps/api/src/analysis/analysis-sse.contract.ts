@@ -29,12 +29,6 @@ export interface AnalysisSsePayloadMap {
     json: unknown;
     sectionType: SectionType;
   };
-  web_search_warning: {
-    sectionType?: SectionType;
-    code: string;
-    occurredAt: string;
-    round?: number;
-  };
   section_complete: {
     sectionType: SectionType;
     status: AnalysisStatus;

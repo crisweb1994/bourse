@@ -28,7 +28,6 @@ import {
   mapSummaryChunkEvent,
   mapSummaryCompleteEvent,
   mapThrownError,
-  mapWebSearchWarningEvent,
   type ApiSseFrame,
 } from './analysis-sse.mapper';
 import type { AnalysisSseEventName } from './analysis-sse.contract';
@@ -325,9 +324,6 @@ export async function runAnalysisWorkflowAdapter(
         }
 
         case 'web_search_warning': {
-          // Forward web_search warnings to the client so a degraded run is
-          // visible. (Telemetry accumulation removed — no SectionTrace sink.)
-          sendFrame(ctx.send, mapWebSearchWarningEvent(event));
           break;
         }
 

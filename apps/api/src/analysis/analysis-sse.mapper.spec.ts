@@ -8,7 +8,6 @@ import {
   mapSummaryCompleteEvent,
   mapSummaryChunkEvent,
   mapThrownError,
-  mapWebSearchWarningEvent,
 } from './analysis-sse.mapper';
 
 function event<T extends SseEvent['type']>(
@@ -113,24 +112,4 @@ describe('analysis SSE mapper', () => {
     });
   });
 
-  it('maps web_search warnings without inventing fields', () => {
-    const frame = mapWebSearchWarningEvent(
-      event('web_search_warning', {
-        sectionType: 'SENTIMENT',
-        code: 'too_many_requests',
-        occurredAt: '2026-07-09T00:00:00.000Z',
-        round: 2,
-      }),
-    );
-
-    assert.deepEqual(frame, {
-      event: 'web_search_warning',
-      data: {
-        sectionType: 'SENTIMENT',
-        code: 'too_many_requests',
-        occurredAt: '2026-07-09T00:00:00.000Z',
-        round: 2,
-      },
-    });
-  });
 });
