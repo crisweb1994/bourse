@@ -100,7 +100,6 @@ export class ProviderResolverService {
     },
   ): Promise<{
     primary: ReturnType<ProviderFactoryService['buildProvider']>;
-    fallback?: ReturnType<ProviderFactoryService['buildProvider']>;
     aiModel: string;
   }> {
     const runtime = await this.resolveRuntime(userId, hints.settingIdHint);

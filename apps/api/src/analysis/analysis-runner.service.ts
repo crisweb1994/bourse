@@ -130,7 +130,6 @@ export class AnalysisRunnerService {
     const isComprehensive = analysis.analysisType === 'COMPREHENSIVE';
     const {
       primary: provider,
-      fallback: fallbackProvider,
       aiModel,
     } = await this.providerResolver.resolveProviderPair(analysis.userId, {
       settingIdHint: analysis.aiProviderSettingId,
@@ -155,7 +154,6 @@ export class AnalysisRunnerService {
         this.config.get('ANALYSIS_PARALLEL_CONCURRENCY'),
       ),
       allowWebSearchFallback: true,
-      ...(fallbackProvider ? { fallbackProvider } : {}),
     });
   }
 

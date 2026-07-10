@@ -102,8 +102,6 @@ export interface AdapterContext {
    * of throwing.
    */
   allowWebSearchFallback?: boolean;
-  /** Provider wired with the user's configured fallback web-search adapter. */
-  fallbackProvider?: AgentProvider;
   /**
    * Test-only: substitute `streamComprehensive`. Production callers MUST
    * pass undefined; the adapter then uses the real agent workflow.
@@ -251,9 +249,6 @@ export async function runAnalysisWorkflowAdapter(
       ...(prebuiltPack ? { evidencePack: prebuiltPack } : {}),
       ...(ctx.allowWebSearchFallback
         ? { allowWebSearchFallback: true }
-        : {}),
-      ...(ctx.fallbackProvider
-        ? { fallbackProvider: ctx.fallbackProvider }
         : {}),
     });
   }
