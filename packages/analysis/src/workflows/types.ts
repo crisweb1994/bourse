@@ -84,18 +84,10 @@ export interface ComprehensiveOptions {
    * RFC rfc-evidence-pack-web-search-fallback: when v2 builder fails on
    * hard (AUTH / NETWORK / RATE_LIMIT_HARD) errors, fall back to v1 LLM
    * web_search builder so the workflow can complete instead of FAILED.
-   * Default false; user must opt in via AI Settings. Transient and
-   * INPUT_INVALID errors never trigger fallback regardless.
+   * Default false; callers enable it when degraded runs should recover through
+   * the current workflow provider.
    */
   allowWebSearchFallback?: boolean;
-  /**
-   * RFC rfc-web-search-backend-config: optional separate provider used
-   * by the v1 web_search fallback path. When set, the v1 builder runs
-   * against this provider (typically wired with the user's "fallback"
-   * web_search adapter — e.g. self-hosted SearXNG). When unset, falls
-   * back to the positional `provider`, preserving current behavior.
-   */
-  fallbackProvider?: AgentProvider;
   /**
    * Path A: a pre-built evidence pack supplied by the consumer (apps/api builds
    * it via connector → compute → snapshotToEvidencePack, merging the CN tool

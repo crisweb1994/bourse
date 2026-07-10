@@ -43,15 +43,11 @@ export function isPackCriticallyDegraded(pack: EvidencePackAny): boolean {
  * web-sourced numbers are clearly marked non-authoritative (never fed to
  * compute as code-verified — hard invariant #1) and private-data dims skip.
  *
- * `fallbackProvider` overrides which provider runs the rebuild (typically a
- * cheaper utility model); defaults to the main `provider`.
- *
  * Returns the rebuilt pack, or `undefined` when recovery is disabled
  * (`allowWebSearchFallback` false) or the existing pack is healthy.
  */
 export async function resolveEvidencePack(
   provider: AgentProvider,
-  fallbackProvider: AgentProvider | undefined,
   input: DimensionInput,
   init: {
     evidencePack: EvidencePackAny | undefined;
@@ -66,8 +62,7 @@ export async function resolveEvidencePack(
   ) {
     return init.evidencePack;
   }
-  const fbProvider = fallbackProvider ?? provider;
-  const v1 = await buildEvidencePack(fbProvider, input, {
+  const v1 = await buildEvidencePack(provider, input, {
     ...(init.todayDate ? { todayDate: init.todayDate } : {}),
     ...(init.signal ? { signal: init.signal } : {}),
   });
