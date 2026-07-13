@@ -143,6 +143,7 @@ export interface AnalysisDto {
   symbol: string;
   market: Market;
   analysisType: AnalysisType;
+  question: string | null;
   status: AnalysisStatus;
   aiProvider: string | null;
   aiModel: string | null;
@@ -190,10 +191,12 @@ export async function createAnalysis(
   analysisType: ActiveAnalysisType,
   aiProviderSettingId?: string,
   aiModel?: string,
+  question?: string,
 ): Promise<AnalysisDto> {
   const body: Record<string, string> = { stockId, analysisType };
   if (aiProviderSettingId) body.aiProviderSettingId = aiProviderSettingId;
   if (aiModel) body.aiModel = aiModel;
+  if (question?.trim()) body.question = question.trim();
 
   return fetchApi('/api/analysis', {
     method: 'POST',

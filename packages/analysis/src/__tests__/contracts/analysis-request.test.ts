@@ -24,6 +24,23 @@ describe('contracts/AnalysisRequest', () => {
     expect(AnalysisRequest.parse(full).budget?.maxCostUsd).toBe(0.5);
   });
 
+  it('accepts and trims an optional research question', () => {
+    const parsed = AnalysisRequest.parse({
+      ...minimal,
+      question: '  财报后的利润率能否恢复？  ',
+    });
+    expect(parsed.question).toBe('财报后的利润率能否恢复？');
+  });
+
+  it('rejects an empty or overlong research question', () => {
+    expect(() =>
+      AnalysisRequest.parse({ ...minimal, question: '   ' }),
+    ).toThrow();
+    expect(() =>
+      AnalysisRequest.parse({ ...minimal, question: 'a'.repeat(501) }),
+    ).toThrow();
+  });
+
   it('rejects empty symbol', () => {
     expect(() => AnalysisRequest.parse({ ...minimal, symbol: '' })).toThrow();
   });

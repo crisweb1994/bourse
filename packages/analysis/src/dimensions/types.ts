@@ -25,6 +25,8 @@ export interface DimensionInput {
   /** Display name; falls back to symbol when omitted */
   name?: string;
   locale: string;
+  /** Optional user-supplied research focus for this run. */
+  question?: string;
 }
 
 export interface DimensionRunContext {

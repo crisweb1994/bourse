@@ -17,6 +17,7 @@ function analysis(id: string, status: AnalysisStatus): AnalysisHistoryItemDto {
     symbol: 'AAPL',
     market: 'US',
     analysisType: 'COMPREHENSIVE',
+    question: null,
     status,
     aiProvider: null,
     aiModel: null,

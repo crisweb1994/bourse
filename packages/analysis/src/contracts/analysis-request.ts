@@ -15,6 +15,7 @@ export const AnalysisRequest = z.object({
   market: z.string().min(1),
   type: ActiveAnalysisType,
   locale: z.string().min(2).default('zh-CN'),
+  question: z.string().trim().min(1).max(500).optional(),
   competitors: z.array(z.string().min(1)).optional(),
   budget: Budget.optional(),
 });

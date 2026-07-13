@@ -32,6 +32,25 @@ describe('dimensions/registry', () => {
     }
   });
 
+  it('appends the research focus without allowing it to replace the target', () => {
+    const prompts = getDimension('FUNDAMENTAL').buildPrompts(
+      {
+        symbol: 'AAPL',
+        market: 'US',
+        name: 'Apple',
+        locale: 'zh-CN',
+        question: '和 MSFT 相比，这次财报后的增长更可靠吗？',
+      },
+      { todayDate: '2026-07-13' },
+    );
+
+    expect(prompts.user).toContain('【本次研究焦点】');
+    expect(prompts.user).toContain('和 MSFT 相比');
+    expect(prompts.user).toContain('仅作为研究主题');
+    expect(prompts.user).toContain('始终以 Apple（AAPL）为准');
+    expect(prompts.user).toContain('不得替换目标标的');
+  });
+
   it('throws InvalidContractError for unknown type', () => {
     expect(() =>
       getDimension('UNKNOWN_TYPE' as never),

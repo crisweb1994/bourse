@@ -56,6 +56,7 @@ export class AnalysisCommandService {
         symbol: stock.symbol,
         market: stock.market,
         analysisType: PrismaAnalysisType[dto.analysisType],
+        question: dto.question?.trim() || null,
         aiProvider: providerName,
         aiModel,
         aiProviderSettingId: settingId,
@@ -129,6 +130,15 @@ export class AnalysisCommandService {
       throw new Error('Only FAILED sections can be retried');
     }
 
+    // A failed run may have persisted provider metadata from an older env
+    // configuration. Resolve it again before retrying so an unbound analysis
+    // follows the current root .env (while an explicitly bound user setting
+    // continues to use that setting).
+    const { aiModel, providerName, settingId } =
+      await this.providerResolver.resolveAnalysisMetadata(userId, {
+        settingIdHint: analysis.aiProviderSettingId,
+      });
+
     await this.prisma.analysisSection.update({
       where: { id: sectionId },
       data: {
@@ -141,7 +151,12 @@ export class AnalysisCommandService {
     });
     await this.prisma.analysis.update({
       where: { id: analysisId },
-      data: { status: PrismaAnalysisStatus.PENDING },
+      data: {
+        status: PrismaAnalysisStatus.PENDING,
+        aiProvider: providerName,
+        aiModel,
+        aiProviderSettingId: settingId,
+      },
     });
 
     return { ok: true };

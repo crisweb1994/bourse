@@ -16,6 +16,8 @@ interface AnalysisLauncherProps {
   setSelectedSettingId: (value: string) => void;
   selectedModel: string;
   setSelectedModel: (value: string) => void;
+  question: string;
+  setQuestion: (value: string) => void;
   loading: boolean;
   stockId: string | null;
   stockLabel: string;
@@ -33,6 +35,8 @@ export function AnalysisLauncher({
   setSelectedSettingId,
   selectedModel,
   setSelectedModel,
+  question,
+  setQuestion,
   loading,
   stockId,
   stockLabel,
@@ -56,6 +60,8 @@ export function AnalysisLauncher({
           setSelectedSettingId={setSelectedSettingId}
           selectedModel={selectedModel}
           setSelectedModel={setSelectedModel}
+          question={question}
+          setQuestion={setQuestion}
           loading={loading}
           stockId={stockId}
           onStart={onStart}

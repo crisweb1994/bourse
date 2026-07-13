@@ -640,6 +640,7 @@ export async function* streamComprehensive(
     todayDate,
     succeededTypes,
     failedTypes,
+    input.question,
   );
 
   // Buffered streaming: collect chunks via callback, then yield as

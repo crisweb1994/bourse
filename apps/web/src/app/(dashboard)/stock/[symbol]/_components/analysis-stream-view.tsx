@@ -7,6 +7,7 @@ import {
   Bot,
   Clock,
   Loader2,
+  MessageSquareText,
   RotateCcw,
   Sparkles,
   Square,
@@ -100,43 +101,46 @@ export function AnalysisStreamView({
   return (
     <div className="space-y-4">
       {showMetaBar && currentAnalysisMeta && (
-        <div
-          className={
-            'flex flex-wrap items-center gap-x-4 gap-y-1.5 ' +
-            'rounded-[var(--radius-btn)] border border-[var(--color-border-soft)] ' +
-            'bg-[var(--color-bg-elev)] px-4 py-2.5 ' +
-            'text-[12px] text-[var(--color-fg-2)]'
-          }
-        >
-          <Pill variant="emerald">
-            {ANALYSIS_TYPES.find(
-              (t) => t.value === currentAnalysisMeta.analysisType,
-            )?.label || currentAnalysisMeta.analysisType}
-          </Pill>
-          <span className="inline-flex items-center gap-1 font-mono">
-            <Clock className="w-3 h-3" strokeWidth={1.5} />
-            {formatAnalysisTime(
-              currentAnalysisMeta.generatedAt ||
-                currentAnalysisMeta.createdAt,
-            )}
-          </span>
-          {(currentAnalysisMeta.aiModel || currentAnalysisMeta.aiProvider) && (
+        <div className="rounded-[var(--radius-btn)] border border-[var(--color-border-soft)] bg-[var(--color-bg-elev)]">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-4 py-2.5 text-[12px] text-[var(--color-fg-2)]">
+            <Pill variant="emerald">
+              {ANALYSIS_TYPES.find(
+                (t) => t.value === currentAnalysisMeta.analysisType,
+              )?.label || currentAnalysisMeta.analysisType}
+            </Pill>
             <span className="inline-flex items-center gap-1 font-mono">
-              <Bot className="w-3 h-3" strokeWidth={1.5} />
-              {currentAnalysisMeta.aiModel || currentAnalysisMeta.aiProvider}
+              <Clock className="w-3 h-3" strokeWidth={1.5} />
+              {formatAnalysisTime(
+                currentAnalysisMeta.generatedAt || currentAnalysisMeta.createdAt,
+              )}
             </span>
+            {(currentAnalysisMeta.aiModel || currentAnalysisMeta.aiProvider) && (
+              <span className="inline-flex items-center gap-1 font-mono">
+                <Bot className="w-3 h-3" strokeWidth={1.5} />
+                {currentAnalysisMeta.aiModel || currentAnalysisMeta.aiProvider}
+              </span>
+            )}
+            <span className="ml-auto inline-flex items-center gap-2">
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={onOpenAnalysisForm}
+                disabled={stream.status === 'streaming'}
+              >
+                <Sparkles className="w-3 h-3" strokeWidth={1.5} />
+                新分析
+              </Button>
+            </span>
+          </div>
+          {currentAnalysisMeta.question && (
+            <div className="flex items-start gap-2 border-t border-[var(--color-border-soft)] px-4 py-2.5 text-[12.5px] leading-[1.55]">
+              <MessageSquareText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--color-accent)]" strokeWidth={1.5} />
+              <span className="text-[var(--color-fg-2)]">研究焦点</span>
+              <p className="m-0 min-w-0 flex-1 text-[var(--color-fg)]">
+                {currentAnalysisMeta.question}
+              </p>
+            </div>
           )}
-          <span className="ml-auto inline-flex items-center gap-2">
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={onOpenAnalysisForm}
-              disabled={stream.status === 'streaming'}
-            >
-              <Sparkles className="w-3 h-3" strokeWidth={1.5} />
-              新分析
-            </Button>
-          </span>
         </div>
       )}
 

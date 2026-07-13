@@ -37,6 +37,8 @@ export default function StockAnalysisPage({
     setSelectedSettingId,
     selectedModel,
     setSelectedModel,
+    question,
+    setQuestion,
     providerSettings,
   } = useAnalysisLauncherState();
   const [aborting, setAborting] = useState(false);
@@ -78,12 +80,15 @@ export default function StockAnalysisPage({
     conflictAnalysis,
     autoSwitchedFrom,
   } = lifecycle;
-  const handleStartAnalysis = () =>
-    lifecycle.startAnalysis({
+  const handleStartAnalysis = async () => {
+    const started = await lifecycle.startAnalysis({
       type: selectedType,
       settingId: selectedSettingId || undefined,
       model: selectedModel || undefined,
+      question: question.trim() || undefined,
     });
+    if (started) setQuestion('');
+  };
   const handleRerun = lifecycle.rerun;
   const handleRetry = lifecycle.retrySection;
   const handleViewOngoing = lifecycle.viewOngoing;
@@ -195,6 +200,8 @@ export default function StockAnalysisPage({
         setSelectedSettingId={setSelectedSettingId}
         selectedModel={selectedModel}
         setSelectedModel={setSelectedModel}
+        question={question}
+        setQuestion={setQuestion}
         loading={loading}
         stockId={effectiveStockId}
         stockLabel={name || symbol || ''}

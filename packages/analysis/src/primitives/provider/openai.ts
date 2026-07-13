@@ -160,7 +160,7 @@ export class OpenAIProvider implements AgentProvider {
     }
     return (
       typeof process !== 'undefined' &&
-      process.env?.OPENAI_USE_CHAT_COMPLETIONS === 'true'
+      process.env?.OPENAI_USE_CHAT_COMPLETIONS?.trim().toLowerCase() === 'true'
     );
   }
 

@@ -50,6 +50,9 @@ importers:
       cookie-parser:
         specifier: ^1.4.7
         version: 1.4.7
+      dotenv:
+        specifier: ^16.6.1
+        version: 16.6.1
       ioredis:
         specifier: ^5.10.1
         version: 5.10.1

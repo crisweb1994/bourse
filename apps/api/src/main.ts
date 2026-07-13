@@ -1,10 +1,26 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import cookieParser from 'cookie-parser';
-import { AppModule } from './app.module';
+import { loadRootEnv } from './config/root-env';
 
 async function bootstrap() {
+  loadRootEnv();
+  const { AppModule } = await import('./app.module');
   const app = await NestFactory.create(AppModule);
+  const config = app.get(ConfigService);
+  const provider = (config.get<string>('AI_PROVIDER') || 'claude').toLowerCase();
+  const credentialConfigured =
+    provider === 'openai'
+      ? Boolean(config.get<string>('OPENAI_API_KEY'))
+      : Boolean(config.get<string>('ANTHROPIC_API_KEY'));
+  const model =
+    provider === 'openai'
+      ? config.get<string>('OPENAI_MODEL')
+      : config.get<string>('ANTHROPIC_MODEL');
+  new Logger('RuntimeConfig').log(
+    `AI provider=${provider} model=${model || 'provider-default'} credentials=${credentialConfigured ? 'configured' : 'missing'}`,
+  );
 
   // Behind Traefik / Dokploy reverse proxy: trust X-Forwarded-* so req.secure,
   // req.protocol, and OAuth callback URL construction reflect the original HTTPS request.

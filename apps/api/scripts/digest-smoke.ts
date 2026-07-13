@@ -53,9 +53,7 @@ import { SnapshotV2Service } from '../src/analysis/snapshot-v2.service';
 import { ProviderFactoryService } from '../src/analysis/provider-factory.service';
 import { AiSettingsService } from '../src/ai-settings/ai-settings.service';
 
-// 加载根 .env → process.env，与 AppModule 的 envFilePath 顺序一致（.env.local
-// 优先）。dotenv 默认不覆盖已有值，所以先加载的文件胜出 → 先 .env.local。
-dotenv.config({ path: '../../.env.local' });
+// 加载 monorepo 根 .env；与 AppModule 的唯一文件配置源一致。
 dotenv.config({ path: '../../.env' });
 
 const SEC_UA =

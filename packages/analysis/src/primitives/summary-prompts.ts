@@ -26,6 +26,7 @@ export function buildSummaryPrompts(
   todayDate: string,
   availableTypes: readonly SectionType[],
   failedTypes: readonly SectionType[] = [],
+  question?: string,
 ): { system: string; user: string } {
   const count = availableTypes.length;
   const list = availableTypes.join('、');
@@ -35,7 +36,10 @@ export function buildSummaryPrompts(
       : '';
   const intro = `你是一位资深首席投资分析师。你将收到一只股票的 ${count} 个维度分析报告（${list}）。${failedNote}\n\n请基于这 ${count} 份报告生成一份综合总览：\n${NUMBERED_SECTIONS}`;
   const system = `${intro}\n${buildCommonSuffix(DEFAULT_FRESHNESS, todayDate)}`;
-  const user = `以下是该股票 ${count} 个维度的分析报告：\n\n${sectionReports}\n\n请生成综合投资总览报告。`;
+  const focus = question
+    ? `\n\n【本次研究焦点】\n${question}\n请在综合结论中直接回答该问题，并区分事实、推断与仍不确定的信息。`
+    : '';
+  const user = `以下是该股票 ${count} 个维度的分析报告：\n\n${sectionReports}${focus}\n\n请生成综合投资总览报告。`;
   return { system, user };
 }
 

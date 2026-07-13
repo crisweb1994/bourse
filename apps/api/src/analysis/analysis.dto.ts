@@ -2,7 +2,7 @@ import {
   ACTIVE_ANALYSIS_TYPES,
   type ActiveAnalysisType,
 } from '@bourse/shared-types';
-import { IsIn, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CreateAnalysisDto {
   @IsString()
@@ -10,6 +10,11 @@ export class CreateAnalysisDto {
 
   @IsIn(ACTIVE_ANALYSIS_TYPES as unknown as string[])
   analysisType!: ActiveAnalysisType;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  question?: string;
 
   @IsOptional()
   @IsString()

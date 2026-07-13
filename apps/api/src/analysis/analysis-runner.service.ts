@@ -29,6 +29,7 @@ interface AnalysisRun {
   symbol: string;
   userId: string;
   analysisType: string;
+  question?: string | null;
   status: AnalysisStatus;
   aiProvider?: string | null;
   aiModel?: string | null;

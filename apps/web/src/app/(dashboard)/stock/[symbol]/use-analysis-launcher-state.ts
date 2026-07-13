@@ -13,6 +13,7 @@ export function useAnalysisLauncherState(
   const [selectedType, setSelectedType] = useState(initialType);
   const [selectedSettingId, setSelectedSettingId] = useState('');
   const [selectedModel, setSelectedModel] = useState('');
+  const [question, setQuestion] = useState('');
   const [providerSettings, setProviderSettings] = useState<
     AiProviderSettingDto[]
   >([]);
@@ -43,6 +44,8 @@ export function useAnalysisLauncherState(
     setSelectedSettingId,
     selectedModel,
     setSelectedModel,
+    question,
+    setQuestion,
     providerSettings,
   };
 }

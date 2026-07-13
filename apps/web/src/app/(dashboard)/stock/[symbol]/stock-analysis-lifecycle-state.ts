@@ -5,6 +5,7 @@ export type CreatePayload = {
   type: ActiveAnalysisType;
   settingId?: string;
   model?: string;
+  question?: string;
 };
 
 export interface LifecycleState {

@@ -35,6 +35,19 @@ function makeDimResult(type: 'FUNDAMENTAL' | 'TECHNICAL', md: string): Dimension
 }
 
 describe('primitives/buildSummaryPrompts', () => {
+  it('carries the research focus into the comprehensive conclusion', () => {
+    const { user } = buildSummaryPrompts(
+      'reports',
+      TODAY,
+      ['FUNDAMENTAL'],
+      [],
+      '毛利率下滑是短期波动吗？',
+    );
+    expect(user).toContain('【本次研究焦点】');
+    expect(user).toContain('毛利率下滑是短期波动吗？');
+    expect(user).toContain('区分事实、推断与仍不确定的信息');
+  });
+
   it('system contains the analyst role + 9 numbered sections', () => {
     const { system } = buildSummaryPrompts('reports here', TODAY, [
       'FUNDAMENTAL',

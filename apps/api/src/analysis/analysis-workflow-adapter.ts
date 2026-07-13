@@ -103,6 +103,7 @@ export interface AdapterContext {
 interface AnalysisLike {
   id: string;
   analysisType: string;
+  question?: string | null;
   sections: ReadonlyArray<AnalysisSectionLike>;
   stock: { symbol: string; market: string; name?: string | null };
 }
@@ -172,6 +173,7 @@ export async function runAnalysisWorkflowAdapter(
     market: ctx.analysis.stock.market,
     locale: 'zh-CN',
     ...(ctx.analysis.stock.name ? { name: ctx.analysis.stock.name } : {}),
+    ...(ctx.analysis.question ? { question: ctx.analysis.question } : {}),
   };
 
   // Mark queued sections as IN_PROGRESS up front so concurrent reads see a

@@ -184,6 +184,7 @@ export function useStockAnalysisLifecycle(params: Params) {
         payload.type,
         payload.settingId,
         payload.model,
+        payload.question,
       );
       dispatch({ t: 'loading', v: false });
       afterSuccess(analysis);
@@ -247,7 +248,11 @@ export function useStockAnalysisLifecycle(params: Params) {
       {
         type: current.analysisType,
         settingId: p.formSettingId || undefined,
-        model: current.aiModel || p.formModel || undefined,
+        // A rerun should follow the currently selected provider/config. Reusing
+        // the historical model can send a Claude model id to OpenAI after the
+        // root .env provider changes.
+        model: p.formModel || undefined,
+        question: current.question || undefined,
       },
       (analysis) => {
         dispatch({ t: 'current', analysis });
