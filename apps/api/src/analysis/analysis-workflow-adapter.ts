@@ -155,6 +155,150 @@ export async function runAnalysisWorkflowAdapter(
   let degradedSourceMark: 'WEB_SEARCH_FALLBACK' | null = null;
   let summaryDataAsOf: string | null = null;
 
+  // ===== Event handlers (close over mutable run state above) =====
+
+  function onEvidencePackReady(event: Extract<SseEvent, { type: 'evidence_pack_ready' }>) {
+    sendFrame(ctx.send, mapEvidencePackReadyEvent(event));
+    // Capture the degraded marker for the terminal Analysis row.
+    const da = (
+      event.pack as { dataAvailability?: { degradedSource?: string } }
+    ).dataAvailability;
+    if (da?.degradedSource === 'WEB_SEARCH_FALLBACK') {
+      degradedSourceMark = 'WEB_SEARCH_FALLBACK'; // mutates outer state
+    }
+  }
+
+  async function onSectionSkipped(event: Extract<SseEvent, { type: 'section_skipped' }>) {
+    sendFrame(ctx.send, mapSectionSkippedEvent(event));
+    const row = sectionByType.get(event.sectionType);
+    if (row) await persistence.persistSectionSkipped(row.id);
+  }
+
+  function onSectionStart(event: Extract<SseEvent, { type: 'section_start' }>) {
+    const row = sectionByType.get(event.sectionType);
+    if (!row) {
+      logger.warn(
+        `${tag} section_start for unknown sectionType=${event.sectionType}; skipping`,
+      );
+      return;
+    }
+    sectionAccs.set(event.sectionType, { // mutates outer state
+      sectionId: row.id,
+      markdown: '',
+      citations: [],
+      structuredJson: null,
+    });
+    sendFrame(ctx.send, mapSectionStartEvent(event, row));
+  }
+
+  function onReportChunk(event: Extract<SseEvent, { type: 'report_chunk' }>) {
+    const acc = sectionAccs.get(event.sectionType);
+    if (acc) acc.markdown += event.deltaText; // mutates acc
+    sendFrame(ctx.send, mapReportChunkEvent(event));
+  }
+
+  function onCitation(event: Extract<SseEvent, { type: 'citation' }>) {
+    const acc = sectionAccs.get(event.sectionType);
+    const cit = {
+      title: event.citation.title,
+      url: event.citation.url,
+      sourceType: event.citation.sourceType,
+      retrievedAt: event.citation.retrievedAt,
+    };
+    if (acc) acc.citations.push(cit); // mutates acc
+    sendFrame(ctx.send, mapCitationEvent(event));
+  }
+
+  function onReportComplete(event: Extract<SseEvent, { type: 'report_complete' }>) {
+    // No SSE — overwrites chunk accumulation with the authoritative full markdown.
+    const acc = sectionAccs.get(event.sectionType);
+    if (acc) acc.markdown = event.fullMarkdown || acc.markdown; // mutates acc
+  }
+
+  function onStructuredData(event: Extract<SseEvent, { type: 'structured_data' }>) {
+    const acc = sectionAccs.get(event.sectionType);
+    if (acc) acc.structuredJson = event.json; // mutates acc
+    sendFrame(ctx.send, mapStructuredDataEvent(event));
+  }
+
+  async function onSectionComplete(event: Extract<SseEvent, { type: 'section_complete' }>) {
+    const acc = sectionAccs.get(event.sectionType);
+    if (!acc) {
+      logger.warn(
+        `${tag} section_complete for unknown sectionType=${event.sectionType}; skipping persistence`,
+      );
+      return;
+    }
+    const completed = event.status === 'COMPLETED';
+    await persistence.persistSectionComplete(event, acc);
+    if (completed) {
+      completedSectionTypes.add(event.sectionType); // mutates outer state
+    } else {
+      failedSectionTypes.push(event.sectionType); // mutates outer state
+    }
+    sendFrame(ctx.send, mapSectionCompleteEvent(event));
+  }
+
+  async function onJudgeComplete(event: Extract<SseEvent, { type: 'judge_complete' }>) {
+    const acc = sectionAccs.get(event.sectionType);
+    if (acc) {
+      await persistence.persistJudgeResult(ctx.analysisId, event, acc);
+    }
+  }
+
+  function onSummaryChunk(event: Extract<SseEvent, { type: 'summary_chunk' }>) {
+    summaryMarkdown += event.deltaText; // mutates outer state
+    sendFrame(ctx.send, mapSummaryChunkEvent(event));
+  }
+
+  function onSummaryComplete(event: Extract<SseEvent, { type: 'summary_complete' }>) {
+    summaryMarkdown = event.fullMarkdown || summaryMarkdown; // mutates outer state
+    summaryJson = event.json;
+    summaryDataAsOf = (event.json as { dataAsOf?: string }).dataAsOf ?? null;
+    sendFrame(ctx.send, mapSummaryCompleteEvent(event));
+  }
+
+  async function onError(event: Extract<SseEvent, { type: 'error' }>) {
+    // Forward as a non-terminal warning surface; terminal status is
+    // decided by the `done` event below.
+    logger.error(
+      `${tag} dim ${event.sectionType ?? '(run-level)'} error: ${event.message}`,
+    );
+    sendFrame(ctx.send, mapErrorEvent(event));
+    // Section-scoped errors may arrive without a later section_complete.
+    // Persist the real message now so the orphan sweep does not replace
+    // it with a generic run-level failure.
+    if (event.sectionType) {
+      const acc = sectionAccs.get(event.sectionType);
+      if (acc) {
+        try {
+          await persistence.persistSectionErrorById(acc.sectionId, event.message);
+        } catch (e) {
+          logger.warn(
+            `${tag} could not persist FAILED state for ${event.sectionType}: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      } else {
+        // Section never got section_start (dim threw before yielding
+        // it). updateMany by (analysisId, type) is the safe path.
+        try {
+          await persistence.persistSectionErrorByType(
+            ctx.analysisId,
+            event.sectionType,
+            event.message,
+          );
+        } catch (e) {
+          logger.warn(
+            `${tag} could not persist FAILED state for ${event.sectionType}: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      }
+      if (!failedSectionTypes.includes(event.sectionType)) {
+        failedSectionTypes.push(event.sectionType); // mutates outer state
+      }
+    }
+  }
+
   // ===== Assemble workflow options =====
   // marketProfile (CN only) feeds the cross-dim validator + domain-tier source
   // routing. Comprehensive passes the full profile (enables the validator);
@@ -249,181 +393,24 @@ export async function runAnalysisWorkflowAdapter(
       const event = next.value;
 
       switch (event.type) {
-        case 'evidence_pack_ready':
-          sendFrame(ctx.send, mapEvidencePackReadyEvent(event));
-          // Capture the degraded marker for the terminal Analysis row.
-          {
-            const da = (
-              event.pack as {
-                dataAvailability?: { degradedSource?: string };
-              }
-            ).dataAvailability;
-            if (da?.degradedSource === 'WEB_SEARCH_FALLBACK') {
-              degradedSourceMark = 'WEB_SEARCH_FALLBACK';
-            }
-          }
-          break;
-
-        case 'section_skipped':
-          // Forward controlled skips and keep the section row consistent for
-          // list/history views.
-          {
-            sendFrame(ctx.send, mapSectionSkippedEvent(event));
-            const row = sectionByType.get(event.sectionType);
-            if (row) await persistence.persistSectionSkipped(row.id);
-          }
-          break;
-
-        case 'section_start': {
-          const row = sectionByType.get(event.sectionType);
-          if (!row) {
-            logger.warn(
-              `${tag} section_start for unknown sectionType=${event.sectionType}; skipping`,
-            );
-            break;
-          }
-          sectionAccs.set(event.sectionType, {
-            sectionId: row.id,
-            markdown: '',
-            citations: [],
-            structuredJson: null,
-          });
-          sendFrame(ctx.send, mapSectionStartEvent(event, row));
-          break;
-        }
-
-        case 'report_chunk': {
-          const acc = sectionAccs.get(event.sectionType);
-          if (acc) acc.markdown += event.deltaText;
-          sendFrame(ctx.send, mapReportChunkEvent(event));
-          break;
-        }
-
-        case 'citation': {
-          const acc = sectionAccs.get(event.sectionType);
-          const cit = {
-            title: event.citation.title,
-            url: event.citation.url,
-            sourceType: event.citation.sourceType,
-            retrievedAt: event.citation.retrievedAt,
-          };
-          if (acc) acc.citations.push(cit);
-          sendFrame(ctx.send, mapCitationEvent(event));
-          break;
-        }
-
-        case 'report_complete': {
-          const acc = sectionAccs.get(event.sectionType);
-          if (acc) acc.markdown = event.fullMarkdown || acc.markdown;
-          break;
-        }
-
-        case 'structured_data': {
-          const acc = sectionAccs.get(event.sectionType);
-          if (acc) acc.structuredJson = event.json;
-          sendFrame(ctx.send, mapStructuredDataEvent(event));
-          break;
-        }
-
-        case 'web_search_warning': {
-          break;
-        }
-
-        case 'section_complete': {
-          const acc = sectionAccs.get(event.sectionType);
-          if (!acc) {
-            logger.warn(
-              `${tag} section_complete for unknown sectionType=${event.sectionType}; skipping persistence`,
-            );
-            break;
-          }
-          const completed = event.status === 'COMPLETED';
-          await persistence.persistSectionComplete(event, acc);
-          if (completed) {
-            completedSectionTypes.add(event.sectionType);
-          } else {
-            failedSectionTypes.push(event.sectionType);
-          }
-          sendFrame(ctx.send, mapSectionCompleteEvent(event));
-          break;
-        }
-
-        case 'judge_start': {
-          break;
-        }
-
-        case 'judge_complete': {
-          const acc = sectionAccs.get(event.sectionType);
-          if (acc) {
-            await persistence.persistJudgeResult(ctx.analysisId, event, acc);
-          }
-          break;
-        }
-
-        case 'summary_chunk':
-          summaryMarkdown += event.deltaText;
-          sendFrame(ctx.send, mapSummaryChunkEvent(event));
-          break;
-
-        case 'summary_complete':
-          summaryMarkdown = event.fullMarkdown || summaryMarkdown;
-          summaryJson = event.json;
-          summaryDataAsOf = (event.json as { dataAsOf?: string }).dataAsOf
-            ?? null;
-          sendFrame(ctx.send, mapSummaryCompleteEvent(event));
-          break;
-
-        case 'cost_update':
-          // The API SSE contract does not expose cost_update frames.
-          break;
-
-        case 'error':
-          // Forward as a non-terminal warning surface; terminal status is
-          // decided by the `done` event below.
-          logger.error(
-            `${tag} dim ${event.sectionType ?? '(run-level)'} error: ${event.message}`,
-          );
-          sendFrame(ctx.send, mapErrorEvent(event));
-          // Section-scoped errors may arrive without a later section_complete.
-          // Persist the real message now so the orphan sweep does not replace
-          // it with a generic run-level failure.
-          if (event.sectionType) {
-            const acc = sectionAccs.get(event.sectionType);
-            if (acc) {
-              try {
-                await persistence.persistSectionErrorById(
-                  acc.sectionId,
-                  event.message,
-                );
-              } catch (e) {
-                logger.warn(
-                  `${tag} could not persist FAILED state for ${event.sectionType}: ${e instanceof Error ? e.message : String(e)}`,
-                );
-              }
-            } else {
-              // Section never got section_start (dim threw before yielding
-              // it). updateMany by (analysisId, type) is the safe path.
-              try {
-                await persistence.persistSectionErrorByType(
-                  ctx.analysisId,
-                  event.sectionType,
-                  event.message,
-                );
-              } catch (e) {
-                logger.warn(
-                  `${tag} could not persist FAILED state for ${event.sectionType}: ${e instanceof Error ? e.message : String(e)}`,
-                );
-              }
-            }
-            if (!failedSectionTypes.includes(event.sectionType)) {
-              failedSectionTypes.push(event.sectionType);
-            }
-          }
-          break;
+        case 'evidence_pack_ready': onEvidencePackReady(event); break;
+        case 'section_skipped':     await onSectionSkipped(event); break;
+        case 'section_start':       onSectionStart(event); break;
+        case 'report_chunk':        onReportChunk(event); break;
+        case 'citation':            onCitation(event); break;
+        case 'report_complete':     onReportComplete(event); break;  // no SSE, state only
+        case 'structured_data':     onStructuredData(event); break;
+        case 'web_search_warning':  break;  // not forwarded to API SSE
+        case 'section_complete':    await onSectionComplete(event); break;
+        case 'judge_start':         break;  // no action needed
+        case 'judge_complete':      await onJudgeComplete(event); break;
+        case 'summary_chunk':       onSummaryChunk(event); break;
+        case 'summary_complete':    onSummaryComplete(event); break;
+        case 'cost_update':         break;  // not exposed in API SSE contract
+        case 'error':               await onError(event); break;
 
         case 'done': {
           terminalStatus = event.status as AdapterResult['terminalStatus'];
-
           await persistence.persistRunDone({
             analysisId: ctx.analysisId,
             mode: ctx.mode,

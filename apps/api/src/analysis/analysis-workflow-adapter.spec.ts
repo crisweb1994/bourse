@@ -751,3 +751,117 @@ describe('runAnalysisWorkflowAdapter — single dimension mode', () => {
     assert.ok(sendCalls.some((c) => c.type === 'done'));
   });
 });
+
+describe('runAnalysisWorkflowAdapter — evidence_pack_ready', () => {
+  it('forwards evidence_pack_ready as API SSE and captures degradedSource when WEB_SEARCH_FALLBACK', async () => {
+    const pack = {
+      dataAvailability: { degradedSource: 'WEB_SEARCH_FALLBACK' },
+    };
+    const events: SseEvent[] = [
+      evt('evidence_pack_ready', { pack }, 1),
+      evt('done', { status: 'COMPLETED' } as never, 2),
+    ];
+
+    const { ctx, sendCalls, prismaCalls } = buildCtx({ events });
+    await runAnalysisWorkflowAdapter(ctx);
+
+    // SSE frame forwarded to client.
+    const epFrame = sendCalls.find((c) => c.type === 'evidence_pack_ready');
+    assert.ok(epFrame, 'expected evidence_pack_ready SSE frame');
+    assert.deepEqual((epFrame!.data as { pack: unknown }).pack, pack);
+
+    // degradedSource written to Analysis row.
+    const analysisUpdate = prismaCalls.find(
+      (c) => c.table === 'analysis' && c.method === 'update',
+    );
+    assert.ok(analysisUpdate, 'expected analysis.update');
+    const data = (analysisUpdate!.args as { data: Record<string, unknown> }).data;
+    assert.equal(data.degradedSource, 'WEB_SEARCH_FALLBACK');
+  });
+
+  it('does not set degradedSource when evidence pack has no degraded marker', async () => {
+    const pack = { dataAvailability: { degradedSource: null } };
+    const events: SseEvent[] = [
+      evt('evidence_pack_ready', { pack }, 1),
+      evt('done', { status: 'COMPLETED' } as never, 2),
+    ];
+
+    const { ctx, prismaCalls } = buildCtx({ events });
+    await runAnalysisWorkflowAdapter(ctx);
+
+    const analysisUpdate = prismaCalls.find(
+      (c) => c.table === 'analysis' && c.method === 'update',
+    );
+    assert.ok(analysisUpdate);
+    const data = (analysisUpdate!.args as { data: Record<string, unknown> }).data;
+    // When not degraded the field is omitted from the update payload entirely.
+    assert.equal('degradedSource' in data, false);
+  });
+});
+
+describe('runAnalysisWorkflowAdapter — section_skipped', () => {
+  it('forwards section_skipped SSE and marks the section SKIPPED in DB', async () => {
+    const events: SseEvent[] = [
+      evt(
+        'section_skipped',
+        {
+          sectionType: 'FUNDAMENTAL',
+          reason: 'MISSING_DATA',
+          missingFields: ['revenue'],
+        },
+        1,
+      ),
+      evt('done', { status: 'PARTIAL_FAILED' } as never, 2),
+    ];
+
+    const { ctx, sendCalls, prismaCalls } = buildCtx({
+      events,
+      sections: [
+        { id: 'sec-fund', type: 'FUNDAMENTAL', order: 0, status: 'PENDING' },
+      ],
+    });
+    await runAnalysisWorkflowAdapter(ctx);
+
+    // SSE frame forwarded.
+    const skipFrame = sendCalls.find((c) => c.type === 'section_skipped');
+    assert.ok(skipFrame, 'expected section_skipped SSE frame');
+    assert.equal(
+      (skipFrame!.data as { sectionType: string }).sectionType,
+      'FUNDAMENTAL',
+    );
+
+    // DB row updated to SKIPPED.
+    const sectionUpdate = prismaCalls.find(
+      (c) =>
+        c.table === 'analysisSection' &&
+        c.method === 'update' &&
+        (c.args as { where?: { id: string } }).where?.id === 'sec-fund',
+    );
+    assert.ok(sectionUpdate, 'expected analysisSection.update for sec-fund');
+  });
+});
+
+describe('runAnalysisWorkflowAdapter — web_search_warning', () => {
+  it('silently drops web_search_warning (no SSE frame, no DB write)', async () => {
+    const events: SseEvent[] = [
+      evt('section_start', { sectionType: 'RISK', order: 0 }, 1),
+      evt(
+        'web_search_warning',
+        { sectionType: 'RISK', message: 'quota exceeded' },
+        2,
+      ),
+      evt('report_chunk', { sectionType: 'RISK', deltaText: 'text' }, 3),
+      evt('section_complete', { sectionType: 'RISK', status: 'COMPLETED' }, 4),
+      evt('done', { status: 'COMPLETED' } as never, 5),
+    ];
+
+    const { ctx, sendCalls } = buildCtx({
+      events,
+      sections: [{ id: 'sec-risk', type: 'RISK', order: 0, status: 'PENDING' }],
+    });
+    await runAnalysisWorkflowAdapter(ctx);
+
+    const wsWarn = sendCalls.find((c) => c.type === 'web_search_warning');
+    assert.equal(wsWarn, undefined, 'web_search_warning must not be forwarded as SSE');
+  });
+});
