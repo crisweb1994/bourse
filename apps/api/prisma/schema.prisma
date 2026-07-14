@@ -76,9 +76,7 @@ model AiProviderSetting {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  // 遗留字段：primaryModel 引入前的旧字段，待 R0-C migration 清理。
-  model          String?
-  /// 主模型：主分析 + web_search。留空 → fallback enabledModels[0] → model。
+  /// 主模型：主分析 + web_search。留空 → fallback enabledModels[0]。
   primaryModel   String?
   /// 次模型：JSON 抽取 / summary 等辅助任务。留空 → fallback 到 primaryModel。
   utilityModel   String?

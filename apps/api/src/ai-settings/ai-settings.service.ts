@@ -324,7 +324,7 @@ export class AiSettingsService {
       providerType: row.providerType,
       apiKey: this.readApiKey(row),
       baseUrl: row.baseUrl,
-      model: row.primaryModel ?? row.enabledModels[0] ?? row.model ?? null,
+      model: row.primaryModel ?? row.enabledModels[0] ?? null,
       utilityModel: row.utilityModel ?? null,
     };
   }

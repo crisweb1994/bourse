@@ -1,7 +1,0 @@
--- Baseline migration.
--- The schema was previously managed by `prisma db push`.
--- This file is intentionally empty: it marks the current DB state as the
--- starting point for the migration history without running any DDL.
---
--- After deploying this file, mark it as applied on the production database:
---   pnpm -F @bourse/api exec prisma migrate resolve --applied 20260714000000_baseline
