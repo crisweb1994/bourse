@@ -32,12 +32,6 @@
       }
     },
     {
-      "type": "report_complete",
-      "data": {
-        "sectionType": "FUNDAMENTAL"
-      }
-    },
-    {
       "type": "structured_data",
       "data": {
         "json": {
@@ -91,12 +85,6 @@
       }
     },
     {
-      "type": "report_complete",
-      "data": {
-        "sectionType": "VALUATION"
-      }
-    },
-    {
       "type": "structured_data",
       "data": {
         "json": {
@@ -129,12 +117,6 @@
       "type": "summary_chunk",
       "data": {
         "text": "summary "
-      }
-    },
-    {
-      "type": "report_complete",
-      "data": {
-        "sectionType": "COMPREHENSIVE"
       }
     },
     {

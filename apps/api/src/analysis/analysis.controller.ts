@@ -13,24 +13,25 @@ import { Response } from 'express';
 import { JwtCookieGuard } from '../auth/jwt-cookie.guard';
 import { CsrfGuard } from '../auth/csrf.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
-import { AnalysisService } from './analysis.service';
-import { AnalysisLifecycleService } from './analysis-lifecycle.service';
+import { AnalysisCommandService } from './analysis-command.service';
+import { AnalysisQueryService } from './analysis-query.service';
 import { AnalysisRunnerService } from './analysis-runner.service';
 import { CreateAnalysisDto } from './analysis.dto';
+import type { AnalysisSseCallback } from './analysis-sse.contract';
 
 @Controller('analysis')
 @UseGuards(JwtCookieGuard)
 export class AnalysisController {
   constructor(
-    private analysisService: AnalysisService,
-    private lifecycleService: AnalysisLifecycleService,
+    private commandService: AnalysisCommandService,
+    private queryService: AnalysisQueryService,
     private runnerService: AnalysisRunnerService,
   ) {}
 
   @Post()
   @UseGuards(CsrfGuard)
   create(@CurrentUser() user: any, @Body() dto: CreateAnalysisDto) {
-    return this.analysisService.create(user.id, dto);
+    return this.commandService.create(user.id, dto);
   }
 
   @Get('history')
@@ -44,7 +45,7 @@ export class AnalysisController {
     @Query('stockId') stockId?: string,
     @Query('degradedOnly') degradedOnly?: string,
   ) {
-    return this.analysisService.getHistory(user.id, {
+    return this.queryService.getHistory(user.id, {
       page: page ? parseInt(page, 10) : 1,
       limit: limit ? parseInt(limit, 10) : 20,
       analysisType,
@@ -55,23 +56,21 @@ export class AnalysisController {
     });
   }
 
-  // plan-v2 Wave 4.1 — batch endpoints removed. plan-v2 §15.1 "BatchJob 砍".
-
   @Delete(':id')
   @UseGuards(CsrfGuard)
   delete(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.analysisService.delete(user.id, id);
+    return this.commandService.delete(user.id, id);
   }
 
   @Post(':id/abort')
   @UseGuards(CsrfGuard)
   abort(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.lifecycleService.abort(user.id, id);
+    return this.commandService.abort(user.id, id);
   }
 
   @Get(':id')
   getById(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.analysisService.getById(user.id, id);
+    return this.queryService.getById(user.id, id);
   }
 
   @Post(':id/sections/:sectionId/retry')
@@ -81,7 +80,7 @@ export class AnalysisController {
     @Param('id') id: string,
     @Param('sectionId') sectionId: string,
   ) {
-    return this.lifecycleService.retrySection(user.id, id, sectionId);
+    return this.commandService.retrySection(user.id, id, sectionId);
   }
 
   @Get(':id/stream')
@@ -91,7 +90,7 @@ export class AnalysisController {
     @Res() res: Response,
   ) {
     // Verify ownership (lightweight — runAnalysis re-reads the full row).
-    await this.analysisService.assertOwnership(user.id, id);
+    await this.queryService.assertOwnership(user.id, id);
 
     // Set SSE headers
     res.setHeader('Content-Type', 'text/event-stream');
@@ -100,7 +99,7 @@ export class AnalysisController {
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
-    const send = (event: string, data: unknown) => {
+    const send: AnalysisSseCallback = (event, data) => {
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     };
 
@@ -109,7 +108,7 @@ export class AnalysisController {
       disconnected = true;
     });
 
-    const wrappedSend = (event: string, data: unknown) => {
+    const wrappedSend: AnalysisSseCallback = (event, data) => {
       if (!disconnected) {
         send(event, data);
       }

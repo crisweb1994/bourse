@@ -72,25 +72,6 @@ export class AuthService {
   }
 
   /**
-   * RFC rfc-evidence-pack-web-search-fallback: persist the user's opt-in
-   * flag. Returns the updated row so callers can reflect it back in the
-   * PATCH response.
-   */
-  async updatePreferences(
-    userId: string,
-    patch: { allowWebSearchFallback?: boolean },
-  ) {
-    return this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        ...(patch.allowWebSearchFallback !== undefined
-          ? { allowWebSearchFallback: patch.allowWebSearchFallback }
-          : {}),
-      },
-    });
-  }
-
-  /**
    * Single-tenant / private-deploy mode: when AUTH_REQUIRED=false, the
    * whole app runs as one shared anonymous user. We use a fixed githubId
    * sentinel (`__local__`) so the existing `githubId @unique` constraint

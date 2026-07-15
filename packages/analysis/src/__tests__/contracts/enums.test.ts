@@ -4,6 +4,7 @@ import {
   Confidence,
   Recommendation,
   RunStatus,
+  SectionType,
   Signal,
 } from '../../contracts/enums';
 
@@ -43,7 +44,14 @@ describe('contracts/enums', () => {
   describe('shared-types reuse', () => {
     it('AnalysisType validates real enum values', () => {
       expect(AnalysisType.parse('FUNDAMENTAL')).toBe('FUNDAMENTAL');
+      expect(AnalysisType.parse('COMPREHENSIVE')).toBe('COMPREHENSIVE');
       expect(AnalysisType.parse('PORTFOLIO')).toBe('PORTFOLIO');
+    });
+
+    it('SectionType accepts dimensions but rejects non-section analysis types', () => {
+      expect(SectionType.parse('FUNDAMENTAL')).toBe('FUNDAMENTAL');
+      expect(() => SectionType.parse('COMPREHENSIVE')).toThrow();
+      expect(() => SectionType.parse('DEBATE')).toThrow();
     });
 
     it('Signal / Confidence validate real enum values', () => {

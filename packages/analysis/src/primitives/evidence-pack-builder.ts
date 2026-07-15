@@ -8,8 +8,8 @@ import type { AgentProvider } from './provider';
  * financials, and risk facts; output is JSON that we parse, validate, and
  * freeze.
  *
- * Why not reuse full dim Round 1 output: user chose "独立轻量收集" — debate
- * shouldn't require a comprehensive run to have been done.
+ * Kept standalone so evidence recovery can run before any dimension report
+ * exists and without requiring a comprehensive run to have completed.
  */
 export interface BuildEvidencePackOptions {
   /** YYYY-MM-DD; defaults to today (UTC). */
@@ -105,8 +105,8 @@ export async function buildEvidencePack(
   const streamResult = await provider.stream(
     COLLECTION_SYSTEM,
     userPrompt,
-    // No streaming UI for EvidencePack collection — debate.ts only cares
-    // about the final structured result + citations.
+    // No streaming UI for EvidencePack collection; workflows only need the
+    // final structured result + citations.
     () => {},
     {
       signal: options.signal,
@@ -132,8 +132,7 @@ export async function buildEvidencePack(
     allowedUrls,
   };
 
-  // Freeze the pack so Bull/Bear can't accidentally mutate shared state
-  // (defensive against future workflow refactors).
+  // Freeze the pack so workflow consumers cannot mutate shared facts.
   return Object.freeze({
     ...pack,
     financialSnapshot: Object.freeze(pack.financialSnapshot),

@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2, MessageSquareText, Sparkles } from 'lucide-react';
 import Link from 'next/link';
+import type { ActiveAnalysisType } from '@bourse/shared-types';
 import { type AiProviderSettingDto } from '@/lib/api';
 import {
   Button,
@@ -20,13 +20,15 @@ import { ANALYSIS_TYPES } from '../stock-page-ui';
 // ============================================================
 
 interface AnalysisFormProps {
-  selectedType: string;
-  setSelectedType: (v: string) => void;
+  selectedType: ActiveAnalysisType;
+  setSelectedType: (v: ActiveAnalysisType) => void;
   providerSettings: AiProviderSettingDto[];
   selectedSettingId: string;
   setSelectedSettingId: (v: string) => void;
   selectedModel: string;
   setSelectedModel: (v: string) => void;
+  question: string;
+  setQuestion: (v: string) => void;
   loading: boolean;
   stockId: string | null;
   onStart: () => void;
@@ -44,6 +46,8 @@ export function AnalysisForm({
   setSelectedSettingId,
   selectedModel,
   setSelectedModel,
+  question,
+  setQuestion,
   loading,
   stockId,
   onStart,
@@ -51,30 +55,41 @@ export function AnalysisForm({
   embedded,
 }: AnalysisFormProps) {
   const isComprehensive = selectedType === 'COMPREHENSIVE';
-  const [customQuestion, setCustomQuestion] = useState('');
 
   const body = (
     <>
       <div className="px-5 py-4">
-        {/* <div className="mb-4">
-          <label className="mb-1.5 block text-[12px] text-[var(--color-fg-2)]">
-            问题（可选）
-          </label>
+        <div className="mb-5">
+          <div className="mb-1.5 flex items-center justify-between gap-3">
+            <label
+              htmlFor="analysis-question"
+              className="flex items-center gap-1.5 text-[12px] text-[var(--color-fg-2)]"
+            >
+              <MessageSquareText className="h-3.5 w-3.5" strokeWidth={1.5} />
+              本次想重点研究什么？
+              <span className="text-[var(--color-fg-3)]">（可选）</span>
+            </label>
+            <span className="font-mono text-[10.5px] text-[var(--color-fg-3)]">
+              {question.length}/500
+            </span>
+          </div>
           <textarea
-            value={customQuestion}
-            onChange={(e) => setCustomQuestion(e.target.value)}
-            placeholder="例：AAPL 这次财报怎么看？/ 关税政策对它影响多大？"
+            id="analysis-question"
+            value={question}
+            maxLength={500}
+            onChange={(e) => setQuestion(e.target.value)}
+            placeholder="例如：最新财报里的毛利率下滑是短期波动，还是竞争格局已经改变？"
             className={
-              'min-h-[72px] w-full resize-y rounded-[var(--radius-btn)] border ' +
+              'min-h-[84px] w-full resize-y rounded-[var(--radius-btn)] border outline-none ' +
               'border-[var(--color-border)] bg-[var(--color-bg-elev)] px-3 py-2.5 ' +
               'text-[13.5px] text-[var(--color-fg)] placeholder:text-[var(--color-fg-3)] ' +
-              'focus:border-[var(--color-fg)]'
+              'leading-[1.6] transition-colors focus:border-[var(--color-fg)]'
             }
           />
-          <p className="mt-1 text-[11.5px] text-[var(--color-fg-3)]">
-            留空走标准维度分析；填写问题后会随本次分析记录在界面中保留。
+          <p className="mt-1.5 text-[11.5px] leading-[1.5] text-[var(--color-fg-3)]">
+            留空按所选维度完整分析；填写后，报告会优先围绕这个问题组织证据和结论。
           </p>
-        </div> */}
+        </div>
 
         <div className="mb-1.5 text-[12px] text-[var(--color-fg-2)]">
           分析类型
@@ -84,6 +99,7 @@ export function AnalysisForm({
             const active = selectedType === t.value;
             return (
               <button
+                type="button"
                 key={t.value}
                 onClick={() => setSelectedType(t.value)}
                 className={cn(

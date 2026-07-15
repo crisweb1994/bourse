@@ -7,18 +7,12 @@ import type {
   SseEvent,
 } from '@bourse/analysis';
 import {
-  runStreamComprehensiveAdapter,
+  runAnalysisWorkflowAdapter,
   type AdapterContext,
-} from './stream-comprehensive-adapter';
+} from './analysis-workflow-adapter';
 
-/**
- * RFC-07 P1 T7: adapter behavior tests.
- *
- * These exercise the event-handler switch in isolation by injecting a fake
- * `streamComprehensive` (the adapter accepts an `_streamFactory` test hook
- * for exactly this). We assert: SSE callbacks fired in the right order and
- * Prisma writes carry the right args.
- */
+// Exercises the workflow adapter by injecting scripted domain events and
+// asserting the API SSE frames plus Prisma writes.
 
 const RUN_ID = 'analysis-test-1';
 const TODAY = '2026-05-15T00:00:00.000Z';
@@ -92,10 +86,7 @@ function buildCtx(opts: {
     analysisId: 'a1',
     analysis: {
       id: 'a1',
-      symbol: 'AAPL',
-      market: opts.market ?? 'CN',
       analysisType: opts.analysisType ?? 'COMPREHENSIVE',
-      userId: 'u1',
       sections,
       stock: {
         symbol: 'AAPL',
@@ -142,9 +133,7 @@ function buildCtx(opts: {
         },
       },
     } as unknown as AdapterContext['prisma'],
-    toolCache: {} as AdapterContext['toolCache'],
-    modelId: 'claude-sonnet-4-test',
-    providerName: 'claude',
+    aiModel: 'claude-sonnet-4-test',
     _streamFactory: fakeFactory,
     _singleStreamFactory: fakeSingleFactory,
     ...(opts.mode ? { mode: opts.mode } : {}),
@@ -155,7 +144,7 @@ function buildCtx(opts: {
 
 // ===== Tests =====
 
-describe('runStreamComprehensiveAdapter — happy path', () => {
+describe('runAnalysisWorkflowAdapter — happy path', () => {
   it('translates a full section event chain into apps/api SSE + persists rows', async () => {
     const events: SseEvent[] = [
       evt('section_start', { sectionType: 'FUNDAMENTAL', order: 0 }, 1),
@@ -222,19 +211,19 @@ describe('runStreamComprehensiveAdapter — happy path', () => {
       ],
     });
 
-    const result = await runStreamComprehensiveAdapter(ctx);
+    const result = await runAnalysisWorkflowAdapter(ctx);
 
     assert.equal(result.terminalStatus, 'COMPLETED');
     assert.equal(result.failedSectionTypes.length, 0);
 
-    // SSE: every agent event mapped to a client event
+    // SSE: report_complete is domain-internal; the client relies on
+    // report_chunk + section_complete.
     const sendTypes = sendCalls.map((c) => c.type);
     assert.deepEqual(sendTypes, [
       'section_start',
       'report_chunk',
       'report_chunk',
       'citation',
-      'report_complete',
       'structured_data',
       'section_complete',
       'done',
@@ -252,6 +241,9 @@ describe('runStreamComprehensiveAdapter — happy path', () => {
     assert.equal(updateArgs.where.id, 'sec-1');
     assert.equal(updateArgs.data.status, 'COMPLETED');
     assert.equal(updateArgs.data.reportMarkdown, 'hello world');
+    assert.deepEqual(updateArgs.data.structuredJson, {
+      conclusion: { signal: 'BULLISH', confidence: 'HIGH' },
+    });
 
     // Analysis row written on done
     const analysisUpdate = prismaCalls.find((c) => c.table === 'analysis');
@@ -289,23 +281,16 @@ describe('runStreamComprehensiveAdapter — happy path', () => {
 
     const { ctx, prismaCalls, sendCalls } = buildCtx({ events });
 
-    await runStreamComprehensiveAdapter(ctx);
+    await runAnalysisWorkflowAdapter(ctx);
 
-    // Two summary_chunk events + the synthetic `report_complete{COMPREHENSIVE}`
-    // + summary_complete + done
+    // Two summary_chunk events + summary_complete + done.
     const sendTypes = sendCalls.map((c) => c.type);
     assert.deepEqual(sendTypes, [
       'summary_chunk',
       'summary_chunk',
-      'report_complete',
       'summary_complete',
       'done',
     ]);
-
-    const reportCompleteCall = sendCalls.find(
-      (c) => c.type === 'report_complete',
-    );
-    assert.equal(reportCompleteCall!.data.sectionType, 'COMPREHENSIVE');
 
     const summaryComplete = sendCalls.find(
       (c) => c.type === 'summary_complete',
@@ -328,7 +313,7 @@ describe('runStreamComprehensiveAdapter — happy path', () => {
   });
 });
 
-describe('runStreamComprehensiveAdapter — partial / fail / cancel', () => {
+describe('runAnalysisWorkflowAdapter — partial / fail / cancel', () => {
   it('PARTIAL_FAILED: failed section listed in failedSectionTypes', async () => {
     const events: SseEvent[] = [
       evt('section_start', { sectionType: 'FUNDAMENTAL', order: 0 }, 1),
@@ -347,7 +332,7 @@ describe('runStreamComprehensiveAdapter — partial / fail / cancel', () => {
       ],
     });
 
-    const result = await runStreamComprehensiveAdapter(ctx);
+    const result = await runAnalysisWorkflowAdapter(ctx);
     assert.equal(result.terminalStatus, 'PARTIAL_FAILED');
     assert.deepEqual(result.failedSectionTypes, ['FUNDAMENTAL']);
   });
@@ -358,7 +343,7 @@ describe('runStreamComprehensiveAdapter — partial / fail / cancel', () => {
       finalThrow: new Error('boom'),
     });
 
-    const result = await runStreamComprehensiveAdapter(ctx);
+    const result = await runAnalysisWorkflowAdapter(ctx);
     assert.equal(result.terminalStatus, 'FAILED');
 
     const errSend = sendCalls.find((c) => c.type === 'error');
@@ -370,7 +355,7 @@ describe('runStreamComprehensiveAdapter — partial / fail / cancel', () => {
     assert.equal(doneSend!.data.status, 'FAILED');
   });
 
-  it('orphan sweep (fix 2026-05-16): mid-stream throw → straggler sections marked FAILED + count honest', async () => {
+  it('marks unfinished sections as FAILED after a mid-stream throw', async () => {
     // 3 sections seeded. 1 completes normally, 1 starts but never completes,
     // 1 never starts. Then factory throws (mimics an upstream failure
     // mid-stream).
@@ -395,7 +380,7 @@ describe('runStreamComprehensiveAdapter — partial / fail / cancel', () => {
       ],
     });
 
-    const result = await runStreamComprehensiveAdapter(ctx);
+    const result = await runAnalysisWorkflowAdapter(ctx);
     assert.equal(result.terminalStatus, 'FAILED');
 
     // The orphan sweep should run a single updateMany on the two stragglers.
@@ -421,7 +406,7 @@ describe('runStreamComprehensiveAdapter — partial / fail / cancel', () => {
     );
   });
 
-  it('section-scoped error event (fix 2026-05-16): writes real errorMessage to DB, not sweep fallback', async () => {
+  it('persists section-scoped error messages without sweep overwrite', async () => {
     // Mimics what comprehensive.ts emits when streamDimension throws
     // mid-wave: a top-level `error` event with sectionType + message,
     // followed by the workflow moving on (no section_complete for that
@@ -447,7 +432,7 @@ describe('runStreamComprehensiveAdapter — partial / fail / cancel', () => {
       ],
     });
 
-    const result = await runStreamComprehensiveAdapter(ctx);
+    const result = await runAnalysisWorkflowAdapter(ctx);
     assert.equal(result.terminalStatus, 'PARTIAL_FAILED');
 
     // The error-event handler should have called prisma.analysisSection.update
@@ -472,7 +457,7 @@ describe('runStreamComprehensiveAdapter — partial / fail / cancel', () => {
     assert.equal(sweepRuns.length, 0, 'sweep should NOT overwrite real error');
   });
 
-  it('orphan sweep (fix 2026-05-16): mid-stream throw → IN_PROGRESS sections marked FAILED', async () => {
+  it('marks an in-progress orphan section as FAILED', async () => {
     const events: SseEvent[] = [
       evt('section_start', { sectionType: 'FUNDAMENTAL', order: 0 }, 1),
       // Never reaches section_complete — generator throws.
@@ -486,7 +471,7 @@ describe('runStreamComprehensiveAdapter — partial / fail / cancel', () => {
       ],
     });
 
-    const result = await runStreamComprehensiveAdapter(ctx);
+    const result = await runAnalysisWorkflowAdapter(ctx);
     assert.equal(result.terminalStatus, 'FAILED');
 
     const orphanSweep = prismaCalls.find(
@@ -502,11 +487,7 @@ describe('runStreamComprehensiveAdapter — partial / fail / cancel', () => {
   });
 });
 
-// plan-v2 Wave 3.3: cross_dim_warning SSE event removed. Validator still
-// runs inside the agent workflow; DOWNGRADE persistence no longer flows
-// through the adapter so the dedicated spec has been deleted.
-
-describe('runStreamComprehensiveAdapter — non-CN market', () => {
+describe('runAnalysisWorkflowAdapter — non-CN market', () => {
   it('omits marketProfile for non-CN runs but still drives streaming', async () => {
     const events: SseEvent[] = [evt('done', { status: 'COMPLETED' } as never, 1)];
     const factoryOptions: ComprehensiveOptions[] = [];
@@ -524,7 +505,7 @@ describe('runStreamComprehensiveAdapter — non-CN market', () => {
     const { ctx } = buildCtx({ events, market: 'US' });
     ctx._streamFactory = fakeFactory;
 
-    await runStreamComprehensiveAdapter(ctx);
+    await runAnalysisWorkflowAdapter(ctx);
 
     assert.equal(factoryOptions.length, 1);
     assert.equal(factoryOptions[0]!.marketProfile, undefined);
@@ -532,8 +513,8 @@ describe('runStreamComprehensiveAdapter — non-CN market', () => {
   });
 });
 
-describe('runStreamComprehensiveAdapter — selective judge (RFC-10 P4)', () => {
-  it('forwards judge_start/judge_complete + writes judgeResult to section', async () => {
+describe('runAnalysisWorkflowAdapter — selective judge', () => {
+  it('writes judgeResult to section without forwarding internal judge events', async () => {
     const judgeResult = {
       schemaVersion: 'judge-result-v1' as const,
       pass: false,
@@ -591,19 +572,12 @@ describe('runStreamComprehensiveAdapter — selective judge (RFC-10 P4)', () => 
       events,
       sections: [{ id: 'sec-val', type: 'VALUATION', order: 0, status: 'PENDING' }],
     });
-    const result = await runStreamComprehensiveAdapter(ctx);
+    const result = await runAnalysisWorkflowAdapter(ctx);
 
     assert.equal(result.terminalStatus, 'COMPLETED');
 
-    // SSE forwarded verbatim
-    const judgeStartCalls = sendCalls.filter((c) => c.type === 'judge_start');
-    const judgeCompleteCalls = sendCalls.filter((c) => c.type === 'judge_complete');
-    assert.equal(judgeStartCalls.length, 1);
-    assert.equal(judgeCompleteCalls.length, 1);
-    const jc = judgeCompleteCalls[0]!.data as Record<string, unknown>;
-    assert.equal(jc.sectionType, 'VALUATION');
-    assert.equal(jc.traceCostUsd, 0.005);
-    assert.equal((jc.result as { pass: boolean }).pass, false);
+    assert.equal(sendCalls.some((c) => c.type === 'judge_start'), false);
+    assert.equal(sendCalls.some((c) => c.type === 'judge_complete'), false);
 
     // structuredJson updated with judgeResult sub-field + downgraded confidence
     const sectionUpdates = prismaCalls.filter(
@@ -677,7 +651,7 @@ describe('runStreamComprehensiveAdapter — selective judge (RFC-10 P4)', () => 
       events,
       sections: [{ id: 'sec-risk', type: 'RISK', order: 0, status: 'PENDING' }],
     });
-    await runStreamComprehensiveAdapter(ctx);
+    await runAnalysisWorkflowAdapter(ctx);
 
     // The adapter calls updateMany twice for a CN run: once at start to flip
     // all sections to IN_PROGRESS, then once per judge_complete carrying
@@ -703,7 +677,7 @@ describe('runStreamComprehensiveAdapter — selective judge (RFC-10 P4)', () => 
   });
 });
 
-describe('runStreamComprehensiveAdapter — single dimension mode', () => {
+describe('runAnalysisWorkflowAdapter — single dimension mode', () => {
   it('drives streamSingle, persists the section, finalizes overall* from done.result (no summary fields)', async () => {
     const events: SseEvent[] = [
       evt('section_start', { sectionType: 'VALUATION', order: 0 }, 1),
@@ -749,7 +723,7 @@ describe('runStreamComprehensiveAdapter — single dimension mode', () => {
       ],
     });
 
-    const result = await runStreamComprehensiveAdapter(ctx);
+    const result = await runAnalysisWorkflowAdapter(ctx);
 
     assert.equal(result.terminalStatus, 'COMPLETED');
     assert.equal(result.failedSectionTypes.length, 0);
@@ -775,5 +749,119 @@ describe('runStreamComprehensiveAdapter — single dimension mode', () => {
     assert.equal('summaryJson' in data, false);
 
     assert.ok(sendCalls.some((c) => c.type === 'done'));
+  });
+});
+
+describe('runAnalysisWorkflowAdapter — evidence_pack_ready', () => {
+  it('forwards evidence_pack_ready as API SSE and captures degradedSource when WEB_SEARCH_FALLBACK', async () => {
+    const pack = {
+      dataAvailability: { degradedSource: 'WEB_SEARCH_FALLBACK' },
+    };
+    const events: SseEvent[] = [
+      evt('evidence_pack_ready', { pack }, 1),
+      evt('done', { status: 'COMPLETED' } as never, 2),
+    ];
+
+    const { ctx, sendCalls, prismaCalls } = buildCtx({ events });
+    await runAnalysisWorkflowAdapter(ctx);
+
+    // SSE frame forwarded to client.
+    const epFrame = sendCalls.find((c) => c.type === 'evidence_pack_ready');
+    assert.ok(epFrame, 'expected evidence_pack_ready SSE frame');
+    assert.deepEqual((epFrame!.data as { pack: unknown }).pack, pack);
+
+    // degradedSource written to Analysis row.
+    const analysisUpdate = prismaCalls.find(
+      (c) => c.table === 'analysis' && c.method === 'update',
+    );
+    assert.ok(analysisUpdate, 'expected analysis.update');
+    const data = (analysisUpdate!.args as { data: Record<string, unknown> }).data;
+    assert.equal(data.degradedSource, 'WEB_SEARCH_FALLBACK');
+  });
+
+  it('does not set degradedSource when evidence pack has no degraded marker', async () => {
+    const pack = { dataAvailability: { degradedSource: null } };
+    const events: SseEvent[] = [
+      evt('evidence_pack_ready', { pack }, 1),
+      evt('done', { status: 'COMPLETED' } as never, 2),
+    ];
+
+    const { ctx, prismaCalls } = buildCtx({ events });
+    await runAnalysisWorkflowAdapter(ctx);
+
+    const analysisUpdate = prismaCalls.find(
+      (c) => c.table === 'analysis' && c.method === 'update',
+    );
+    assert.ok(analysisUpdate);
+    const data = (analysisUpdate!.args as { data: Record<string, unknown> }).data;
+    // When not degraded the field is omitted from the update payload entirely.
+    assert.equal('degradedSource' in data, false);
+  });
+});
+
+describe('runAnalysisWorkflowAdapter — section_skipped', () => {
+  it('forwards section_skipped SSE and marks the section SKIPPED in DB', async () => {
+    const events: SseEvent[] = [
+      evt(
+        'section_skipped',
+        {
+          sectionType: 'FUNDAMENTAL',
+          reason: 'MISSING_DATA',
+          missingFields: ['revenue'],
+        },
+        1,
+      ),
+      evt('done', { status: 'PARTIAL_FAILED' } as never, 2),
+    ];
+
+    const { ctx, sendCalls, prismaCalls } = buildCtx({
+      events,
+      sections: [
+        { id: 'sec-fund', type: 'FUNDAMENTAL', order: 0, status: 'PENDING' },
+      ],
+    });
+    await runAnalysisWorkflowAdapter(ctx);
+
+    // SSE frame forwarded.
+    const skipFrame = sendCalls.find((c) => c.type === 'section_skipped');
+    assert.ok(skipFrame, 'expected section_skipped SSE frame');
+    assert.equal(
+      (skipFrame!.data as { sectionType: string }).sectionType,
+      'FUNDAMENTAL',
+    );
+
+    // DB row updated to SKIPPED.
+    const sectionUpdate = prismaCalls.find(
+      (c) =>
+        c.table === 'analysisSection' &&
+        c.method === 'update' &&
+        (c.args as { where?: { id: string } }).where?.id === 'sec-fund',
+    );
+    assert.ok(sectionUpdate, 'expected analysisSection.update for sec-fund');
+  });
+});
+
+describe('runAnalysisWorkflowAdapter — web_search_warning', () => {
+  it('silently drops web_search_warning (no SSE frame, no DB write)', async () => {
+    const events: SseEvent[] = [
+      evt('section_start', { sectionType: 'RISK', order: 0 }, 1),
+      evt(
+        'web_search_warning',
+        { sectionType: 'RISK', message: 'quota exceeded' },
+        2,
+      ),
+      evt('report_chunk', { sectionType: 'RISK', deltaText: 'text' }, 3),
+      evt('section_complete', { sectionType: 'RISK', status: 'COMPLETED' }, 4),
+      evt('done', { status: 'COMPLETED' } as never, 5),
+    ];
+
+    const { ctx, sendCalls } = buildCtx({
+      events,
+      sections: [{ id: 'sec-risk', type: 'RISK', order: 0, status: 'PENDING' }],
+    });
+    await runAnalysisWorkflowAdapter(ctx);
+
+    const wsWarn = sendCalls.find((c) => c.type === 'web_search_warning');
+    assert.equal(wsWarn, undefined, 'web_search_warning must not be forwarded as SSE');
   });
 });

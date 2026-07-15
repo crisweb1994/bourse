@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { AnalysisResult } from './analysis-result';
 import { Citation } from './citation';
-import { AnalysisType, RunStatus } from './enums';
+import { RunStatus, SectionType } from './enums';
 import { EvidencePack } from './evidence-pack';
 import { EvidencePackV2 } from './evidence-pack-v2';
 import { JudgeResult } from './judge-result';
@@ -15,38 +15,38 @@ const baseEvent = z.object({
 
 export const SectionStartEvent = baseEvent.extend({
   type: z.literal('section_start'),
-  sectionType: AnalysisType,
+  sectionType: SectionType,
   order: z.number().int().nonnegative(),
 });
 
 export const ReportChunkEvent = baseEvent.extend({
   type: z.literal('report_chunk'),
-  sectionType: AnalysisType,
+  sectionType: SectionType,
   deltaText: z.string(),
 });
 
 export const ReportCompleteEvent = baseEvent.extend({
   type: z.literal('report_complete'),
-  sectionType: AnalysisType,
+  sectionType: SectionType,
   fullMarkdown: z.string(),
 });
 
 export const StructuredDataEvent = baseEvent.extend({
   type: z.literal('structured_data'),
-  sectionType: AnalysisType,
+  sectionType: SectionType,
   // Strongly typed at the dimension layer; here we only know it's JSON.
   json: z.unknown(),
 });
 
 export const CitationEvent = baseEvent.extend({
   type: z.literal('citation'),
-  sectionType: AnalysisType,
+  sectionType: SectionType,
   citation: Citation,
 });
 
 export const SectionCompleteEvent = baseEvent.extend({
   type: z.literal('section_complete'),
-  sectionType: AnalysisType,
+  sectionType: SectionType,
   status: RunStatus,
   // Optional per-section usage, populated by streamDimension so callers can
   // accumulate run-wide totals without subscribing to every cost_update.
@@ -78,7 +78,7 @@ export const SectionCompleteEvent = baseEvent.extend({
  */
 export const SectionSkippedEvent = baseEvent.extend({
   type: z.literal('section_skipped'),
-  sectionType: AnalysisType,
+  sectionType: SectionType,
   reason: z.literal('DEGRADED_SOURCE_MISSING_PRIVATE_DATA'),
   /** Which private fields are missing (subset of dim.requiresPrivateData). */
   missingFields: z.array(
@@ -114,7 +114,7 @@ export const CostUpdateEvent = baseEvent.extend({
 // also accumulate into SectionCompleteEvent.usage.webSearchErrorsCount.
 export const WebSearchWarningEvent = baseEvent.extend({
   type: z.literal('web_search_warning'),
-  sectionType: AnalysisType.optional(),
+  sectionType: SectionType.optional(),
   code: z.enum([
     'too_many_requests',
     'invalid_input',
@@ -140,27 +140,16 @@ export const DoneEvent = baseEvent.extend({
 
 export const ErrorEvent = baseEvent.extend({
   type: z.literal('error'),
-  sectionType: AnalysisType.optional(),
+  sectionType: SectionType.optional(),
   message: z.string().min(1),
   recoverable: z.boolean(),
 });
-
-// plan-v2 Wave 3.3 — debate workflow events (debate_round_start /
-// debate_chunk / debate_round_complete / judge_chunk / debate_complete)
-// + EvidenceSourceDegradedEvent + CrossDimWarningEvent removed. DEBATE
-// workflow is gone; web_search v1 fallback / cross-dim downgrades still
-// run internally but no longer emit dedicated SSE frames.
 
 /**
  * v0.6 PRD §11.1 — `evidence_pack_ready` carries either a v2 or v1 pack
  * (discriminated on `pack.schemaVersion`). v1 packs lack the field entirely;
  * v2 packs carry `schemaVersion: 'evidence-pack-v2'`. Planner-driven analysis
  * additionally emits `planId / snapshotId / originCounts` for observability.
- *
- * Wire compat:
- *   - existing v1 debate/legacy consumers see no shape change (extra optional
- *     fields are ignored under z.object passthrough);
- *   - new v0.6 consumers route on `pack.schemaVersion` to decode v2 facts.
  *
  * zod's `discriminatedUnion` requires a literal discriminator on every member.
  * v1 EvidencePack has no `schemaVersion`, so we use `z.union` (v2 first, v1
@@ -186,19 +175,18 @@ export const EvidencePackReadyEvent = baseEvent.extend({
  * Flow per dim that `shouldJudge` selects:
  *   judge_start { sectionType } → runJudge() → judge_complete { sectionType, result, trace* }
  *
- * Frontends that don't care can ignore both events (no contract break).
- * apps/api adapter folds `result` into `Section.structuredJson.judgeResult`
- * for replay and surfaces concerns in UI. Comprehensive judge uses
+ * apps/api keeps these domain events internal and folds `result` into
+ * `Section.structuredJson.judgeResult` for replay. Comprehensive judge uses
  * `provider.complete` and emits one start+complete pair per audited dim.
  */
 export const JudgeStartEvent = baseEvent.extend({
   type: z.literal('judge_start'),
-  sectionType: AnalysisType,
+  sectionType: SectionType,
 });
 
 export const JudgeCompleteEvent = baseEvent.extend({
   type: z.literal('judge_complete'),
-  sectionType: AnalysisType,
+  sectionType: SectionType,
   result: JudgeResult,
   /** Token + USD breakdown for telemetry attribution. */
   traceTokensIn: z.number().int().nonnegative(),

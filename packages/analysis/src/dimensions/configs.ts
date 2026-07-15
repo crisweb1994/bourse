@@ -187,9 +187,9 @@ export const ALL_DIMENSIONS: readonly Dimension[] = DIMENSION_CONFIGS.map(
   makeStandardDimension,
 );
 
-/** Lookup helper — typed access by AnalysisType. */
+/** Lookup helper — typed access by SectionType. */
 export function getDimensionByType(
-  type: import('../contracts/enums').AnalysisType,
+  type: import('../contracts/enums').SectionType,
 ): Dimension | undefined {
   return ALL_DIMENSIONS.find((d) => d.type === type);
 }

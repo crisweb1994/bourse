@@ -129,6 +129,28 @@ describe('OpenAIProvider OPENAI_USE_CHAT_COMPLETIONS=true — complete path', ()
     else process.env.OPENAI_USE_CHAT_COMPLETIONS = originalFlag;
   });
 
+  it('accepts surrounding whitespace in the env flag', async () => {
+    process.env.OPENAI_USE_CHAT_COMPLETIONS = ' TRUE  ';
+    const chatCreate = vi.fn().mockResolvedValue({
+      choices: [{ message: { content: 'ok' } }],
+    });
+    const responsesCreate = vi.fn();
+    const provider = new OpenAIProvider({
+      apiKey: 'test-key',
+      model: 'test-model',
+      _internalClient: {
+        chat: { completions: { create: chatCreate } },
+        responses: { create: responsesCreate },
+      } as never,
+    });
+
+    const result = await provider.complete('sys', 'user');
+
+    expect(result.text).toBe('ok');
+    expect(chatCreate).toHaveBeenCalledOnce();
+    expect(responsesCreate).not.toHaveBeenCalled();
+  });
+
   it('routes through chat.completions.create (minimal request body, no response_format by default)', async () => {
     process.env.OPENAI_USE_CHAT_COMPLETIONS = 'true';
     delete process.env.OPENAI_CHAT_RESPONSE_FORMAT;

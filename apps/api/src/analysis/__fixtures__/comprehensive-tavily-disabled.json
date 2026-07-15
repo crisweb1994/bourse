@@ -16,12 +16,6 @@
       }
     },
     {
-      "type": "report_complete",
-      "data": {
-        "sectionType": "FUNDAMENTAL"
-      }
-    },
-    {
       "type": "structured_data",
       "data": {
         "json": {

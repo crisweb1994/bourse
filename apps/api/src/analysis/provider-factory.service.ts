@@ -16,20 +16,9 @@ export interface AgentProviderOverrides {
   baseUrl?: string | null;
   model?: string | null;
   utilityModel?: string | null;
-  /**
-   * RFC rfc-web-search-backend-config: per-user web_search executor.
-   *   - `WebSearchExecutor` → inject this adapter (pluggable path)
-   *   - `null` → user explicitly chose NATIVE; disable pluggable
-   *   - `undefined` → fall through to env-based default factory
-   */
-  webSearchExecutor?: WebSearchExecutor | null;
-  /**
-   * Per-user web search CUSTOM_ONLY mode (plan-v2 §17.4.4): forces the
-   * OpenAI provider onto chat.completions so the pluggable web_search
-   * function tool actually fires (Responses API has its own native
-   * web_search that ignores webSearchExecutorFactory). Only respected by
-   * the OpenAI branch; ignored by Claude.
-   */
+  /** Per-user web-search adapter. Undefined keeps the provider env default. */
+  webSearchExecutor?: WebSearchExecutor;
+  /** OpenAI-only: route through chat.completions so custom web search runs. */
   forceChatCompletions?: boolean;
 }
 
@@ -39,10 +28,8 @@ export interface AgentProviderRuntime extends AgentProviderOverrides {
 
 /**
  * NestJS-injectable factory for `@bourse/analysis` AgentProvider
- * instances. plan-v2 §12.3 collapses the standalone `ai/` module into the
- * analysis module: per-request, AnalysisService calls `buildProvider()` to
- * get an AgentProvider then drives the package's streamDimension /
- * structuredOutputWithRepair / buildSummaryPrompts directly.
+ * instances. ProviderResolverService supplies per-user runtime settings;
+ * this factory only constructs concrete provider objects.
  */
 @Injectable()
 export class ProviderFactoryService {
@@ -97,6 +84,7 @@ export class ProviderFactoryService {
     if (!apiKey) {
       this.logger.warn('No OPENAI_API_KEY configured');
     }
+    const webSearchExecutor = overrides?.webSearchExecutor;
     return new OpenAIProvider({
       apiKey: apiKey ?? 'unset',
       baseUrl:
@@ -111,12 +99,8 @@ export class ProviderFactoryService {
         overrides?.utilityModel ??
         this.config.get<string>('OPENAI_UTILITY_MODEL') ??
         undefined,
-      // RFC rfc-web-search-backend-config: when caller supplied an
-      // executor (or `null` for NATIVE), inject a fixed factory. When
-      // `undefined`, leave the field unset so the provider falls back
-      // to its env-based defaultWebSearchExecutorFactory.
-      ...(overrides?.webSearchExecutor !== undefined
-        ? { webSearchExecutorFactory: () => overrides.webSearchExecutor ?? null }
+      ...(webSearchExecutor
+        ? { webSearchExecutorFactory: () => webSearchExecutor }
         : {}),
       ...(overrides?.forceChatCompletions !== undefined
         ? { forceChatCompletions: overrides.forceChatCompletions }

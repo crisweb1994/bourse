@@ -1,15 +1,10 @@
-export const ANALYSIS_TYPES = [
-  { value: 'FUNDAMENTAL', label: '基本面' },
-  { value: 'GOVERNANCE', label: '公司治理' },
-  { value: 'VALUATION', label: '估值' },
-  { value: 'INDUSTRY', label: '行业竞争' },
-  { value: 'RISK', label: '风险' },
-  { value: 'TECHNICAL', label: '技术面' },
-  { value: 'SENTIMENT', label: '情绪' },
-  { value: 'SCENARIO', label: '情景' },
-  { value: 'PORTFOLIO', label: '组合适配' },
-  { value: 'COMPREHENSIVE', label: '综合分析' },
-] as const;
+import { ACTIVE_ANALYSIS_TYPES, ANALYSIS_TYPE_LABELS } from '@/lib/constants';
+import type { Confidence, SectionType, Signal } from '@bourse/shared-types';
+
+export const ANALYSIS_TYPES = ACTIVE_ANALYSIS_TYPES.map((value) => ({
+  value,
+  label: ANALYSIS_TYPE_LABELS[value],
+}));
 
 export function formatAnalysisTime(
   iso: string | null | undefined,
@@ -36,26 +31,26 @@ export function getRequestedAnalysisId(
   return searchParams.get('analysisId') ?? searchParams.get('debateBase');
 }
 
-interface SectionLike {
-  type: string;
+export interface SectionLike {
+  type: SectionType;
   status: string;
   structuredJson?: {
     conclusion?: {
-      signal?: string;
-      confidence?: string;
+      signal?: Signal;
+      confidence?: Confidence;
       oneLiner?: string;
     };
   } | null;
 }
 
-interface SummaryLike {
-  overallSignal: string;
-  overallConfidence: string;
+export interface SummaryLike {
+  overallSignal: Signal;
+  overallConfidence: Confidence;
   oneLiner?: string;
   sectionSignals?: Array<{
-    type: string;
-    signal: string;
-    confidence: string;
+    type: SectionType;
+    signal: Signal;
+    confidence: Confidence;
     oneLiner?: string;
   }>;
   biggestRisk?: string;
@@ -96,4 +91,3 @@ export function buildRightInsightsSummary(
     sectionSignals,
   };
 }
-

@@ -1,5 +1,5 @@
 import type { Citation } from '../contracts/citation';
-import type { AnalysisType } from '../contracts/enums';
+import type { SectionType } from '../contracts/enums';
 import { JudgeResult } from '../contracts/judge-result';
 import type { Dimension } from '../dimensions/types';
 import { judgeNeutral } from '../personas/judge-neutral';
@@ -88,13 +88,13 @@ export function shouldJudge(ctx: JudgeTriggerContext): boolean {
 
 export interface RunJudgeInput {
   /** Which dim is under audit (used in prompt + telemetry tag). */
-  dimensionType: AnalysisType;
+  dimensionType: SectionType;
   /**
    * Pre-serialized EvidencePack block (markdown). Caller chooses the
-   * format — typically `formatEvidencePackBlock(v2Pack)` for CN, or the
-   * v1 debate-style formatter for other markets. Judge never touches the
-   * raw EvidencePack object; isolating serialization here keeps the
-   * primitive independent of v1/v2 schema choices.
+   * format — typically `formatEvidencePackBlock(v2Pack)` for CN, or a v1
+   * EvidencePack formatter for recovery packs / other markets. Judge never
+   * touches the raw EvidencePack object; isolating serialization here keeps
+   * the primitive independent of v1/v2 schema choices.
    */
   evidencePackText: string;
   /** The dim's structuredJson output. JSON-stringified into prompt. */
@@ -184,7 +184,7 @@ function buildJudgeSystemPrompt(judge: Persona): string {
   return `${judge.styleDescription}
 
 【RFC-10 单维审计任务】
-你不是在重新分析这个维度，也不是在加一轮辩论。任务是**审计**一个已经完成的维度输出（structuredJson + report），针对以下要点给出结构化反馈：
+你不是在重新分析这个维度，也不是补充生成报告。任务是**审计**一个已经完成的维度输出（structuredJson + report），针对以下要点给出结构化反馈：
 
 1. **结论支撑度**：structuredJson.conclusion 的 signal/confidence 是否被 EvidencePack 内的事实直接支持？是否依赖了 EvidencePack 之外的推断？
 2. **引用质量**：报告引用的 URL 是否在 allowedUrls 内？引用来源的 tier（A=官方/交易所、B=主流财经媒体、C=研究机构、D=博客论坛、E=社交）分布是否与结论强度匹配？强 BULLISH/BEARISH + 多 Tier D/E 是危险信号。

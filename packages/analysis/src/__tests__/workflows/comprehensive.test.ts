@@ -418,30 +418,7 @@ describe('workflows/streamComprehensive — done event contract', () => {
   });
 });
 
-describe('workflows/streamComprehensive — Day 11.5a fixes', () => {
-  it('parallel + budget throws (P1 #3)', async () => {
-    await expect(
-      runComprehensive(buildProvider({}), minimalInput, {
-        runId,
-        todayDate: TODAY,
-        parallel: true,
-        budget: { maxTokens: 1000 },
-      }),
-    ).rejects.toThrow(/parallel mode does not support budget/);
-  });
-
-  it('parallel + fail-run dim throws (P1 #3)', async () => {
-    const failRunDim: Dimension = { ...FUNDAMENTAL, onFailure: 'fail-run' };
-    await expect(
-      runComprehensive(buildProvider({}), minimalInput, {
-        runId,
-        todayDate: TODAY,
-        parallel: true,
-        dimensions: [failRunDim],
-      }),
-    ).rejects.toThrow(/fail-run/);
-  });
-
+describe('workflows/streamComprehensive — budget and cost updates', () => {
   it('BUDGET_EXHAUSTED partialDimensions includes unrun dims (P1 #4)', async () => {
     const result = await runComprehensive(buildProvider({}), minimalInput, {
       runId,
@@ -474,29 +451,6 @@ describe('workflows/streamComprehensive — Day 11.5a fixes', () => {
       prev = c.totalTokens ?? 0;
     }
     expect(costs[costs.length - 1]?.totalUsd).toBeGreaterThan(0);
-  });
-});
-
-describe('workflows/streamComprehensive — parallel mode (Day 11f)', () => {
-  it('runs all 9 dims and reaches COMPLETED when parallel: true', async () => {
-    const result = await runComprehensive(buildProvider({}), minimalInput, {
-      runId,
-      todayDate: TODAY,
-      parallel: true,
-    });
-    expect(result.status).toBe('COMPLETED');
-    expect(result.perDimension.size).toBe(9);
-  });
-
-  it('parallel mode marks failed dim as PARTIAL_FAILED, summary still runs', async () => {
-    const result = await runComprehensive(
-      buildProvider({ failOn: ['INDUSTRY'] }),
-      minimalInput,
-      { runId, todayDate: TODAY, parallel: true },
-    );
-    expect(result.status).toBe('PARTIAL_FAILED');
-    expect(result.perDimension.size).toBe(8);
-    expect(result.summary).not.toBeNull();
   });
 });
 
@@ -593,5 +547,4 @@ describe('workflows/runComprehensive', () => {
     expect(result.perDimension.size).toBe(9);
   });
 });
-
 

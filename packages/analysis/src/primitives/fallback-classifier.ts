@@ -13,8 +13,8 @@
  *   - OTHER (unrecognized): treat as eligible to err on the side of
  *     keeping the user's flow alive; UI surfaces the original error.
  *
- * The classifier doesn't read the user's preference — it reports
- * eligibility; the workflow combines this with `allowWebSearchFallback`.
+ * The classifier only reports eligibility; the workflow combines this with
+ * the caller's recovery policy.
  */
 export type FallbackKind =
   | 'AUTH'

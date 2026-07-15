@@ -1,12 +1,8 @@
 'use client';
 
-import { type AnalysisDto } from '@/lib/api';
+import { type AnalysisHistoryItemDto } from '@/lib/api';
 import { Button, Dialog } from '@/components/ui';
 import { ANALYSIS_TYPES } from '../stock-page-ui';
-
-// ============================================================
-// ConflictDialog — ③ · "Analysis is already running" 预检拦截
-// ============================================================
 
 export function ConflictDialog({
   open,
@@ -17,7 +13,7 @@ export function ConflictDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  ongoing: AnalysisDto;
+  ongoing: AnalysisHistoryItemDto;
   onView: () => void;
   onCancelAndNew: () => void;
 }) {
@@ -84,16 +80,12 @@ export function ConflictDialog({
   );
 }
 
-// ============================================================
-// SwitchedNotice — ④ · 自动切到 ongoing 分析后的顶部条
-// ============================================================
-
 export function SwitchedNotice({
   ongoing,
   onCancelAndNew,
   onDismiss,
 }: {
-  ongoing: AnalysisDto;
+  ongoing: AnalysisHistoryItemDto;
   onCancelAndNew: () => void;
   onDismiss: () => void;
 }) {

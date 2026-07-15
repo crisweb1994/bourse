@@ -1,23 +1,16 @@
 /**
- * Comprehensive workflow 的纯函数 helpers + 内部类型。
- *
- * refactor-v1 Wave 4：从 `comprehensive.ts` (1447 LOC) 抽出 ~210 LOC 纯函数。
- * 主文件 `comprehensive.ts` 保留 streamComprehensive async generator + 各 phase
- * 之间共享 state；本文件存"输入 → 输出无副作用"helpers，让两边都更易读。
+ * Pure helpers and internal types for the comprehensive workflow.
+ * The generator owns orchestration; this file owns synchronous transforms.
  */
 import type { AnalysisResult, StructuredJson } from '../contracts/analysis-result';
 import type { Citation } from '../contracts/citation';
-import type { AnalysisType, RunStatus } from '../contracts/enums';
+import type { RunStatus, SectionType } from '../contracts/enums';
 import type { SseEvent } from '../contracts/sse-events';
 import type { Dimension, DimensionRunResult } from '../dimensions/types';
 import type { JudgeTriggerContext } from '../primitives/judge';
 import type { MarketProfile } from '../markets/types';
 import type { BudgetLimits } from './types';
-import type {
-  ComprehensiveOptions,
-  ComprehensiveResult,
-  DimensionFailure,
-} from './types';
+import type { ComprehensiveResult, DimensionFailure } from './types';
 
 /**
  * Per-dimension state accumulated from SSE events while a single dimension
@@ -43,8 +36,8 @@ export interface DimAccumulator {
  * mutate; KEEP is a no-op (JudgeResult schema guarantees no UPGRADE).
  */
 export function applyConfidenceDowngrade(
-  dimResults: Map<AnalysisType, DimensionRunResult>,
-  type: AnalysisType,
+  dimResults: Map<SectionType, DimensionRunResult>,
+  type: SectionType,
   adjustment: 'KEEP' | 'DOWNGRADE_TO_MEDIUM' | 'DOWNGRADE_TO_LOW',
 ): void {
   if (adjustment === 'KEEP') return;
@@ -133,13 +126,13 @@ export function finalizeDim(
 
 export interface BuildResultArgs {
   status: RunStatus;
-  dimResults: Map<AnalysisType, DimensionRunResult>;
+  dimResults: Map<SectionType, DimensionRunResult>;
   failures: DimensionFailure[];
   /**
    * Dimensions skipped because the workflow halted (e.g., budget
    * exhausted). Merged with `failures` types into result.partialDimensions.
    */
-  unrunDimensions?: AnalysisType[];
+  unrunDimensions?: SectionType[];
   summary: ComprehensiveResult['summary'];
   allCitations: Citation[];
   allWarnings: string[];
@@ -149,7 +142,7 @@ export interface BuildResultArgs {
   aggregatedToolCalls: number;
   aggregatedCostUsd: number;
   perDimTrace: Map<
-    AnalysisType,
+    SectionType,
     {
       durationMs: number;
       citationsCount: number;
@@ -170,7 +163,7 @@ export function buildResult(args: BuildResultArgs): ComprehensiveResult {
   const perDimension =
     args.perDimTrace.size > 0
       ? (Object.fromEntries(args.perDimTrace) as Record<
-          AnalysisType,
+          SectionType,
           {
             durationMs: number;
             citationsCount: number;
@@ -294,42 +287,6 @@ export function checkBudget(
 }
 
 /**
- * Day 11.5a P1 #3: legacy `parallel: true` mode is incompatible with budget
- * enforcement and fail-run semantics — Promise.all can't synchronously halt
- * sibling dims. Fail loudly rather than silently downgrade.
- *
- * RFC-05: waveMode takes precedence — when the caller sets `waveMode` (any
- * value), this check is skipped and the wave / sequential branches decide.
- * Throws the original error strings verbatim (existing tests assert them).
- */
-export function assertLegacyParallelCompatible(
-  options: Pick<ComprehensiveOptions, 'parallel' | 'waveMode' | 'budget'>,
-  dims: readonly Dimension[],
-): void {
-  if (!(options.parallel && options.waveMode === undefined)) return;
-  const hasBudget =
-    options.budget !== undefined &&
-    (options.budget.maxTokens !== undefined ||
-      options.budget.maxCostUsd !== undefined ||
-      options.budget.maxToolCalls !== undefined);
-  if (hasBudget) {
-    throw new Error(
-      'streamComprehensive: parallel mode does not support budget enforcement. ' +
-        'Use sequential (parallel: false) when any of maxTokens / maxCostUsd / maxToolCalls is set.',
-    );
-  }
-  const failRunDims = dims.filter((d) => d.onFailure === 'fail-run');
-  if (failRunDims.length > 0) {
-    throw new Error(
-      `streamComprehensive: parallel mode incompatible with fail-run dimensions: ${failRunDims
-        .map((d) => d.type)
-        .join(', ')}. ` +
-        'Use sequential or change those dims to skip / retry-once.',
-    );
-  }
-}
-
-/**
  * RFC-06: derive source-routing config from the market profile once.
  * Returns the A|B|C|D host allowlist (E is implicit absence) for provider
  * web_search plus the full tier table for evidence-gate downgrades.
@@ -422,9 +379,9 @@ export function filterDegradedDims(
  * helpers to the validator module.
  */
 export function buildSectionsForValidation(
-  dimResults: Map<AnalysisType, DimensionRunResult>,
+  dimResults: Map<SectionType, DimensionRunResult>,
 ): Array<{
-  type: AnalysisType;
+  type: SectionType;
   reportMarkdown: string;
   structuredJson: StructuredJson;
 }> {
@@ -442,7 +399,7 @@ export function buildSectionsForValidation(
  * Exported so the strategy / phase functions can share it without redefinition.
  */
 export interface JudgeTriggerEntry {
-  type: AnalysisType;
+  type: SectionType;
   dim: Dimension;
   dimResult: DimensionRunResult;
   severity?: 'WARNING' | 'DOWNGRADE';
@@ -459,14 +416,14 @@ export interface JudgeTriggerEntry {
  */
 export function selectJudgeTriggers(
   sectionsForValidation: Array<{
-    type: AnalysisType;
+    type: SectionType;
     structuredJson: StructuredJson;
   }>,
-  dimResults: Map<AnalysisType, DimensionRunResult>,
+  dimResults: Map<SectionType, DimensionRunResult>,
   dims: readonly Dimension[],
   conflicts: Array<{
     severity?: string;
-    observations: Array<{ sectionType: AnalysisType }>;
+    observations: Array<{ sectionType: SectionType }>;
   }>,
   shouldJudgeFn: (ctx: JudgeTriggerContext) => boolean,
 ): JudgeTriggerEntry[] {

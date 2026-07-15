@@ -1,4 +1,4 @@
-import type { AnalysisType } from '../contracts/enums';
+import type { SectionType } from '../contracts/enums';
 import type { Dimension } from '../dimensions/types';
 
 /**
@@ -10,9 +10,7 @@ import type { Dimension } from '../dimensions/types';
  *
  *   1. `groupByWave` — partition dims into ordered wave buckets.
  *   2. `runWithSemaphore` — bounded-concurrency runner over an arbitrary
- *      list of async tasks. No knowledge of dims / SSE; reusable across
- *      future wave-aware workflows (RFC-06 cross-dim composition will
- *      build on this).
+ *      list of async tasks. No knowledge of dims / SSE.
  */
 
 /** A non-empty list of dims that all share the same `wave` number. */
@@ -23,8 +21,7 @@ export interface WaveGroup {
 
 /**
  * Group dims into ordered waves. Returns at most 3 entries (one per
- * occupied wave). Dims with `wave` undefined default to 1 — preserving
- * RFC-05's "all in wave 1 = current parallel:true" contract.
+ * occupied wave). Dims with `wave` undefined default to 1.
  *
  * Preserves the relative order of dims within a wave (caller-provided
  * dim ordering matters for stable SSE seq numbers).
@@ -99,7 +96,7 @@ export async function runWithSemaphore<T>(
  */
 export function findFailRunOffenders(
   dimsInWave: readonly Dimension[],
-  failedTypes: ReadonlySet<AnalysisType>,
+  failedTypes: ReadonlySet<SectionType>,
 ): readonly Dimension[] {
   return dimsInWave.filter(
     (d) => d.onFailure === 'fail-run' && failedTypes.has(d.type),

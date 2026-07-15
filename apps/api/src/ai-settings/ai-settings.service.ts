@@ -25,8 +25,6 @@ export interface AiProviderRuntime {
   baseUrl: string | null;
   model: string | null;
   utilityModel: string | null;
-  supportsWebSearch: boolean;
-  supportsTools: boolean;
 }
 
 const ANTHROPIC_STATIC_MODELS = [
@@ -69,8 +67,6 @@ export class AiSettingsService {
       enabledModels: dto.enabledModels ?? [],
       primaryModel: this.emptyToNull(dto.primaryModel),
       utilityModel: this.emptyToNull(dto.utilityModel),
-      supportsWebSearch: dto.supportsWebSearch ?? false,
-      supportsTools: dto.supportsTools ?? true,
       isDefault: dto.isDefault ?? false,
       enabled: dto.enabled ?? true,
     };
@@ -114,8 +110,6 @@ export class AiSettingsService {
       this.assertModelInEnabled('utilityModel', dto.utilityModel, effectiveEnabled);
       data.utilityModel = this.emptyToNull(dto.utilityModel);
     }
-    if (dto.supportsWebSearch !== undefined) data.supportsWebSearch = dto.supportsWebSearch;
-    if (dto.supportsTools !== undefined) data.supportsTools = dto.supportsTools;
     if (dto.enabled !== undefined) data.enabled = dto.enabled;
 
     if (dto.apiKey !== undefined) {
@@ -330,10 +324,8 @@ export class AiSettingsService {
       providerType: row.providerType,
       apiKey: this.readApiKey(row),
       baseUrl: row.baseUrl,
-      model: row.primaryModel ?? row.enabledModels[0] ?? row.model ?? null,
+      model: row.primaryModel ?? row.enabledModels[0] ?? null,
       utilityModel: row.utilityModel ?? null,
-      supportsWebSearch: row.supportsWebSearch,
-      supportsTools: row.supportsTools,
     };
   }
 
@@ -347,8 +339,6 @@ export class AiSettingsService {
       enabledModels: row.enabledModels ?? [],
       primaryModel: row.primaryModel ?? null,
       utilityModel: row.utilityModel ?? null,
-      supportsWebSearch: row.supportsWebSearch ?? false,
-      supportsTools: row.supportsTools ?? true,
       isDefault: row.isDefault ?? false,
       enabled: row.enabled,
       createdAt: row.createdAt,

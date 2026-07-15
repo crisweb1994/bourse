@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AnalysisType } from '../../contracts/enums';
+import type { SectionType } from '../../contracts/enums';
 import type { Dimension } from '../../dimensions/types';
 import {
   findFailRunOffenders,
@@ -9,7 +9,7 @@ import {
 
 /** Minimal Dimension stub: only the fields wave-executor inspects. */
 function dim(
-  type: AnalysisType,
+  type: SectionType,
   wave?: 1 | 2 | 3,
   onFailure: 'skip' | 'retry-once' | 'fail-run' = 'skip',
 ): Dimension {

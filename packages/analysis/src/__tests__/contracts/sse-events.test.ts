@@ -55,6 +55,17 @@ describe('contracts/SseEvent — discriminated union', () => {
     expect(SseEvent.parse(evt)).toMatchObject({ type: 'report_chunk' });
   });
 
+  it('rejects non-section analysis types as sectionType', () => {
+    expect(() =>
+      SseEvent.parse({
+        ...baseFields,
+        type: 'section_start',
+        sectionType: 'COMPREHENSIVE',
+        order: 0,
+      }),
+    ).toThrow();
+  });
+
   it('parses cost_update', () => {
     const evt = {
       ...baseFields,

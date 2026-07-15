@@ -13,11 +13,6 @@ model User {
   email                  String?
   name                   String
   avatarUrl              String?
-  // RFC rfc-evidence-pack-web-search-fallback: opt-in flag. When true and
-  // the CN EvidencePack v2 tool path hard-fails (AUTH / NETWORK /
-  // RATE_LIMIT_HARD), the workflow retries with the v1 LLM web_search
-  // builder instead of failing the whole run.
-  allowWebSearchFallback Boolean  @default(false)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
@@ -37,9 +32,7 @@ model Stock {
   exchange    String
   currency    String   @default("USD")
   yahooSymbol String?
-  // plan-v2 §11.1: sector filled by connector on first ingest (US: yahoo.sector
-  // / CN: eastmoney BOARD_NAME / HK: yahoo.sector). Used by compute/relative.ts
-  // for peer-group lookups.
+  // 由 connector 首次 ingest 写入，用于 compute/relative.ts 同行分组。
   sector      String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -56,8 +49,7 @@ model WatchlistItem {
   userId    String
   stockId   String
   notes     String?
-  // plan-v2 §13.1.1: workspace Watchlist widget renders by order asc; user
-  // drag-sort persists here. Default 0 puts new items at the top.
+  // 用户拖拽排序持久化；order asc 渲染；新增默认 0（置顶）。
   order     Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -73,35 +65,20 @@ model AiProviderSetting {
   id     String @id @default(cuid())
   userId String
 
-  // multi-config fields (Phase 1)
   label             String? // 用户起的名字，e.g. "我的 DeepSeek"
   providerType      AiProviderType? // ANTHROPIC | OPENAI_COMPATIBLE
   enabledModels     String[]        @default([])
-  supportsWebSearch Boolean         @default(false)
-  supportsTools     Boolean         @default(true)
   isDefault         Boolean         @default(false)
 
   baseUrl         String?
-  apiKey          String? // 明文存储（用户可在 Settings 页查看/编辑）
+  apiKey          String? // 明文存储（用户可在 Settings 页查看/��辑）
   enabled         Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  // deprecated — 保留供旧 Analysis.aiProvider 回放兼容
-  provider       String?
-  model          String?
-  /**
-   * 主模型 (Primary). 主分析流式 / 主报告生成 / web_search 工具调用 /
-   * 证据归一化 / debate。留空 → fallback 到 enabledModels[0] → 旧 model。
-   * UI 上必填; 后端校验须 ∈ enabledModels。
-   */
+  /// 主模型：主分析 + web_search。留空 → fallback enabledModels[0]。
   primaryModel   String?
-  /**
-   * 次模型 (Utility). 用于不需要强推理的辅助任务: structured JSON
-   * 抽取/修复、COMPREHENSIVE summary、搜索查询改写。留空 → fallback
-   * 到主 `model`。典型用法: model='gpt-5.5' + utilityModel='gpt-5.5-mini'。
-   * 注意: web_search 工具调用 + 证据归一化仍走主 model 以保证引用准确性。
-   */
+  /// 次模型：JSON 抽取 / summary 等辅助任务。留空 → fallback 到 primaryModel。
   utilityModel   String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -114,10 +91,7 @@ enum AiProviderType {
   OPENAI_COMPATIBLE
 }
 
-// plan-v2 §17.4.4 (2026-05-27) — WebSearchSetting reinstated. RFC:
-// docs/web-search-per-user.md. Wave 4.5 had removed the table in favor
-// of env-only config; reverted because users need to bring their own
-// Tavily/SearXNG keys without re-deploying.
+// 用户自配 Tavily/SearXNG key，避免依赖运维侧单一 env。
 enum WebSearchProviderType {
   TAVILY
   SEARXNG
@@ -144,8 +118,7 @@ model WebSearchSetting {
   user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// Daily Brief (docs/prd-daily-brief.md v1.5) — 定时行情简报订阅 + IM/Webhook
-// 投递记录。完整简报只在 IM，不落库（BriefPayload 是运行时内存结构）。
+// 定时行情简报订阅 + IM/Webhook 投递记录。完整简报只在 IM，不落库。
 model DigestSubscription {
   id         String   @id @default(cuid())
   userId     String   @unique
@@ -182,20 +155,18 @@ model Analysis {
   symbol              String
   market              Market
   analysisType        AnalysisType
+  question            String?
   status              AnalysisStatus @default(PENDING)
   aiProvider          String?
   aiModel             String?
   aiProviderSettingId String?
-  promptVersion       String?
   dataAsOf            String?
   generatedAt         DateTime?
   summaryMarkdown     String?
   summaryJson         Json?
   overallSignal       Signal?
   overallConfidence   Confidence?
-  // RFC rfc-evidence-pack-web-search-fallback: null = normal run; set to
-  // 'WEB_SEARCH_FALLBACK' when EvidencePack came from the v1 web_search
-  // builder after v2 hard-failed. Indexed for history filtering.
+  // null = 正常运行；'WEB_SEARCH_FALLBACK' = EvidencePack v2 失败后降级到 v1 web_search。
   degradedSource      String?
 
   createdAt           DateTime       @default(now())
@@ -219,37 +190,10 @@ model AnalysisSection {
   errorMessage   String?
   order          Int
 
-  // plan-v2 §11.1: per-section telemetry folded from the deleted
-  // SectionTrace table. Defaults so older rows / FAILED sections without
-  // recorded LLM activity stay non-NULL.
-  tokensIn       Int            @default(0)
-  tokensOut      Int            @default(0)
-  durationMs     Int?
-  // plan-v2 §10.1: section_done event emits signal/confidence directly;
-  // mirroring on the row lets history/list views render badges without
-  // parsing structuredJson.
-  signal         Signal?
-  confidence     Confidence?
-  // plan-v2 §10.1: citation-policy / cross-dim-validate warnings surfaced
-  // to UI. Json so each entry can carry { rule, message, severity }.
-  warnings       Json?
-
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
   analysis Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
-}
-
-// =============================================================================
-// research-core persistence (PRD §12.2)
-// Owned by apps/api as the only Prisma-aware layer. Implements
-// research-core ResearchRepositoryPort.
-// =============================================================================
-
-enum Sensitivity {
-  public
-  restricted
-  private
 }
 
 enum Market {
@@ -289,7 +233,7 @@ enum AnalysisType {
   PORTFOLIO
   GOVERNANCE
   COMPREHENSIVE
-  DEBATE
+  DEBATE // 已删除的功能，保留枚举值以兼容历史数据。
 }
 
 enum SectionType {
@@ -311,6 +255,7 @@ enum AnalysisStatus {
   PARTIAL_FAILED
   FAILED
   CANCELLED
+  BUDGET_EXHAUSTED
 }
 
 enum Signal {

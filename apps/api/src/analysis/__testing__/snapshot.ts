@@ -1,11 +1,9 @@
 /**
- * v0.3 后遗留 ① Layer 1：fixture diff 工具。
+ * Fixture diff helper for analysis workflow regression tests.
  *
- * 负责：
- *  - 对 scenario 运行结果做"运行时无关化"（redact 时间戳 / 自增 ID / 时长）
- *  - 与 `__fixtures__/<scenario>.json` 比对；UPDATE_FIXTURES=1 写回
- *
- * 不负责：scenario 运行本身（见 `scenario-runner.ts`）。
+ * It normalizes runtime-derived values, compares with
+ * `__fixtures__/<scenario>.json`, and writes fixtures when
+ * UPDATE_FIXTURES=1.
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';

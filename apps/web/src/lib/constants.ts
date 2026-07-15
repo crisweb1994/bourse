@@ -1,16 +1,16 @@
-export const ANALYSIS_TYPE_LABELS: Record<string, string> = {
-  FUNDAMENTAL: '基本面',
-  VALUATION: '估值',
-  INDUSTRY: '行业竞争',
-  RISK: '风险',
-  TECHNICAL: '技术面',
-  SENTIMENT: '情绪',
-  SCENARIO: '情景',
-  PORTFOLIO: '组合适配',
-  GOVERNANCE: '公司治理',
-  COMPREHENSIVE: '综合分析',
-  DEBATE: 'AI 多空合议',
-};
+import {
+  ANALYSIS_TYPE_LABELS as SHARED_ANALYSIS_TYPE_LABELS,
+} from '@bourse/shared-types';
+
+export {
+  ACTIVE_ANALYSIS_TYPES,
+  ANALYSIS_DIMENSIONS,
+  COMPREHENSIVE_DIMENSIONS,
+  LEGACY_ANALYSIS_TYPES,
+} from '@bourse/shared-types';
+
+export const ANALYSIS_TYPE_LABELS: Record<string, string> =
+  SHARED_ANALYSIS_TYPE_LABELS;
 
 export const STATUS_LABELS: Record<string, string> = {
   PENDING: '等待中',
@@ -19,6 +19,7 @@ export const STATUS_LABELS: Record<string, string> = {
   PARTIAL_FAILED: '部分失败',
   FAILED: '失败',
   CANCELLED: '已取消',
+  BUDGET_EXHAUSTED: '预算耗尽',
 };
 
 export const MARKET_LABELS: Record<string, string> = {

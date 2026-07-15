@@ -1,7 +1,7 @@
 import type { ZodSchema } from 'zod';
 import type { StructuredJson } from '../contracts/analysis-result';
 import type { Citation } from '../contracts/citation';
-import type { AnalysisType, Confidence, Signal } from '../contracts/enums';
+import type { Confidence, SectionType, Signal } from '../contracts/enums';
 
 // Day 4 only knows about webSearch. Day 6+ will add peerLookup /
 // financialSnapshot / newsScan as the V1+ tool pack lands.
@@ -25,6 +25,8 @@ export interface DimensionInput {
   /** Display name; falls back to symbol when omitted */
   name?: string;
   locale: string;
+  /** Optional user-supplied research focus for this run. */
+  question?: string;
 }
 
 export interface DimensionRunContext {
@@ -38,7 +40,7 @@ export interface BuiltPrompts {
 }
 
 export interface DimensionRunResult<T extends StructuredJson = StructuredJson> {
-  type: AnalysisType;
+  type: SectionType;
   reportMarkdown: string;
   structuredJson: T;
   citations: Citation[];
@@ -81,7 +83,7 @@ export interface MultiRoundPlan {
  * (`multiRoundPlan`) — see CLAUDE.md §3 #18 / MVP doc §3.1.
  */
 export interface Dimension<T extends StructuredJson = StructuredJson> {
-  type: AnalysisType;
+  type: SectionType;
   inputSchema: ZodSchema<DimensionInput>;
   buildPrompts(input: DimensionInput, ctx: DimensionRunContext): BuiltPrompts;
   allowedTools: readonly ToolName[];
@@ -94,10 +96,7 @@ export interface Dimension<T extends StructuredJson = StructuredJson> {
   /**
    * RFC-05: which wave this dim belongs to (1-3). Same-wave dims run
    * concurrently under `waveSemaphore`; later waves wait for earlier
-   * waves to fully settle. Default 1 (single-wave = current
-   * `parallel: true` behavior). Higher wave numbers are reserved for
-   * RFC-06+ cross-dim composition (dims that read prior-wave outputs);
-   * RFC-05 only ships the executor scaffolding.
+   * waves to fully settle. Default 1.
    */
   wave?: 1 | 2 | 3;
 

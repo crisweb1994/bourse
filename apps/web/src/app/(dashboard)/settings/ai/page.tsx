@@ -20,13 +20,11 @@ import {
   listAiProviderSettings,
   testProviderConnection,
   updateAiProviderSetting,
-  updateUserPreferences,
   type AiModelOptionDto,
   type AiProviderSettingDto,
   type BuiltinProviderTemplate,
   type ProviderTypeStr,
 } from '@/lib/api';
-import { API_URL } from '@/lib/utils';
 import { BUILTIN_PROVIDER_CATALOG } from '@/lib/ai-provider-catalog';
 import { WebSearchSettingCard } from './web-search-card';
 import { DigestSubscriptionCard } from './digest-card';
@@ -51,8 +49,6 @@ interface FormState {
   enabledModels: string[];
   primaryModel: string;
   utilityModel: string;
-  supportsWebSearch: boolean;
-  supportsTools: boolean;
   isDefault: boolean;
   enabled: boolean;
 }
@@ -65,8 +61,6 @@ const EMPTY_FORM: FormState = {
   enabledModels: [],
   primaryModel: '',
   utilityModel: '',
-  supportsWebSearch: false,
-  supportsTools: true,
   isDefault: false,
   enabled: true,
 };
@@ -80,8 +74,6 @@ function toForm(s: AiProviderSettingDto): FormState {
     enabledModels: [...s.enabledModels],
     primaryModel: s.primaryModel ?? '',
     utilityModel: s.utilityModel ?? '',
-    supportsWebSearch: s.supportsWebSearch,
-    supportsTools: s.supportsTools,
     isDefault: s.isDefault,
     enabled: s.enabled,
   };
@@ -118,42 +110,6 @@ export default function AiSettingsPage() {
     [settings, activeId],
   );
   const isNew = activeId === '__new__';
-
-  // RFC rfc-evidence-pack-web-search-fallback: page-level user pref.
-  // Persisted via PATCH /api/auth/preferences; loaded once on mount.
-  const [allowWebSearchFallback, setAllowWebSearchFallback] = useState(false);
-  const [savingFallback, setSavingFallback] = useState(false);
-
-  // plan-v2 Wave 4.5 — WebSearchSetting CRUD removed. Adapter picked from env.
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`${API_URL}/api/auth/me`, { credentials: 'include' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((u) => {
-        if (cancelled || !u) return;
-        setAllowWebSearchFallback(u.allowWebSearchFallback === true);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const toggleFallback = async (next: boolean) => {
-    setSavingFallback(true);
-    const prev = allowWebSearchFallback;
-    setAllowWebSearchFallback(next);
-    try {
-      await updateUserPreferences({ allowWebSearchFallback: next });
-      toast.success(next ? '已启用 web_search 兜底' : '已关闭 web_search 兜底');
-    } catch (err) {
-      setAllowWebSearchFallback(prev);
-      toast.error(err instanceof Error ? err.message : '保存偏好失败');
-    } finally {
-      setSavingFallback(false);
-    }
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -198,8 +154,6 @@ export default function AiSettingsPage() {
         providerType: template.providerType,
         baseUrl: template.baseUrl,
         enabledModels: [...template.defaultModels],
-        supportsWebSearch: template.supportsWebSearch,
-        supportsTools: template.supportsTools,
         isDefault: settings.length === 0,
       });
     } else {
@@ -229,8 +183,6 @@ export default function AiSettingsPage() {
         enabledModels: form.enabledModels,
         primaryModel: primary,
         utilityModel: form.utilityModel.trim(),
-        supportsWebSearch: form.supportsWebSearch,
-        supportsTools: form.supportsTools,
         isDefault: form.isDefault,
         enabled: form.enabled,
       };
@@ -606,26 +558,11 @@ export default function AiSettingsPage() {
                     />
                   </Field>
 
-                  {/* 能力开关 */}
                   <div>
                     <div className="mb-2.5">
-                      <SectionTag>能力开关</SectionTag>
+                      <SectionTag>使用状态</SectionTag>
                     </div>
                     <div className="space-y-1.5">
-                      <SwitchRow
-                        label="支持 Web Search"
-                        desc="provider 是否支持内置联网搜索工具（Anthropic / OpenAI 原生支持）"
-                        checked={form.supportsWebSearch}
-                        onCheckedChange={(v) =>
-                          updateForm({ supportsWebSearch: v })
-                        }
-                      />
-                      <SwitchRow
-                        label="支持 Function Calling / Tools"
-                        desc="关闭则结构化输出回退到 JSON-mode prompting（DeepSeek / Kimi 等建议关闭）"
-                        checked={form.supportsTools}
-                        onCheckedChange={(v) => updateForm({ supportsTools: v })}
-                      />
                       <SwitchRow
                         label="设为默认 Provider"
                         desc="未指定时自动使用该 provider"
@@ -814,9 +751,6 @@ export default function AiSettingsPage() {
         </section>
       </div>
 
-      {/* plan-v2 §17.4.4 — per-user web search adapter config. Restored
-          table; UI consumes hasAnthropic to disable CUSTOM_ONLY when the
-          user is on Claude (SDK can't host a pluggable web_search tool). */}
       <WebSearchSettingCard
         hasAnthropic={settings.some(
           (s) => s.enabled && s.providerType === 'ANTHROPIC',
@@ -825,36 +759,6 @@ export default function AiSettingsPage() {
 
       {/* Daily Brief（docs/prd-daily-brief.md）：行情简报订阅 + 推送渠道。 */}
       <DigestSubscriptionCard />
-
-      {/* RFC rfc-evidence-pack-web-search-fallback: page-level preference.
-          Sits below the per-provider grid so it's clearly separate from
-          provider-scoped settings. */}
-      <Card className="mt-4">
-        <div className="px-5 py-4 border-b border-[var(--color-border-soft)]">
-          <SectionTag>数据源兜底</SectionTag>
-        </div>
-        <div className="px-5 py-4">
-          <SwitchRow
-            label="数据接口失败时启用 web_search 兜底"
-            desc={
-              <>
-                A 股实时数据 API（行情 / 财报 / 北向 / 龙虎榜 / 解禁 / 一致预期）
-                出现 401 / 网络错 / 配额耗尽等硬故障时，自动切到 AI 网页搜索
-                完成分析。
-                <br />
-                <span className="text-[var(--color-warn)]">
-                  代价：北向资金 / 龙虎榜 / 一致预期 EPS 等私有数据
-                  无法替代，相关维度会被主动跳过；Debate 在此模式下置信度上限为
-                  MEDIUM。
-                </span>
-              </>
-            }
-            checked={allowWebSearchFallback}
-            onCheckedChange={toggleFallback}
-            disabled={savingFallback}
-          />
-        </div>
-      </Card>
     </>
   );
 }
@@ -882,4 +786,3 @@ function Field({
     </div>
   );
 }
-

@@ -157,8 +157,8 @@ flowchart TB
 
 - **严重降级** = `isPackCriticallyDegraded`:`dataAvailability.complete` 缺 `financials`
   (核心基本面输入)。
-- 恢复是 **market-agnostic** 且**生产恒开**(apps/api 对每次 run 启用;原 per-user
-  opt-in 已废弃,见 improve.md)。单元测试通过 `allowWebSearchFallback` 显式开关隔离。
+- 恢复是 **market-agnostic** 且**生产恒开**(apps/api 对每次 run 启用)。单元测试通过
+  `recoverMissingEvidence` 隔离 no-pack 路径。
 
 > ✅ **B 已落地 + 按字段自主补抓(flagged)**:整包恢复触发已放宽为「缺 financials 即
 > 触发」且生产恒开。另:`allowWebSearchGaps`(env,默认关)开启后,维度 LLM 可对 pack
@@ -212,9 +212,9 @@ flowchart TB
 
 - **失败语义**:`skip`(记失败、继续)/ `retry-once`(重试一次再跳)/ `fail-run`
   (在 summary 前停,status=FAILED)。
-- **预算**:`budget.maxTokens` 在维度边界检查,超限 → `BUDGET_EXHAUSTED`(顺序模式)。
-- **并发与预算互斥**:`parallel:true` 配 budget / fail-run 会显式抛错;要并发又要
-  预算请用 `waveMode:'auto'`。
+- **预算**:`budget.maxTokens / maxCostUsd / maxToolCalls` 在维度边界检查,超限 →
+  `BUDGET_EXHAUSTED`。
+- **执行模式**:默认顺序流式执行;需要并发时使用 `waveMode:'auto'` 分波执行。
 - `single` workflow(`streamSingle`)是单维精简版,跳过 wave / 校验 / judge。
 
 ---

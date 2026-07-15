@@ -13,7 +13,7 @@ import {
   type ValidatedFactKey,
   type ValidatorReport,
 } from '../contracts/cross-dim-validator';
-import type { AnalysisType, Confidence } from '../contracts/enums';
+import type { Confidence, SectionType } from '../contracts/enums';
 import type { EvidencePackV2 } from '../contracts/evidence-pack-v2';
 import type { MarketProfile } from '../markets/types';
 import { computeDeviation, extractFact } from './cross-dim-extract';
@@ -40,7 +40,7 @@ import { computeDeviation, extractFact } from './cross-dim-extract';
  */
 
 export interface SectionForValidation {
-  type: AnalysisType;
+  type: SectionType;
   reportMarkdown: string;
   structuredJson: StructuredJson;
 }
@@ -367,10 +367,10 @@ function classifyNumeric(
 
 function collectDimsToDowngrade(
   conflicts: FactConflict[],
-): Map<AnalysisType, string[]> {
+): Map<SectionType, string[]> {
   // Only DOWNGRADE / FAIL conflicts demand a confidence adjustment. WARNING
   // is informational (written to validator report; doesn't touch dim output).
-  const out = new Map<AnalysisType, string[]>();
+  const out = new Map<SectionType, string[]>();
   for (const c of conflicts) {
     if (c.severity !== 'DOWNGRADE' && c.severity !== 'FAIL') continue;
     for (const obs of c.observations) {

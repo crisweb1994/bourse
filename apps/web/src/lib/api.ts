@@ -1,5 +1,11 @@
 import { Market, DigestSession, ChannelType } from '@bourse/shared-types';
 import type {
+  ActiveAnalysisType,
+  AnalysisStatus,
+  AnalysisType,
+  Confidence,
+  SectionType,
+  Signal,
   StockSearchResult,
   WatchlistItemDto,
 } from '@bourse/shared-types';
@@ -37,14 +43,13 @@ export async function searchStocks(query: string): Promise<StockSearchResult[]> 
   return fetchApi(`/api/stocks/search?q=${encodeURIComponent(query)}`);
 }
 
-// plan-v2 §12.1 — merged stock detail. `stock` is null + `candidates`
-// populated when (symbol, market) hasn't been seen yet; otherwise quote
-// and profile are fetched in parallel server-side.
+// Merged stock detail. Unknown symbols return candidates; known symbols return
+// the stock row plus quote/profile snapshots.
 export interface StockDtoBrief {
   id: string;
   symbol: string;
   name: string;
-  market: string;
+  market: Market;
   exchange: string;
   currency: string;
   yahooSymbol: string | null;
@@ -136,30 +141,25 @@ export interface AnalysisDto {
   userId: string;
   stockId: string;
   symbol: string;
-  market: string;
-  analysisType: string;
-  status: string;
+  market: Market;
+  analysisType: AnalysisType;
+  question: string | null;
+  status: AnalysisStatus;
   aiProvider: string | null;
   aiModel: string | null;
-  promptVersion: string | null;
   dataAsOf: string | null;
   generatedAt: string | null;
-  overallSignal: string | null;
-  overallConfidence: string | null;
-  /** RFC rfc-evidence-pack-web-search-fallback. */
+  overallSignal: Signal | null;
+  overallConfidence: Confidence | null;
   degradedSource?: 'WEB_SEARCH_FALLBACK' | null;
-  // plan-v2 Wave 2: snapshotIds + research (planner summary) dropped along
-  // with the planning pipeline and ResearchSnapshot persistence.
   createdAt: string;
-  /** Free-form payload — used by DEBATE for { config, evidencePack,
-   * debateResult, judgeText, partialRounds } and by COMPREHENSIVE for
-   * the summary block. Frontend uses it via narrow type assertions. */
+  /** Free-form payload; COMPREHENSIVE stores the summary block here. */
   summaryJson?: unknown;
   stock: {
     id: string;
     symbol: string;
     name: string;
-    market: string;
+    market: Market;
     exchange: string;
     currency: string;
     yahooSymbol: string | null;
@@ -169,23 +169,34 @@ export interface AnalysisDto {
 
 export interface AnalysisSectionDto {
   id: string;
-  type: string;
-  status: string;
+  type: SectionType;
+  status: AnalysisStatus;
   reportMarkdown: string | null;
   structuredJson: any;
   citations: any[];
   order: number;
 }
 
+export interface AnalysisHistorySectionDto {
+  type: SectionType;
+  status: AnalysisStatus;
+}
+
+export type AnalysisHistoryItemDto = Omit<AnalysisDto, 'sections'> & {
+  sections: AnalysisHistorySectionDto[];
+};
+
 export async function createAnalysis(
   stockId: string,
-  analysisType: string,
+  analysisType: ActiveAnalysisType,
   aiProviderSettingId?: string,
   aiModel?: string,
+  question?: string,
 ): Promise<AnalysisDto> {
   const body: Record<string, string> = { stockId, analysisType };
   if (aiProviderSettingId) body.aiProviderSettingId = aiProviderSettingId;
   if (aiModel) body.aiModel = aiModel;
+  if (question?.trim()) body.question = question.trim();
 
   return fetchApi('/api/analysis', {
     method: 'POST',
@@ -201,42 +212,23 @@ export async function getAnalysis(id: string): Promise<AnalysisDto> {
   return fetchApi(`/api/analysis/${id}`);
 }
 
-/**
- * RFC rfc-evidence-pack-web-search-fallback §3.1: persist the user's
- * opt-in for v2-tool-failure → v1 web_search fallback. Returns the
- * updated value so callers can confirm without re-fetching `/me`.
- */
-// plan-v2 Wave 4.5 — WebSearchSetting CRUD client removed. Web search
-// provider now picked from server-side env (TAVILY_API_KEY etc); UI
-// has no override surface.
-
-export async function updateUserPreferences(patch: {
-  allowWebSearchFallback?: boolean;
-}): Promise<{ allowWebSearchFallback: boolean }> {
-  return fetchApi('/api/auth/preferences', {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      ...csrfHeaders(),
-    },
-    body: JSON.stringify(patch),
-  });
-}
-
-// plan-v2 Wave 3.1b — createDebate removed alongside the DEBATE workflow.
-
 export async function getAnalysisHistory(
   page = 1,
   limit = 20,
   filters?: {
-    analysisType?: string;
-    status?: string;
+    analysisType?: AnalysisType;
+    status?: AnalysisStatus;
     symbol?: string;
     stockId?: string;
-    /** RFC rfc-evidence-pack-web-search-fallback: 仅看 degraded 行。 */
+    /** Filter to runs where structured evidence fell back to web_search. */
     degradedOnly?: boolean;
   },
-): Promise<{ items: AnalysisDto[]; total: number; page: number; limit: number }> {
+): Promise<{
+  items: AnalysisHistoryItemDto[];
+  total: number;
+  page: number;
+  limit: number;
+}> {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (filters?.analysisType) params.set('analysisType', filters.analysisType);
   if (filters?.status) params.set('status', filters.status);
@@ -260,10 +252,6 @@ export async function abortAnalysis(id: string): Promise<{ ok: boolean }> {
   });
 }
 
-// plan-v2 Wave 4.2 — InvestorProfileDto + getInvestorProfile +
-// updateInvestorProfile removed. plan-v2 §15.1 "用户画像放 URL params +
-// localStorage, beta 无需持久化".
-
 export async function retrySection(
   analysisId: string,
   sectionId: string,
@@ -274,10 +262,6 @@ export async function retrySection(
   });
 }
 
-// plan-v2 Wave 4.1 — BatchJobDto + createBatchAnalysis / getBatchAnalysis /
-// cancelBatchAnalysis removed alongside the BatchJob backend.
-
-// AI settings APIs — Phase 1: multi-config + builtin catalog
 export type ProviderTypeStr = 'ANTHROPIC' | 'OPENAI_COMPATIBLE';
 
 export interface AiProviderSettingDto {
@@ -289,8 +273,6 @@ export interface AiProviderSettingDto {
   enabledModels: string[];
   primaryModel: string | null;
   utilityModel: string | null;
-  supportsWebSearch: boolean;
-  supportsTools: boolean;
   isDefault: boolean;
   enabled: boolean;
 }
@@ -301,8 +283,6 @@ export interface BuiltinProviderTemplate {
   providerType: ProviderTypeStr;
   baseUrl: string;
   defaultModels: string[];
-  supportsWebSearch: boolean;
-  supportsTools: boolean;
   iconColor: string;
   iconText: string;
 }
@@ -326,8 +306,6 @@ export interface AiProviderSettingInput {
   enabledModels?: string[];
   primaryModel?: string;
   utilityModel?: string;
-  supportsWebSearch?: boolean;
-  supportsTools?: boolean;
   isDefault?: boolean;
   enabled?: boolean;
 }
@@ -388,10 +366,6 @@ export function testProviderConnection(input: {
     body: JSON.stringify(input),
   });
 }
-
-// ============================================================================
-// Web Search Setting (plan-v2 §17.4.4)
-// ============================================================================
 
 export type WebSearchProviderType = 'TAVILY' | 'SEARXNG';
 export type WebSearchPrimaryMode = 'NATIVE_FIRST' | 'CUSTOM_ONLY';

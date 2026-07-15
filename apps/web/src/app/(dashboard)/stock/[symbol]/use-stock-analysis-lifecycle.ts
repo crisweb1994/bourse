@@ -1,22 +1,5 @@
 'use client';
 
-/**
- * useStockAnalysisLifecycle — the single source of truth for "which analysis
- * is this page showing, and how do we create/switch/resolve runs".
- *
- * Consolidates what used to be ~7 useState + 3 effects + 6 handlers scattered
- * in page.tsx:
- *   - recentAnalyses / currentAnalysisMeta / checkingOngoing / loading
- *   - the conflict machinery (conflictAnalysis / conflictPending /
- *     autoSwitchedFrom)
- *   - the analysisId loader, the history loader, the terminal meta-sync
- *   - create / rerun / retry / view-ongoing / cancel-and-new
- *
- * Behaviour is preserved 1:1 from the previous in-component logic — the state
- * is now a single reducer and the mutable inputs (stream / router / form
- * setters) are read through a ref so the load effects stay keyed only on
- * (effectiveStockId, analysisId) without stale-closure hazards.
- */
 import { useEffect, useReducer, useRef } from 'react';
 import {
   abortAnalysis,
@@ -25,87 +8,24 @@ import {
   getAnalysisHistory,
   retrySection as apiRetrySection,
   type AnalysisDto,
+  type AnalysisHistoryItemDto,
 } from '@/lib/api';
 import { toast } from '@/components/ui';
 import type { useAnalysisStream } from '@/hooks/use-analysis-stream';
-
-export type CreatePayload = {
-  type: string;
-  settingId?: string;
-  model?: string;
-};
+import {
+  isActiveAnalysisType,
+  type ActiveAnalysisType,
+} from '@bourse/shared-types';
+import {
+  buildStockAnalysisUrl,
+  findOngoingAnalysis,
+  INITIAL_LIFECYCLE_STATE,
+  isAlreadyRunningError,
+  lifecycleReducer,
+  type CreatePayload,
+} from './stock-analysis-lifecycle-state';
 
 type Stream = ReturnType<typeof useAnalysisStream>;
-
-interface LifecycleState {
-  recentAnalyses: AnalysisDto[];
-  current: AnalysisDto | null;
-  checkingOngoing: boolean;
-  loading: boolean;
-  conflict: AnalysisDto | null;
-  conflictPending: CreatePayload | null;
-  autoSwitchedFrom: AnalysisDto | null;
-}
-
-const INITIAL_STATE: LifecycleState = {
-  recentAnalyses: [],
-  current: null,
-  checkingOngoing: true,
-  loading: false,
-  conflict: null,
-  conflictPending: null,
-  autoSwitchedFrom: null,
-};
-
-type Action =
-  | { t: 'checking'; v: boolean }
-  | { t: 'loading'; v: boolean }
-  | { t: 'recent'; items: AnalysisDto[] }
-  | { t: 'current'; analysis: AnalysisDto | null }
-  | { t: 'conflict'; analysis: AnalysisDto | null; pending: CreatePayload | null }
-  | { t: 'clearConflict' }
-  | { t: 'conflictPending'; pending: CreatePayload | null }
-  | { t: 'autoSwitched'; analysis: AnalysisDto | null }
-  | { t: 'markCancelled'; id: string };
-
-function reducer(s: LifecycleState, a: Action): LifecycleState {
-  switch (a.t) {
-    case 'checking':
-      return { ...s, checkingOngoing: a.v };
-    case 'loading':
-      return { ...s, loading: a.v };
-    case 'recent':
-      return { ...s, recentAnalyses: a.items };
-    case 'current':
-      return { ...s, current: a.analysis };
-    case 'conflict':
-      return { ...s, conflict: a.analysis, conflictPending: a.pending };
-    case 'clearConflict':
-      return { ...s, conflict: null, conflictPending: null };
-    case 'conflictPending':
-      return { ...s, conflictPending: a.pending };
-    case 'autoSwitched':
-      return { ...s, autoSwitchedFrom: a.analysis };
-    case 'markCancelled':
-      return {
-        ...s,
-        recentAnalyses: s.recentAnalyses.map((x) =>
-          x.id === a.id ? { ...x, status: 'CANCELLED' } : x,
-        ),
-      };
-    default:
-      return s;
-  }
-}
-
-const findOngoing = (items: AnalysisDto[]): AnalysisDto | undefined =>
-  items.find((a) => a.status === 'IN_PROGRESS' || a.status === 'PENDING');
-
-const isAlreadyRunningError = (err: unknown): boolean => {
-  if (!(err instanceof Error)) return false;
-  const m = err.message.toLowerCase();
-  return m.includes('already running') || m.includes('already in progress');
-};
 
 interface Params {
   stream: Stream;
@@ -115,7 +35,7 @@ interface Params {
   symbol: string | null;
   router: { replace: (href: string) => void };
   /** Sync the form's default analysis-type to a resolved run. */
-  setFormType: (type: string) => void;
+  setFormType: (type: ActiveAnalysisType) => void;
   /** Close the new-analysis dialog. */
   closeForm: () => void;
   /** Current form provider/model selection — read by rerun()'s payload. */
@@ -124,7 +44,10 @@ interface Params {
 }
 
 export function useStockAnalysisLifecycle(params: Params) {
-  const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
+  const [state, dispatch] = useReducer(
+    lifecycleReducer,
+    INITIAL_LIFECYCLE_STATE,
+  );
 
   // Mutable inputs read through a ref so the load effects can stay keyed on
   // (effectiveStockId, analysisId) only — no stale-closure on stream/router/
@@ -132,8 +55,8 @@ export function useStockAnalysisLifecycle(params: Params) {
   const ref = useRef(params);
   ref.current = params;
 
-  // currentAnalysisMeta mirror for the terminal meta-sync guard.
-  const currentRef = useRef<AnalysisDto | null>(null);
+  // Latest loaded analysis for the terminal metadata refresh.
+  const currentRef = useRef<AnalysisHistoryItemDto | null>(null);
   currentRef.current = state.current;
 
   const { effectiveStockId, analysisId } = params;
@@ -155,7 +78,9 @@ export function useStockAnalysisLifecycle(params: Params) {
     getAnalysis(analysisId)
       .then((analysis) => {
         if (cancelled) return;
-        ref.current.setFormType(analysis.analysisType);
+        if (isActiveAnalysisType(analysis.analysisType)) {
+          ref.current.setFormType(analysis.analysisType);
+        }
         dispatch({ t: 'current', analysis });
         ref.current.stream.startStream(analysisId);
       })
@@ -182,15 +107,17 @@ export function useStockAnalysisLifecycle(params: Params) {
     getAnalysisHistory(1, 5, { stockId: effectiveStockId })
       .then((res) => {
         if (cancelled) return;
-        // Always cache — conflict pre-flight, compare, header chip all read it,
+        // Always cache — conflict checks, compare view, and header chips read it,
         // including on ?analysisId= deep-links the loader above doesn't fill.
         dispatch({ t: 'recent', items: res.items });
         if (!analysisId) {
-          const ongoing = findOngoing(res.items);
+          const ongoing = findOngoingAnalysis(res.items);
           const target = ongoing ?? res.items[0];
           if (target) {
             dispatch({ t: 'current', analysis: target });
-            ref.current.setFormType(target.analysisType);
+            if (isActiveAnalysisType(target.analysisType)) {
+              ref.current.setFormType(target.analysisType);
+            }
             ref.current.stream.startStream(target.id);
           }
         }
@@ -241,14 +168,10 @@ export function useStockAnalysisLifecycle(params: Params) {
       toast.error('缺少股票记录，请先添加到自选股后再进入分析。');
       return false;
     }
-    // ③ pre-flight — a cached ongoing run avoids the wasted roundtrip.
-    // Skipped on the cancel-and-replay paths: they just aborted the only
-    // ongoing run, but the dispatched cancellation isn't visible in this
-    // closure's `state` yet, so a pre-flight would re-detect the stale ongoing
-    // and re-open the conflict instead of creating. The backend 409 + the ④
-    // fallback below still guard against a genuinely concurrent run.
+    // Local conflict check avoids creating a second run when recent history
+    // already shows an active analysis for this stock.
     if (!opts?.skipPreflight) {
-      const cachedOngoing = findOngoing(state.recentAnalyses);
+      const cachedOngoing = findOngoingAnalysis(state.recentAnalyses);
       if (cachedOngoing) {
         dispatch({ t: 'conflict', analysis: cachedOngoing, pending: payload });
         return false;
@@ -261,31 +184,37 @@ export function useStockAnalysisLifecycle(params: Params) {
         payload.type,
         payload.settingId,
         payload.model,
+        payload.question,
       );
       dispatch({ t: 'loading', v: false });
       afterSuccess(analysis);
       return true;
     } catch (err: unknown) {
       dispatch({ t: 'loading', v: false });
-      // ④ post-error fallback — backend rejected because of a race. Refetch
-      // history, find the brand-new ongoing row, auto-switch to it.
+      // Server-side conflict: refresh history and attach to the active run.
       if (isAlreadyRunningError(err)) {
         try {
           const fresh = await getAnalysisHistory(1, 5, {
             stockId: p.effectiveStockId,
           });
-          const ongoing = findOngoing(fresh.items);
+          const ongoing = findOngoingAnalysis(fresh.items);
           if (ongoing) {
             dispatch({ t: 'recent', items: fresh.items });
             dispatch({ t: 'autoSwitched', analysis: ongoing });
             dispatch({ t: 'current', analysis: ongoing });
             dispatch({ t: 'conflictPending', pending: payload });
-            p.setFormType(ongoing.analysisType);
+            if (isActiveAnalysisType(ongoing.analysisType)) {
+              p.setFormType(ongoing.analysisType);
+            }
             p.closeForm();
             p.stream.reset();
             p.stream.startStream(ongoing.id);
             p.router.replace(
-              `/stock/${encodeURIComponent(p.symbol ?? '')}?stockId=${p.effectiveStockId}&analysisId=${ongoing.id}`,
+              buildStockAnalysisUrl({
+                symbol: p.symbol,
+                stockId: p.effectiveStockId,
+                analysisId: ongoing.id,
+              }),
             );
             return false;
           }
@@ -310,18 +239,31 @@ export function useStockAnalysisLifecycle(params: Params) {
     const p = ref.current;
     const current = state.current;
     if (!p.effectiveStockId || !current) return;
+    if (!isActiveAnalysisType(current.analysisType)) {
+      toast.error('该历史分析类型已不支持重新运行');
+      return;
+    }
+    const stockId = p.effectiveStockId;
     await tryCreateAnalysis(
       {
         type: current.analysisType,
         settingId: p.formSettingId || undefined,
-        model: current.aiModel || p.formModel || undefined,
+        // A rerun should follow the currently selected provider/config. Reusing
+        // the historical model can send a Claude model id to OpenAI after the
+        // root .env provider changes.
+        model: p.formModel || undefined,
+        question: current.question || undefined,
       },
       (analysis) => {
         dispatch({ t: 'current', analysis });
         p.stream.reset();
         p.stream.startStream(analysis.id);
         p.router.replace(
-          `/stock/${encodeURIComponent(p.symbol ?? '')}?stockId=${p.effectiveStockId}&analysisId=${analysis.id}`,
+          buildStockAnalysisUrl({
+            symbol: p.symbol,
+            stockId,
+            analysisId: analysis.id,
+          }),
         );
       },
     );
@@ -342,15 +284,22 @@ export function useStockAnalysisLifecycle(params: Params) {
     const p = ref.current;
     const conflict = state.conflict;
     if (!conflict || !p.effectiveStockId) return;
+    const stockId = p.effectiveStockId;
     const id = conflict.id;
     dispatch({ t: 'clearConflict' });
     dispatch({ t: 'current', analysis: conflict });
-    p.setFormType(conflict.analysisType);
+    if (isActiveAnalysisType(conflict.analysisType)) {
+      p.setFormType(conflict.analysisType);
+    }
     p.closeForm();
     p.stream.reset();
     p.stream.startStream(id);
     p.router.replace(
-      `/stock/${encodeURIComponent(p.symbol ?? '')}?stockId=${p.effectiveStockId}&analysisId=${id}`,
+      buildStockAnalysisUrl({
+        symbol: p.symbol,
+        stockId,
+        analysisId: id,
+      }),
     );
   };
 
@@ -358,6 +307,7 @@ export function useStockAnalysisLifecycle(params: Params) {
     const p = ref.current;
     const conflict = state.conflict;
     if (!conflict || !p.effectiveStockId) return;
+    const stockId = p.effectiveStockId;
     const ongoingId = conflict.id;
     const replay = state.conflictPending;
     dispatch({ t: 'clearConflict' });
@@ -377,7 +327,11 @@ export function useStockAnalysisLifecycle(params: Params) {
           p.stream.reset();
           p.stream.startStream(analysis.id);
           p.router.replace(
-            `/stock/${encodeURIComponent(p.symbol ?? '')}?stockId=${p.effectiveStockId}&analysisId=${analysis.id}`,
+            buildStockAnalysisUrl({
+              symbol: p.symbol,
+              stockId,
+              analysisId: analysis.id,
+            }),
           );
         },
         { skipPreflight: true },
@@ -403,6 +357,7 @@ export function useStockAnalysisLifecycle(params: Params) {
       return;
     }
     if (replay && p.effectiveStockId) {
+      const stockId = p.effectiveStockId;
       await tryCreateAnalysis(
         replay,
         (analysis) => {
@@ -410,7 +365,11 @@ export function useStockAnalysisLifecycle(params: Params) {
           p.stream.reset();
           p.stream.startStream(analysis.id);
           p.router.replace(
-            `/stock/${encodeURIComponent(p.symbol ?? '')}?stockId=${p.effectiveStockId}&analysisId=${analysis.id}`,
+            buildStockAnalysisUrl({
+              symbol: p.symbol,
+              stockId,
+              analysisId: analysis.id,
+            }),
           );
         },
         { skipPreflight: true },

@@ -1,11 +1,8 @@
 /**
- * v0.3 后遗留 ① Layer 1：scenario runner.
+ * Scenario runner for analysis workflow regression fixtures.
  *
- * 把一段预录的 SSE 事件序列灌进 `runStreamComprehensiveAdapter`
- * / `runStreamDebateAdapter`，捕获两类可观测产物（send / prisma），
- * 转成一份可 snapshot 的 ScenarioSnapshot。
- *
- * 不依赖真实 LLM / 真实 DB / Nest 容器；快、确定、零成本。
+ * Feeds scripted domain events into `runAnalysisWorkflowAdapter`, captures API
+ * SSE frames and Prisma writes, then returns a snapshot-friendly object.
  */
 import type {
   AgentProvider,
@@ -24,10 +21,10 @@ export interface TestProviderCapabilities {
 }
 
 import {
-  runStreamComprehensiveAdapter,
+  runAnalysisWorkflowAdapter,
   type AdapterContext,
   type AdapterResult,
-} from '../stream-comprehensive-adapter';
+} from '../analysis-workflow-adapter';
 
 export interface CapturedSend {
   type: string;
@@ -54,12 +51,10 @@ export interface ScenarioInputComprehensive {
   finalReturn?: unknown;
   /** If set, the generator throws this after yielding all events. */
   finalThrow?: Error;
-  /** ResearchSnapshot for `provider.capabilities` (e.g., webSearch.available=false). */
+  /** Fake provider capabilities, e.g. webSearch.available=false. */
   providerCapabilities?: TestProviderCapabilities;
   market?: 'CN' | 'US' | 'HK' | 'JP' | 'UK';
 }
-
-// plan-v2 Wave 3.1 — ScenarioInputDebate + runDebate removed.
 
 export type ScenarioInput = ScenarioInputComprehensive;
 
@@ -93,10 +88,7 @@ async function runComprehensive(
     analysisId: 'a-test',
     analysis: {
       id: 'a-test',
-      symbol: 'TEST',
-      market: input.market ?? 'CN',
       analysisType: 'COMPREHENSIVE',
-      userId: 'u-test',
       sections: input.sections,
       stock: { symbol: 'TEST', market: input.market ?? 'CN', name: 'Test Co.' },
     },
@@ -105,13 +97,11 @@ async function runComprehensive(
       sendEvents.push({ type, data: data as Record<string, unknown> });
     },
     prisma: makePrismaStub(prismaWrites),
-    toolCache: {} as AdapterContext['toolCache'],
-    modelId: 'fixture-model',
-    providerName: 'fixture-provider',
+    aiModel: 'fixture-model',
     _streamFactory: factory,
   };
 
-  const result = await runStreamComprehensiveAdapter(ctx);
+  const result = await runAnalysisWorkflowAdapter(ctx);
 
   return {
     scenarioName: input.name,

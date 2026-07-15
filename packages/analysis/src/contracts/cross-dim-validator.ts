@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AnalysisType, Confidence } from './enums';
+import { Confidence, SectionType } from './enums';
 
 /**
  * RFC-03 §5: Cross-dimensional validator contracts.
@@ -71,7 +71,7 @@ export type GroundTruthSource = z.infer<typeof GroundTruthSource>;
  *   - etc.
  */
 export const FactObservation = z.object({
-  sectionType: AnalysisType,
+  sectionType: SectionType,
   value: z.unknown(),
   extractedFrom: z.string().min(1),
 });
@@ -107,7 +107,7 @@ export type FactConflict = z.infer<typeof FactConflict>;
  * without parsing warnings[] strings.
  */
 export const DowngradeRecord = z.object({
-  type: AnalysisType,
+  type: SectionType,
   originalConfidence: Confidence,
   downgradedTo: Confidence,
   reason: z.string().min(1),

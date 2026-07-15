@@ -182,7 +182,7 @@ describe('streamComprehensive — RFC-05 waveMode "auto" basic', () => {
     expect(result.status).toBe('COMPLETED');
   });
 
-  it('does NOT throw on budget when waveMode=auto (vs legacy parallel:true)', async () => {
+  it('honors budget when waveMode=auto', async () => {
     const result = await runComprehensive(buildProvider({}), minimalInput, {
       runId,
       todayDate: TODAY,
@@ -301,60 +301,5 @@ describe('streamComprehensive — waveMode "auto" wave ordering', () => {
     // before/after settle since both could overlap with the wait inside.
     // Stronger: wave 2 start > wave 1 start + epsilon.
     expect(tB!).toBeGreaterThan(tA!);
-  });
-});
-
-// ===== Backward compat: legacy parallel:true still works =====
-
-describe('streamComprehensive — RFC-05 backward compat', () => {
-  it('legacy parallel:true (no waveMode) still uses Promise.all path', async () => {
-    const result = await runComprehensive(buildProvider({}), minimalInput, {
-      runId,
-      todayDate: TODAY,
-      parallel: true,
-    });
-    expect(result.status).toBe('COMPLETED');
-  });
-
-  it('legacy parallel:true with budget still throws (preserves semantics)', async () => {
-    await expect(
-      collect(
-        streamComprehensive(buildProvider({}), minimalInput, {
-          runId,
-          todayDate: TODAY,
-          parallel: true,
-          budget: { maxTokens: 100_000 },
-        }),
-      ),
-    ).rejects.toThrow(/parallel mode does not support budget/);
-  });
-
-  it('legacy parallel:true with fail-run dim still throws', async () => {
-    const failRunDim: Dimension = {
-      ...ALL_DIMENSIONS[0]!,
-      onFailure: 'fail-run',
-    };
-    await expect(
-      collect(
-        streamComprehensive(buildProvider({}), minimalInput, {
-          runId,
-          todayDate: TODAY,
-          parallel: true,
-          dimensions: [failRunDim],
-        }),
-      ),
-    ).rejects.toThrow(/parallel mode incompatible with fail-run/);
-  });
-
-  it('waveMode "disabled" takes precedence over parallel:true → sequential', async () => {
-    const result = await runComprehensive(buildProvider({}), minimalInput, {
-      runId,
-      todayDate: TODAY,
-      parallel: true,
-      waveMode: 'disabled',
-      // budget legal because we're sequential
-      budget: { maxTokens: 10_000_000 },
-    });
-    expect(result.status).toBe('COMPLETED');
   });
 });

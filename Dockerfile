@@ -39,9 +39,6 @@ COPY --from=api-build /app /app
 WORKDIR /app
 ENV NODE_ENV=production
 EXPOSE 3001
-# `prisma db push` runs each startup so schema lands without a separate
-# migration step. Beta-grade convenience; switch to `prisma migrate deploy`
-# when data is precious.
 CMD ["sh", "-c", "pnpm --filter @bourse/api exec prisma db push --skip-generate && node apps/api/dist/main"]
 
 # ---------------------------------------------------------------------------

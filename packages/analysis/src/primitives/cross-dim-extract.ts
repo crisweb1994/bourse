@@ -3,7 +3,7 @@ import type {
   FactObservation,
   ValidatedFactKey,
 } from '../contracts/cross-dim-validator';
-import type { AnalysisType } from '../contracts/enums';
+import type { SectionType } from '../contracts/enums';
 
 /**
  * RFC-03 §6: cross-dim fact extractors.
@@ -26,7 +26,7 @@ import type { AnalysisType } from '../contracts/enums';
  */
 
 export interface ExtractInput {
-  type: AnalysisType;
+  type: SectionType;
   reportMarkdown: string;
   structuredJson: StructuredJson;
 }

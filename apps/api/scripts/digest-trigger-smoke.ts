@@ -30,7 +30,6 @@ import { WebhookAdapter } from '../src/digest/channel/webhook.adapter';
 import { FeishuAdapter } from '../src/digest/channel/feishu.adapter';
 import { TelegramAdapter } from '../src/digest/channel/telegram.adapter';
 
-dotenv.config({ path: '../../.env.local' });
 dotenv.config({ path: '../../.env' });
 
 const SEC_UA = process.env.RESEARCH_CORE_USER_AGENT?.trim() || 'smoke contact@example.com';

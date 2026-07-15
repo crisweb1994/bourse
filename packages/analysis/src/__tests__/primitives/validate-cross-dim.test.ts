@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { StructuredJson } from '../../contracts/analysis-result';
 import { DEFAULT_CROSS_DIM_TOLERANCE } from '../../contracts/cross-dim-validator';
-import type { AnalysisType, Confidence } from '../../contracts/enums';
+import type { Confidence, SectionType } from '../../contracts/enums';
 import type { EvidencePackV2 } from '../../contracts/evidence-pack-v2';
 import { CN } from '../../markets/cn';
 import {
@@ -13,7 +13,7 @@ const ISO = '2026-05-13T08:00:00.000Z';
 const TODAY = '2026-05-13';
 
 function section(
-  type: AnalysisType,
+  type: SectionType,
   overrides: Partial<{
     confidence: Confidence;
     pe: number;

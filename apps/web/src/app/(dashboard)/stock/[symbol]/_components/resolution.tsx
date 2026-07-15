@@ -4,9 +4,6 @@ import { Loader2, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { Button, Card } from '@/components/ui';
 
-// ============================================================
-// ResolutionRecovery — PR-3 · /stock/:symbol 直达链接恢复
-// ============================================================
 export function ResolutionRecovery({
   symbol,
   candidates,

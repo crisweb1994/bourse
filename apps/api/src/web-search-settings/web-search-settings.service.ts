@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { buildWebSearchExecutorFromSetting } from '@bourse/analysis';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -8,16 +8,9 @@ import {
   WebSearchTestResult,
 } from './web-search-settings.dto';
 
-/**
- * Per-user web search configuration (plan-v2 §17.4.4 — reinstated table).
- * One row per user (uniqueness enforced at schema level). Empty / absent
- * row means "fall through to env (TAVILY_API_KEY / SEARXNG_BASE_URL / ...)
- * or provider native".
- */
+/** Per-user web search adapter configuration. An absent row uses provider-native search or deployment env defaults. */
 @Injectable()
 export class WebSearchSettingsService {
-  private readonly logger = new Logger(WebSearchSettingsService.name);
-
   constructor(private prisma: PrismaService) {}
 
   async get(userId: string): Promise<WebSearchSettingDto | null> {
@@ -91,12 +84,6 @@ export class WebSearchSettingsService {
         error: err instanceof Error ? err.message : String(err),
       };
     }
-    // buildWebSearchExecutorFromSetting → buildAdapterFromConfig throws on
-    // malformed input (unknown providerId, missing required field for the
-    // chosen adapter). validateProviderShape above already covers the
-    // common cases, but the registry's exhaustive-check branch is reachable
-    // when providerType is a brand-new enum value not yet wired here.
-    // Either way, surface it as a test failure, not a 500.
     let executor;
     try {
       executor = buildWebSearchExecutorFromSetting({
@@ -142,7 +129,7 @@ export class WebSearchSettingsService {
   }
 
   /**
-   * Internal — used by AnalysisService to load the row (with real apiKey)
+   * Internal — used by ProviderResolverService to load the row (with real apiKey)
    * for executor construction. Not exposed via HTTP.
    */
   async getInternalForRuntime(userId: string) {

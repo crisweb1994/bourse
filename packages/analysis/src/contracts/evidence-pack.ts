@@ -1,8 +1,7 @@
 import { z } from 'zod';
 
-// MVP doc §4.4.3: immutable fact pack consumed by debate workflow.
-// Bull/Bear personas may ONLY cite urls in `allowedUrls`; the pack is
-// frozen at Stage A end and never mutated afterwards.
+// Immutable fact pack consumed by analysis workflows. Model output may only
+// cite URLs present in `allowedUrls`.
 
 export const FinancialSnapshot = z.object({
   price: z.number().optional(),
@@ -35,13 +34,11 @@ export const ValuationSnapshot = z.object({
 export type ValuationSnapshot = z.infer<typeof ValuationSnapshot>;
 
 /**
- * RFC rfc-evidence-pack-web-search-fallback: per-pack data-source quality
- * marker. Absent / `NONE` = pack was built normally; `WEB_SEARCH_FALLBACK`
- * = v2 CN tool path failed on a non-transient error AND user had
- * `allowWebSearchFallback` on, so the LLM web_search v1 builder produced
- * this pack. Downstream consumers (dims / debate Judge / UI) MUST treat
- * any degraded pack as reduced reliability — Judge.confidence is clamped
- * to MEDIUM and dims listed in `missingPrivateFields` may be skipped.
+ * Per-pack data-source quality marker. Absent / `NONE` = pack was built
+ * normally; `WEB_SEARCH_FALLBACK` = structured data was unusable and evidence
+ * recovery rebuilt the pack through the LLM web_search v1 builder. Downstream
+ * consumers must treat degraded packs as reduced reliability: confidence may
+ * be clamped and dims listed in `missingPrivateFields` may be skipped.
  */
 export const EvidencePackDegradeMeta = z.object({
   degradedSource: z.enum(['NONE', 'WEB_SEARCH_FALLBACK']).default('NONE'),
@@ -85,14 +82,12 @@ export const EvidencePack = z.object({
 });
 export type EvidencePack = z.infer<typeof EvidencePack>;
 
-// RFC-02: v1 + v2 discriminated union. v1 stays as 'EvidencePack' (kept
-// stable so existing debate/SSE/workflow consumers don't have to change).
-// v2 is imported separately for code-driven A-share Stage 0; callers that
-// need to accept either version use EvidencePackAny.
+// v1 + v2 discriminated union. v1 stays as 'EvidencePack' for recovery packs
+// and non-CN markets; v2 carries code-driven structured facts.
 import { EvidencePackV2 } from './evidence-pack-v2';
 
 export const EvidencePackAny = z.discriminatedUnion('schemaVersion', [
-  EvidencePack,    // 'evidence-pack-v1' — debate workflow, any market
-  EvidencePackV2,  // 'evidence-pack-v2' — comprehensive Stage 0, CN only
+  EvidencePack,    // 'evidence-pack-v1'
+  EvidencePackV2,  // 'evidence-pack-v2'
 ]);
 export type EvidencePackAny = z.infer<typeof EvidencePackAny>;

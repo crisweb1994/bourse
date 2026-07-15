@@ -145,10 +145,8 @@ export interface ProviderStreamOptions {
    */
   onRoundComplete?: (round: number, text: string) => void;
   /**
-   * Plan 3 §4.4.1 — when true, provider runs WITHOUT web_search tool
-   * spec. Used by debate.ts Bull/Bear/Judge calls, which must only cite
-   * EvidencePack.allowedUrls and are explicitly disallowed from doing
-   * fresh web searches.
+   * When true, provider runs without web_search tools. Structured audit calls
+   * use this path so they only evaluate the supplied report and EvidencePack.
    */
   disableTools?: boolean;
   /**

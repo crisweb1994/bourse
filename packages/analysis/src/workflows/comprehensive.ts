@@ -1,6 +1,6 @@
 import type { AnalysisResult } from '../contracts/analysis-result';
 import type { Citation } from '../contracts/citation';
-import type { AnalysisType, RunStatus } from '../contracts/enums';
+import type { RunStatus, SectionType } from '../contracts/enums';
 import type { EvidencePackAny } from '../contracts/evidence-pack';
 import type { SseEvent } from '../contracts/sse-events';
 import { ALL_DIMENSIONS } from '../dimensions';
@@ -31,10 +31,8 @@ import type {
   DimensionInput,
 } from './types';
 
-// refactor-v1 Wave 4: 纯函数 helpers 抽到 ./comprehensive-helpers
 import {
   applyConfidenceDowngrade,
-  assertLegacyParallelCompatible,
   buildResult,
   buildSectionsForValidation,
   checkBudget,
@@ -50,7 +48,7 @@ import {
   resolveEvidencePack,
 } from './comprehensive-async-helpers';
 
-// 执行策略 helpers (wave / parallel harvest + drain / sequential stream-through)
+// 执行策略 helpers (wave harvest + drain / sequential stream-through)
 import {
   applyHarvest,
   emitTerminalDone,
@@ -83,8 +81,8 @@ const JUDGE_CONCURRENCY = 3;
  *   - 'retry-once'  → re-run streamDimension once; on second failure, skip
  *   - 'fail-run'    → halt before summary, emit done with status=FAILED
  *
- * Honors `options.budget.maxTokens` between sections: when cumulative
- * tokens exceed the cap, halt before next dim with status=BUDGET_EXHAUSTED.
+ * Honors configured budget caps between sections: when cumulative usage
+ * reaches a cap, halt before the next dim with status=BUDGET_EXHAUSTED.
  *
  * Returns ComprehensiveResult via TReturn so callers using explicit
  * generator iteration can consume it.
@@ -101,14 +99,6 @@ export async function* streamComprehensive(
   const budget: BudgetLimits = options.budget ?? {};
   let seq = options.startSeq ?? 0;
 
-  // Parallel mode is incompatible with budget enforcement and fail-run
-  // semantics — Promise.all can't synchronously halt sibling dims.
-  // Fail loudly rather than silently downgrade (Day 11.5a P1 #3).
-  // RFC-05: waveMode takes precedence — when caller sets waveMode (any value),
-  // we skip the legacy parallel validation and let the wave / sequential
-  // branches decide.
-  assertLegacyParallelCompatible(options, dims);
-
   // RFC-06: derive source-routing config once. When `marketProfile.domainTiers`
   // is set (currently CN only), we (a) constrain provider web_search to those
   // hosts and (b) feed the full table to evidence-gate so it can downgrade
@@ -119,7 +109,7 @@ export async function* streamComprehensive(
   const { domainTiers: marketDomainTiers, allowedDomains: marketAllowedDomains } =
     deriveMarketRouting(options.marketProfile);
 
-  const dimResults = new Map<AnalysisType, DimensionRunResult>();
+  const dimResults = new Map<SectionType, DimensionRunResult>();
   const failures: DimensionFailure[] = [];
   const allCitations: Citation[] = [];
   const allWarnings: string[] = [];
@@ -157,7 +147,7 @@ export async function* streamComprehensive(
     }
   };
   const perDimTrace = new Map<
-    AnalysisType,
+    SectionType,
     {
       durationMs: number;
       citationsCount: number;
@@ -183,26 +173,23 @@ export async function* streamComprehensive(
   // result instead of an empty/failed analysis. Partial degradation (some data
   // present, e.g. quote present but financials missing) is NOT recovered this
   // way: the V2 pack is kept and each dim fills the gaps per-field
-  // (marked) — we never discard good code-verified data. `allowWebSearchFallback`
-  // is the recovery-enabled switch: apps/api turns it on for every production
-  // run; unit tests leave it off to isolate dim orchestration. The rebuilt pack
-  // is stamped degradedSource=WEB_SEARCH_FALLBACK, so its web-sourced numbers are
-  // clearly marked non-authoritative (never fed to compute as if code-verified —
-  // hard invariant #1) and private-data dims skip.
+  // (marked) — we never discard good code-verified data. apps/api enables this
+  // recovery path for production runs.
+  // The rebuilt pack is stamped degradedSource=WEB_SEARCH_FALLBACK, so its
+  // web-sourced numbers are clearly marked non-authoritative (never fed to
+  // compute as if code-verified — hard invariant #1) and private-data dims skip.
   evidencePack = await resolveEvidencePack(
     provider,
-    options.fallbackProvider,
     input,
     {
       evidencePack,
-      allowWebSearchFallback: options.allowWebSearchFallback === true,
+      recoverMissingEvidence: options.recoverMissingEvidence === true,
       ...(options.todayDate ? { todayDate: options.todayDate } : {}),
       ...(options.signal ? { signal: options.signal } : {}),
     },
   );
 
-  // plan-v2 Wave 3.3: evidence_source_degraded SSE event removed. Frontends
-  // derive degraded state from this event's pack.dataAvailability.degradedSource.
+  // Consumers derive degraded state from pack.dataAvailability.degradedSource.
   if (evidencePack) {
     yield {
       type: 'evidence_pack_ready',
@@ -270,21 +257,14 @@ export async function* streamComprehensive(
       true,
     );
 
-  // RFC-05: wave mode. Takes precedence over legacy `parallel`.
   // - waveMode 'auto': group dims by wave, run with semaphore, gate
   //   budget/fail-run between waves. Default semaphore = 4.
-  // - waveMode 'disabled' or 'sequential': skip both wave + parallel
-  //   branches, drop into the for-loop sequential path below.
-  // - waveMode undefined: fall through to legacy `parallel`/sequential
-  //   logic (keeps RFC-05 a backward-compat opt-in).
-  const resolvedWaveMode: 'auto' | 'disabled' | undefined =
-    options.waveMode === 'sequential'
-      ? 'disabled'
-      : options.waveMode;
+  // - waveMode 'sequential' or undefined: stream dimensions one at a time.
+  const useWaveMode = options.waveMode === 'auto';
   const waveSemaphore = options.waveSemaphore ?? 4;
 
-  // Shared harvest context — wave and parallel modes both feed per-dim
-  // harvests through the helpers in ./comprehensive-strategies.
+  // Shared harvest context — wave mode feeds per-dim harvests through the
+  // helpers in ./comprehensive-strategies.
   const harvestCtx: HarvestContext = {
     provider,
     input,
@@ -342,10 +322,9 @@ export async function* streamComprehensive(
   };
   const nextSeq = (): number => seq++;
 
-  if (resolvedWaveMode === 'auto') {
+  if (useWaveMode) {
     // Global order is preserved by feeding each dim its original index
-    // from the canonical dims[] array — events drained per-wave still
-    // sort the same as the legacy parallel path.
+    // from the canonical dims[] array.
     const waveGroups = groupByWave(dims);
     let waveAborted: 'budget' | 'fail-run' | null = null;
     let abortReason = '';
@@ -453,23 +432,13 @@ export async function* streamComprehensive(
       );
       return result;
     }
-    // All waves done — fall through to summary phase.
-  } else if (options.parallel && resolvedWaveMode !== 'disabled') {
-    const harvests = await Promise.all(
-      dims.map((dim, i) => harvestDimBuffered(harvestCtx, dim, i)),
-    );
-
-    // Drain in dim order, renumber seq globally, accumulate state.
-    for (const h of harvests) {
-      yield* applyHarvest(h, harvestCollections, harvestTotals, runId, nextSeq);
-    }
-    // Fall through to summary phase (parallel mode skips sequential loop).
+    // All waves done; fall through to summary phase.
   } else {
     // ===== Sequential mode (default) =====
     // Per-dimension streaming with retry-once + fail-run support. Isolated
     // in runSequentialStrategy (./comprehensive-strategies) because, unlike
-    // wave/parallel, it streams events through inline (no buffering) and
-    // checks budget at dim granularity.
+    // wave mode, it streams events through inline (no buffering) and checks
+    // budget at dim granularity.
     const seqHandle: SeqHandle = {
       get: () => seq,
       set: (v) => {
@@ -536,10 +505,8 @@ export async function* streamComprehensive(
         marketProfile: options.marketProfile,
       });
 
-      // plan-v2 Wave 3.3: cross_dim_warning SSE event removed. Validator
-      // still runs and downgrades confidence in-place; conflict messages
-      // still fold into `allWarnings` so the final ComprehensiveResult
-      // carries an auditable trace.
+      // Cross-dim validation is internal: it can downgrade confidence in place
+      // and records conflict messages in the final result warnings.
       if (validatorReport.conflicts.length > 0) {
         for (const c of validatorReport.conflicts) {
           allWarnings.push(`[cross-dim:${c.severity}] ${c.message}`);
@@ -673,6 +640,7 @@ export async function* streamComprehensive(
     todayDate,
     succeededTypes,
     failedTypes,
+    input.question,
   );
 
   // Buffered streaming: collect chunks via callback, then yield as
@@ -809,4 +777,3 @@ export async function runComprehensive(
     if (next.done) return next.value;
   }
 }
-

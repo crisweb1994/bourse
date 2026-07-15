@@ -1,10 +1,8 @@
 /**
  * Execution-strategy helpers for `streamComprehensive`.
  *
- * Wave (RFC-05) and legacy parallel modes share the same per-dim harvest +
- * drain + accumulate contract — previously inlined twice in
- * `comprehensive.ts` (~150 lines of near-verbatim duplication). This file
- * holds the shared core:
+ * Wave mode uses a buffered per-dim harvest + drain + accumulate contract.
+ * Sequential mode streams inline. This file holds both execution cores:
  *
  *  - `harvestDimBuffered`: run one dim's streamDimension with retry-once,
  *    buffer its SSE events, return the accumulator + events + last error.
@@ -16,7 +14,7 @@
  *    directly — it returns the delta-folded result).
  */
 import type { Citation } from '../contracts/citation';
-import type { AnalysisType, RunStatus } from '../contracts/enums';
+import type { RunStatus, SectionType } from '../contracts/enums';
 import type { EvidencePackAny } from '../contracts/evidence-pack';
 import type { SseEvent } from '../contracts/sse-events';
 import type { Dimension, DimensionRunResult } from '../dimensions/types';
@@ -67,12 +65,12 @@ export interface HarvestTotals {
 
 /** Mutable collections the caller owns; passed by reference. */
 export interface HarvestCollections {
-  dimResults: Map<AnalysisType, DimensionRunResult>;
+  dimResults: Map<SectionType, DimensionRunResult>;
   failures: DimensionFailure[];
   allCitations: Citation[];
   allWarnings: string[];
   perDimTrace: Map<
-    AnalysisType,
+    SectionType,
     {
       durationMs: number;
       citationsCount: number;
@@ -91,8 +89,8 @@ export interface HarvestCollections {
  * are kept). Returns the final accumulator + buffered events + last error
  * (null when the dim succeeded within `maxAttempts`).
  *
- * Buffering is required because wave/parallel modes must renumber event seq
- * globally during drain — the events can't be yielded inline.
+ * Buffering is required because wave mode must renumber event seq globally
+ * during drain — the events can't be yielded inline.
  */
 export async function harvestDimBuffered(
   ctx: HarvestContext,
@@ -214,7 +212,7 @@ export async function* applyHarvest(
     collections.allCitations.push(...h.acc.citations);
     collections.allWarnings.push(...result.warnings);
     if (h.acc.toolCalls > 0) {
-      // Day 11.5b: route per-dim tool invocations through middleware.
+      // Route per-dim tool invocations through middleware.
       for (let n = 0; n < h.acc.toolCalls; n++) {
         collections.toolMiddleware.record({
           toolName: 'webSearch',
@@ -337,8 +335,8 @@ export async function* runSequentialStrategy(
         message: `Budget exhausted (${breach}); halting before ${dim.type}`,
         recoverable: false,
       };
-      // Day 11.5a P1 #4: include all dims that never ran so the consumer
-      // can show "X/8 completed, Y waiting".
+      // Include all dims that never ran so the consumer can show
+      // "X/8 completed, Y waiting".
       const unrunDims = dims.slice(i).map((d) => d.type);
       const result = yield* emitTerminalDone(
         {
@@ -403,7 +401,7 @@ export async function* runSequentialStrategy(
         totals.toolCalls += acc.toolCalls;
         totals.costUsd += acc.costUsd;
         if (acc.toolCalls > 0) {
-          // Day 11.5b: route tool invocations through middleware.
+          // Route tool invocations through middleware.
           for (let n = 0; n < acc.toolCalls; n++) {
             collections.toolMiddleware.record({
               toolName: 'webSearch',

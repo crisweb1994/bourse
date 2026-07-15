@@ -148,7 +148,7 @@ describe('streamComprehensive — skip dims on degraded pack', () => {
         runId,
         todayDate: TODAY,
         evidencePack: pack,
-        allowWebSearchFallback: true,
+        recoverMissingEvidence: true,
       }),
     );
     expect(vi.mocked(buildEvidencePack)).not.toHaveBeenCalled();
@@ -168,7 +168,7 @@ describe('streamComprehensive — skip dims on degraded pack', () => {
         runId,
         todayDate: TODAY,
         evidencePack: partial,
-        allowWebSearchFallback: true,
+        recoverMissingEvidence: true,
       }),
     );
     expect(vi.mocked(buildEvidencePack)).not.toHaveBeenCalled();
@@ -198,7 +198,7 @@ describe('streamComprehensive — skip dims on degraded pack', () => {
         runId,
         todayDate: TODAY,
         evidencePack: degraded,
-        allowWebSearchFallback: true,
+        recoverMissingEvidence: true,
       }),
     );
 
@@ -220,53 +220,11 @@ describe('streamComprehensive — skip dims on degraded pack', () => {
         runId,
         todayDate: TODAY,
         evidencePack: pack,
-        allowWebSearchFallback: true,
+        recoverMissingEvidence: true,
       }),
     );
 
     expect(vi.mocked(buildEvidencePack)).not.toHaveBeenCalled();
     expect(events.filter((e) => e.type === 'section_skipped')).toHaveLength(0);
-  });
-});
-
-// `options.fallbackProvider` is an explicit override for the v1 web_search
-// rebuild (comprehensive.ts `fbProvider = options.fallbackProvider ?? provider`).
-// The degraded-skip tests above only exercise the `?? provider` default — these
-// cover the explicit-override branch.
-describe('streamComprehensive — fallbackProvider override', () => {
-  beforeEach(() => {
-    vi.mocked(buildEvidencePack).mockReset();
-  });
-
-  it('uses options.fallbackProvider (not the main provider) for the v1 rebuild', async () => {
-    const degraded = buildV2Pack([]); // no quote + no financials → critically degraded
-    const fbPack = buildPackWithMissing([
-      'northboundFlow',
-      'lhb',
-      'unlockCalendar',
-      'consensusEps',
-    ]);
-    vi.mocked(buildEvidencePack).mockResolvedValueOnce(fbPack);
-
-    const main = buildProvider([]);
-    const fallback = buildProvider([]);
-
-    await collect(
-      streamComprehensive(main, minimalInput, {
-        runId,
-        todayDate: TODAY,
-        evidencePack: degraded,
-        allowWebSearchFallback: true,
-        fallbackProvider: fallback,
-      }),
-    );
-
-    expect(vi.mocked(buildEvidencePack)).toHaveBeenCalledTimes(1);
-    // The first positional arg must be the fallback provider, not `main`.
-    // This is the precise contract of `fbProvider = options.fallbackProvider
-    // ?? provider` — when the override is supplied, the rebuild runs against
-    // the fallback (e.g. a cheaper utility model), never the main provider.
-    expect(vi.mocked(buildEvidencePack).mock.calls[0]?.[0]).toBe(fallback);
-    expect(vi.mocked(buildEvidencePack).mock.calls[0]?.[0]).not.toBe(main);
   });
 });

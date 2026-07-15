@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AnalysisType } from './enums';
+import { ActiveAnalysisType } from './enums';
 
 // Per-run cost limits. Hitting any limit triggers BUDGET_EXHAUSTED with
 // partial result; see MVP doc §四 cost guardrail.
@@ -10,14 +10,12 @@ export const Budget = z.object({
 });
 export type Budget = z.infer<typeof Budget>;
 
-// Walking-skeleton scope (Day 2): symbol/market/type/locale required;
-// competitors/budget present as optional placeholders so downstream
-// signatures don't churn when V1 features land.
 export const AnalysisRequest = z.object({
   symbol: z.string().min(1),
   market: z.string().min(1),
-  type: AnalysisType,
+  type: ActiveAnalysisType,
   locale: z.string().min(2).default('zh-CN'),
+  question: z.string().trim().min(1).max(500).optional(),
   competitors: z.array(z.string().min(1)).optional(),
   budget: Budget.optional(),
 });
