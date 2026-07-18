@@ -1,9 +1,11 @@
 import { Logger } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import type { AnalysisTerminalStatus } from '@bourse/shared-types';
 import {
   type AgentProvider,
   type ComprehensiveOptions,
   type DimensionInput,
+  type EvidencePackAny,
   getDimension,
   getMarket,
   type SseEvent,
@@ -104,6 +106,7 @@ interface AnalysisLike {
   id: string;
   analysisType: string;
   question?: string | null;
+  promptVersion?: string | null;
   sections: ReadonlyArray<AnalysisSectionLike>;
   stock: { symbol: string; market: string; name?: string | null };
 }
@@ -154,10 +157,12 @@ export async function runAnalysisWorkflowAdapter(
   // Captured on evidence_pack_ready and written to Analysis.degradedSource.
   let degradedSourceMark: 'WEB_SEARCH_FALLBACK' | null = null;
   let summaryDataAsOf: string | null = null;
+  let capturedEvidencePack: EvidencePackAny | undefined;
 
   // ===== Event handlers (close over mutable run state above) =====
 
   function onEvidencePackReady(event: Extract<SseEvent, { type: 'evidence_pack_ready' }>) {
+    capturedEvidencePack = event.pack as EvidencePackAny;
     sendFrame(ctx.send, mapEvidencePackReadyEvent(event));
     // Capture the degraded marker for the terminal Analysis row.
     const da = (
@@ -340,6 +345,7 @@ export async function runAnalysisWorkflowAdapter(
     ? await ctx.evidencePackService.buildForAnalysis(ctx.analysis)
     : null;
   const prebuiltPack = evidencePackResult?.pack;
+  capturedEvidencePack = prebuiltPack;
   if (evidencePackResult?.fallbackUsed) {
     degradedSourceMark = 'WEB_SEARCH_FALLBACK';
   }
@@ -423,6 +429,37 @@ export async function runAnalysisWorkflowAdapter(
             degradedSourceMark,
             doneEvent: event,
           });
+          if (
+            capturedEvidencePack &&
+            (terminalStatus === 'COMPLETED' || terminalStatus === 'PARTIAL_FAILED')
+          ) {
+            try {
+              await persistEvidenceSnapshot(
+                ctx.prisma,
+                ctx.analysisId,
+                capturedEvidencePack,
+                {
+                  degraded: degradedSourceMark !== null,
+                  sourceMode: degradedSourceMark
+                    ? 'WEB_SEARCH_FALLBACK'
+                    : 'EVIDENCE_PACK',
+                  provider: ctx.provider.name,
+                  model: ctx.aiModel,
+                  promptVersion: ctx.analysis.promptVersion ?? null,
+                  sectionSources: [...sectionAccs.entries()].map(
+                    ([sectionType, acc]) => ({
+                      sectionType,
+                      citations: acc.citations,
+                    }),
+                  ),
+                },
+              );
+            } catch (snapshotError) {
+              logger.warn(
+                `${tag} evidence snapshot persistence failed: ${snapshotError instanceof Error ? snapshotError.message : String(snapshotError)}`,
+              );
+            }
+          }
           sendFrame(ctx.send, mapDoneEvent(ctx.analysisId, terminalStatus));
           break;
         }
@@ -475,4 +512,78 @@ function sendFrame<T extends AnalysisSseEventName>(
   frame: ApiSseFrame<T>,
 ) {
   send(frame.event, frame.data);
+}
+
+async function persistEvidenceSnapshot(
+  prisma: PrismaService,
+  analysisId: string,
+  pack: EvidencePackAny,
+  options: {
+    sourceMode: string;
+    degraded: boolean;
+    provider?: string | null;
+    model?: string | null;
+    promptVersion?: string | null;
+    sectionSources?: unknown[];
+  },
+) {
+  const snapshotStore = (prisma as any).analysisEvidenceSnapshot;
+  if (!snapshotStore?.upsert) {
+    logger.warn(
+      `[${analysisId}] evidence snapshot delegate unavailable; run db:generate before production use`,
+    );
+    return;
+  }
+
+  const raw = pack as unknown as Record<string, any>;
+  const availability = raw.dataAvailability ?? {};
+  const missing = Array.isArray(availability.missing)
+    ? availability.missing.map((item: any) =>
+        typeof item === 'string' ? item : String(item?.field ?? 'unknown'),
+      )
+    : [];
+  const citations = Array.isArray(raw.citations) ? raw.citations : [];
+  const capturedAt =
+    typeof raw.capturedAt === 'string'
+      ? raw.capturedAt
+      : new Date().toISOString();
+  const contentHash = createHash('sha256')
+    .update(canonicalJson(pack))
+    .digest('hex');
+
+  await snapshotStore.upsert({
+    where: { analysisId },
+    create: {
+      analysisId,
+      schemaVersion: String(raw.schemaVersion ?? 'unknown'),
+      evidencePackVersion: String(raw.schemaVersion ?? 'unknown'),
+      capturedAt: new Date(capturedAt),
+      dataAsOf: raw.dataAsOf ?? capturedAt,
+      sourceMode: options.sourceMode,
+      degraded: options.degraded,
+      missingFields: missing,
+      payload: pack as any,
+      sourceSnapshots: [
+        ...citations,
+        ...(options.sectionSources ?? []),
+      ] as any,
+      metadata: {
+        provider: options.provider ?? null,
+        model: options.model ?? null,
+        promptVersion: options.promptVersion ?? null,
+      } as any,
+      contentHash,
+    },
+    update: {},
+  });
+}
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  const object = value as Record<string, unknown>;
+  return `{${Object.keys(object)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key])}`)
+    .join(',')}}`;
 }

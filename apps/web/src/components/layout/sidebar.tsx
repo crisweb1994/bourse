@@ -6,6 +6,7 @@ import {
   Home,
   Pin,
   History,
+  MessageSquareText,
   Settings,
   X,
   ChevronsUpDown,
@@ -37,6 +38,7 @@ interface NavItem {
 const WORKSPACE_NAV: NavItem[] = [
   { href: '/', label: '首页', icon: Home },
   { href: '/watchlist', label: '自选股', icon: Pin },
+  { href: '/chat', label: 'Chat', icon: MessageSquareText },
   { href: '/history', label: '历史记录', icon: History },
 ];
 

@@ -94,6 +94,7 @@ export class ProviderResolverService {
   ): Promise<{
     primary: ReturnType<ProviderFactoryService['buildProvider']>;
     aiModel: string;
+    providerName: string;
   }> {
     const runtime = await this.resolveRuntime(userId, hints.settingIdHint);
 
@@ -116,6 +117,7 @@ export class ProviderResolverService {
       return {
         primary,
         aiModel,
+        providerName: providerTypeToName(runtime.providerType),
       };
     }
 
@@ -125,7 +127,7 @@ export class ProviderResolverService {
       ...(forceChatCompletions !== undefined ? { forceChatCompletions } : {}),
     });
     const aiModel = primary.getModel(hints.modelHint || undefined);
-    return { primary, aiModel };
+    return { primary, aiModel, providerName };
   }
 
   /**

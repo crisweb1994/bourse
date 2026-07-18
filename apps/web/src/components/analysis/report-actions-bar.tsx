@@ -9,6 +9,7 @@ import {
   Check,
   GitCompare,
   Printer,
+  MessageSquareText,
 } from 'lucide-react';
 import type { SectionData } from '@/hooks/use-analysis-stream';
 import { Button, SectionTag, toast } from '@/components/ui';
@@ -40,6 +41,8 @@ export interface ReportActionsBarProps extends SectionsForExport {
   onCompareWithLast?: () => void;
   /** True while the comparison Dialog is mounted (visual press-state). */
   comparing?: boolean;
+  /** Open Chat grounded to this exact Analysis id. */
+  onAskAnalysis?: () => void;
 }
 
 export function ReportActionsBar({
@@ -56,6 +59,7 @@ export function ReportActionsBar({
   onRerun,
   onCompareWithLast,
   comparing,
+  onAskAnalysis,
 }: ReportActionsBarProps) {
   const [copied, setCopied] = useState(false);
 
@@ -113,6 +117,13 @@ export function ReportActionsBar({
     >
       <SectionTag>分析操作</SectionTag>
       <span className="flex-1" />
+
+      {onAskAnalysis && (
+        <Button size="sm" onClick={onAskAnalysis}>
+          <MessageSquareText className="h-3 w-3" strokeWidth={1.5} />
+          询问此分析
+        </Button>
+      )}
 
       <Button size="sm" onClick={handleCopy}>
         {copied ? (

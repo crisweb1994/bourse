@@ -145,6 +145,82 @@ function buildCtx(opts: {
 // ===== Tests =====
 
 describe('runAnalysisWorkflowAdapter — happy path', () => {
+  it('persists the immutable EvidencePack before terminal done', async () => {
+    const events: SseEvent[] = [
+      evt('done', { status: 'COMPLETED' } as never, 1),
+    ];
+    const { ctx, sendCalls } = buildCtx({ events, sections: [] });
+    const evidencePack = {
+      schemaVersion: 'evidence-pack-v1',
+      symbol: 'AAPL',
+      market: 'US',
+      capturedAt: TODAY,
+      financialSnapshot: {},
+      news: [],
+      valuation: {},
+      riskFacts: [],
+      allowedUrls: [],
+    };
+    let persisted: any;
+    ctx.evidencePackService = {
+      buildForAnalysis: async () => ({ pack: evidencePack, fallbackUsed: false }),
+    } as unknown as AdapterContext['evidencePackService'];
+    (ctx.prisma as any).analysisEvidenceSnapshot = {
+      upsert: async (args: unknown) => {
+        persisted = args;
+        return {};
+      },
+    };
+    (ctx.analysis as any).promptVersion = 'analysis-schema-v1';
+
+    await runAnalysisWorkflowAdapter(ctx);
+
+    assert.equal(persisted.where.analysisId, 'a1');
+    assert.equal(persisted.create.payload, evidencePack);
+    assert.equal(persisted.create.schemaVersion, 'evidence-pack-v1');
+    assert.equal(persisted.create.metadata.provider, 'fake');
+    assert.equal(persisted.create.metadata.model, 'claude-sonnet-4-test');
+    assert.equal(persisted.create.contentHash.length, 64);
+    assert.equal(sendCalls.at(-1)?.type, 'done');
+  });
+
+  it('keeps a completed analysis completed when snapshot persistence fails', async () => {
+    const { ctx, prismaCalls, sendCalls } = buildCtx({
+      events: [evt('done', { status: 'COMPLETED' } as never, 1)],
+      sections: [],
+    });
+    ctx.evidencePackService = {
+      buildForAnalysis: async () => ({
+        pack: {
+          schemaVersion: 'evidence-pack-v1',
+          symbol: 'AAPL',
+          market: 'US',
+          capturedAt: TODAY,
+        },
+        fallbackUsed: false,
+      }),
+    } as unknown as AdapterContext['evidencePackService'];
+    (ctx.prisma as any).analysisEvidenceSnapshot = {
+      upsert: async () => {
+        throw new Error('snapshot database unavailable');
+      },
+    };
+
+    const result = await runAnalysisWorkflowAdapter(ctx);
+
+    assert.equal(result.terminalStatus, 'COMPLETED');
+    assert.equal(sendCalls.at(-1)?.type, 'done');
+    assert.equal(sendCalls.at(-1)?.data.status, 'COMPLETED');
+    assert.equal(
+      prismaCalls.some(
+        (call) =>
+          call.table === 'analysis' &&
+          (call.args as any)?.data?.status === 'FAILED',
+      ),
+      false,
+    );
+  });
+
   it('translates a full section event chain into apps/api SSE + persists rows', async () => {
     const events: SseEvent[] = [
       evt('section_start', { sectionType: 'FUNDAMENTAL', order: 0 }, 1),
