@@ -170,7 +170,7 @@ describe('workflows/wave-executor — findFailRunOffenders', () => {
       dim('VALUATION', 1, 'skip'),
       dim('RISK', 1, 'fail-run'),
     ];
-    const failed = new Set<AnalysisType>(['FUNDAMENTAL', 'VALUATION']);
+    const failed = new Set<SectionType>(['FUNDAMENTAL', 'VALUATION']);
     const offenders = findFailRunOffenders(dims, failed);
     expect(offenders.map((d) => d.type)).toEqual(['FUNDAMENTAL']);
     // VALUATION is in failed but its onFailure=skip → not an offender.
