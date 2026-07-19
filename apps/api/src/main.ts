@@ -18,8 +18,10 @@ async function bootstrap() {
     provider === 'openai'
       ? config.get<string>('OPENAI_MODEL')
       : config.get<string>('ANTHROPIC_MODEL');
+  const version = config.get<string>('APP_VERSION') || 'dev';
+  const commit = config.get<string>('GIT_SHA') || 'local';
   new Logger('RuntimeConfig').log(
-    `AI provider=${provider} model=${model || 'provider-default'} credentials=${credentialConfigured ? 'configured' : 'missing'}`,
+    `version=${version} commit=${commit.slice(0, 12)} AI provider=${provider} model=${model || 'provider-default'} credentials=${credentialConfigured ? 'configured' : 'missing'}`,
   );
 
   // Behind Traefik / Dokploy reverse proxy: trust X-Forwarded-* so req.secure,

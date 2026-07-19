@@ -1,15 +1,14 @@
-name: Docker build & push
+name: Docker image
 
-# PR: build only (verify Dockerfile still works).
-# Push to main: build + push latest + short-sha.
-# Push a vX.Y.Z tag: build + push versioned tags (1.2.3 / 1.2 / 1).
-
+# PRs verify the image without publishing. Main publishes edge + sha tags.
+# Release Please calls this workflow with a version to publish stable tags.
 on:
   push:
     branches: [main]
-    tags: ['v*.*.*']
     paths:
+      - '.github/workflows/docker.yml'
       - 'Dockerfile'
+      - 'docker/**'
       - 'docker-compose.yml'
       - 'apps/**'
       - 'packages/**'
@@ -17,11 +16,23 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - '.github/workflows/docker.yml'
       - 'Dockerfile'
+      - 'docker/**'
       - 'docker-compose.yml'
       - 'apps/**'
       - 'packages/**'
       - 'pnpm-lock.yaml'
+  workflow_call:
+    inputs:
+      release_version:
+        description: SemVer without the v prefix
+        required: true
+        type: string
+
+concurrency:
+  group: docker-${{ github.ref }}-${{ inputs.release_version || 'continuous' }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -36,61 +47,55 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
+      - name: Resolve build metadata
+        id: build
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          if [ -n "$RELEASE_VERSION" ]; then
+            version="$RELEASE_VERSION"
+          else
+            version="0.0.0-dev+${GITHUB_SHA::7}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "built_at=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+
       - name: Log in to GitHub Container Registry
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate API image tags
-        id: meta-api
+      - name: Generate image tags
+        id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}-api
+          images: ghcr.io/${{ github.repository }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha,prefix=,format=short
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=pr
+            type=sha,prefix=sha-,format=short,enable=${{ github.event_name == 'push' && inputs.release_version == '' }}
+            type=raw,value=edge,enable=${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && inputs.release_version == '' }}
+            type=semver,value=${{ inputs.release_version }},pattern={{version}},enable=${{ inputs.release_version != '' }}
+            type=semver,value=${{ inputs.release_version }},pattern={{major}}.{{minor}},enable=${{ inputs.release_version != '' }}
+            type=semver,value=${{ inputs.release_version }},pattern={{major}},enable=${{ inputs.release_version != '' }}
+            type=raw,value=latest,enable=${{ inputs.release_version != '' }}
 
-      - name: Generate Web image tags
-        id: meta-web
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}-web
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha,prefix=,format=short
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build & push API image
+      - name: Build and publish image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
-          target: api
-          push: ${{ github.event_name == 'push' }}
-          tags: ${{ steps.meta-api.outputs.tags }}
-          labels: ${{ steps.meta-api.outputs.labels }}
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,scope=api,mode=max
-
-      - name: Build & push Web image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          target: web
-          push: ${{ github.event_name == 'push' }}
-          tags: ${{ steps.meta-web.outputs.tags }}
-          labels: ${{ steps.meta-web.outputs.labels }}
+          target: bourse
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL || 'http://localhost:3001' }}
             NEXT_PUBLIC_AUTH_REQUIRED=${{ vars.NEXT_PUBLIC_AUTH_REQUIRED || 'false' }}
-          cache-from: type=gha,scope=web
-          cache-to: type=gha,scope=web,mode=max
+            APP_VERSION=${{ steps.build.outputs.version }}
+            GIT_SHA=${{ github.sha }}
+            BUILD_DATE=${{ steps.build.outputs.built_at }}
+          cache-from: type=gha,scope=bourse
+          cache-to: type=gha,scope=bourse,mode=max

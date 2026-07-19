@@ -128,6 +128,21 @@ pnpm dev                                        # api :3001 + web :3000
 需要 GitHub OAuth 登录、跨子域 cookie、CORS 白名单等生产配置？
 参考 [`.env.production.example`](.env.production.example) 里的完整环境变量说明。
 
+API 与 Web 使用同一个版本化镜像、以两个独立容器运行。生产环境应固定到
+精确版本，避免直接部署可变的 `latest`：
+
+```bash
+BOURSE_IMAGE=ghcr.io/crisweb1994/bourse:0.1.0 docker compose up -d
+```
+
+合并 Conventional Commit 后，Release Please 会维护 Release PR；合并该 PR
+会创建 `vX.Y.Z` GitHub Release，并发布对应的 GHCR 镜像。
+
+首次启用前，在 GitHub `Settings → Actions → General → Workflow permissions`
+中启用 Actions 的读写权限，并允许 Actions 创建 Pull Request。发布版本由根
+`package.json` 和 `.release-please-manifest.json` 共同记录；workspace 内部包
+不单独发布，也不作为产品版本来源。
+
 ---
 
 ## 架构一图看懂
