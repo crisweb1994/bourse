@@ -16,6 +16,7 @@ import {
   SectionTag,
   SwitchRow,
   toast,
+  useConfirm,
 } from '@/components/ui';
 import {
   deleteWebSearchSetting,
@@ -124,12 +125,8 @@ function fromDto(dto: WebSearchSettingDto): FormState {
   };
 }
 
-interface Props {
-  /** Whether any user-enabled AI provider is Anthropic. Drives CUSTOM_ONLY disable state. */
-  hasAnthropic: boolean;
-}
-
-export function WebSearchSettingCard({ hasAnthropic }: Props) {
+export function WebSearchSettingsForm() {
+  const confirm = useConfirm();
   const [data, setData] = useState<WebSearchSettingDto | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [loading, setLoading] = useState(true);
@@ -157,11 +154,6 @@ export function WebSearchSettingCard({ hasAnthropic }: Props) {
 
   const selectedAdapter =
     ADAPTERS.find((a) => a.id === form.providerType) ?? ADAPTERS[0];
-
-  const customOnlyDisabledReason =
-    hasAnthropic && form.providerType !== 'NONE'
-      ? 'Anthropic Claude SDK 自带 web_search 不可被替换。CUSTOM_ONLY 模式对 Claude 不生效，请选其它 provider。'
-      : null;
 
   const canSave = useMemo(() => {
     if (saving) return false;
@@ -244,6 +236,14 @@ export function WebSearchSettingCard({ hasAnthropic }: Props) {
 
   const handleDelete = async (): Promise<void> => {
     if (!data) return;
+    const ok = await confirm({
+      title: '删除联网搜索配置？',
+      description: '删除后将恢复使用部署环境或模型原生搜索。',
+      confirmText: '删除配置',
+      cancelText: '保留配置',
+      danger: true,
+    });
+    if (!ok) return;
     setSaving(true);
     try {
       await deleteWebSearchSetting();
@@ -259,19 +259,19 @@ export function WebSearchSettingCard({ hasAnthropic }: Props) {
   };
 
   return (
-    <Card className="mt-4">
+    <Card>
       <div className="px-5 py-4 border-b border-[var(--color-border-soft)] flex items-center justify-between">
-        <SectionTag>联网搜索 · Web Search</SectionTag>
-        <Pill>per-user</Pill>
+        <SectionTag>搜索适配器</SectionTag>
+        <Pill variant={data ? 'emerald' : 'neutral'}>{data ? '已配置' : '默认策略'}</Pill>
       </div>
 
-      <div className="grid grid-cols-[240px_1fr]">
+      <div className="grid lg:grid-cols-[220px_minmax(0,1fr)]">
         {/* ============ Left: adapter list ============ */}
-        <div className="border-r border-[var(--color-border-soft)] bg-[var(--color-bg-elev)] py-3">
+        <div className="border-b border-[var(--color-border-soft)] bg-[var(--color-bg-elev)] py-3 lg:border-b-0 lg:border-r">
           <p className="px-4 pb-3 text-[11px] leading-[1.55] text-[var(--color-fg-3)] border-b border-[var(--color-border-soft)]">
             同时仅一个 adapter 生效。切换会覆盖当前配置。
           </p>
-          <div className="pt-2">
+          <div className="grid gap-1 pt-2 sm:grid-cols-2 lg:block">
             {ADAPTERS.map((a) => {
               const active = form.providerType === a.id;
               const isEnabled = data?.providerType === a.id || (a.id === 'NONE' && !data);
@@ -292,7 +292,7 @@ export function WebSearchSettingCard({ hasAnthropic }: Props) {
         </div>
 
         {/* ============ Right: config panel ============ */}
-        <div className="p-5 space-y-4">
+        <div className="min-w-0 space-y-4 p-4 sm:p-5">
           {loading ? (
             <div className="flex items-center gap-2 text-[12.5px] text-[var(--color-fg-2)]">
               <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.5} />
@@ -326,6 +326,7 @@ export function WebSearchSettingCard({ hasAnthropic }: Props) {
                 >
                   <input
                     type="password"
+                    aria-label="搜索适配器 API Key"
                     value={form.apiKey}
                     onChange={(e) => updateForm({ apiKey: e.target.value })}
                     placeholder={
@@ -340,6 +341,7 @@ export function WebSearchSettingCard({ hasAnthropic }: Props) {
                 <Field label="Base URL" hint="你的 SearXNG 实例 URL，e.g. https://searxng.example.com">
                   <input
                     type="text"
+                    aria-label="SearXNG Base URL"
                     value={form.baseUrl}
                     onChange={(e) => updateForm({ baseUrl: e.target.value })}
                     placeholder="https://searxng.example.com"
@@ -364,15 +366,11 @@ export function WebSearchSettingCard({ hasAnthropic }: Props) {
                     />
                     <SwitchRow
                       label="总是用我配置的 adapter"
-                      desc={
-                        customOnlyDisabledReason ??
-                        '强制走 chat.completions 路径 + user adapter。'
-                      }
+                      desc="OpenAI 兼容 Provider 强制使用此 adapter；Anthropic 受 SDK 限制，运行时仍使用原生搜索。"
                       checked={form.primaryMode === 'CUSTOM_ONLY'}
                       onCheckedChange={(v: boolean) =>
                         updateForm({ primaryMode: v ? 'CUSTOM_ONLY' : 'NATIVE_FIRST' })
                       }
-                      disabled={!!customOnlyDisabledReason}
                     />
                   </div>
                 </div>
@@ -475,10 +473,10 @@ function AdapterRow({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        'w-full text-left px-4 py-2.5 flex items-center justify-between border-l-2 transition-colors',
+        'mx-2 flex min-h-12 w-[calc(100%_-_16px)] items-center justify-between rounded-[6px] border px-3 py-2.5 text-left transition-colors',
         active
-          ? 'border-[var(--color-accent)] bg-[var(--color-bg-elev)]'
-          : 'border-transparent hover:bg-[var(--color-hover)]',
+          ? 'border-[var(--color-border)] bg-[var(--color-bg-elev)]'
+          : 'border-transparent hover:bg-[var(--color-surface-hover)]',
         disabled && 'opacity-50 cursor-not-allowed hover:bg-transparent',
       )}
     >

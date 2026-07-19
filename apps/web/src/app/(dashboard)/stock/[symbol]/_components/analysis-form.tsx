@@ -160,7 +160,7 @@ export function AnalysisForm({
           </Select>
           {providerSettings.length === 0 && (
             <Link
-              href="/settings/ai"
+              href="/settings/providers"
               className="font-mono text-[11px] text-[var(--color-fg-2)] border-b border-[var(--color-fg-4)] hover:border-[var(--color-fg)]"
             >
               添加模型 →

@@ -71,7 +71,8 @@ model AiProviderSetting {
   isDefault         Boolean         @default(false)
 
   baseUrl         String?
-  apiKey          String? // 明文存储（用户可在 Settings 页查看/��辑）
+  apiKey          String? // legacy plaintext; cleared after lazy migration
+  apiKeyEncrypted String? // versioned AES-256-GCM ciphertext
   enabled         Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

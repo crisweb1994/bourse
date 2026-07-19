@@ -268,13 +268,19 @@ export interface AiProviderSettingDto {
   id: string;
   label: string;
   providerType: ProviderTypeStr;
-  baseUrl: string;
-  apiKey: string | null;
   enabledModels: string[];
   primaryModel: string | null;
   utilityModel: string | null;
   isDefault: boolean;
   enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AiProviderSettingDetailDto extends AiProviderSettingDto {
+  baseUrl: string;
+  hasApiKey: boolean;
+  apiKeyMasked: string | null;
 }
 
 export interface BuiltinProviderTemplate {
@@ -303,6 +309,7 @@ export interface AiProviderSettingInput {
   providerType: ProviderTypeStr;
   baseUrl?: string;
   apiKey?: string;
+  clearApiKey?: boolean;
   enabledModels?: string[];
   primaryModel?: string;
   utilityModel?: string;
@@ -316,7 +323,7 @@ export function listAiProviderSettings(): Promise<AiProviderSettingDto[]> {
 
 export function createAiProviderSetting(
   data: AiProviderSettingInput,
-): Promise<AiProviderSettingDto> {
+): Promise<AiProviderSettingDetailDto> {
   return fetchApi('/api/settings/providers', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
@@ -327,12 +334,18 @@ export function createAiProviderSetting(
 export function updateAiProviderSetting(
   id: string,
   data: Partial<AiProviderSettingInput>,
-): Promise<AiProviderSettingDto> {
+): Promise<AiProviderSettingDetailDto> {
   return fetchApi(`/api/settings/providers/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
     body: JSON.stringify(data),
   });
+}
+
+export function getAiProviderSetting(
+  id: string,
+): Promise<AiProviderSettingDetailDto> {
+  return fetchApi(`/api/settings/providers/${id}`);
 }
 
 export function deleteAiProviderSetting(id: string): Promise<{ ok: true }> {
@@ -346,8 +359,11 @@ export function fetchProviderModels(input: {
   providerType: ProviderTypeStr;
   baseUrl: string;
   apiKey?: string;
-}): Promise<AiModelOptionDto[]> {
-  return fetchApi('/api/settings/providers/models', {
+}, providerId?: string): Promise<AiModelOptionDto[]> {
+  const path = providerId
+    ? `/api/settings/providers/${providerId}/models`
+    : '/api/settings/providers/models';
+  return fetchApi(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
     body: JSON.stringify(input),
@@ -356,11 +372,14 @@ export function fetchProviderModels(input: {
 
 export function testProviderConnection(input: {
   providerType: ProviderTypeStr;
-  apiKey: string;
+  apiKey?: string;
   baseUrl?: string;
   model: string;
-}): Promise<TestConnectionResult> {
-  return fetchApi('/api/settings/providers/test', {
+}, providerId?: string): Promise<TestConnectionResult> {
+  const path = providerId
+    ? `/api/settings/providers/${providerId}/test`
+    : '/api/settings/providers/test';
+  return fetchApi(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
     body: JSON.stringify(input),

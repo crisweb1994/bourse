@@ -6,8 +6,7 @@ import {
   Home,
   Pin,
   History,
-  User,
-  Cpu,
+  Settings,
   X,
   ChevronsUpDown,
   LogOut,
@@ -24,6 +23,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  useConfirm,
 } from '@/components/ui';
 import type { UserDto } from '@bourse/shared-types';
 
@@ -41,8 +41,7 @@ const WORKSPACE_NAV: NavItem[] = [
 ];
 
 const ACCOUNT_NAV: NavItem[] = [
-  { href: '/settings/profile', label: '账户', icon: User },
-  { href: '/settings/ai', label: 'AI 模型', icon: Cpu },
+  { href: '/settings', label: '设置', icon: Settings },
 ];
 
 export function Sidebar({
@@ -56,6 +55,7 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const confirm = useConfirm();
   const { resolvedTheme, setTheme } = useTheme();
   const isAnonymous = user?.githubId === '__local__';
 
@@ -66,6 +66,28 @@ export function Sidebar({
       headers: csrfHeaders(),
     });
     router.push('/login');
+  };
+
+  const handleNavigate = async (
+    event: React.MouseEvent<HTMLAnchorElement>,
+    href: string,
+  ) => {
+    if (document.documentElement.dataset.settingsDirty !== 'true') {
+      onClose();
+      return;
+    }
+    event.preventDefault();
+    const leave = await confirm({
+      title: '放弃未保存的更改？',
+      description: '离开后，本页尚未保存的 Provider 配置将丢失。',
+      confirmText: '放弃更改',
+      cancelText: '继续编辑',
+      danger: true,
+    });
+    if (!leave) return;
+    delete document.documentElement.dataset.settingsDirty;
+    onClose();
+    router.push(href);
   };
 
   return (
@@ -103,14 +125,14 @@ export function Sidebar({
           label="工作台"
           items={WORKSPACE_NAV}
           pathname={pathname}
-          onItemClick={onClose}
+          onItemClick={handleNavigate}
           className="px-3 pt-7"
         />
         <NavGroup
           label="账户"
           items={ACCOUNT_NAV}
           pathname={pathname}
-          onItemClick={onClose}
+          onItemClick={handleNavigate}
           className="px-3 pt-6"
         />
 
@@ -200,7 +222,10 @@ function NavGroup({
   label: string;
   items: NavItem[];
   pathname: string;
-  onItemClick: () => void;
+  onItemClick: (
+    event: React.MouseEvent<HTMLAnchorElement>,
+    href: string,
+  ) => void;
   className?: string;
 }) {
   return (
@@ -217,7 +242,7 @@ function NavGroup({
           <Link
             key={item.href}
             href={item.href}
-            onClick={onItemClick}
+            onClick={(event) => onItemClick(event, item.href)}
             className={cn(
               'flex items-center gap-2.5 px-2 py-[7px] rounded-[6px] text-[13px] ' +
                 'text-[var(--color-fg)] transition-colors duration-100',

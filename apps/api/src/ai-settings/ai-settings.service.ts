@@ -3,14 +3,17 @@ import {
   BadRequestException,
   HttpException,
   Injectable,
+  InternalServerErrorException,
   Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import {
-  AiProviderSettingDto,
+  AiProviderSettingDetailDto,
+  AiProviderSettingSummaryDto,
   CreateAiProviderSettingDto,
   ProviderTypeStr,
   UpdateAiProviderSettingDto,
@@ -33,9 +36,13 @@ const ANTHROPIC_STATIC_MODELS = [
   'claude-haiku-4-5',
 ];
 
+const CREDENTIAL_CIPHER_VERSION = 'v1';
+const CREDENTIAL_IV_BYTES = 12;
+
 @Injectable()
 export class AiSettingsService {
   private readonly logger = new Logger(AiSettingsService.name);
+  private credentialsKey: Buffer | null = null;
 
   constructor(
     private prisma: PrismaService,
@@ -46,15 +53,19 @@ export class AiSettingsService {
     return BUILTIN_PROVIDER_CATALOG;
   }
 
-  async list(userId: string): Promise<AiProviderSettingDto[]> {
+  async list(userId: string): Promise<AiProviderSettingSummaryDto[]> {
     const rows = await this.prisma.aiProviderSetting.findMany({
       where: { userId },
       orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
     });
-    return rows.map((r) => this.toDto(r));
+    return rows.map((r) => this.toSummaryDto(r));
   }
 
-  async create(userId: string, dto: CreateAiProviderSettingDto): Promise<AiProviderSettingDto> {
+  async get(userId: string, id: string): Promise<AiProviderSettingDetailDto> {
+    return this.toDetailDto(await this.ensureOwned(userId, id));
+  }
+
+  async create(userId: string, dto: CreateAiProviderSettingDto): Promise<AiProviderSettingDetailDto> {
     const apiKey = dto.apiKey?.trim() || null;
     this.assertModelInEnabled('primaryModel', dto.primaryModel, dto.enabledModels);
     this.assertModelInEnabled('utilityModel', dto.utilityModel, dto.enabledModels);
@@ -63,7 +74,8 @@ export class AiSettingsService {
       label: dto.label.trim() || '未命名',
       providerType: dto.providerType,
       baseUrl: this.emptyToNull(dto.baseUrl),
-      apiKey,
+      apiKey: null,
+      apiKeyEncrypted: apiKey ? this.encryptApiKey(apiKey) : null,
       enabledModels: dto.enabledModels ?? [],
       primaryModel: this.emptyToNull(dto.primaryModel),
       utilityModel: this.emptyToNull(dto.utilityModel),
@@ -83,14 +95,14 @@ export class AiSettingsService {
     }
 
     const row = await this.prisma.aiProviderSetting.create({ data });
-    return this.toDto(row);
+    return this.toDetailDto(row);
   }
 
   async update(
     userId: string,
     id: string,
     dto: UpdateAiProviderSettingDto,
-  ): Promise<AiProviderSettingDto> {
+  ): Promise<AiProviderSettingDetailDto> {
     const existing = await this.ensureOwned(userId, id);
 
     const data: Record<string, unknown> = {};
@@ -112,8 +124,13 @@ export class AiSettingsService {
     }
     if (dto.enabled !== undefined) data.enabled = dto.enabled;
 
-    if (dto.apiKey !== undefined) {
-      data.apiKey = dto.apiKey.trim() || null;
+    if (dto.clearApiKey === true) {
+      data.apiKey = null;
+      data.apiKeyEncrypted = null;
+    } else if (dto.apiKey !== undefined) {
+      const apiKey = dto.apiKey.trim() || null;
+      data.apiKey = null;
+      data.apiKeyEncrypted = apiKey ? this.encryptApiKey(apiKey) : null;
     }
 
     if (dto.isDefault === true) {
@@ -124,7 +141,7 @@ export class AiSettingsService {
     }
 
     const row = await this.prisma.aiProviderSetting.update({ where: { id }, data });
-    return this.toDto(row);
+    return this.toDetailDto(row);
   }
 
   async remove(userId: string, id: string): Promise<{ ok: true }> {
@@ -199,6 +216,19 @@ export class AiSettingsService {
       .filter(Boolean) as { id: string; name: string }[];
   }
 
+  async listModelsForSaved(
+    userId: string,
+    id: string,
+    input: { providerType: ProviderTypeStr; baseUrl: string; apiKey?: string },
+  ) {
+    const row = await this.ensureOwned(userId, id);
+    const savedApiKey = await this.readApiKey(row);
+    return this.listModelsStateless({
+      ...input,
+      apiKey: input.apiKey?.trim() || savedApiKey || undefined,
+    });
+  }
+
   /**
    * 无状态测试连接 — 不依赖 DB 行，直接用入参拨打。允许用户在新建中、未保存
    * 时也能立刻验证 baseUrl + key + model 是否好用。
@@ -270,6 +300,24 @@ export class AiSettingsService {
     }
   }
 
+  async testConnectionForSaved(
+    userId: string,
+    id: string,
+    input: {
+      providerType: ProviderTypeStr;
+      apiKey?: string;
+      baseUrl?: string;
+      model: string;
+    },
+  ) {
+    const row = await this.ensureOwned(userId, id);
+    const savedApiKey = await this.readApiKey(row);
+    return this.testConnectionStateless({
+      ...input,
+      apiKey: input.apiKey?.trim() || savedApiKey || '',
+    });
+  }
+
   /**
    * 智能拼路径：避免 baseUrl 已经包含 path 段时被重复追加。
    *   joinUrl('https://api.deepseek.com/v1', '/chat/completions')      → .../v1/chat/completions
@@ -318,24 +366,22 @@ export class AiSettingsService {
     });
   }
 
-  private toRuntime(row: any): AiProviderRuntime {
+  private async toRuntime(row: any): Promise<AiProviderRuntime> {
     return {
       id: row.id,
       providerType: row.providerType,
-      apiKey: this.readApiKey(row),
+      apiKey: await this.readApiKey(row),
       baseUrl: row.baseUrl,
       model: row.primaryModel ?? row.enabledModels[0] ?? null,
       utilityModel: row.utilityModel ?? null,
     };
   }
 
-  private toDto(row: any): AiProviderSettingDto {
+  private toSummaryDto(row: any): AiProviderSettingSummaryDto {
     return {
       id: row.id,
       label: row.label ?? '未命名',
       providerType: row.providerType ?? 'OPENAI_COMPATIBLE',
-      baseUrl: row.baseUrl ?? '',
-      apiKey: this.readApiKey(row),
       enabledModels: row.enabledModels ?? [],
       primaryModel: row.primaryModel ?? null,
       utilityModel: row.utilityModel ?? null,
@@ -346,9 +392,144 @@ export class AiSettingsService {
     };
   }
 
-  /** 读明文 apiKey（删 apiKeyEncrypted 后明文是唯一来源）。 */
-  private readApiKey(row: any): string | null {
-    return row.apiKey ?? null;
+  private async toDetailDto(row: any): Promise<AiProviderSettingDetailDto> {
+    const apiKey = await this.readApiKey(row);
+    return {
+      ...this.toSummaryDto(row),
+      baseUrl: row.baseUrl ?? '',
+      hasApiKey: Boolean(apiKey),
+      apiKeyMasked: apiKey ? `****${apiKey.slice(-4)}` : null,
+    };
+  }
+
+  private async readApiKey(row: any): Promise<string | null> {
+    if (row.apiKeyEncrypted) {
+      const decrypted = this.decryptApiKey(row.apiKeyEncrypted);
+      if (decrypted.usedJwtFallback) {
+        await this.prisma.aiProviderSetting.updateMany({
+          where: {
+            id: row.id,
+            apiKeyEncrypted: row.apiKeyEncrypted,
+          },
+          data: {
+            apiKey: null,
+            apiKeyEncrypted: this.encryptApiKey(decrypted.apiKey),
+          },
+        });
+      }
+      return decrypted.apiKey;
+    }
+
+    const legacyApiKey = row.apiKey?.trim() || null;
+    if (!legacyApiKey) return null;
+
+    const apiKeyEncrypted = this.encryptApiKey(legacyApiKey);
+    await this.prisma.aiProviderSetting.updateMany({
+      where: {
+        id: row.id,
+        apiKey: legacyApiKey,
+        apiKeyEncrypted: null,
+      },
+      data: {
+        apiKey: null,
+        apiKeyEncrypted,
+      },
+    });
+    return legacyApiKey;
+  }
+
+  private encryptApiKey(apiKey: string): string {
+    const iv = randomBytes(CREDENTIAL_IV_BYTES);
+    const cipher = createCipheriv('aes-256-gcm', this.getCredentialsKey(), iv);
+    const ciphertext = Buffer.concat([cipher.update(apiKey, 'utf8'), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+    return [
+      CREDENTIAL_CIPHER_VERSION,
+      iv.toString('base64url'),
+      authTag.toString('base64url'),
+      ciphertext.toString('base64url'),
+    ].join(':');
+  }
+
+  private decryptApiKey(payload: string): { apiKey: string; usedJwtFallback: boolean } {
+    const [version, ivEncoded, authTagEncoded, ciphertextEncoded, ...extra] = payload.split(':');
+    if (
+      version !== CREDENTIAL_CIPHER_VERSION ||
+      !ivEncoded ||
+      !authTagEncoded ||
+      !ciphertextEncoded ||
+      extra.length > 0
+    ) {
+      throw new InternalServerErrorException(
+        'Stored AI credential has an unsupported or invalid format',
+      );
+    }
+
+    const iv = Buffer.from(ivEncoded, 'base64url');
+    const authTag = Buffer.from(authTagEncoded, 'base64url');
+    const ciphertext = Buffer.from(ciphertextEncoded, 'base64url');
+    for (const candidate of this.getCredentialDecryptionKeys()) {
+      try {
+        const decipher = createDecipheriv('aes-256-gcm', candidate.key, iv);
+        decipher.setAuthTag(authTag);
+        const apiKey = Buffer.concat([
+          decipher.update(ciphertext),
+          decipher.final(),
+        ]).toString('utf8');
+        return { apiKey, usedJwtFallback: candidate.usedJwtFallback };
+      } catch {
+        // Authentication failure means this ciphertext belongs to another key candidate.
+      }
+    }
+
+    throw new InternalServerErrorException(
+      'Unable to decrypt stored AI credential; verify AI_CREDENTIALS_ENCRYPTION_KEY',
+    );
+  }
+
+  private getCredentialsKey(): Buffer {
+    if (this.credentialsKey) return this.credentialsKey;
+
+    const dedicatedSecret = this.config.get<string>('AI_CREDENTIALS_ENCRYPTION_KEY')?.trim();
+    const jwtSecret = this.config.get<string>('JWT_SECRET')?.trim();
+    const secret = dedicatedSecret || jwtSecret;
+    if (!secret) {
+      throw new InternalServerErrorException(
+        'AI credential encryption is not configured; set AI_CREDENTIALS_ENCRYPTION_KEY',
+      );
+    }
+    if (!dedicatedSecret) {
+      this.logger.warn(
+        'AI_CREDENTIALS_ENCRYPTION_KEY is not set; using JWT_SECRET for credential encryption',
+      );
+    }
+    this.credentialsKey = createHash('sha256').update(secret, 'utf8').digest();
+    return this.credentialsKey;
+  }
+
+  private getCredentialDecryptionKeys(): Array<{ key: Buffer; usedJwtFallback: boolean }> {
+    const dedicatedSecret = this.config.get<string>('AI_CREDENTIALS_ENCRYPTION_KEY')?.trim();
+    const jwtSecret = this.config.get<string>('JWT_SECRET')?.trim();
+    if (!dedicatedSecret && !jwtSecret) {
+      throw new InternalServerErrorException(
+        'AI credential encryption is not configured; set AI_CREDENTIALS_ENCRYPTION_KEY',
+      );
+    }
+
+    const candidates: Array<{ key: Buffer; usedJwtFallback: boolean }> = [];
+    if (dedicatedSecret) {
+      candidates.push({
+        key: createHash('sha256').update(dedicatedSecret, 'utf8').digest(),
+        usedJwtFallback: false,
+      });
+    }
+    if (jwtSecret && jwtSecret !== dedicatedSecret) {
+      candidates.push({
+        key: createHash('sha256').update(jwtSecret, 'utf8').digest(),
+        usedJwtFallback: Boolean(dedicatedSecret),
+      });
+    }
+    return candidates;
   }
 
   private emptyToNull(value?: string | null): string | null {

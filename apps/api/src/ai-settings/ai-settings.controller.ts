@@ -15,6 +15,7 @@ import { AiSettingsService } from './ai-settings.service';
 import {
   CreateAiProviderSettingDto,
   ListModelsDto,
+  TestSavedConnectionDto,
   TestConnectionDto,
   UpdateAiProviderSettingDto,
 } from './ai-settings.dto';
@@ -32,6 +33,11 @@ export class AiSettingsController {
   @Get()
   list(@CurrentUser() user: any) {
     return this.aiSettingsService.list(user.id);
+  }
+
+  @Get(':id')
+  get(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.aiSettingsService.get(user.id, id);
   }
 
   @Post()
@@ -63,5 +69,23 @@ export class AiSettingsController {
   @Post('test')
   testConnection(@Body() body: TestConnectionDto) {
     return this.aiSettingsService.testConnectionStateless(body);
+  }
+
+  @Post(':id/models')
+  listSavedModels(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() body: ListModelsDto,
+  ) {
+    return this.aiSettingsService.listModelsForSaved(user.id, id, body);
+  }
+
+  @Post(':id/test')
+  testSavedConnection(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() body: TestSavedConnectionDto,
+  ) {
+    return this.aiSettingsService.testConnectionForSaved(user.id, id, body);
   }
 }
