@@ -2,6 +2,7 @@ node_modules/
 .pnpm-store/
 dist/
 .next/
+.next-build/
 .turbo/
 *.tsbuildinfo
 .env

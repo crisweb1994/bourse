@@ -8,20 +8,21 @@ datasource db {
 }
 
 model User {
-  id                     String   @id @default(cuid())
-  githubId               String   @unique
-  email                  String?
-  name                   String
-  avatarUrl              String?
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  id        String   @id @default(cuid())
+  githubId  String   @unique
+  email     String?
+  name      String
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  aiProviderSettings  AiProviderSetting[]
-  watchlistItems      WatchlistItem[]
-  analyses            Analysis[]
-  webSearchSetting    WebSearchSetting?
-  digestSubscription  DigestSubscription?
-  deliveryRecords     DeliveryRecord[]
+  aiProviderSettings AiProviderSetting[]
+  watchlistItems     WatchlistItem[]
+  analyses           Analysis[]
+  webSearchSetting   WebSearchSetting?
+  digestSubscription DigestSubscription?
+  deliveryRecords    DeliveryRecord[]
+  researchThreads    ResearchThread[]
 }
 
 model Stock {
@@ -37,8 +38,10 @@ model Stock {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  watchlistItems WatchlistItem[]
-  analyses       Analysis[]
+  watchlistItems        WatchlistItem[]
+  analyses              Analysis[]
+  researchThreads       ResearchThread[]
+  openResearchSnapshots OpenResearchSnapshot[]
 
   @@unique([symbol, market])
   @@index([sector])
@@ -65,10 +68,10 @@ model AiProviderSetting {
   id     String @id @default(cuid())
   userId String
 
-  label             String? // 用户起的名字，e.g. "我的 DeepSeek"
-  providerType      AiProviderType? // ANTHROPIC | OPENAI_COMPATIBLE
-  enabledModels     String[]        @default([])
-  isDefault         Boolean         @default(false)
+  label         String? // 用户起的名字，e.g. "我的 DeepSeek"
+  providerType  AiProviderType? // ANTHROPIC | OPENAI_COMPATIBLE
+  enabledModels String[]        @default([])
+  isDefault     Boolean         @default(false)
 
   baseUrl         String?
   apiKey          String? // legacy plaintext; cleared after lazy migration
@@ -78,9 +81,9 @@ model AiProviderSetting {
   updatedAt       DateTime @updatedAt
 
   /// 主模型：主分析 + web_search。留空 → fallback enabledModels[0]。
-  primaryModel   String?
+  primaryModel String?
   /// 次模型：JSON 抽取 / summary 等辅助任务。留空 → fallback 到 primaryModel。
-  utilityModel   String?
+  utilityModel String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -101,7 +104,7 @@ enum WebSearchProviderType {
 
 enum WebSearchPrimaryMode {
   NATIVE_FIRST // 优先用 provider 自带（Anthropic SDK / OpenAI Responses）
-  CUSTOM_ONLY  // 强制走 user adapter（Anthropic 在 UI 隐藏；OpenAI 切到 chat.completions）
+  CUSTOM_ONLY // 强制走 user adapter（Anthropic 在 UI 隐藏；OpenAI 切到 chat.completions）
 }
 
 model WebSearchSetting {
@@ -109,7 +112,7 @@ model WebSearchSetting {
   userId          String                @unique
   providerType    WebSearchProviderType
   apiKey          String?
-  baseUrl         String?               // SearXNG only
+  baseUrl         String? // SearXNG only
   primaryMode     WebSearchPrimaryMode  @default(NATIVE_FIRST)
   timeoutMs       Int?
   budgetUsdPerRun Decimal?              @db.Decimal(10, 4)
@@ -121,29 +124,29 @@ model WebSearchSetting {
 
 // 定时行情简报订阅 + IM/Webhook 投递记录。完整简报只在 IM，不落库。
 model DigestSubscription {
-  id         String   @id @default(cuid())
-  userId     String   @unique
-  markets    Market[]              // ["US","CN","HK"] 子集
-  sessions   DigestSession[]      // ["PRE","POST"] 子集
-  channels   Json                  // ChannelConfig[]（discriminated union，含凭证）
-  enabled    Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String          @id @default(cuid())
+  userId    String          @unique
+  markets   Market[] // ["US","CN","HK"] 子集
+  sessions  DigestSession[] // ["PRE","POST"] 子集
+  channels  Json // ChannelConfig[]（discriminated union，含凭证）
+  enabled   Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model DeliveryRecord {
-  id          String   @id @default(cuid())
+  id          String         @id @default(cuid())
   userId      String
   market      Market
   session     DigestSession
   channelType ChannelType
-  target      String                  // 脱敏：url 域名 / chatId 末四位
+  target      String // 脱敏：url 域名 / chatId 末四位
   status      DeliveryStatus
   httpStatus  Int?
   error       String?
-  attemptedAt DateTime @default(now())
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attemptedAt DateTime       @default(now())
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, attemptedAt])
   @@index([market, session, attemptedAt])
@@ -161,6 +164,7 @@ model Analysis {
   aiProvider          String?
   aiModel             String?
   aiProviderSettingId String?
+  promptVersion       String?
   dataAsOf            String?
   generatedAt         DateTime?
   summaryMarkdown     String?
@@ -170,12 +174,13 @@ model Analysis {
   // null = 正常运行；'WEB_SEARCH_FALLBACK' = EvidencePack v2 失败后降级到 v1 web_search。
   degradedSource      String?
 
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  stock    Stock             @relation(fields: [stockId], references: [id], onDelete: Cascade)
-  sections AnalysisSection[]
+  user             User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stock            Stock                     @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  sections         AnalysisSection[]
+  evidenceSnapshot AnalysisEvidenceSnapshot?
 
   @@index([userId, degradedSource])
 }
@@ -191,8 +196,176 @@ model AnalysisSection {
   errorMessage   String?
   order          Int
 
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  analysis Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+}
+
+// Chat Phase 1 owns conversation records. AnalysisEvidenceSnapshot is written
+// by the Analysis lifecycle and exposed to Chat through a read-only port.
+enum ChatIntent {
+  OPEN_RESEARCH
+  EXPLAIN_EXISTING
+  COMPARE_HISTORY
+  REFRESH_REQUIRED
+  VALIDATE_THESIS
+  SCOPE_CHANGE
+  UNSUPPORTED
+}
+
+enum ChatGenerationStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+enum ChatMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM_NOTICE
+}
+
+enum ChatMessageKind {
+  TEXT
+  PROPOSAL
+  DELTA_SUMMARY
+  THESIS_REVIEW
+  ERROR_NOTICE
+}
+
+enum ChatMessageStatus {
+  COMPLETED
+  PARTIAL
+  FAILED
+}
+
+model ResearchThread {
+  id             String    @id @default(cuid())
+  userId         String
+  primaryStockId String
+  title          String
+  archivedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  primaryStock Stock            @relation(fields: [primaryStockId], references: [id], onDelete: Cascade)
+  generations  ChatGeneration[]
+  messages     ChatMessage[]
+
+  @@index([userId, primaryStockId, updatedAt])
+}
+
+model ChatGeneration {
+  id                        String               @id @default(cuid())
+  threadId                  String
+  clientRequestId           String
+  intent                    ChatIntent
+  status                    ChatGenerationStatus @default(PENDING)
+  contextSnapshot           Json
+  analysisContextSnapshotId String?
+  linkedAnalysisRunId       String?
+  promptVersion             String
+  actualProvider            String?
+  actualModel               String?
+  inputTokens               Int?
+  outputTokens              Int?
+  groundedSources           Json?
+  errorCode                 String?
+  createdAt                 DateTime             @default(now())
+  completedAt               DateTime?
+
+  thread                  ResearchThread               @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  messages                ChatMessage[]
+  openResearchSnapshot    OpenResearchSnapshot?
+  streamEvents            ChatStreamEvent[]
+  analysisContextSnapshot ChatAnalysisContextSnapshot? @relation(fields: [analysisContextSnapshotId], references: [id], onDelete: SetNull)
+
+  @@unique([threadId, clientRequestId])
+  @@index([threadId, status])
+}
+
+model ChatAnalysisContextSnapshot {
+  id          String   @id @default(cuid())
+  analysisId  String
+  contentHash String   @unique
+  payload     Json
+  createdAt   DateTime @default(now())
+
+  generations ChatGeneration[]
+
+  @@index([analysisId, createdAt])
+}
+
+model ChatStreamEvent {
+  id           String   @id @default(cuid())
+  generationId String
+  sequence     Int
+  event        String
+  payload      Json
+  createdAt    DateTime @default(now())
+
+  generation ChatGeneration @relation(fields: [generationId], references: [id], onDelete: Cascade)
+
+  @@unique([generationId, sequence])
+  @@index([generationId, sequence])
+}
+
+model ChatMessage {
+  id           String            @id @default(cuid())
+  threadId     String
+  generationId String?
+  role         ChatMessageRole
+  kind         ChatMessageKind
+  status       ChatMessageStatus
+  content      String            @db.Text
+  sequence     Int
+  citationRefs Json?
+  numericRefs  Json?
+  createdAt    DateTime          @default(now())
+
+  thread     ResearchThread  @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  generation ChatGeneration? @relation(fields: [generationId], references: [id], onDelete: SetNull)
+
+  @@unique([threadId, sequence])
+  @@index([generationId])
+}
+
+model OpenResearchSnapshot {
+  id                 String   @id @default(cuid())
+  generationId       String   @unique
+  stockId            String
+  query              String   @db.Text
+  dataAsOf           DateTime
+  gatewayVersion     String
+  sources            Json
+  citationCandidates Json
+  contentHash        String
+  createdAt          DateTime @default(now())
+
+  generation ChatGeneration @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  stock      Stock          @relation(fields: [stockId], references: [id], onDelete: Cascade)
+
+  @@index([stockId, createdAt])
+}
+
+model AnalysisEvidenceSnapshot {
+  id                  String   @id @default(cuid())
+  analysisId          String   @unique
+  schemaVersion       String
+  evidencePackVersion String
+  capturedAt          DateTime @default(now())
+  dataAsOf            Json
+  sourceMode          String
+  degraded            Boolean  @default(false)
+  missingFields       String[]
+  payload             Json
+  sourceSnapshots     Json
+  metadata            Json?
+  contentHash         String
 
   analysis Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
 }

@@ -68,6 +68,7 @@ interface AnalysisStreamViewProps {
   onAddToWatchlist: () => void | Promise<void>;
   onRerun: () => void | Promise<void>;
   onCompareOpenChange: (open: boolean) => void;
+  onAskAnalysis: (sectionType?: string) => void;
 }
 
 export function AnalysisStreamView({
@@ -97,6 +98,7 @@ export function AnalysisStreamView({
   onAddToWatchlist,
   onRerun,
   onCompareOpenChange,
+  onAskAnalysis,
 }: AnalysisStreamViewProps) {
   return (
     <div className="space-y-4">
@@ -290,6 +292,7 @@ export function AnalysisStreamView({
                 onRetry={onRetry}
                 showSideContent={false}
                 showCitations={true}
+                onAsk={onAskAnalysis}
               />
             ))}
 
@@ -331,6 +334,7 @@ export function AnalysisStreamView({
           section={sectionList[0]}
           onRetry={onRetry}
           showSideContent={true}
+          onAsk={onAskAnalysis}
         />
       )}
 
@@ -367,6 +371,7 @@ export function AnalysisStreamView({
           watchlistBusy={watchlistBusy}
           onAddToWatchlist={!watchlistItemId ? onAddToWatchlist : undefined}
           onRerun={onRerun}
+          onAskAnalysis={() => onAskAnalysis()}
           onCompareWithLast={
             recentAnalyses.filter(
               (a) =>

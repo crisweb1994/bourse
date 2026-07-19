@@ -13,6 +13,7 @@ import { ProviderResolverService } from './provider-resolver.service';
 import { ProviderFactoryService } from './provider-factory.service';
 import { SnapshotV2Service } from './snapshot-v2.service';
 import { EvidencePackService } from './evidence-pack.service';
+import { AnalysisChatService } from './analysis-chat.service';
 
 // Analysis owns provider construction and imports the market-data connector
 // ports used to build evidence packs.
@@ -34,7 +35,8 @@ import { EvidencePackService } from './evidence-pack.service';
     ProviderFactoryService,
     SnapshotV2Service,
     EvidencePackService,
+    AnalysisChatService,
   ],
-  exports: [SnapshotV2Service],
+  exports: [SnapshotV2Service, AnalysisChatService, ProviderResolverService],
 })
 export class AnalysisModule {}

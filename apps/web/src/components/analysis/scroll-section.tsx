@@ -1,6 +1,6 @@
 'use client';
 
-import { Loader2, XCircle, RotateCcw, Clock } from 'lucide-react';
+import { Loader2, XCircle, RotateCcw, Clock, MessageSquareText } from 'lucide-react';
 import type { SectionData } from '@/hooks/use-analysis-stream';
 import { MarkdownRenderer } from '@/components/shared/markdown-renderer';
 import { Button, Card, Pill, SectionTag } from '@/components/ui';
@@ -14,6 +14,7 @@ interface Props {
   onRetry: (sectionId: string) => void;
   showSideContent?: boolean;
   showCitations?: boolean;
+  onAsk?: (sectionType: string) => void;
 }
 
 export function ScrollSection({
@@ -21,6 +22,7 @@ export function ScrollSection({
   onRetry,
   showSideContent = true,
   showCitations = showSideContent,
+  onAsk,
 }: Props) {
   const label = SECTION_LABELS[section.type] || section.type;
   // PR-9: surface the structured signal in the section header (Style A mockup
@@ -53,6 +55,16 @@ export function ScrollSection({
               confidence={conclusion!.confidence}
               className="ml-auto"
             />
+          )}
+          {onAsk && section.status === 'completed' && (
+            <Button
+              size="sm"
+              onClick={() => onAsk(section.type)}
+              className={hasSignal ? '' : 'ml-auto'}
+            >
+              <MessageSquareText className="h-3 w-3" strokeWidth={1.5} />
+              询问此维度
+            </Button>
           )}
         </div>
 

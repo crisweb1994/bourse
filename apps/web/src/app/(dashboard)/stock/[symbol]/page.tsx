@@ -134,6 +134,18 @@ export default function StockAnalysisPage({
   } = resultLayout;
   const [compareOpen, setCompareOpen] = useState(false);
 
+  const openAnalysisChat = (sectionType?: string) => {
+    if (!symbol || !currentAnalysisMeta?.id) return;
+
+    const search = new URLSearchParams({
+      stock: symbol,
+      market,
+      analysis: currentAnalysisMeta.id,
+    });
+    if (sectionType) search.set('section', sectionType);
+    router.push(`/chat?${search.toString()}`);
+  };
+
   return (
     <>
       <StockPageBackButton router={router} />
@@ -241,6 +253,7 @@ export default function StockAnalysisPage({
           onAddToWatchlist={handleAddToWatchlist}
           onRerun={handleRerun}
           onCompareOpenChange={setCompareOpen}
+          onAskAnalysis={openAnalysisChat}
         />
       )}
 

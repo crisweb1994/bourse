@@ -23,7 +23,8 @@ const SearxngItem = z.object({
   title: z.string().default(''),
   url: z.string(),
   content: z.string().default(''),
-  publishedDate: z.string().optional(),
+  // Official SearXNG responses use null when an engine has no publish date.
+  publishedDate: z.string().nullish(),
   engine: z.string().optional(),
 });
 

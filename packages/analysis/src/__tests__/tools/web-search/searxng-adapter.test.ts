@@ -11,6 +11,29 @@ function mockFetch(json: unknown, status = 200): typeof fetch {
 }
 
 describe('searxng adapter', () => {
+  it('accepts the official null publishedDate shape', async () => {
+    const adapter = createSearxngAdapter({
+      baseUrl: 'https://search.example.com',
+      _internalFetch: mockFetch({
+        results: [{
+          title: 'Apple investor relations',
+          url: 'https://www.apple.com/newsroom/',
+          content: 'Company news',
+          publishedDate: null,
+          engine: 'bing',
+        }],
+      }),
+    });
+
+    const result = await adapter.search(
+      { query: 'AAPL', count: 5 },
+      { timeoutMs: 1000 },
+    );
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.publishedAt).toBeUndefined();
+  });
+
   it('normalizes /search?format=json response into SearchResults', async () => {
     const adapter = createSearxngAdapter({
       baseUrl: 'https://search.example.com',

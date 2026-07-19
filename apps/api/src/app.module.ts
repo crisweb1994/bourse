@@ -10,6 +10,7 @@ import { AiSettingsModule } from './ai-settings/ai-settings.module';
 import { WebSearchSettingsModule } from './web-search-settings/web-search-settings.module';
 import { DigestModule } from './digest/digest.module';
 import { ROOT_ENV_FILE_PATHS } from './config/root-env';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { ROOT_ENV_FILE_PATHS } from './config/root-env';
     StockModule,
     WatchlistModule,
     AnalysisModule,
+    ChatModule,
     // plan-v2 Wave 2.6e — ResearchModule + PlannerModule removed. CRUD
     // surface for research / planner endpoints is gone; AnalysisModule
     // pulls port singletons through ConnectorsModule directly.

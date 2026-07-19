@@ -1,4 +1,9 @@
-import { Market, DigestSession, ChannelType } from '@bourse/shared-types';
+import {
+  ChatSsePayloadSchema,
+  Market,
+  DigestSession,
+  ChannelType,
+} from '@bourse/shared-types';
 import type {
   ActiveAnalysisType,
   AnalysisStatus,
@@ -6,6 +11,7 @@ import type {
   Confidence,
   SectionType,
   Signal,
+  ChatSsePayload,
   StockSearchResult,
   WatchlistItemDto,
 } from '@bourse/shared-types';
@@ -41,6 +47,190 @@ export class ApiError extends Error {
 export async function searchStocks(query: string): Promise<StockSearchResult[]> {
   if (!query || query.length < 1) return [];
   return fetchApi(`/api/stocks/search?q=${encodeURIComponent(query)}`);
+}
+
+// Chat Phase 1 APIs
+export interface ChatThreadDto {
+  id: string;
+  userId: string;
+  primaryStockId: string;
+  title: string;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  primaryStock: StockDtoBrief;
+  messages?: ChatMessageDto[];
+  generations?: ChatGenerationDto[];
+  eligibleAnalyses?: AnalysisChatSummaryDto[];
+}
+
+export interface ChatMessageDto {
+  id: string;
+  generationId: string | null;
+  role: 'USER' | 'ASSISTANT' | 'SYSTEM_NOTICE';
+  kind: string;
+  status: string;
+  content: string;
+  sequence: number;
+  citationRefs?: string[] | null;
+  createdAt: string;
+}
+
+export interface ChatGenerationDto {
+  id: string;
+  threadId: string;
+  clientRequestId: string;
+  intent: string;
+  status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'CANCELLED' | 'FAILED';
+  contextSnapshot?: any;
+  createdAt: string;
+  completedAt?: string | null;
+  groundedSources?: any[] | null;
+  openResearchSnapshot?: {
+    id: string;
+    dataAsOf: string;
+    gatewayVersion: string;
+    sources: any[];
+  } | null;
+}
+
+export interface AnalysisChatSummaryDto {
+  id: string;
+  stockId: string;
+  symbol: string;
+  analysisType: string;
+  status: string;
+  generatedAt: string | null;
+  dataAsOf: string | null;
+  overallSignal: string | null;
+  overallConfidence: string | null;
+  degraded: boolean;
+  hasEvidenceSnapshot: boolean;
+}
+
+export type { ChatSsePayload } from '@bourse/shared-types';
+
+export async function createChatThread(
+  symbol: string,
+  market?: string,
+  title?: string,
+): Promise<ChatThreadDto> {
+  const qs = market ? `?market=${encodeURIComponent(market)}` : '';
+  return fetchApi(`/api/chat/stocks/${encodeURIComponent(symbol)}/threads${qs}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+    body: JSON.stringify(title ? { title } : {}),
+  });
+}
+
+export async function listChatThreads(
+  symbol: string,
+  includeArchived = false,
+): Promise<ChatThreadDto[]> {
+  return fetchApi(
+    `/api/chat/stocks/${encodeURIComponent(symbol)}/threads?archived=${includeArchived}`,
+  );
+}
+
+export async function listRecentChatThreads(
+  includeArchived = false,
+): Promise<ChatThreadDto[]> {
+  return fetchApi(`/api/chat/threads?archived=${includeArchived}`);
+}
+
+export async function getChatThread(threadId: string): Promise<ChatThreadDto> {
+  return fetchApi(`/api/chat/threads/${encodeURIComponent(threadId)}`);
+}
+
+export async function updateChatThread(
+  threadId: string,
+  patch: { title?: string; action?: 'archive' | 'restore' },
+): Promise<ChatThreadDto> {
+  return fetchApi(`/api/chat/threads/${encodeURIComponent(threadId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+    body: JSON.stringify(patch),
+  });
+}
+
+export async function deleteChatThread(threadId: string): Promise<{ ok: boolean }> {
+  return fetchApi(`/api/chat/threads/${encodeURIComponent(threadId)}`, {
+    method: 'DELETE',
+    headers: csrfHeaders(),
+  });
+}
+
+export async function createChatGeneration(
+  threadId: string,
+  request: {
+    question: string;
+    clientRequestId: string;
+    analysisIds?: string[];
+    sectionTypes?: string[];
+    modeHint?: 'OPEN_RESEARCH' | 'ANALYSIS_GROUNDED';
+  },
+): Promise<ChatGenerationDto> {
+  return fetchApi(`/api/chat/threads/${encodeURIComponent(threadId)}/generations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+    body: JSON.stringify(request),
+  });
+}
+
+export async function cancelChatGeneration(generationId: string) {
+  return fetchApi(`/api/chat/generations/${encodeURIComponent(generationId)}/cancel`, {
+    method: 'POST',
+    headers: csrfHeaders(),
+  });
+}
+
+export async function streamChatGeneration(
+  generationId: string,
+  onEvent: (event: ChatSsePayload) => void,
+  options: { afterSeq?: number; signal?: AbortSignal } = {},
+): Promise<{ lastSeq: number; done: boolean }> {
+  const afterSeq = options.afterSeq ?? 0;
+  const response = await fetch(
+    `${API_URL}/api/chat/generations/${encodeURIComponent(generationId)}/stream?afterSeq=${afterSeq}`,
+    { credentials: 'include', signal: options.signal, headers: { Accept: 'text/event-stream' } },
+  );
+  if (!response.ok || !response.body) throw new ApiError(response.status, 'Chat 连接失败');
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let lastSeq = afterSeq;
+  let receivedDone = false;
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const chunks = buffer.replace(/\r\n/g, '\n').split('\n\n');
+    buffer = chunks.pop() ?? '';
+    for (const chunk of chunks) {
+      let eventName = 'message';
+      const dataLines: string[] = [];
+      for (const line of chunk.split('\n')) {
+        if (line.startsWith('event:')) eventName = line.slice(6).trim();
+        if (line.startsWith('data:')) dataLines.push(line.slice(5).replace(/^ /, ''));
+      }
+      const data = dataLines.join('\n');
+      if (!data) continue;
+      try {
+        const parsed = ChatSsePayloadSchema.safeParse({
+          event: eventName,
+          ...JSON.parse(data),
+        });
+        if (!parsed.success) continue;
+        const event = parsed.data;
+        if (typeof event.seq === 'number') lastSeq = Math.max(lastSeq, event.seq);
+        if (eventName === 'done') receivedDone = true;
+        onEvent(event);
+      } catch {
+        // Ignore a malformed heartbeat; the next durable reconnect can replay.
+      }
+    }
+  }
+  return { lastSeq, done: receivedDone };
 }
 
 // Merged stock detail. Unknown symbols return candidates; known symbols return
