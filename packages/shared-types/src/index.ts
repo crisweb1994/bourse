@@ -1,4 +1,5 @@
 export * from './chat';
+export * from './build-metadata';
 
 // ===== Enums =====
 

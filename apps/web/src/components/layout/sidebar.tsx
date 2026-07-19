@@ -16,7 +16,14 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { cn, API_URL, csrfHeaders } from '@/lib/utils';
+import {
+  APP_VERSION,
+  API_URL,
+  BUILD_DATE,
+  BUILD_SHA,
+  cn,
+  csrfHeaders,
+} from '@/lib/utils';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -114,6 +121,12 @@ export function Sidebar({
         <div className="flex items-center gap-2.5 px-4 pt-5 pb-1.5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/bourse-logo.svg" alt="Bourse" className="h-7 w-auto" />
+          <span
+            className="font-mono text-[10px] text-[var(--color-fg-3)]"
+            title={`Commit ${BUILD_SHA} · Built ${BUILD_DATE}`}
+          >
+            {APP_VERSION === 'dev' ? 'dev' : `v${APP_VERSION}`}
+          </span>
           <button
             onClick={onClose}
             className="ml-auto lg:hidden text-[var(--color-fg-2)]"

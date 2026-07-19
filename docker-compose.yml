@@ -13,6 +13,21 @@
 #     docker compose down -v         # also wipes the DB volume
 # =============================================================================
 
+x-bourse-service: &bourse-service
+  image: ${BOURSE_IMAGE:-ghcr.io/crisweb1994/bourse:latest}
+  build:
+    context: .
+    dockerfile: Dockerfile
+    target: bourse
+    args:
+      # NEXT_PUBLIC_* values are baked into the shared image's Web bundle.
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+      NEXT_PUBLIC_AUTH_REQUIRED: ${AUTH_REQUIRED:-false}
+      APP_VERSION: ${BOURSE_VERSION:-0.0.1-dev}
+      GIT_SHA: ${BOURSE_GIT_SHA:-local}
+      BUILD_DATE: ${BOURSE_BUILD_DATE:-local}
+  restart: unless-stopped
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -33,12 +48,8 @@ services:
       retries: 5
 
   api:
-    image: ${API_IMAGE:-ghcr.io/crisweb1994/bourse-api:latest}
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: api
-    restart: unless-stopped
+    <<: *bourse-service
+    command: ["api"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -74,16 +85,8 @@ services:
       WEB_SEARCH_CACHE_TTL_MS: ${WEB_SEARCH_CACHE_TTL_MS:-}
 
   web:
-    image: ${WEB_IMAGE:-ghcr.io/crisweb1994/bourse-web:latest}
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: web
-      args:
-        # NEXT_PUBLIC_* are baked into the JS bundle at build time, so they
-        # must be ARGs — env vars at runtime won't reach the browser.
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
-    restart: unless-stopped
+    <<: *bourse-service
+    command: ["web"]
     depends_on:
       - api
     ports:

@@ -11,6 +11,7 @@ import { WebSearchSettingsModule } from './web-search-settings/web-search-settin
 import { DigestModule } from './digest/digest.module';
 import { ROOT_ENV_FILE_PATHS } from './config/root-env';
 import { ChatModule } from './chat/chat.module';
+import { MetaController } from './meta/meta.controller';
 
 @Module({
   imports: [
@@ -36,5 +37,6 @@ import { ChatModule } from './chat/chat.module';
     // plan-v2 §12.3 — AgentModule removed; ProviderFactoryService (renamed
     // from AgentRunnerService) now lives inside AnalysisModule.
   ],
+  controllers: [MetaController],
 })
 export class AppModule {}

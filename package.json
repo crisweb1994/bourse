@@ -1,5 +1,6 @@
 {
   "name": "bourse",
+  "version": "0.0.1",
   "private": true,
   "description": "AI 股票研究平台 —— 代码负责事实，LLM 只负责判断。9 维度并行分析，支持 A 股 / 美股 / 港股。",
   "license": "MIT",

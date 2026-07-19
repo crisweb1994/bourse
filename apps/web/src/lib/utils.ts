@@ -8,6 +8,10 @@ export function cn(...inputs: ClassValue[]) {
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
+export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || 'dev';
+export const BUILD_SHA = process.env.NEXT_PUBLIC_GIT_SHA || 'local';
+export const BUILD_DATE = process.env.NEXT_PUBLIC_BUILD_DATE || 'local';
+
 export function getCookie(name: string) {
   if (typeof document === 'undefined') return null;
 

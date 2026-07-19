@@ -4,6 +4,8 @@ dist
 **/dist
 .next
 **/.next
+.next-build
+**/.next-build
 .turbo
 **/.turbo
 *.tsbuildinfo
@@ -15,4 +17,5 @@ dist
 .DS_Store
 demo.html
 docs
+apps/web/PRODUCT.md
 README.md
