@@ -8,7 +8,12 @@ import {
   Pill,
   SectionTag,
   SwitchRow,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   toast,
+  useConfirm,
 } from '@/components/ui';
 import {
   deleteDigestSubscription,
@@ -61,7 +66,7 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = {
-  enabled: true,
+  enabled: false,
   markets: [],
   sessions: ['PRE', 'POST'],
   channels: [],
@@ -78,7 +83,8 @@ function fromDto(dto: DigestSubscriptionDto): FormState {
   };
 }
 
-export function DigestSubscriptionCard() {
+export function DigestSettingsForm() {
+  const confirm = useConfirm();
   const [data, setData] = useState<DigestSubscriptionDto | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [loading, setLoading] = useState(true);
@@ -167,6 +173,14 @@ export function DigestSubscriptionCard() {
 
   const handleDelete = async (): Promise<void> => {
     if (!data) return;
+    const ok = await confirm({
+      title: '取消行情简报订阅？',
+      description: '取消后不再生成或投递任何市场简报。',
+      confirmText: '取消订阅',
+      cancelText: '保留订阅',
+      danger: true,
+    });
+    if (!ok) return;
     setSaving(true);
     try {
       await deleteDigestSubscription();
@@ -181,10 +195,12 @@ export function DigestSubscriptionCard() {
   };
 
   return (
-    <Card className="mt-4">
+    <Card>
       <div className="px-5 py-4 border-b border-[var(--color-border-soft)] flex items-center justify-between">
-        <SectionTag>行情简报 · Daily Brief</SectionTag>
-        <Pill>per-user</Pill>
+        <SectionTag>订阅状态</SectionTag>
+        <Pill variant={data?.enabled ? 'emerald' : 'neutral'}>
+          {data?.enabled ? '已启用' : '未启用'}
+        </Pill>
       </div>
 
       <div className="p-5 space-y-5">
@@ -196,8 +212,8 @@ export function DigestSubscriptionCard() {
         ) : (
           <>
             <p className="text-[12px] text-[var(--color-fg-2)] leading-[1.55] max-w-[560px]">
-              在每个市场的盘前（开盘前 30~5min）与盘后（收盘后 5~30min）自动生成两段式行情简报，
-              推送到你配置的 IM 渠道。AI 解读用你的 provider（未配则降级纯数字）。
+              在每个市场开盘前 30 至 5 分钟、收盘后 5 至 30 分钟生成行情简报，
+              并投递到已配置渠道。没有可用 Provider 时仅发送数字摘要。
             </p>
 
             <SwitchRow
@@ -316,7 +332,7 @@ function ChipToggle({
         'px-3 py-1.5 rounded-full text-[12.5px] font-mono border transition-colors',
         checked
           ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-          : 'border-[var(--color-border)] text-[var(--color-fg-2)] hover:bg-[var(--color-hover)]',
+          : 'border-[var(--color-border)] text-[var(--color-fg-2)] hover:bg-[var(--color-surface-hover)]',
       )}
     >
       {label}
@@ -325,42 +341,31 @@ function ChipToggle({
 }
 
 function AddChannelMenu({ onAdd }: { onAdd: (t: DigestChannelType) => void }) {
-  const [open, setOpen] = useState(false);
   return (
-    <div className="relative">
-      <Button size="sm" onClick={() => setOpen((v) => !v)}>
-        <Plus className="w-3 h-3" strokeWidth={1.5} />
-        添加
-      </Button>
-      {open && (
-        <>
-          <div
-            className="fixed inset-0 z-10"
-            onClick={() => setOpen(false)}
-          />
-          <div className="absolute right-0 top-full mt-1 z-20 min-w-[160px] py-1 rounded-md border border-[var(--color-border)] bg-[var(--color-bg-elev)] shadow-none">
-            {CHANNEL_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                disabled={!opt.available}
-                onClick={() => {
-                  onAdd(opt.value);
-                  setOpen(false);
-                }}
-                className={cn(
-                  'w-full text-left px-3 py-1.5 text-[12.5px] hover:bg-[var(--color-hover)]',
-                  !opt.available && 'opacity-40 cursor-not-allowed hover:bg-transparent',
-                )}
-              >
-                {opt.label}
-                {!opt.available && <span className="ml-2 text-[10.5px]">Phase B</span>}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="sm" type="button">
+          <Plus className="w-3 h-3" strokeWidth={1.5} />
+          添加渠道
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[180px]">
+        {CHANNEL_OPTIONS.map((opt) => (
+          <DropdownMenuItem
+            key={opt.value}
+            disabled={!opt.available}
+            onSelect={() => onAdd(opt.value)}
+          >
+            {opt.label}
+            {!opt.available && (
+              <span className="ml-auto font-mono text-[10.5px] text-[var(--color-fg-3)]">
+                后续版本
+              </span>
+            )}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -381,7 +386,7 @@ function ChannelEditor({
   const typeLabel =
     CHANNEL_OPTIONS.find((o) => o.value === channel.type)?.label ?? channel.type;
   return (
-    <div className="px-3 py-3 rounded-md border border-[var(--color-border-soft)] space-y-2">
+    <div className="space-y-3 border-t border-[var(--color-border-soft)] pt-3 first:border-t-0 first:pt-0">
       <div className="flex items-center justify-between">
         <span className="text-[12.5px] font-medium flex items-center gap-1.5">
           <Bell className="w-3 h-3 text-[var(--color-fg-3)]" strokeWidth={1.5} />
@@ -389,11 +394,12 @@ function ChannelEditor({
         </span>
         <Button variant="quiet" size="sm" onClick={onRemove} disabled={disabled}>
           <Trash2 className="w-3 h-3" strokeWidth={1.5} />
+          <span className="sr-only">删除 {typeLabel} 渠道</span>
         </Button>
       </div>
 
       {channel.type === 'TELEGRAM' ? (
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid gap-2 sm:grid-cols-2">
           <ChannelInput
             label="Bot Token"
             value={channel.botToken}

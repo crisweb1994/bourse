@@ -37,7 +37,7 @@ Switch.displayName = 'Switch';
 
 /**
  * SwitchRow — label + description + Switch in a bordered row layout
- * (used in /settings/ai 能力开关 section).
+ * (used in settings capability sections).
  */
 export function SwitchRow({
   label,

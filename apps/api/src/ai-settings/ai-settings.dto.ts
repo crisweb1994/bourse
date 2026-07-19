@@ -75,6 +75,10 @@ export class UpdateAiProviderSettingDto {
   apiKey?: string;
 
   @IsOptional()
+  @IsBoolean()
+  clearApiKey?: boolean;
+
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   enabledModels?: string[];
@@ -103,18 +107,23 @@ export class TestConnectionDto {
   @IsString() model!: string;
 }
 
+export class TestSavedConnectionDto {
+  @IsIn(PROVIDER_TYPES as unknown as string[]) providerType!: ProviderTypeStr;
+  @IsOptional() @IsString() apiKey?: string;
+  @IsOptional() @IsString() baseUrl?: string;
+  @IsString() model!: string;
+}
+
 export class ListModelsDto {
   @IsIn(PROVIDER_TYPES as unknown as string[]) providerType!: ProviderTypeStr;
   @IsString() baseUrl!: string;
   @IsOptional() @IsString() apiKey?: string;
 }
 
-export interface AiProviderSettingDto {
+export interface AiProviderSettingSummaryDto {
   id: string;
   label: string;
   providerType: ProviderTypeStr;
-  baseUrl: string;
-  apiKey: string | null;
   enabledModels: string[];
   primaryModel: string | null;
   utilityModel: string | null;
@@ -122,4 +131,11 @@ export interface AiProviderSettingDto {
   enabled: boolean;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface AiProviderSettingDetailDto
+  extends AiProviderSettingSummaryDto {
+  baseUrl: string;
+  hasApiKey: boolean;
+  apiKeyMasked: string | null;
 }

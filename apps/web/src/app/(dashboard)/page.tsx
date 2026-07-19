@@ -6,7 +6,6 @@ import { Loader2, ChevronRight } from 'lucide-react';
 import { StockSearch } from '@/components/stock/stock-search';
 import { WatchlistTable } from '@/components/watchlist/watchlist-table';
 import { useWatchlist } from '@/hooks/use-watchlist';
-import { useAuth } from '@/hooks/use-auth';
 import { getAnalysisHistory, type AnalysisHistoryItemDto } from '@/lib/api';
 import {
   ANALYSIS_TYPE_LABELS,
@@ -18,14 +17,12 @@ import { statusPillVariant, signalPillVariant } from '@/lib/pills';
 import {
   Card,
   CardHead,
-  PageHeader,
   Pill,
   SectionHead,
   Sym,
 } from '@/components/ui';
 
 export default function DashboardPage() {
-  const { user } = useAuth();
   const { items: watchlist, loading: loadingWatch, refresh } = useWatchlist();
   const [recent, setRecent] = useState<AnalysisHistoryItemDto[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(true);
@@ -43,16 +40,6 @@ export default function DashboardPage() {
 
   return (
     <>
-      <PageHeader
-        tag="首页"
-        title={
-          <>
-            你好{user?.name ? <>，{user.name.split(' ')[0]}</> : ''}
-          </>
-        }
-        subtitle="搜索一只股票开始分析，或从下方的自选股 / 最近分析继续。"
-      />
-
       {/* 搜索股票 */}
       <section className="mb-12">
         <SectionHead
