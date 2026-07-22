@@ -270,7 +270,21 @@ function sanitizeMetricCandidate(
       delete value.amount;
       normalizations.push('scalar_amount_to_value');
     }
-    candidate.value = value;
+    if (
+      value.kind === 'scalar'
+      && typeof value.value === 'string'
+      && typeof candidate.sourceQuote === 'string'
+    ) {
+      const quotedRange = inferQuotedRange(candidate.sourceQuote, value.value);
+      if (quotedRange) {
+        candidate.value = quotedRange;
+        normalizations.push('quoted_range_from_scalar');
+      } else {
+        candidate.value = value;
+      }
+    } else {
+      candidate.value = value;
+    }
   }
   if (typeof candidate.sourcePage === 'string' && /^\d+$/.test(candidate.sourcePage)) {
     candidate.sourcePage = Number(candidate.sourcePage);
@@ -626,6 +640,14 @@ function quoteContainsValue(
   value: MetricValue,
   metricCode: MetricFact['metricCode'],
 ): boolean {
+  if (value.kind === 'range') {
+    const quotedRange = inferQuotedRange(quote, value.min) ?? inferQuotedRange(quote, value.max);
+    if (
+      quotedRange?.kind === 'range'
+      && new Decimal(quotedRange.min).eq(value.min)
+      && new Decimal(quotedRange.max).eq(value.max)
+    ) return true;
+  }
   const observed = extractDecimalTokens(quote);
   const expected = value.kind === 'scalar' ? [value.value] : [value.min, value.max];
   return expected.every((raw) => {
@@ -649,6 +671,42 @@ function extractDecimalTokens(quote: string): Decimal[] {
       return [];
     }
   });
+}
+
+function inferQuotedRange(quote: string, scalar: string): MetricValue | null {
+  let target: Decimal;
+  try {
+    target = new Decimal(scalar);
+  } catch {
+    return null;
+  }
+
+  const number = String.raw`\(?[-+]?\s*(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\)?`;
+  const pattern = new RegExp(
+    String.raw`(${number})[^\d]{0,24}?(?:-|–|—|~|～|至|到)\s*(${number})`,
+    'g',
+  );
+  for (const match of quote.matchAll(pattern)) {
+    const left = parseQuotedDecimal(match[1]);
+    const right = parseQuotedDecimal(match[2]);
+    if (!left || !right || (!left.eq(target) && !right.eq(target))) continue;
+    return left.lte(right)
+      ? { kind: 'range', min: left.toString(), max: right.toString() }
+      : { kind: 'range', min: right.toString(), max: left.toString() };
+  }
+  return null;
+}
+
+function parseQuotedDecimal(raw: string | undefined): Decimal | null {
+  if (!raw) return null;
+  const wrappedNegative = raw.trim().startsWith('(') && raw.trim().endsWith(')');
+  const normalized = raw.replace(/[(),\s]/g, '');
+  try {
+    const value = new Decimal(normalized);
+    return wrappedNegative ? value.negated() : value;
+  } catch {
+    return null;
+  }
 }
 
 function deduplicateFacts(

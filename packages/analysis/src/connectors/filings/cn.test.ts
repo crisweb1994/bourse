@@ -254,6 +254,7 @@ describe('cn-filings connector — searchFilings', () => {
     });
     expect(out.warnings).toEqual([]);
     expect(out.data.contentHash).toHaveLength(64);
+    expect(out.data.rawContent).toEqual(source);
   });
 });
 

@@ -165,10 +165,11 @@ export function createCnFilingsConnector(options: CnFilingsOptions = {}): Filing
           );
         }
         const bytes = new Uint8Array(await response.arrayBuffer());
-        // pdfjs may transfer/detach the supplied ArrayBuffer. Hash the immutable
-        // wire bytes before handing them to any parser implementation.
+        // pdfjs may transfer/detach the supplied ArrayBuffer. Preserve the wire
+        // bytes and give the parser its own buffer so rawContent stays immutable.
+        const parserBytes = bytes.slice();
         const contentHash = computeBinaryContentHash(bytes);
-        const parsed = await (options.pdfParser ?? parsePdfText)(bytes);
+        const parsed = await (options.pdfParser ?? parsePdfText)(parserBytes);
         if (!parsed.text.trim()) {
           return documentFailure(input, retrievedAt, 'PARTIAL_DATA', 'CN filing PDF has no extractable text (possibly scanned)');
         }

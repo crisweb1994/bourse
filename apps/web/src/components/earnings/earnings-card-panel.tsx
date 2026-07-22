@@ -175,11 +175,11 @@ function EarningsCard({
     && card.statusSummary.structuredOnly === card.statusSummary.total;
   const [timelineOpen, setTimelineOpen] = useState(false);
   return (
-    <Card className="mb-6" data-testid="earnings-card">
-      <div className="flex flex-col gap-3 border-b border-[var(--color-border-soft)] px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+    <Card className="mb-6 min-w-0 w-full" data-testid="earnings-card">
+      <div className="flex min-w-0 flex-col gap-3 border-b border-[var(--color-border-soft)] px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="m-0 text-[15px] font-semibold text-[var(--color-fg)]">
+            <h2 className="m-0 basis-full text-wrap-balance text-[15px] font-semibold text-[var(--color-fg)] sm:basis-auto">
               {periodLabel(card)} · {formLabel(card.filing.formType)}
             </h2>
             <Pill variant={status.variant} dot>{status.label}</Pill>
@@ -222,7 +222,7 @@ function EarningsCard({
       )}
 
       <div className="divide-y divide-[var(--color-border-soft)]">
-        <section aria-labelledby="earnings-metrics-title" className="px-5 py-4">
+        <section aria-labelledby="earnings-metrics-title" className="px-4 py-4 sm:px-5">
           <div className="mb-2.5 flex items-center justify-between gap-3">
             <h3 id="earnings-metrics-title" className="m-0 text-[12px] font-medium text-[var(--color-fg-2)]">数字一览</h3>
             <span className="text-[11px] text-[var(--color-fg-3)]">
@@ -266,8 +266,8 @@ function EarningsCard({
         )}
       </div>
 
-      <div className="flex flex-col gap-2 border-t border-[var(--color-border-soft)] bg-[var(--color-surface-2)] px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2 text-[11px] text-[var(--color-fg-2)]">
+      <div className="flex min-w-0 flex-col gap-2 border-t border-[var(--color-border-soft)] bg-[var(--color-surface-2)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div className="flex min-w-0 items-start gap-2 text-[11px] leading-5 text-[var(--color-fg-2)] sm:items-center">
           {structuredOnly
             ? <Clock3 className="h-3.5 w-3.5 text-[var(--color-info)]" strokeWidth={1.5} />
             : <ShieldCheck className="h-3.5 w-3.5 text-[var(--color-accent)]" strokeWidth={1.5} />}
@@ -275,12 +275,12 @@ function EarningsCard({
             ? '结构化数据 · 原文待核；数据截至日期见逐项来源'
             : '自动一致性检查不是审计；冲突项保留双来源'}
         </div>
-        <Button variant="quiet" size="sm" onClick={onAsk}>
+        <Button className="min-h-11 w-full sm:min-h-7 sm:w-auto" variant="quiet" size="sm" onClick={onAsk}>
           <MessageSquareText className="h-3.5 w-3.5" strokeWidth={1.5} />
           追问这份财报
         </Button>
       </div>
-      <div className="border-t border-[var(--color-border-soft)] px-5 py-2.5">
+      <div className="border-t border-[var(--color-border-soft)] px-4 py-2.5 sm:px-5">
         <button
           type="button"
           aria-expanded={timelineOpen}
@@ -288,7 +288,7 @@ function EarningsCard({
             setTimelineOpen((open) => !open);
             if (!timelineOpen) onLoadHistory?.();
           }}
-          className="inline-flex min-h-8 items-center gap-2 rounded-[var(--radius-btn)] px-1.5 text-[11.5px] text-[var(--color-fg-2)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-fg)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
+          className="inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-btn)] px-1.5 text-[11.5px] text-[var(--color-fg-2)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-fg)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)] sm:min-h-8"
         >
           <History className="h-3.5 w-3.5" strokeWidth={1.5} />
           版本与历史
@@ -368,12 +368,12 @@ function MetricRow({ fact }: { fact: EarningsMetricFactDto }) {
   const state = factState(fact);
   return (
     <details className="group">
-      <summary className="grid min-h-[52px] cursor-pointer list-none grid-cols-[minmax(90px,1fr)_auto] items-center gap-x-3 px-1 py-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)] sm:grid-cols-[minmax(120px,1fr)_minmax(120px,auto)_minmax(110px,auto)_18px]">
-        <span className="text-[12.5px] text-[var(--color-fg-2)]">{METRIC_LABELS[fact.metricCode] ?? fact.metricCode}</span>
-        <span className="text-right font-mono text-[13.5px] font-medium tabular-nums text-[var(--color-fg)] sm:text-left">
+      <summary className="grid min-h-[64px] cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-1 py-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)] sm:min-h-[52px] sm:grid-cols-[minmax(120px,1fr)_minmax(120px,auto)_minmax(110px,auto)_18px] sm:gap-y-0">
+        <span className="min-w-0 text-[12.5px] text-[var(--color-fg-2)]">{METRIC_LABELS[fact.metricCode] ?? fact.metricCode}</span>
+        <span className="col-span-2 row-start-2 min-w-0 whitespace-normal break-words text-left font-mono text-[13.5px] font-medium tabular-nums text-[var(--color-fg)] sm:col-span-1 sm:row-start-auto">
           {formatMetricValue(fact)}
         </span>
-        <span className="col-span-2 flex flex-wrap items-center gap-2 text-[11px] text-[var(--color-fg-3)] sm:col-span-1 sm:justify-end">
+        <span className="col-start-2 row-start-1 flex min-w-0 flex-wrap items-center justify-end gap-2 text-[11px] text-[var(--color-fg-3)] sm:col-start-auto sm:row-start-auto sm:justify-end">
           {fact.comparisons.map((comparison) => (
             <span key={`${comparison.kind}-${comparison.label}`} title={comparison.asOf ? `快照：${formatDateTime(comparison.asOf)}` : undefined}>
               {formatComparison(comparison, fact)}

@@ -77,7 +77,7 @@ export function StockHeader({
 
   return (
     <header className="mb-6">
-      <div className="flex items-end justify-between gap-3 flex-wrap">
+      <div className="flex flex-wrap items-start justify-between gap-3 sm:items-end">
         <div className="min-w-0">
           <SectionTag className="mb-3">股票分析</SectionTag>
           <div className="flex items-baseline gap-3 flex-wrap">
@@ -91,7 +91,7 @@ export function StockHeader({
             {name}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
           <WatchlistToggle
             on={inWatchlist}
             busy={!!watchlistBusy}

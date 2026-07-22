@@ -125,6 +125,41 @@ describe('verifyEarningsCandidates', () => {
     expect(result.facts[0].normalizedValue).toEqual({ kind: 'scalar', value: '-1234500000' });
   });
 
+  it('repairs a scalar lower bound when the cited disclosure is an explicit range', () => {
+    const source = '归属于上市公司股东的净利润 盈利：873,000 万元–920,000 万元';
+    const result = verifyEarningsCandidates({
+      candidates: [{
+        ...candidate('netIncomeAttrib', '873000', source),
+        scale: 10_000,
+      }],
+      derivation: { ...derivation, text: source },
+      event: { periodEndOn: '2026-06-30', reportingScope: 'consolidated' },
+    });
+    expect(result.rejected).toEqual([]);
+    expect(result.facts[0]).toMatchObject({
+      value: { kind: 'range', min: '873000', max: '920000' },
+      normalizedValue: { kind: 'range', min: '8730000000', max: '9200000000' },
+    });
+    expect(result.facts[0].checkStatus).toMatchObject({
+      checks: expect.arrayContaining(['quoted_range_from_scalar']),
+    });
+  });
+
+  it('repairs a scalar range written with a spaced ASCII hyphen', () => {
+    const source = '基本每股收益 2.2492 元/股 - 2.3703 元/股';
+    const result = verifyEarningsCandidates({
+      candidates: [{
+        ...candidate('epsBasic', '2.2492', source),
+        unit: 'per_share',
+        scale: 1,
+      }],
+      derivation: { ...derivation, text: source },
+      event: { periodEndOn: '2026-06-30', reportingScope: 'consolidated' },
+    });
+    expect(result.rejected).toEqual([]);
+    expect(result.facts[0].value).toEqual({ kind: 'range', min: '2.2492', max: '2.3703' });
+  });
+
   it('deduplicates identical facts and rejects conflicting duplicates', () => {
     const duplicateText = [
       '合并口径营业收入为100亿元。',
