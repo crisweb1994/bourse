@@ -16,13 +16,15 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  aiProviderSettings AiProviderSetting[]
-  watchlistItems     WatchlistItem[]
-  analyses           Analysis[]
-  webSearchSetting   WebSearchSetting?
-  digestSubscription DigestSubscription?
-  deliveryRecords    DeliveryRecord[]
-  researchThreads    ResearchThread[]
+  aiProviderSettings     AiProviderSetting[]
+  watchlistItems         WatchlistItem[]
+  analyses               Analysis[]
+  webSearchSetting       WebSearchSetting?
+  digestSubscription     DigestSubscription?
+  deliveryRecords        DeliveryRecord[]
+  earningsDeliveryRecords EarningsDeliveryRecord[]
+  researchThreads        ResearchThread[]
+  earningsGenerationRuns EarningsGenerationRun[]
 }
 
 model Stock {
@@ -38,10 +40,17 @@ model Stock {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  watchlistItems        WatchlistItem[]
-  analyses              Analysis[]
-  researchThreads       ResearchThread[]
-  openResearchSnapshots OpenResearchSnapshot[]
+  watchlistItems         WatchlistItem[]
+  analyses               Analysis[]
+  researchThreads        ResearchThread[]
+  openResearchSnapshots  OpenResearchSnapshot[]
+  filings                Filing[]
+  earningsEvents         EarningsEvent[]
+  earningsGenerationRuns EarningsGenerationRun[]
+  earningsGuidance       EarningsGuidance[]
+  earningsConsensusSnapshots EarningsConsensusSnapshot[]
+  filingDetectionCursor  FilingDetectionCursor?
+  earningsDeliveryRecords EarningsDeliveryRecord[]
 
   @@unique([symbol, market])
   @@index([sector])
@@ -130,6 +139,7 @@ model DigestSubscription {
   sessions  DigestSession[] // ["PRE","POST"] 子集
   channels  Json // ChannelConfig[]（discriminated union，含凭证）
   enabled   Boolean         @default(true)
+  earningsImmediateEnabled Boolean @default(false)
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
   user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -150,6 +160,30 @@ model DeliveryRecord {
 
   @@index([userId, attemptedAt])
   @@index([market, session, attemptedAt])
+}
+
+model EarningsDeliveryRecord {
+  id                 String               @id @default(cuid())
+  dedupeKey          String               @unique
+  userId             String
+  stockId            String
+  revisionId         String
+  previousRevisionId String?
+  kind               EarningsDeliveryKind
+  channelType        ChannelType
+  target             String
+  status             DeliveryStatus
+  httpStatus         Int?
+  error              String?
+  attemptedAt        DateTime             @default(now())
+  deliveredAt        DateTime?
+
+  user     User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stock    Stock                 @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  revision EarningsCardRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+
+  @@index([userId, stockId, attemptedAt])
+  @@index([revisionId, status])
 }
 
 model Analysis {
@@ -206,6 +240,7 @@ model AnalysisSection {
 // by the Analysis lifecycle and exposed to Chat through a read-only port.
 enum ChatIntent {
   OPEN_RESEARCH
+  EARNINGS_BRIEF
   EXPLAIN_EXISTING
   COMPARE_HISTORY
   REFRESH_REQUIRED
@@ -267,6 +302,7 @@ model ChatGeneration {
   status                    ChatGenerationStatus @default(PENDING)
   contextSnapshot           Json
   analysisContextSnapshotId String?
+  earningsRevisionId       String?
   linkedAnalysisRunId       String?
   promptVersion             String
   actualProvider            String?
@@ -283,6 +319,7 @@ model ChatGeneration {
   openResearchSnapshot    OpenResearchSnapshot?
   streamEvents            ChatStreamEvent[]
   analysisContextSnapshot ChatAnalysisContextSnapshot? @relation(fields: [analysisContextSnapshotId], references: [id], onDelete: SetNull)
+  earningsRevision        EarningsCardRevision? @relation(fields: [earningsRevisionId], references: [id], onDelete: SetNull)
 
   @@unique([threadId, clientRequestId])
   @@index([threadId, status])
@@ -370,6 +407,302 @@ model AnalysisEvidenceSnapshot {
   analysis Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
 }
 
+// Public filing artifacts and earnings cards. These rows are global facts,
+// not user-owned analysis output. User references exist only for audit/scope.
+model Filing {
+  id               String             @id @default(cuid())
+  stockId          String
+  provider         String
+  sourceDocumentId String
+  sourceGroupId    String?
+  formType         String
+  documentKind     FilingDocumentKind
+  title            String?
+  sourceUrl        String
+  publishedAt      DateTime
+  retrievedAt      DateTime
+  mimeType         String
+  contentHash      String
+  rawContent       Bytes
+  createdAt        DateTime           @default(now())
+
+  stock       Stock                 @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  derivations FilingDerivation[]
+  eventLinks  EarningsEventFiling[]
+  guidance    EarningsGuidance[]
+
+  @@unique([provider, sourceDocumentId])
+  @@index([stockId, publishedAt])
+  @@index([contentHash])
+}
+
+model FilingDerivation {
+  id             String                 @id @default(cuid())
+  filingId       String
+  derivationKey  String                 @unique
+  parserVersion  String
+  modelVersion   String
+  promptVersion  String
+  schemaVersion  String
+  status         FilingDerivationStatus
+  normalizedText String                 @db.Text
+  contentHash    String
+  pages          Json?
+  sections       Json?
+  extraction     Json?
+  errorCode      String?
+  errorMessage   String?
+  createdAt      DateTime               @default(now())
+
+  filing Filing @relation(fields: [filingId], references: [id], onDelete: Cascade)
+
+  @@index([filingId, createdAt])
+}
+
+// Forward-looking company guidance. It stays separate from actuals and is
+// eligible only when issued before the actual filing publication time.
+model EarningsGuidance {
+  id                 String                  @id @default(cuid())
+  dedupeKey          String                  @unique
+  stockId            String
+  filingId           String?
+  metricCode         String
+  targetPeriodEndOn  DateTime                @db.Date
+  targetPeriodType   EarningsPeriodType
+  valueMin           Decimal                 @db.Decimal(30, 8)
+  valueMax           Decimal                 @db.Decimal(30, 8)
+  unit               String
+  currency           String?
+  scale              Int                     @default(1)
+  accountingBasis    String
+  consolidationScope EarningsReportingScope
+  issuedAt           DateTime
+  provider           String
+  sourceUrl           String
+  sourceSpan          Json
+  supersededAt        DateTime?
+  createdAt           DateTime                @default(now())
+
+  stock  Stock   @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  filing Filing? @relation(fields: [filingId], references: [id], onDelete: SetNull)
+
+  @@index([stockId, targetPeriodEndOn, targetPeriodType, metricCode, issuedAt], map: "EarningsGuidance_lookup_idx")
+  @@index([filingId])
+}
+
+// Only snapshots captured before publication can be attached to a card.
+model EarningsConsensusSnapshot {
+  id           String             @id @default(cuid())
+  stockId      String
+  metricCode   String
+  periodEndOn  DateTime           @db.Date
+  periodType   String
+  value        Decimal            @db.Decimal(30, 8)
+  unit         String
+  currency     String?
+  asOf         DateTime
+  capturedAt   DateTime           @default(now())
+  provider     String
+  sourceUrl    String
+  analystCount Int?
+  expiresAt    DateTime?
+
+  stock Stock @relation(fields: [stockId], references: [id], onDelete: Cascade)
+
+  @@unique([stockId, metricCode, periodEndOn, periodType, provider, asOf], map: "EarningsConsensusSnapshot_identity_key")
+  @@index([stockId, periodEndOn, periodType, metricCode, asOf], map: "EarningsConsensusSnapshot_lookup_idx")
+}
+
+model EarningsEvent {
+  id             String                 @id @default(cuid())
+  stockId        String
+  periodEndOn    DateTime               @db.Date
+  periodType     EarningsPeriodType
+  reportingScope EarningsReportingScope
+  fiscalYear     Int
+  fiscalQuarter  Int?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  stock          Stock                   @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  filingLinks    EarningsEventFiling[]
+  card           EarningsCard?
+  generationRuns EarningsGenerationRun[]
+
+  @@unique([stockId, periodEndOn, periodType, reportingScope])
+  @@index([stockId, periodEndOn])
+}
+
+model EarningsEventFiling {
+  eventId      String
+  filingId     String
+  relationType EarningsRelationType
+  createdAt    DateTime             @default(now())
+
+  event  EarningsEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  filing Filing        @relation(fields: [filingId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, filingId])
+  @@index([filingId])
+}
+
+model EarningsCard {
+  id                String   @id @default(cuid())
+  eventId           String   @unique
+  currentRevisionId String?  @unique
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  event           EarningsEvent          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  currentRevision EarningsCardRevision?  @relation("CurrentEarningsRevision", fields: [currentRevisionId], references: [id], onDelete: SetNull)
+  revisions       EarningsCardRevision[] @relation("EarningsCardRevisions")
+}
+
+model EarningsCardRevision {
+  id            String                     @id @default(cuid())
+  cardId        String
+  revisionNo    Int
+  status        EarningsCardRevisionStatus
+  schemaVersion String
+  promptVersion String
+  model         String?
+  payload       Json
+  contentHash   String
+  inputTokens   Int                        @default(0)
+  outputTokens  Int                        @default(0)
+  costUsd       Decimal                    @default(0) @db.Decimal(12, 6)
+  generatedAt   DateTime                   @default(now())
+  supersededAt  DateTime?
+
+  card           EarningsCard            @relation("EarningsCardRevisions", fields: [cardId], references: [id], onDelete: Cascade)
+  currentFor     EarningsCard?           @relation("CurrentEarningsRevision")
+  generationRuns EarningsGenerationRun[]
+  chatGenerations ChatGeneration[]
+  deliveryRecords EarningsDeliveryRecord[]
+
+  @@unique([cardId, revisionNo])
+  @@index([cardId, generatedAt])
+}
+
+model EarningsGenerationRun {
+  id                String                   @id @default(cuid())
+  stockId           String
+  eventId           String?
+  requestedByUserId String?
+  cardRevisionId    String?
+  clientRequestId   String?
+  idempotencyKey    String                   @unique
+  sourceDescriptor  Json
+  status            EarningsGenerationStatus @default(QUEUED)
+  stage             EarningsGenerationStage  @default(DISCOVER)
+  attempt           Int                      @default(1)
+  retryable         Boolean                  @default(true)
+  errorCode         String?
+  errorMessage      String?
+  provider          String?
+  model             String?
+  inputTokens       Int                      @default(0)
+  outputTokens      Int                      @default(0)
+  costUsd           Decimal                  @default(0) @db.Decimal(12, 6)
+  budgetReservedUsd Decimal                  @default(0) @db.Decimal(12, 6)
+  createdAt         DateTime                 @default(now())
+  startedAt         DateTime?
+  completedAt       DateTime?
+
+  stock        Stock                 @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  event        EarningsEvent?        @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  requestedBy  User?                 @relation(fields: [requestedByUserId], references: [id], onDelete: SetNull)
+  cardRevision EarningsCardRevision? @relation(fields: [cardRevisionId], references: [id], onDelete: SetNull)
+
+  @@unique([requestedByUserId, clientRequestId])
+  @@index([stockId, createdAt])
+  @@index([status, createdAt])
+}
+
+model FilingDetectionCursor {
+  stockId              String   @id
+  nextCheckAt          DateTime @default(now())
+  leaseUntil           DateTime?
+  lastCheckedAt        DateTime?
+  lastDiscoveredAt     DateTime?
+  lastSourceDocumentId String?
+  failureCount         Int      @default(0)
+  lastError            String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  stock Stock @relation(fields: [stockId], references: [id], onDelete: Cascade)
+
+  @@index([nextCheckAt, leaseUntil])
+}
+
+model EarningsSchedulerLease {
+  key        String   @id
+  ownerToken String?
+  leaseUntil DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([leaseUntil])
+}
+
+enum FilingDocumentKind {
+  PRIMARY
+  EARNINGS_RELEASE
+  PDF
+  OTHER
+}
+
+enum FilingDerivationStatus {
+  COMPLETE
+  FAILED
+}
+
+enum EarningsPeriodType {
+  Q1
+  Q2
+  Q3
+  H1
+  FY
+}
+
+enum EarningsReportingScope {
+  CONSOLIDATED
+  PARENT
+  UNKNOWN
+}
+
+enum EarningsRelationType {
+  SUPPLEMENTS
+  CORRECTS
+  SUPERSEDES
+}
+
+enum EarningsCardRevisionStatus {
+  PARTIAL
+  COMPLETE
+}
+
+enum EarningsGenerationStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  BUDGET_EXHAUSTED
+}
+
+enum EarningsGenerationStage {
+  DISCOVER
+  FETCH
+  DERIVE
+  EXTRACT
+  CHECK
+  RECONCILE
+  INTERPRET
+  PERSIST
+  DONE
+}
+
 enum Market {
   US
   CN
@@ -394,6 +727,12 @@ enum ChannelType {
   WECOM
   TELEGRAM
   SLACK
+}
+
+enum EarningsDeliveryKind {
+  NEW_CARD
+  UPDATE
+  CORRECTION
 }
 
 enum AnalysisType {

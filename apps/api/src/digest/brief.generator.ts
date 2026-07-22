@@ -15,6 +15,8 @@ import { SnapshotV2Service } from '../analysis/snapshot-v2.service';
 import { ProviderFactoryService } from '../analysis/provider-factory.service';
 import { AiSettingsService } from '../ai-settings/ai-settings.service';
 import type { StockSnapshot } from '@bourse/analysis';
+import { EarningsQueryService } from '../earnings/earnings-query.service';
+import type { EarningsCardDto } from '@bourse/shared-types';
 
 /**
  * Daily Brief · Brief Generator（docs/prd-daily-brief.md §7 DB.5）。
@@ -50,6 +52,7 @@ export class DigestGeneratorService {
     private readonly providerFactory: ProviderFactoryService,
     private readonly aiSettings: AiSettingsService,
     private readonly config: ConfigService,
+    private readonly earnings: EarningsQueryService,
     /**
      * 指数数据层 + 技术指标计算钩子，仅用于单测注入 stub；生产环境留空走
      * `@bourse/analysis` 默认实现（fetchIndexQuote / fetchIndexHistory /
@@ -251,16 +254,17 @@ export class DigestGeneratorService {
           where: { userId, stockId: row.stockId },
           orderBy: { createdAt: 'desc' },
         });
-        return { row, snapshot, lastAnalysis };
+        const earnings = await this.earnings.latest(row.stockId).catch(() => null);
+        return { row, snapshot, lastAnalysis, earnings: earnings?.card ?? null };
       }),
     );
 
     const itemBriefs: WatchlistItemBrief[] = [];
     const sectorByItem: Map<WatchlistItemBrief, string> = new Map();
     const anomalyContext: AnomalyContext[] = [];
-    for (const { row, snapshot, lastAnalysis } of enriched) {
+    for (const { row, snapshot, lastAnalysis, earnings } of enriched) {
       if (!snapshot) continue; // fetch 失败 → 跳过该票
-      const item = this.assembleItemBrief(snapshot, lastAnalysis, now);
+      const item = this.assembleItemBrief(snapshot, lastAnalysis, now, earnings);
       if (!item) continue;
       itemBriefs.push(item);
       // Stock.sector：connector 首次入库时填（schema 注释）；缺失归 '未分类'。
@@ -337,6 +341,7 @@ export class DigestGeneratorService {
     snapshot: StockSnapshot,
     lastAnalysis: { dataAsOf: string | null } | null,
     now: Date,
+    earnings: EarningsCardDto | null,
   ): WatchlistItemBrief | null {
     const quote = snapshot.rawFacts.quote;
     if (!quote || !Number.isFinite(quote.price)) return null;
@@ -347,6 +352,9 @@ export class DigestGeneratorService {
 
     const drift = this.computeDrift(snapshot, lastAnalysis);
     const events = this.extractEvents(snapshot, now);
+    if (earnings) {
+      events.push({ kind: 'EARNINGS', date: earnings.filing.publishedAt.slice(0, 10) });
+    }
 
     return {
       symbol: snapshot.symbol,
@@ -362,6 +370,7 @@ export class DigestGeneratorService {
           ? ((lastClose - tech.sma200) / tech.sma200) * 100
           : null,
       events,
+      earnings: earnings ? summarizeEarnings(earnings) : null,
       deepDive: null, // 异动触发后回填
     };
   }
@@ -601,6 +610,21 @@ interface AnomalyContext {
   symbol: string;
   item: WatchlistItemBrief;
   reasons: string[];
+}
+
+function summarizeEarnings(card: EarningsCardDto): WatchlistItemBrief['earnings'] {
+  return {
+    revisionId: card.revisionId,
+    periodEndOn: card.periodEndOn,
+    periodType: card.periodType,
+    publishedAt: card.filing.publishedAt,
+    sourceUrl: card.filing.sourceUrl,
+    statusSummary: card.statusSummary,
+    topFacts: card.facts.slice(0, 6).map((fact) => ({
+      metricCode: fact.metricCode,
+      value: fact.normalizedValue ?? fact.value,
+    })),
+  };
 }
 
 // ============================================================================

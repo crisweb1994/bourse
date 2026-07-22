@@ -13,6 +13,7 @@ import { DigestTriggerController } from './trigger.controller';
 import { WebhookAdapter } from './channel/webhook.adapter';
 import { FeishuAdapter } from './channel/feishu.adapter';
 import { TelegramAdapter } from './channel/telegram.adapter';
+import { EarningsModule } from '../earnings/earnings.module';
 
 /**
  * Daily Brief 子系统（docs/prd-daily-brief.md）。
@@ -29,7 +30,7 @@ import { TelegramAdapter } from './channel/telegram.adapter';
  *  - 3 个 ChannelAdapter：本地声明，注入 DeliveryService。
  */
 @Module({
-  imports: [AuthModule, AnalysisModule, AiSettingsModule],
+  imports: [AuthModule, AnalysisModule, AiSettingsModule, EarningsModule],
   controllers: [DigestController, DigestTriggerController],
   providers: [
     DigestSubscriptionService,

@@ -4,6 +4,7 @@ import type { AgentProvider, ProviderUsage } from './provider';
 
 export interface StructuredOutputOptions {
   signal?: AbortSignal;
+  maxTokens?: number;
 }
 
 export interface StructuredOutputResult<T> {

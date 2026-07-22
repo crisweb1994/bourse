@@ -36,6 +36,7 @@ export class FeishuAdapter implements ChannelAdapter {
     });
     return { httpStatus: res.status };
   }
+
 }
 
 function cardHeader(payload: BriefPayload): {

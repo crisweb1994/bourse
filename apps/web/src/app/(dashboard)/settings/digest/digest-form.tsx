@@ -60,6 +60,7 @@ const CHANNEL_OPTIONS: {
 
 interface FormState {
   enabled: boolean;
+  earningsImmediateEnabled: boolean;
   markets: DigestMarket[];
   sessions: DigestSession[];
   channels: DigestChannel[];
@@ -67,6 +68,7 @@ interface FormState {
 
 const EMPTY_FORM: FormState = {
   enabled: false,
+  earningsImmediateEnabled: false,
   markets: [],
   sessions: ['PRE', 'POST'],
   channels: [],
@@ -75,6 +77,7 @@ const EMPTY_FORM: FormState = {
 function fromDto(dto: DigestSubscriptionDto): FormState {
   return {
     enabled: dto.enabled,
+    earningsImmediateEnabled: dto.earningsImmediateEnabled,
     markets: dto.markets as DigestMarket[],
     sessions: dto.sessions as DigestSession[],
     // 后端返回的 channels 已 mask（secret/botToken = ••••末四位）；前端原样持有，
@@ -154,6 +157,7 @@ export function DigestSettingsForm() {
     sessions: form.sessions,
     channels: form.channels,
     enabled: form.enabled,
+    earningsImmediateEnabled: form.earningsImmediateEnabled,
   });
 
   const handleSave = async (): Promise<void> => {
@@ -221,6 +225,13 @@ export function DigestSettingsForm() {
               desc="默认关闭；显式订阅才推送。关闭后不再生成、不投递。"
               checked={form.enabled}
               onCheckedChange={(v) => updateForm({ enabled: v })}
+            />
+
+            <SwitchRow
+              label="财报即时通知"
+              desc="自选股财报卡生成、更新或发生更正时立即推送；默认关闭。"
+              checked={form.earningsImmediateEnabled}
+              onCheckedChange={(v) => updateForm({ earningsImmediateEnabled: v })}
             />
 
             {/* 推送市场 */}

@@ -25,6 +25,8 @@ import {
   CASHFLOW_CONCEPTS_EXTRA,
   INCOME_CONCEPTS,
   INCOME_CONCEPTS_EXTRA,
+  compareCurrentFact,
+  pickCumulativeFactForPeriod,
   pickFactForPeriod,
   type XbrlCompanyFacts,
   type XbrlConcept,
@@ -277,7 +279,7 @@ function extractPeriods(
   for (const p of allPeriods) {
     const key = periodKey(p);
     const existing = dedup.get(key);
-    if (!existing || p.entry.filed.localeCompare(existing.entry.filed) > 0) {
+    if (!existing || compareCurrentFact(p.entry, existing.entry) < 0) {
       dedup.set(key, p);
     }
   }
@@ -433,29 +435,29 @@ function buildPeriodEntry(
   };
 
   const cashFlow: CashFlow = {
-    operatingCashFlow: pickLineItem(usGaap, CASHFLOW_CONCEPTS.operatingCashFlow, fy, fp),
-    investingCashFlow: pickLineItem(usGaap, CASHFLOW_CONCEPTS.investingCashFlow, fy, fp),
-    financingCashFlow: pickLineItem(usGaap, CASHFLOW_CONCEPTS.financingCashFlow, fy, fp),
-    capitalExpenditures: pickLineItem(usGaap, CASHFLOW_CONCEPTS.capitalExpenditures, fy, fp),
-    depreciationAndAmortization: pickLineItem(
+    operatingCashFlow: pickCashFlowLineItem(usGaap, CASHFLOW_CONCEPTS.operatingCashFlow, fy, fp),
+    investingCashFlow: pickCashFlowLineItem(usGaap, CASHFLOW_CONCEPTS.investingCashFlow, fy, fp),
+    financingCashFlow: pickCashFlowLineItem(usGaap, CASHFLOW_CONCEPTS.financingCashFlow, fy, fp),
+    capitalExpenditures: pickCashFlowLineItem(usGaap, CASHFLOW_CONCEPTS.capitalExpenditures, fy, fp),
+    depreciationAndAmortization: pickCashFlowLineItem(
       usGaap,
       CASHFLOW_CONCEPTS_EXTRA.depreciationAndAmortization,
       fy,
       fp,
     ),
-    stockBasedCompensation: pickLineItem(
+    stockBasedCompensation: pickCashFlowLineItem(
       usGaap,
       CASHFLOW_CONCEPTS_EXTRA.stockBasedCompensation,
       fy,
       fp,
     ),
-    paymentsOfDividends: pickLineItem(
+    paymentsOfDividends: pickCashFlowLineItem(
       usGaap,
       CASHFLOW_CONCEPTS_EXTRA.paymentsOfDividends,
       fy,
       fp,
     ),
-    repurchaseOfCommonStock: pickLineItem(
+    repurchaseOfCommonStock: pickCashFlowLineItem(
       usGaap,
       CASHFLOW_CONCEPTS_EXTRA.repurchaseOfCommonStock,
       fy,
@@ -480,6 +482,31 @@ function buildPeriodEntry(
     balance,
     cashFlow,
   };
+}
+
+function pickCashFlowLineItem(
+  usGaap: Record<string, XbrlConcept>,
+  alternatives: readonly string[],
+  fy: number,
+  fp: 'FY' | 'Q1' | 'Q2' | 'Q3' | 'Q4',
+): FinancialsLineItem | undefined {
+  if (fp === 'FY' || fp === 'Q1') return pickLineItem(usGaap, alternatives, fy, fp);
+  const previousFp = fp === 'Q2' ? 'Q1' : fp === 'Q3' ? 'Q2' : null;
+  if (!previousFp) return pickLineItem(usGaap, alternatives, fy, fp);
+  for (const name of alternatives) {
+    const concept = usGaap[name];
+    if (!concept) continue;
+    const current = pickCumulativeFactForPeriod(concept, { fy, fp });
+    const previous = pickCumulativeFactForPeriod(concept, { fy, fp: previousFp });
+    if (!current || !previous || current.unit !== previous.unit) continue;
+    if (!current.entry.start || current.entry.start !== previous.entry.start) continue;
+    return {
+      value: current.entry.val - previous.entry.val,
+      unit: current.unit,
+    };
+  }
+  // Do not label an unavailable YTD cash-flow value as a discrete quarter.
+  return undefined;
 }
 
 function pickLineItem(

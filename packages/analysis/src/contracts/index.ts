@@ -22,3 +22,4 @@ export * from './sse-events';
 
 // Daily Brief (docs/prd-daily-brief.md) — 定时行情简报契约
 export * from './brief-payload';
+export * from './earnings';

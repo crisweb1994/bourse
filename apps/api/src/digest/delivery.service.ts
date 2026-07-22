@@ -58,6 +58,7 @@ export class DigestDeliveryService {
     );
   }
 
+
   /** 单渠道投递：重试 3 次（退避）+ 写 DeliveryRecord。 */
   private async deliverOne(
     userId: string,
@@ -121,6 +122,7 @@ export class DigestDeliveryService {
       },
     });
   }
+
 }
 
 /** 指数退避：100ms / 400ms / 1.6s（base × 4^attempt）。 */

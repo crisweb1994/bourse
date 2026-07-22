@@ -14,6 +14,9 @@ import type {
   ChatSsePayload,
   StockSearchResult,
   WatchlistItemDto,
+  EarningsGenerationRunDto,
+  LatestEarningsResponseDto,
+  EarningsCardDto,
 } from '@bourse/shared-types';
 import { API_URL, csrfHeaders } from './utils';
 
@@ -41,6 +44,52 @@ export class ApiError extends Error {
   ) {
     super(message);
   }
+}
+
+// Earnings brief APIs
+export type {
+  EarningsCardDto,
+  EarningsGenerationRunDto,
+  LatestEarningsResponseDto,
+} from '@bourse/shared-types';
+
+export function getLatestEarnings(
+  stockId: string,
+): Promise<LatestEarningsResponseDto> {
+  return fetchApi(`/api/earnings/stocks/${encodeURIComponent(stockId)}/latest`);
+}
+
+export function createEarningsGeneration(
+  stockId: string,
+  clientRequestId: string,
+): Promise<EarningsGenerationRunDto> {
+  return fetchApi(
+    `/api/earnings/stocks/${encodeURIComponent(stockId)}/generations`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+      body: JSON.stringify({ clientRequestId }),
+    },
+  );
+}
+
+export function getEarningsGeneration(
+  runId: string,
+): Promise<EarningsGenerationRunDto> {
+  return fetchApi(`/api/earnings/generations/${encodeURIComponent(runId)}`);
+}
+
+export function retryEarningsGeneration(
+  runId: string,
+): Promise<EarningsGenerationRunDto> {
+  return fetchApi(`/api/earnings/generations/${encodeURIComponent(runId)}/retry`, {
+    method: 'POST',
+    headers: csrfHeaders(),
+  });
+}
+
+export function getEarningsHistory(stockId: string): Promise<EarningsCardDto[]> {
+  return fetchApi(`/api/earnings/stocks/${encodeURIComponent(stockId)}/history`);
 }
 
 // Stock APIs
@@ -675,6 +724,7 @@ export interface DigestSubscriptionDto {
   /** 后端 mask 过的 channels（secret/botToken 显示 •••• 末四位）。 */
   channels: DigestChannel[];
   enabled: boolean;
+  earningsImmediateEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -685,6 +735,7 @@ export interface UpsertDigestSubscriptionPayload {
   /** 真凭证（新建）或 mask 形态（编辑 keep-existing）。 */
   channels: DigestChannel[];
   enabled?: boolean;
+  earningsImmediateEnabled?: boolean;
 }
 
 export function getDigestSubscription(): Promise<DigestSubscriptionDto | null> {

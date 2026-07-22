@@ -49,6 +49,7 @@ function buildAaplFixture() {
               fact({ fy: 2023, fp: 'FY', val: 383_285_000_000, end: '2023-09-30', filed: '2023-11-03' }),
               fact({ fy: 2024, fp: 'Q1', val: 119_575_000_000, end: '2023-12-30', filed: '2024-02-02' }),
               fact({ fy: 2024, fp: 'Q2', val: 90_753_000_000, end: '2024-03-30', filed: '2024-05-03' }),
+              fact({ fy: 2024, fp: 'Q2', val: 81_797_000_000, end: '2023-04-01', filed: '2024-05-03' }),
               fact({ fy: 2024, fp: 'Q3', val: 85_777_000_000, end: '2024-06-29', filed: '2024-08-02' }),
               fact({ fy: 2024, fp: 'FY', val: 391_035_000_000, end: '2024-09-28', filed: '2024-11-01' }),
             ],
@@ -118,9 +119,9 @@ function buildAaplFixture() {
           units: {
             USD: [
               fact({ fy: 2023, fp: 'FY', val: 110_543_000_000, end: '2023-09-30', filed: '2023-11-03' }),
-              fact({ fy: 2024, fp: 'Q1', val: 39_895_000_000, end: '2023-12-30', filed: '2024-02-02' }),
-              fact({ fy: 2024, fp: 'Q2', val: 28_159_000_000, end: '2024-03-30', filed: '2024-05-03' }),
-              fact({ fy: 2024, fp: 'Q3', val: 26_811_000_000, end: '2024-06-29', filed: '2024-08-02' }),
+              { ...fact({ fy: 2024, fp: 'Q1', val: 39_895_000_000, end: '2023-12-30', filed: '2024-02-02' }), start: '2023-10-01' },
+              { ...fact({ fy: 2024, fp: 'Q2', val: 68_054_000_000, end: '2024-03-30', filed: '2024-05-03' }), start: '2023-10-01' },
+              { ...fact({ fy: 2024, fp: 'Q3', val: 94_865_000_000, end: '2024-06-29', filed: '2024-08-02' }), start: '2023-10-01' },
               fact({ fy: 2024, fp: 'FY', val: 118_254_000_000, end: '2024-09-28', filed: '2024-11-01' }),
             ],
           },
@@ -128,9 +129,9 @@ function buildAaplFixture() {
         PaymentsToAcquirePropertyPlantAndEquipment: {
           units: {
             USD: [
-              fact({ fy: 2024, fp: 'Q1', val: 2_392_000_000, end: '2023-12-30', filed: '2024-02-02' }),
-              fact({ fy: 2024, fp: 'Q2', val: 2_146_000_000, end: '2024-03-30', filed: '2024-05-03' }),
-              fact({ fy: 2024, fp: 'Q3', val: 2_152_000_000, end: '2024-06-29', filed: '2024-08-02' }),
+              { ...fact({ fy: 2024, fp: 'Q1', val: 2_392_000_000, end: '2023-12-30', filed: '2024-02-02' }), start: '2023-10-01' },
+              { ...fact({ fy: 2024, fp: 'Q2', val: 4_538_000_000, end: '2024-03-30', filed: '2024-05-03' }), start: '2023-10-01' },
+              { ...fact({ fy: 2024, fp: 'Q3', val: 6_690_000_000, end: '2024-06-29', filed: '2024-08-02' }), start: '2023-10-01' },
               fact({ fy: 2024, fp: 'FY', val: 9_447_000_000, end: '2024-09-28', filed: '2024-11-01' }),
             ],
           },
@@ -231,6 +232,12 @@ describe('sec-edgar-xbrl — happy path', () => {
     expect(fy2024?.income.revenue?.value).toBe(391_035_000_000);
     expect(fy2024?.income.eps?.value).toBe(6.08);
     expect(fy2024?.income.eps?.unit).toBe('USD/shares');
+
+    const q2fy2024 = bundle.periods.find((p) => p.fiscalPeriod === 'Q2-FY2024');
+    expect(q2fy2024?.fiscalYearEnd).toBe('2024-03-30');
+    expect(q2fy2024?.income.revenue?.value).toBe(90_753_000_000);
+    expect(q2fy2024?.cashFlow.operatingCashFlow?.value).toBe(28_159_000_000);
+    expect(q2fy2024?.cashFlow.capitalExpenditures?.value).toBe(2_146_000_000);
 
     // Citations + provenance
     expect(result.citations).toHaveLength(1);

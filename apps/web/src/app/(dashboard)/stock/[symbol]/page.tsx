@@ -6,7 +6,9 @@ import { Loader2 } from 'lucide-react';
 import { abortAnalysis } from '@/lib/api';
 import { useAnalysisStream } from '@/hooks/use-analysis-stream';
 import { useStuckWatchdog } from '@/hooks/use-stuck-watchdog';
+import { useEarningsCard } from '@/hooks/use-earnings-card';
 import { StockHeader } from '@/components/stock/stock-header';
+import { EarningsCardPanel } from '@/components/earnings/earnings-card-panel';
 import { Card, toast } from '@/components/ui';
 import { AnalysisDialogs } from './_components/analysis-dialogs';
 import { AnalysisLauncher } from './_components/analysis-launcher';
@@ -56,6 +58,11 @@ export default function StockAnalysisPage({
     canAddToWatchlist,
     handleAddToWatchlist,
   } = useStockResolution({ symbol, market, name, stockId });
+
+  const earnings = useEarningsCard({
+    stockId: effectiveStockId,
+    canGenerate: Boolean(watchlistItemId),
+  });
 
   // Single source of truth for the analysis lifecycle (load / create / switch /
   // conflict). Owns recentAnalyses / currentAnalysisMeta / checkingOngoing /
@@ -146,6 +153,12 @@ export default function StockAnalysisPage({
     router.push(`/chat?${search.toString()}`);
   };
 
+  const openEarningsChat = () => {
+    if (!symbol) return;
+    const search = new URLSearchParams({ stock: symbol, market, draft: '1', earnings: '1' });
+    router.push(`/chat?${search.toString()}`);
+  };
+
   return (
     <>
       <StockPageBackButton router={router} />
@@ -188,6 +201,21 @@ export default function StockAnalysisPage({
         }}
         onAddOnly={handleAddToWatchlist}
       />
+
+      {effectiveStockId && (
+        <EarningsCardPanel
+          response={earnings.response}
+          generation={earnings.generation}
+          loading={earnings.loading}
+          error={earnings.error}
+          onStart={() => void earnings.start()}
+          onRetry={() => void earnings.retry()}
+          onAsk={openEarningsChat}
+          history={earnings.history}
+          historyLoading={earnings.historyLoading}
+          onLoadHistory={() => void earnings.loadHistory()}
+        />
+      )}
 
       {/* Checking status */}
       {stream.status === 'idle' && checkingOngoing && (

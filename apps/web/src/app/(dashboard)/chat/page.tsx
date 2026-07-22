@@ -62,6 +62,7 @@ export default function ChatPage() {
   const requestedAnalysisId = searchParams.get('analysis') ?? '';
   const requestedSection = searchParams.get('section') ?? '';
   const requestedDraft = searchParams.get('draft') === '1';
+  const requestedEarnings = searchParams.get('earnings') === '1';
 
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<StockSearchResult[]>([]);
@@ -85,6 +86,12 @@ export default function ChatPage() {
   useEffect(() => {
     setSelectedAnalysis(requestedAnalysisId);
   }, [requestedAnalysisId]);
+
+  useEffect(() => {
+    if (requestedEarnings && requestedDraft && symbol && !thread && !draft) {
+      setDraft('请基于最新财报速读卡，说明本期最重要的数字变化和仍待核对的地方。');
+    }
+  }, [draft, requestedDraft, requestedEarnings, symbol, thread]);
 
   useEffect(() => {
     if (!search.trim()) {

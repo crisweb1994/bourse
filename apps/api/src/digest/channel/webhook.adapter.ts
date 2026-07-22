@@ -31,6 +31,7 @@ export class WebhookAdapter implements ChannelAdapter {
     });
     return { httpStatus: res.status };
   }
+
 }
 
 /** Web Crypto HMAC-SHA256 → hex。Node 20 内置 globalThis.crypto.subtle。 */

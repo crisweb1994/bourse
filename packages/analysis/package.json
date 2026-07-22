@@ -14,12 +14,18 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "vendor:fixture": "tsx src/evals/vendor-fixture.ts",
-    "eval:judge": "vitest run src/evals/__tests__/judge.test.ts"
+    "eval:judge": "vitest run src/evals/__tests__/judge.test.ts",
+    "earnings:vendor": "tsx src/evals/earnings/vendor-filing.ts",
+    "earnings:extract": "tsx src/evals/earnings/extract-vendored.ts",
+    "earnings:eval": "tsx src/evals/earnings/evaluate.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.0",
     "@bourse/shared-types": "workspace:*",
+    "cheerio": "^1.2.0",
+    "decimal.js": "^10.6.0",
     "openai": "^6.36.0",
+    "pdfjs-dist": "^6.1.200",
     "zod": "^3.23.8"
   },
   "devDependencies": {

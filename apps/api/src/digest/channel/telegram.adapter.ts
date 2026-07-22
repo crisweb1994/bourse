@@ -48,4 +48,5 @@ export class TelegramAdapter implements ChannelAdapter {
     });
     return { httpStatus: res.status };
   }
+
 }

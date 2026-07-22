@@ -16,6 +16,8 @@ export type FetchLike = (
    *  json-only stubs in tests keep working. Connectors that need text must
    *  fall back gracefully when `text` is undefined. */
   text?(): Promise<string>;
+  /** Binary response body for PDFs and other filing artifacts. */
+  arrayBuffer?(): Promise<ArrayBuffer>;
 }>;
 
 export interface ConnectorRunContext {

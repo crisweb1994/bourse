@@ -159,6 +159,9 @@ function makeHarness(opts: {
   const config: any = {
     get: () => undefined, // 全部走 DB.5 初值
   };
+  const earnings: any = {
+    latest: async () => ({ available: false, supported: true }),
+  };
 
   // deps.index stub: 单指数 ^GSPC，返回固定 quote/history；其它返回 null。
   const index = {
@@ -199,6 +202,7 @@ function makeHarness(opts: {
     providerFactory,
     aiSettings,
     config,
+    earnings,
     { index, computeTech },
   );
 

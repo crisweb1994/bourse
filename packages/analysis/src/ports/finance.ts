@@ -47,6 +47,23 @@ export interface ConsensusEpsInput {
   instrumentId: string;
 }
 
+export const EarningsConsensusEstimateSchema = z.object({
+  metricCode: z.enum(['epsBasic', 'revenue']),
+  periodEndOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  periodType: z.enum(['QUARTER', 'FY']),
+  value: z.string().regex(/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/),
+  unit: z.enum(['per_share', 'currency']),
+  currency: z.string().length(3),
+  analystCount: z.number().int().nonnegative().optional(),
+});
+export type EarningsConsensusEstimate = z.infer<typeof EarningsConsensusEstimateSchema>;
+
+export const EarningsConsensusBundleSchema = z.object({
+  asOf: z.string().datetime(),
+  estimates: z.array(EarningsConsensusEstimateSchema),
+});
+export type EarningsConsensusBundle = z.infer<typeof EarningsConsensusBundleSchema>;
+
 export interface Quote {
   instrument: InstrumentRef;
   price: number;
@@ -134,4 +151,11 @@ export interface FinancePort {
     input: ConsensusEpsInput,
     ctx?: ConnectorRunContext,
   ): Promise<ResearchResult<ConsensusEpsBundle | null>>;
+  /** Earnings-card benchmark snapshots. Callers must persist the result
+   * before the filing publication time; fetching after publication cannot be
+   * used to reconstruct a pre-publication consensus. */
+  fetchEarningsConsensus?(
+    input: ConsensusEpsInput,
+    ctx?: ConnectorRunContext,
+  ): Promise<ResearchResult<EarningsConsensusBundle | null>>;
 }

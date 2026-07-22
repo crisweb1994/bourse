@@ -17,6 +17,13 @@ export function computeContentHash(input: {
   return createHash('sha256').update(normalized).digest('hex');
 }
 
+export function computeBinaryContentHash(input: Uint8Array | string): string {
+  if ((typeof input === 'string' && input.length === 0) || (input instanceof Uint8Array && input.byteLength === 0)) {
+    throw new Error('computeBinaryContentHash: input cannot be empty');
+  }
+  return createHash('sha256').update(input).digest('hex');
+}
+
 function normalize(s: string): string {
   return s
     .replace(/\r\n/g, '\n')

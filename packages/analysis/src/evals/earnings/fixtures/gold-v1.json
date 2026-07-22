@@ -1,0 +1,337 @@
+{
+  "schemaVersion": "earnings-eval-gold-v1",
+  "policy": "Human-reviewed official-filing facts. CN: revenue, attributable net income, diluted EPS, operating cash flow, total assets. US: revenue, operating income, net income, diluted EPS, total assets. No candidate snapshot was used as truth.",
+  "reviewedAt": "2026-07-21T03:47:00Z",
+  "samples": [
+    {
+      "sampleId": "CN_600519_Q1_2026",
+      "event": { "periodEndOn": "2026-03-31", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "53909252220.51" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "营业收入 53,909,252,220.51 50,600,957,885.78 6.54", "sourcePage": 1, "eligible": true },
+        { "metricCode": "netIncomeAttrib", "normalizedValue": { "kind": "scalar", "value": "27242512886.45" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "归属于上市公司股东的净利润 27,242,512,886.45 26,847,474,238.76 1.47", "sourcePage": 1, "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "21.76" }, "unit": "per_share", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "稀释每股收益（元/股） 21.76 21.38 1.78", "sourcePage": 1, "eligible": true },
+        { "metricCode": "operatingCashFlow", "normalizedValue": { "kind": "scalar", "value": "26909891269.13" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "经营活动产生的现金流量净额 26,909,891,269.13 8,809,195,646.38 205.48", "sourcePage": 1, "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "319918844905.58" }, "unit": "currency", "currency": "CNY", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "总资产 319,918,844,905.58 303,834,844,021.44 5.29", "sourcePage": 2, "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "CN_300750_Q1_2026",
+      "event": { "periodEndOn": "2026-03-31", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "129131041000" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "营业收入（千元） 129,131,041 84,704,589 52.45%", "sourcePage": 1, "eligible": true },
+        { "metricCode": "netIncomeAttrib", "normalizedValue": { "kind": "scalar", "value": "20737710000" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "归属于上市公司股东的净利 润（千元） 20,737,710 13,962,558 48.52%", "sourcePage": 1, "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "4.58" }, "unit": "per_share", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "稀释每股收益（元 / 股） 4.58 3.18 44.03%", "sourcePage": 1, "eligible": true },
+        { "metricCode": "operatingCashFlow", "normalizedValue": { "kind": "scalar", "value": "33680852000" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "经营活动产生的现金流量净额 33,680,852 32,868,257", "sourcePage": 11, "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "1046329036000" }, "unit": "currency", "currency": "CNY", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "总资产（千元） 1,046,329,036 974,827,544 7.33%", "sourcePage": 1, "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "CN_601318_Q1_2026",
+      "event": { "periodEndOn": "2026-03-31", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "218405000000" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "营业收入（人民币百万元） 218,405 232,801 (6.2)", "sourcePage": 4, "eligible": true },
+        { "metricCode": "netIncomeAttrib", "normalizedValue": { "kind": "scalar", "value": "25022000000" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "归属于母公司股东的净利润（人民币百万元） 25,022 27,016 (7.4)", "sourcePage": 4, "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "1.25" }, "unit": "per_share", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "稀释每股收益（人民币元） 1.25 1.44 (13.2)", "sourcePage": 4, "eligible": true },
+        { "metricCode": "operatingCashFlow", "normalizedValue": { "kind": "scalar", "value": "131064000000" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "经营活动产生的现金流量净额（人民币百万元） 131,064 243,221 (46.1)", "sourcePage": 4, "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "14169947000000" }, "unit": "currency", "currency": "CNY", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "总资产（人民币百万元） 14,169,947 13,898,471 2.0", "sourcePage": 4, "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "CN_600036_Q1_2026",
+      "event": { "periodEndOn": "2026-03-31", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "86940000000" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "营业收入 86,940 83,751 3.81", "sourcePage": 2, "eligible": true },
+        { "metricCode": "netIncomeAttrib", "normalizedValue": { "kind": "scalar", "value": "37852000000" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "归属于本行股东的净利润 37,852 37,286 1.52", "sourcePage": 2, "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "1.49" }, "unit": "per_share", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "稀释每股收益 ( 人民币元 ) (1) 1.49 1.48 0.68", "sourcePage": 2, "eligible": true },
+        { "metricCode": "operatingCashFlow", "normalizedValue": { "kind": "scalar", "value": "125849000000" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "经营活动产生的现金流量净额 (2) 125,849 95,026 32.44", "sourcePage": 2, "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "13484882000000" }, "unit": "currency", "currency": "CNY", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "总资产 13,484,882 13,070,523 3.17", "sourcePage": 2, "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "CN_000333_Q1_2026",
+      "event": { "periodEndOn": "2026-03-31", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "131098601000" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "营业收入（ 千 元） 131,098,601 127,838,538 2.55%", "sourcePage": 2, "eligible": true },
+        { "metricCode": "netIncomeAttrib", "normalizedValue": { "kind": "scalar", "value": "12674556000" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "归属于上市公司股东的净利润（ 千 元） 12,674,556 12,422,233 2.03%", "sourcePage": 2, "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "1.69" }, "unit": "per_share", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "稀释每股收益（元 / 股） 1.69 1.63 3.68%", "sourcePage": 2, "eligible": true },
+        { "metricCode": "operatingCashFlow", "normalizedValue": { "kind": "scalar", "value": "14529165000" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "经营活动产生的现金流量净额（ 千 元） 14,529,165 14,320,968 1.45%", "sourcePage": 2, "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "613881571000" }, "unit": "currency", "currency": "CNY", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "总资产（ 千 元） 613,881,571 608,791,766 0.84%", "sourcePage": 2, "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "CN_002594_Q1_2026",
+      "event": { "periodEndOn": "2026-03-31", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "150225314000" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "营业收入（元） 150,225,314,000.00 170,360,448,000.00 -11.82%", "sourcePage": 2, "eligible": true },
+        { "metricCode": "netIncomeAttrib", "normalizedValue": { "kind": "scalar", "value": "4084551000" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "归属于上市公司股东的净利润（元） 4,084,551,000.00 9,154,985,000.00 -55.38%", "sourcePage": 2, "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "0.4480" }, "unit": "per_share", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "稀释每股收益（元 / 股） 0.4480 1.0391 -56.89%", "sourcePage": 2, "eligible": true },
+        { "metricCode": "operatingCashFlow", "normalizedValue": { "kind": "scalar", "value": "2790305000" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "经营活动产生的现金流量净额（元） 2,790,305,000.00 8,580,961,000.00 -67.48%", "sourcePage": 2, "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "902076965000" }, "unit": "currency", "currency": "CNY", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "总资产（元） 902,076,965,000.00 883,729,883,000.00 2.08%", "sourcePage": 2, "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "CN_688981_Q1_2026",
+      "event": { "periodEndOn": "2026-03-31", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "17617218000" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "营业收入 17,617,218 16,301,085 8.1", "sourcePage": 3, "eligible": true },
+        { "metricCode": "netIncomeAttrib", "normalizedValue": { "kind": "scalar", "value": "1361209000" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "归属于上市公司股东的净利润 1,361,209 1,356,374 0.4", "sourcePage": 3, "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "0.17" }, "unit": "per_share", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "稀释每股收益（元/股） 0.17 0.17 -", "sourcePage": 3, "eligible": true },
+        { "metricCode": "operatingCashFlow", "normalizedValue": { "kind": "scalar", "value": "5131729000" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "经营活动产生的现金流量净额 5,131,729 -1,171,520 不适用", "sourcePage": 3, "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "380545855000" }, "unit": "currency", "currency": "CNY", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "总资产 380,545,855 367,718,196 3.5", "sourcePage": 3, "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "CN_300014_Q1_2026",
+      "event": { "periodEndOn": "2026-03-31", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "20679868145.38" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "营业收入（元） 20,679,868,145.38 12,796,142,215.48 61.61%", "sourcePage": 1, "eligible": true },
+        { "metricCode": "netIncomeAttrib", "normalizedValue": { "kind": "scalar", "value": "1446303779.36" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "归属于上市公司股东的净利润（元） 1,446,303,779.36 1,101,115,915.75 31.35%", "sourcePage": 1, "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "0.67" }, "unit": "per_share", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "稀释每股收益（元 / 股） 0.67 0.53 26.42%", "sourcePage": 1, "eligible": true },
+        { "metricCode": "operatingCashFlow", "normalizedValue": { "kind": "scalar", "value": "-365647426.63" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "经营活动产生的现金流量净额（元） - 365,647,426.63 892,143,948.57 - 140.99%", "sourcePage": 1, "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "132764683529.60" }, "unit": "currency", "currency": "CNY", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "总资产（元） 132,764,683,529.60 125,542,296,569.58 5.75%", "sourcePage": 1, "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "CN_603986_Q1_2026",
+      "event": { "periodEndOn": "2026-03-31", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "4188075574.04" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "营业收入 4,188,075,574.04 1,909,062,290.61 119.38", "sourcePage": 1, "eligible": true },
+        { "metricCode": "netIncomeAttrib", "normalizedValue": { "kind": "scalar", "value": "1461248353.08" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "归属于上市公司股东的净利 润 1,461,248,353.08 234,630,087.42 522.79", "sourcePage": 1, "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "2.18" }, "unit": "per_share", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "稀释每股收益（元 / 股） 2.18 0.35 522.86", "sourcePage": 1, "eligible": true },
+        { "metricCode": "operatingCashFlow", "normalizedValue": { "kind": "scalar", "value": "1783057278.72" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "经营活动产生的现金流量 净额 1,783,057,278.72 335,849,288.78", "sourcePage": 11, "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "27773679160.67" }, "unit": "currency", "currency": "CNY", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "总资产 27,773,679,160.67 21,396,579,783.85 29.80", "sourcePage": 2, "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "CN_002330_Q1_2026_CORRECTED",
+      "event": { "periodEndOn": "2026-03-31", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "780289533.59" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "营业收入（元） 780,289,533.59 745,714,556.31 4.64%", "sourcePage": 1, "eligible": true },
+        { "metricCode": "netIncomeAttrib", "normalizedValue": { "kind": "scalar", "value": "9179328.96" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "归属于上市公司股东的净利润（元） 9,179,328.96 9,758,294.04 -5.93%", "sourcePage": 1, "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "0.014" }, "unit": "per_share", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "稀释每股收益（元/股） 0.014 0.015 -6.67%", "sourcePage": 1, "eligible": true },
+        { "metricCode": "operatingCashFlow", "normalizedValue": { "kind": "scalar", "value": "-39950229.95" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "经营活动产生的现金流量净额（元） -39,950,229.95 69,189,090.08 -157.74%", "sourcePage": 1, "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "3607765137.82" }, "unit": "currency", "currency": "CNY", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "总资产（元） 3,607,765,137.82 3,639,283,341.66 -0.87%", "sourcePage": 1, "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "US_AAPL_Q2_FY2026",
+      "event": { "periodEndOn": "2026-03-28", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "111184000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2025-12-28", "periodEndOn": "2026-03-28", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Total net sales (1) 111,184 95,359 254,940 219,659", "eligible": true },
+        { "metricCode": "operatingIncome", "normalizedValue": { "kind": "scalar", "value": "35885000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2025-12-28", "periodEndOn": "2026-03-28", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Operating income 35,885 29,589 86,737 72,421", "eligible": true },
+        { "metricCode": "netIncome", "normalizedValue": { "kind": "scalar", "value": "29578000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2025-12-28", "periodEndOn": "2026-03-28", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Net income $29,578 $24,780 $71,675 $61,110", "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "2.01" }, "unit": "per_share", "currency": "USD", "periodStartOn": "2025-12-28", "periodEndOn": "2026-03-28", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Diluted earnings per share was $2.01, up 22 percent year over year.", "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "371082000000" }, "unit": "currency", "currency": "USD", "periodEndOn": "2026-03-28", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Total assets $371,082 $359,241", "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "US_MSFT_Q3_FY2026",
+      "event": { "periodEndOn": "2026-03-31", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "82886000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Total revenue 82,886 70,066 241,832 205,283", "eligible": true },
+        { "metricCode": "operatingIncome", "normalizedValue": { "kind": "scalar", "value": "38398000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Operating income 38,398 32,000 114,634 94,205", "eligible": true },
+        { "metricCode": "netIncome", "normalizedValue": { "kind": "scalar", "value": "31778000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Provision for income taxes 7,562 5,553 23,904 16,412 Net income $31,778 $25,824 $97,983 $74,599", "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "4.27" }, "unit": "per_share", "currency": "USD", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Diluted $4.27 $3.46 $13.14 $9.99", "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "694228000000" }, "unit": "currency", "currency": "USD", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Total assets $694,228 $619,003", "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "US_NVDA_Q1_FY2027",
+      "event": { "periodEndOn": "2026-04-26", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "81615000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2026-01-26", "periodEndOn": "2026-04-26", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Revenue$81,615 $44,062", "eligible": true },
+        { "metricCode": "operatingIncome", "normalizedValue": { "kind": "scalar", "value": "53536000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2026-01-26", "periodEndOn": "2026-04-26", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Operating income53,536 21,638", "eligible": true },
+        { "metricCode": "netIncome", "normalizedValue": { "kind": "scalar", "value": "58321000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2026-01-26", "periodEndOn": "2026-04-26", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Income tax expense11,582 3,135 Net income$58,321 $18,775 Net income per share", "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "2.39" }, "unit": "per_share", "currency": "USD", "periodStartOn": "2026-01-26", "periodEndOn": "2026-04-26", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Diluted$2.39 $0.76", "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "259474000000" }, "unit": "currency", "currency": "USD", "periodEndOn": "2026-04-26", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Total assets$259,474 $206,803", "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "US_AMZN_Q1_2026",
+      "event": { "periodEndOn": "2026-03-31", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "181519000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Total net sales155,667 181,519", "eligible": true },
+        { "metricCode": "operatingIncome", "normalizedValue": { "kind": "scalar", "value": "23852000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Total operating expenses137,262 157,667 Operating income18,405 23,852 Interest income1,066 1,135", "eligible": true },
+        { "metricCode": "netIncome", "normalizedValue": { "kind": "scalar", "value": "30255000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Equity-method investment activity, net of tax1 (19) Net income$17,127 $30,255 Basic earnings per share$1.62 $2.82", "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "2.78" }, "unit": "per_share", "currency": "USD", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Diluted earnings per share$1.59 $2.78", "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "916630000000" }, "unit": "currency", "currency": "USD", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Total assets$818,042 $916,630", "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "US_GOOGL_Q1_2026",
+      "event": { "periodEndOn": "2026-03-31", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "109896000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Q1 2026 Financial Highlights (unaudited) The following table summarizes our consolidated financial results for the quarter ended March 31, 2025 and 2026 (in millions, except for per share information and percentages). Quarter Ended March 31, 20252026 Revenues$90,234 $109,896", "eligible": true },
+        { "metricCode": "operatingIncome", "normalizedValue": { "kind": "scalar", "value": "39696000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Change in constant currency revenues year over year(1) 14 %19 % Operating income$30,606 $39,696 Operating margin 34 %36 %", "eligible": true },
+        { "metricCode": "netIncome", "normalizedValue": { "kind": "scalar", "value": "62578000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Other income (expense), net $11,183 $37,716 Net income$34,540 $62,578 Diluted net income per share $2.81 $5.11", "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "5.11" }, "unit": "per_share", "currency": "USD", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Net income$34,540 $62,578 Diluted net income per share $2.81 $5.11 (1) Non-GAAP measure.", "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "703919000000" }, "unit": "currency", "currency": "USD", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Total assets$595,281 $703,919", "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "CN_002230_Q1_2026_HOLDOUT",
+      "event": { "periodEndOn": "2026-03-31", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "5274188660.25" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "营业收入（元） 5,274,188,660.25 4,657,815,685.81 13.23%", "sourcePage": 2, "eligible": true },
+        { "metricCode": "netIncomeAttrib", "normalizedValue": { "kind": "scalar", "value": "-169724621.52" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "归属于上市公司股东的净利润（元） -169,724,621.52 -193,251,729.36 12.17%", "sourcePage": 2, "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "-0.07" }, "unit": "per_share", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "稀释每股收益（元 / 股） -0.07 -0.08 12.50%", "sourcePage": 2, "eligible": true },
+        { "metricCode": "operatingCashFlow", "normalizedValue": { "kind": "scalar", "value": "-1068812075.33" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "经营活动产生的现金流量净额（元） -1,068,812,075.33 -712,235,594.00 -50.06%", "sourcePage": 2, "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "45657478488.52" }, "unit": "currency", "currency": "CNY", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "总资产（元） 45,657,478,488.52 44,857,109,349.34 1.78%", "sourcePage": 2, "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "CN_600570_Q1_2026_HOLDOUT",
+      "event": { "periodEndOn": "2026-03-31", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "905318872.46" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "营业收入 905,318,872.46 1,025,881,877.64 -11.75", "sourcePage": 1, "eligible": true },
+        { "metricCode": "netIncomeAttrib", "normalizedValue": { "kind": "scalar", "value": "138770233.83" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "归属于上市公司股东的净 利润 138,770,233.83 31,334,213.72 342.87", "sourcePage": 1, "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "0.07" }, "unit": "per_share", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "稀释每股收益（元/股） 0.07 0.02 250.00", "sourcePage": 2, "eligible": true },
+        { "metricCode": "operatingCashFlow", "normalizedValue": { "kind": "scalar", "value": "-1160173556.58" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "经营活动产生的现金流量 净额 -1,160,173,556.58 -1,057,367,227.62 不适用", "sourcePage": 2, "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "15049031632.13" }, "unit": "currency", "currency": "CNY", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "总资产 15,049,031,632.13 15,907,117,992.47 -5.39", "sourcePage": 2, "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "CN_603501_Q1_2026_HOLDOUT",
+      "event": { "periodEndOn": "2026-03-31", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "6414033079.02" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "营业收入 6,414,033,079.02 6,472,102,098.40 -0.90", "sourcePage": 1, "eligible": true },
+        { "metricCode": "netIncomeAttrib", "normalizedValue": { "kind": "scalar", "value": "502949305.92" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "归属于上市公司股东的净利润 502,949,305.92 865,970,220.63 -41.92", "sourcePage": 1, "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "0.40" }, "unit": "per_share", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "稀释每股收益（元 / 股） 0.40 0.72 -44.44", "sourcePage": 1, "eligible": true },
+        { "metricCode": "operatingCashFlow", "normalizedValue": { "kind": "scalar", "value": "737078999.39" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "经营活动产生的现金流量净额 737,078,999.39 1,097,915,586.75 -32.87", "sourcePage": 1, "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "49366048456.18" }, "unit": "currency", "currency": "CNY", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "总资产 49,366,048,456.18 43,600,508,995.65 13.22", "sourcePage": 2, "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "US_META_Q1_2026_HOLDOUT",
+      "event": { "periodEndOn": "2026-03-31", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "56311000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Revenue$56,311 $42,314 33 %", "eligible": true },
+        { "metricCode": "operatingIncome", "normalizedValue": { "kind": "scalar", "value": "22872000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Income from operations$22,872 $17,555 30 %", "eligible": true },
+        { "metricCode": "netIncome", "normalizedValue": { "kind": "scalar", "value": "26773000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Net income$26,773 $16,644 61 %", "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "10.44" }, "unit": "per_share", "currency": "USD", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Diluted earnings per share (EPS) (1) $10.44 $6.43 62 %", "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "395250000000" }, "unit": "currency", "currency": "USD", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Total assets$395,250 $366,021", "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "US_AMD_Q1_2026_HOLDOUT",
+      "event": { "periodEndOn": "2026-03-28", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "10253000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2025-12-28", "periodEndOn": "2026-03-28", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "GAAP Quarterly Financial Results Q1'26Q1'25Y/YQ4'25Q/Q Revenue ($M)$10,253$7,438 Up 38% $10,270 Flat", "eligible": true },
+        { "metricCode": "operatingIncome", "normalizedValue": { "kind": "scalar", "value": "1476000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2025-12-28", "periodEndOn": "2026-03-28", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Operating income ($M)$1,476$806 Up 83% $1,752 Down 16%", "eligible": true },
+        { "metricCode": "netIncome", "normalizedValue": { "kind": "scalar", "value": "1383000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2025-12-28", "periodEndOn": "2026-03-28", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Net income ($M)$1,383$709 Up 95% $1,511 Down 8%", "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "0.84" }, "unit": "per_share", "currency": "USD", "periodStartOn": "2025-12-28", "periodEndOn": "2026-03-28", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Diluted earnings per share$0.84$0.44 Up 91% $0.92 Down 9%", "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "79642000000" }, "unit": "currency", "currency": "USD", "periodEndOn": "2026-03-28", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Other non-current assets6,317 5,452 Total Assets$79,642 $76,926 LIABILITIES AND STOCKHOLDERS' EQUITY", "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "CN_601398_Q1_2026_HOLDOUT",
+      "event": { "periodEndOn": "2026-03-31", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "230370000000" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "营业收入 230,370 212,774 8.27", "sourcePage": 1, "eligible": true },
+        { "metricCode": "netIncomeAttrib", "normalizedValue": { "kind": "scalar", "value": "86941000000" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "归属于母公司股东的净利润 86,941 84,156 3.31", "sourcePage": 1, "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "0.24" }, "unit": "per_share", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "稀释每股收益（元 / 股） 0.24 0.23 4.35", "sourcePage": 1, "eligible": true },
+        { "metricCode": "operatingCashFlow", "normalizedValue": { "kind": "scalar", "value": "1416276000000" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "经营活动产生的现金流量净 额 1,416,276 942,479 50.27", "sourcePage": 1, "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "55772584000000" }, "unit": "currency", "currency": "CNY", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "总资产 55,772,584 53,477,773 4.29", "sourcePage": 2, "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "CN_300124_Q1_2026_HOLDOUT",
+      "event": { "periodEndOn": "2026-03-31", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "10143223378.12" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "营业收入（元） 10,143,223,378.12 8,977,911,730.21 8,977,911,730.21 12.98%", "sourcePage": 2, "eligible": true },
+        { "metricCode": "netIncomeAttrib", "normalizedValue": { "kind": "scalar", "value": "1013451151.58" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "归属于上市公司股东的净利 润（元） 1,013,451,151.58 1,322,825,045.35 1,322,825,045.35 - 23.39%", "sourcePage": 2, "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "0.37" }, "unit": "per_share", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "稀释每股收益（元 / 股） 0.37 0.49 0.49 - 24.49%", "sourcePage": 2, "eligible": true },
+        { "metricCode": "operatingCashFlow", "normalizedValue": { "kind": "scalar", "value": "94051224.97" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "经营活动产生的现金流量净 额（元） 94,051,224.97 262,550,980.59 262,550,980.59 - 64.18%", "sourcePage": 2, "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "70109425391.87" }, "unit": "currency", "currency": "CNY", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "总资产（元） 70,109,425,391.87 71,314,393,635.15 71,314,783,635.15 - 1.69%", "sourcePage": 2, "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "CN_603093_Q1_2026_HOLDOUT",
+      "event": { "periodEndOn": "2026-03-31", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "433131272.91" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "营业收入 433,131,272.91 269,602,813.94 60.66", "sourcePage": 1, "eligible": true },
+        { "metricCode": "netIncomeAttrib", "normalizedValue": { "kind": "scalar", "value": "204762958.01" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "归属于上市公司股东的净 利润 204,762,958.01 85,738,272.20 138.82", "sourcePage": 1, "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "0.29" }, "unit": "per_share", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "稀释每股收益（元/股） 0.29 0.14 107.14", "sourcePage": 2, "eligible": true },
+        { "metricCode": "operatingCashFlow", "normalizedValue": { "kind": "scalar", "value": "5317831559.70" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "经营活动产生的现金流量 净额 5,317,831,559.70 -11,758,175,827.18 145.23", "sourcePage": 2, "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "78121474857.92" }, "unit": "currency", "currency": "CNY", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "总资产 78,121,474,857.92 65,472,641,493.05 19.32", "sourcePage": 2, "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "US_INTC_Q1_2026_HOLDOUT",
+      "event": { "periodEndOn": "2026-03-28", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "13577000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2025-12-28", "periodEndOn": "2026-03-28", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Net revenue$13,577 $12,667", "eligible": true },
+        { "metricCode": "operatingIncome", "normalizedValue": { "kind": "scalar", "value": "-3136000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2025-12-28", "periodEndOn": "2026-03-28", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Operating income (loss)(3,136)(301)", "eligible": true },
+        { "metricCode": "netIncome", "normalizedValue": { "kind": "scalar", "value": "-4281000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2025-12-28", "periodEndOn": "2026-03-28", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Provision for (benefit from) taxes335 301 Net income (loss)(4,281)(887) Less: net income (loss) attributable to non-controlling interests(553)(66)", "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "-0.73" }, "unit": "per_share", "currency": "USD", "periodStartOn": "2025-12-28", "periodEndOn": "2026-03-28", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Earnings (loss) per share attributable to Intel—basic$(0.73)$(0.19) Earnings (loss) per share attributable to Intel—diluted $(0.73)$(0.19)", "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "205332000000" }, "unit": "currency", "currency": "USD", "periodEndOn": "2026-03-28", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Total assets$205,332 $211,429", "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "US_ADBE_Q2_FY2026_HOLDOUT",
+      "event": { "periodEndOn": "2026-05-29", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "6618000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2026-02-28", "periodEndOn": "2026-05-29", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Total revenue6,618 5,873 13,016 11,587", "eligible": true },
+        { "metricCode": "operatingIncome", "normalizedValue": { "kind": "scalar", "value": "2238000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2026-02-28", "periodEndOn": "2026-05-29", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Operating income2,238 2,109 4,656 4,272", "eligible": true },
+        { "metricCode": "netIncome", "normalizedValue": { "kind": "scalar", "value": "1712000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2026-02-28", "periodEndOn": "2026-05-29", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Net income$1,712 $1,691 $3,601 $3,502", "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "4.25" }, "unit": "per_share", "currency": "USD", "periodStartOn": "2026-02-28", "periodEndOn": "2026-05-29", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Diluted net income per share$4.25 $3.94 $8.86 $8.08", "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "29933000000" }, "unit": "currency", "currency": "USD", "periodEndOn": "2026-05-29", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Total assets$29,933 $29,496", "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "CN_600000_Q1_2026_FINAL_HOLDOUT",
+      "event": { "periodEndOn": "2026-03-31", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "46573000000" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "营业收入 46,573 45,922 1.42", "sourcePage": 1, "eligible": true },
+        { "metricCode": "netIncomeAttrib", "normalizedValue": { "kind": "scalar", "value": "17861000000" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "归属于母公司股东的净利润 17,861 17,598 1.49", "sourcePage": 1, "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "0.52" }, "unit": "per_share", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "稀释每股收益 0.52 0.52 持平", "sourcePage": 1, "eligible": true },
+        { "metricCode": "operatingCashFlow", "normalizedValue": { "kind": "scalar", "value": "91724000000" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "经营活动产生的现金流量净额 91,724 -202,002 145.41", "sourcePage": 1, "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "10305646000000" }, "unit": "currency", "currency": "CNY", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "资产总额 10,305,646 10,081,746 2.22", "sourcePage": 2, "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "CN_002475_Q1_2026_FINAL_HOLDOUT",
+      "event": { "periodEndOn": "2026-03-31", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "83888491960.13" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "营业收入（元） 83,888,491,960.13 61,787,689,862.63 35.77%", "sourcePage": 1, "eligible": true },
+        { "metricCode": "netIncomeAttrib", "normalizedValue": { "kind": "scalar", "value": "3659643487.30" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "归属于上市公司股东的净利 润（元） 3,659,643,487.30 3,043,574,684.79 20.24%", "sourcePage": 1, "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "0.49" }, "unit": "per_share", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "稀释每股收益（元 / 股） 0.49 0.42 16.67%", "sourcePage": 1, "eligible": true },
+        { "metricCode": "operatingCashFlow", "normalizedValue": { "kind": "scalar", "value": "-7068299174.85" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "经营活动产生的现金流量净 额（元） -7,068,299,174.85 -6,691,655,420.46 -5.63%", "sourcePage": 1, "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "325616587672.16" }, "unit": "currency", "currency": "CNY", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "总资产（元） 325,616,587,672.16 306,537,675,786.42 6.22%", "sourcePage": 1, "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "CN_603129_Q1_2026_FINAL_HOLDOUT",
+      "event": { "periodEndOn": "2026-03-31", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "5358756217.34" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "营业收入 5,358,756,217.34 4,250,489,155.76 26.07", "sourcePage": 1, "eligible": true },
+        { "metricCode": "netIncomeAttrib", "normalizedValue": { "kind": "scalar", "value": "422686460.53" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "归属于上市公司股东的净利润 422,686,460.53 415,181,220.69 1.81", "sourcePage": 1, "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "2.75" }, "unit": "per_share", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "稀释每股收益（元 / 股） 2.75 2.71 1.48", "sourcePage": 1, "eligible": true },
+        { "metricCode": "operatingCashFlow", "normalizedValue": { "kind": "scalar", "value": "-362910365.29" }, "unit": "currency", "currency": "CNY", "periodStartOn": "2026-01-01", "periodEndOn": "2026-03-31", "accumulation": "YTD", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "经营活动产生的现金流量净额 -362,910,365.29 792,162,917.76 -145.81", "sourcePage": 1, "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "19180468158.20" }, "unit": "currency", "currency": "CNY", "periodEndOn": "2026-03-31", "accumulation": "discrete", "accountingBasis": "CAS", "consolidationScope": "consolidated", "sourceQuote": "总资产 19,180,468,158.20 19,270,085,851.43 -0.47", "sourcePage": 2, "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "US_CSCO_Q3_FY2026_FINAL_HOLDOUT",
+      "event": { "periodEndOn": "2026-04-25", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "15841000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2026-01-25", "periodEndOn": "2026-04-25", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Total revenue15,841 14,149 46,073 41,981", "eligible": true },
+        { "metricCode": "operatingIncome", "normalizedValue": { "kind": "scalar", "value": "3960000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2026-01-25", "periodEndOn": "2026-04-25", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "OPERATING INCOME3,960 3,202 11,104 8,673", "eligible": true },
+        { "metricCode": "netIncome", "normalizedValue": { "kind": "scalar", "value": "3373000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2026-01-25", "periodEndOn": "2026-04-25", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Provision for income taxes666 456 1,668 471 NET INCOME$3,373 $2,491 $9,408 $7,630 Net income per share:", "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "0.85" }, "unit": "per_share", "currency": "USD", "periodStartOn": "2026-01-25", "periodEndOn": "2026-04-25", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Net income per share: Basic$0.85 $0.63 $2.38 $1.92 Diluted$0.85 $0.62 $2.36 $1.91", "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "125546000000" }, "unit": "currency", "currency": "USD", "periodEndOn": "2026-04-25", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Other assets8,068 6,059 TOTAL ASSETS$125,546 $122,291 LIABILITIES AND EQUITY", "eligible": true }
+      ]
+    },
+    {
+      "sampleId": "US_AVGO_Q2_FY2026_FINAL_HOLDOUT",
+      "event": { "periodEndOn": "2026-05-03", "reportingScope": "consolidated" },
+      "goldFacts": [
+        { "metricCode": "revenue", "normalizedValue": { "kind": "scalar", "value": "22187000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2026-02-02", "periodEndOn": "2026-05-03", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Net revenue$22,187 $19,311 $15,004 $41,498 $29,920", "eligible": true },
+        { "metricCode": "operatingIncome", "normalizedValue": { "kind": "scalar", "value": "10788000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2026-02-02", "periodEndOn": "2026-05-03", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Operating income10,788 8,563 5,829 19,351 12,089", "eligible": true },
+        { "metricCode": "netIncome", "normalizedValue": { "kind": "scalar", "value": "9310000000" }, "unit": "currency", "currency": "USD", "periodStartOn": "2026-02-02", "periodEndOn": "2026-05-03", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Provision for income taxes820 846 120 1,666 107 Net income$9,310 $7,349 $4,965 $16,659 $10,468 Net income per share:", "eligible": true },
+        { "metricCode": "epsDiluted", "normalizedValue": { "kind": "scalar", "value": "1.91" }, "unit": "per_share", "currency": "USD", "periodStartOn": "2026-02-02", "periodEndOn": "2026-05-03", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Net income per share: Basic$1.96 $1.55 $1.05 $3.51 $2.23 Diluted$1.91 $1.50 $1.03 $3.41 $2.17", "eligible": true },
+        { "metricCode": "totalAssets", "normalizedValue": { "kind": "scalar", "value": "179158000000" }, "unit": "currency", "currency": "USD", "periodEndOn": "2026-05-03", "accumulation": "discrete", "accountingBasis": "GAAP", "consolidationScope": "consolidated", "sourceQuote": "Other long-term assets8,023 6,915 Total assets$179,158 $171,092 LIABILITIES AND EQUITY", "eligible": true }
+      ]
+    }
+  ]
+}

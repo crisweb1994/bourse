@@ -63,6 +63,47 @@ export {
 } from './units';
 
 export {
+  calculatePercentChange,
+  locateSourceSpan,
+  normalizeMetricValue,
+  verifyEarningsCandidates,
+  type EarningsDerivationText,
+  type EarningsEventIdentity,
+  type RejectedMetricCandidate,
+  type VerifyEarningsCandidatesInput,
+  type VerifyEarningsCandidatesResult,
+} from './earnings-verify';
+
+export {
+  comparableIdentity,
+  reconcileEarningsFacts,
+  type ReconcileEarningsFactsOptions,
+} from './earnings-reconcile';
+
+export { attachComparisons, computePeriodComparison } from './earnings-diff';
+
+export {
+  attachEarningsBenchmarks,
+  computeConsensusComparison,
+  computeGuidanceComparison,
+  type AttachEarningsBenchmarksInput,
+  type ConsensusBenchmark,
+  type GuidanceBenchmark,
+} from './earnings-benchmarks';
+
+export {
+  financialsToComparableFacts,
+  latestFinancialsToStructuredProjection,
+  type StructuredEarningsProjection,
+} from './earnings-financials-adapter';
+
+export {
+  sectionizeFilingText,
+  selectRelevantFilingSections,
+  type FilingSection,
+} from './earnings-sections';
+
+export {
   ComputedFinancialRatiosSchema,
   ComputeWarningCodeSchema,
   PeriodTrendSchema,

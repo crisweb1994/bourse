@@ -22,3 +22,5 @@ export {
   type JudgeRunResult,
   type RawFixture,
 } from './types';
+
+export * from './earnings';
