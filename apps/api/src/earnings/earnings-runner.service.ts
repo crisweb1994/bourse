@@ -306,7 +306,7 @@ export class EarningsRunnerService implements OnModuleInit {
 
       await this.updateStage(runId, 'INTERPRET');
       const managementClaims = extraction.managementClaims.flatMap((rawClaim, index) => {
-        const parsedClaim = EarningsManagementClaimCandidateSchema.safeParse(rawClaim);
+        const parsedClaim = normalizeManagementClaimCandidate(rawClaim);
         if (!parsedClaim.success) return [];
         const claim = parsedClaim.data;
         if (parsePages(extractionDerivation.pages)?.length && claim.sourcePage === undefined) return [];
@@ -818,7 +818,9 @@ export function mergeEarningsCardPayload(
   const mergedFacts = attachComparisons(comparisonBase, current.facts, 'PREVIOUS_VERSION').map((fact) => ({
     ...fact,
     comparisons: fact.comparisons.filter((comparison) => (
-      comparison.kind !== 'PREVIOUS_VERSION' || comparison.absoluteDelta !== '0'
+      comparison.kind !== 'PREVIOUS_VERSION'
+      || comparison.referenceValue?.kind === 'range'
+      || comparison.absoluteDelta !== '0'
     )),
   }));
   const claims = [...current.managementClaims, ...candidate.managementClaims]
@@ -883,7 +885,7 @@ function filingAuthorityRank(filing: EarningsFilingDescriptor): number {
 function factIdentity(fact: MetricFact): string {
   return JSON.stringify([
     fact.metricCode,
-    fact.periodStartOn,
+    fact.accumulation === 'discrete' ? undefined : fact.periodStartOn,
     fact.periodEndOn,
     fact.periodKind,
     fact.accumulation,
@@ -1018,6 +1020,20 @@ export function guidanceSourceSupportsCandidate(
   const spreadPercentage = max.sub(min).div(midpoint).div(2).mul(100);
   return numbers.some((value) => value.sub(spreadPercentage).abs().lte('0.05'))
     && /(?:\+\/?[-\s]*|plus\s+or\s+minus|上下浮动|增减|波动)[^\d]{0,12}\d+(?:\.\d+)?\s*%/i.test(quote);
+}
+
+export function normalizeManagementClaimCandidate(
+  raw: unknown,
+): ReturnType<typeof EarningsManagementClaimCandidateSchema.safeParse> {
+  const parsed = EarningsManagementClaimCandidateSchema.safeParse(raw);
+  if (parsed.success) return parsed;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return parsed;
+  const candidate = raw as Record<string, unknown>;
+  if (typeof candidate.sourceQuote !== 'string' || candidate.sourceQuote.trim() === '') return parsed;
+  return EarningsManagementClaimCandidateSchema.safeParse({
+    ...candidate,
+    text: candidate.sourceQuote,
+  });
 }
 
 function guidanceQuoteNamesMetric(quote: string, metricCode: string): boolean {

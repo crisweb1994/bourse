@@ -77,4 +77,24 @@ describe('computePeriodComparison', () => {
     expect(comparison?.absoluteDelta).toBe('15');
     expect(comparison?.percentDelta).toBeUndefined();
   });
+
+  it('compares a realized point value with the prior forecast range', () => {
+    const prior = {
+      ...fact('100', filingProvenance),
+      value: { kind: 'range' as const, min: '90', max: '110' },
+      normalizedValue: { kind: 'range' as const, min: '90', max: '110' },
+    };
+    const comparison = computePeriodComparison(
+      fact('105', filingProvenance),
+      prior,
+      'PREVIOUS_VERSION',
+    );
+
+    expect(comparison).toMatchObject({
+      label: '较预告',
+      referenceValue: { kind: 'range', min: '90', max: '110' },
+      outcome: 'within',
+      absoluteDelta: '0',
+    });
+  });
 });

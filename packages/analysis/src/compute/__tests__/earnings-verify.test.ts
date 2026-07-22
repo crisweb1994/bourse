@@ -146,10 +146,10 @@ describe('verifyEarningsCandidates', () => {
   });
 
   it('repairs a scalar range written with a spaced ASCII hyphen', () => {
-    const source = '基本每股收益 2.2492 元/股 - 2.3703 元/股';
+    const source = '2026年半年度业绩预告\n基本每股收益 2.2492 元/股 - 2.3703 元/股';
     const result = verifyEarningsCandidates({
       candidates: [{
-        ...candidate('epsBasic', '2.2492', source),
+        ...candidate('epsBasic', '2.2492', '基本每股收益 2.2492 元/股 - 2.3703 元/股'),
         unit: 'per_share',
         scale: 1,
       }],
@@ -158,6 +158,63 @@ describe('verifyEarningsCandidates', () => {
     });
     expect(result.rejected).toEqual([]);
     expect(result.facts[0].value).toEqual({ kind: 'range', min: '2.2492', max: '2.3703' });
+  });
+
+  it('does not turn current and prior-period table values into a range', () => {
+    const source = '经营活动产生的现金流量净额 91,724 -202,002 145.41';
+    const result = verifyEarningsCandidates({
+      candidates: [{
+        ...candidate('operatingCashFlow', '91724', source),
+        scale: 1_000_000,
+        periodEndOn: '2026-03-31',
+        periodStartOn: '2026-01-01',
+      }],
+      derivation: { ...derivation, text: source },
+      event: { periodEndOn: '2026-03-31', reportingScope: 'consolidated' },
+    });
+
+    expect(result.rejected).toEqual([]);
+    expect(result.facts[0].value).toEqual({ kind: 'scalar', value: '91724' });
+  });
+
+  it('accepts the common net cash flows from operating activities label', () => {
+    const source = 'Net cash flows from operating activities 61,522,204,989.35 92,463,692,168.43 -33.46';
+    const result = verifyEarningsCandidates({
+      candidates: [{
+        ...candidate('operatingCashFlow', '61522204989.35', source),
+        scale: 1,
+        periodEndOn: '2025-12-31',
+        periodStartOn: '2025-01-01',
+        accumulation: 'FY',
+      }],
+      derivation: { ...derivation, text: source },
+      event: { periodEndOn: '2025-12-31', reportingScope: 'consolidated' },
+    });
+
+    expect(result.rejected).toEqual([]);
+    expect(result.facts[0].metricCode).toBe('operatingCashFlow');
+  });
+
+  it('accepts common earnings-release EPS and operating-cash-flow labels', () => {
+    const source = [
+      'Earnings per common share - diluted$1.91 $1.03 +85%',
+      'Cash flow from operations$10,493 $6,555 +60%',
+    ].join('\n');
+    const result = verifyEarningsCandidates({
+      candidates: [
+        {
+          ...candidate('epsDiluted', '1.91', 'Earnings per common share - diluted$1.91 $1.03 +85%'),
+          unit: 'per_share',
+          scale: 1,
+        },
+        candidate('operatingCashFlow', '10493', 'Cash flow from operations$10,493 $6,555 +60%'),
+      ],
+      derivation: { ...derivation, text: source },
+      event: { periodEndOn: '2026-06-30', reportingScope: 'consolidated' },
+    });
+
+    expect(result.rejected).toEqual([]);
+    expect(result.facts.map((fact) => fact.metricCode)).toEqual(['epsDiluted', 'operatingCashFlow']);
   });
 
   it('deduplicates identical facts and rejects conflicting duplicates', () => {
@@ -292,6 +349,36 @@ describe('verifyEarningsCandidates', () => {
 
     expect(result.rejected).toEqual([]);
     expect(result.facts[0]?.periodStartOn).toBe('2026-02-28');
+  });
+
+  it('keeps an explicitly disclosed inclusive quarter start instead of adding a day', () => {
+    const source = [
+      'Three Months Ended',
+      'March 28, 2026',
+      'The quarter began on December 28, 2025.',
+      'Operating income 35,885 29,589',
+    ].join('\n');
+    const result = verifyEarningsCandidates({
+      candidates: [{
+        metricCode: 'operatingIncome',
+        value: { kind: 'scalar', value: '35885' },
+        unit: 'currency',
+        currency: 'USD',
+        scale: 1_000_000,
+        periodStartOn: '2025-09-28',
+        periodEndOn: '2026-03-28',
+        periodKind: 'duration',
+        accumulation: 'FY',
+        accountingBasis: 'GAAP',
+        consolidationScope: 'consolidated',
+        sourceQuote: 'Operating income 35,885 29,589',
+      }],
+      derivation: { ...derivation, text: source },
+      event: { periodEndOn: '2026-03-28', periodType: 'Q2', reportingScope: 'consolidated' },
+    });
+
+    expect(result.rejected).toEqual([]);
+    expect(result.facts[0].periodStartOn).toBe('2025-12-28');
   });
 
   it('recognizes common metric labels used in official CN and US statements', () => {

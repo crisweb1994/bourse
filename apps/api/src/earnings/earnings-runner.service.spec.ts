@@ -6,6 +6,7 @@ import {
   guidanceSourceSupportsCandidate,
   isUnaudited,
   mergeEarningsCardPayload,
+  normalizeManagementClaimCandidate,
   parseEarningsExtractionTimeoutMs,
   parseEarningsGenerationConcurrency,
   structuredFallbackPeriodError,
@@ -114,6 +115,37 @@ test('supplemental 10-Q keeps the 8-K fact and adds the periodic fact', () => {
   assert.equal(merged.supportingFilings[0]?.filingId, 'release-1');
 });
 
+test('supplements collapse discrete quarter facts with a one-day start mismatch', () => {
+  const current = payload('release-1', '8-K', '2026-01-01T00:00:00.000Z', '100', 'revenue');
+  const candidate = payload('quarterly-1', '10-Q', '2026-02-01T00:00:00.000Z', '101', 'revenue');
+  current.facts[0].periodStartOn = '2025-12-29';
+  candidate.facts[0].periodStartOn = '2025-12-28';
+  current.facts[0].accumulation = 'discrete';
+  candidate.facts[0].accumulation = 'discrete';
+
+  const merged = mergeEarningsCardPayload(current, candidate, 'SUPPLEMENTS');
+
+  assert.equal(merged.facts.filter((fact) => fact.metricCode === 'revenue').length, 1);
+  assert.equal(merged.facts[0].value.kind === 'scalar' ? merged.facts[0].value.value : '', '101');
+});
+
+test('superseding point values retain comparison with the prior forecast range', () => {
+  const preview = payload('preview-1', 'preview', '2026-01-01T00:00:00.000Z', '100', 'revenue');
+  const preliminary = payload('preliminary-1', 'preliminary', '2026-02-01T00:00:00.000Z', '105', 'revenue');
+  preview.facts[0].value = { kind: 'range', min: '90', max: '110' };
+  preview.facts[0].normalizedValue = { kind: 'range', min: '90', max: '110' };
+
+  const merged = mergeEarningsCardPayload(preview, preliminary, 'SUPERSEDES');
+
+  assert.deepEqual(merged.facts[0].comparisons[0], {
+    kind: 'PREVIOUS_VERSION',
+    label: '较预告',
+    referenceValue: { kind: 'range', min: '90', max: '110' },
+    outcome: 'within',
+    absoluteDelta: '0',
+  });
+});
+
 test('correction replaces the affected metric while retaining an immutable source trail', () => {
   const current = payload('release-1', '8-K', '2026-01-01T00:00:00.000Z', '100', 'revenue');
   const candidate = payload('release-1-amendment', '8-K/A', '2026-01-02T00:00:00.000Z', '98', 'revenue');
@@ -187,4 +219,16 @@ test('guidance requires an attributable metric and source-supported range', () =
   assert.equal(guidanceSourceSupportsCandidate('Revenue is expected to be 110, plus or minus 9.09%.', base), true);
   assert.equal(guidanceSourceSupportsCandidate('Analysts expect between 100 and 120.', base), false);
   assert.equal(guidanceSourceSupportsCandidate('Revenue is expected to be 105 to 120.', base), false);
+});
+
+test('legacy management claims fall back to their exact quote without inventing text', () => {
+  const parsed = normalizeManagementClaimCandidate({
+    sourceQuote: 'Management said demand remained strong.',
+    sourceSection: 'CEO remarks',
+  });
+  assert.equal(parsed.success, true);
+  if (parsed.success) {
+    assert.equal(parsed.data.text, 'Management said demand remained strong.');
+    assert.equal(parsed.data.sourceQuote, 'Management said demand remained strong.');
+  }
 });

@@ -1,4 +1,4 @@
-export const EARNINGS_EXTRACTION_PROMPT_VERSION = 'earnings-extract-v12';
+export const EARNINGS_EXTRACTION_PROMPT_VERSION = 'earnings-extract-v13';
 export const EARNINGS_SCHEMA_VERSION = 'earnings-card-v2';
 export const EARNINGS_MAX_OUTPUT_TOKENS = 4_000;
 
@@ -50,10 +50,11 @@ export const EARNINGS_EXTRACTION_SYSTEM_PROMPT = `你是财务披露信息抽取
 - sourcePage 如填写必须是从 1 开始的 JSON 整数，不能是字符串。HTML/无分页原文必须完全省略 sourcePage，禁止写 0。所有可选字段无值时直接省略，禁止输出 null。
 - 用户提示中的“公告页数”大于 0 表示 PDF；此时每条 fact/guidance/managementClaim 都必须填写原文所在的 sourcePage 整数。
 - guidance 只抽取管理层明确给出的 FY 前瞻区间，必须提供 targetPeriodEndOn、targetPeriodType=FY、range(min,max) 和连续原文 sourceQuote；不能把分析师共识或历史实际数字当作 guidance。
-- managementClaims 只保留管理层明确说出的经营原因、变化和风险，每条也必须附连续原文。
+- managementClaims 只保留管理层明确说出的经营原因、变化和风险。每项必须同时包含 text 和 sourceQuote：text 是忠实、简洁的中文转述，不新增因果或判断；sourceQuote 是连续原文。缺少任一字段就不要输出该项。
 
 输出字段：periodEndOn, periodType, fiscalYear, fiscalQuarter?, reportingScope, facts[], guidance[], managementClaims[]。
-facts 每项字段：metricCode, value, unit, currency?, scale, periodStartOn?, periodEndOn, periodKind, accumulation, accountingBasis, consolidationScope, claimedYoYPct?, sourceQuote, sourcePage?, sourceSection?。`;
+facts 每项字段：metricCode, value, unit, currency?, scale, periodStartOn?, periodEndOn, periodKind, accumulation, accountingBasis, consolidationScope, claimedYoYPct?, sourceQuote, sourcePage?, sourceSection?。
+managementClaims 每项字段：text, sourceQuote, sourcePage?, sourceSection?。`;
 
 export function buildEarningsExtractionUserPrompt(
   source: EarningsPromptSource,

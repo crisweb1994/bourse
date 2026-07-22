@@ -551,6 +551,11 @@ function formatComparison(
   if (comparison.kind === 'CONSENSUS') {
     return `${comparison.label} ${formatDelta(comparison.percentDelta, comparison.absoluteDelta)}${comparison.asOf ? ` · 披露前 ${formatDateTime(comparison.asOf)}` : ''}`;
   }
+  if (comparison.kind === 'PREVIOUS_VERSION' && comparison.referenceValue?.kind === 'range') {
+    const range = formatRawValue(comparison.referenceValue, fact);
+    const outcome = comparison.outcome === 'within' ? '区间内' : comparison.outcome === 'above' ? '高于上沿' : '低于下沿';
+    return `${comparison.label} ${range} · ${outcome}`;
+  }
   return `${comparison.label} ${formatDelta(comparison.percentDelta, comparison.absoluteDelta)}`;
 }
 
