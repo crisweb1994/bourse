@@ -2,262 +2,270 @@
 
 # Bourse
 
-**让 AI 像顶级分析师一样研究股票 —— 而不是像 ChatGPT 那样编造数字**
+### 面向严肃研究的 AI 股票工作台
 
-一个开源的 AI 股票研究平台。9 个维度并行分析，6 位投资大师视角，实时流式输出。
-支持 **A 股 / 美股 / 港股**，自带 SEC EDGAR / Yahoo Finance / 东方财富 / akshare 数据源。
+把公告、财务数据和市场信息整理成**可追溯的研究结论**，而不是一段看似聪明、无法核对的聊天回答。
 
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](#license)
 [![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)](https://nextjs.org/)
 [![NestJS](https://img.shields.io/badge/NestJS-11-E0234E?logo=nestjs)](https://nestjs.com/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)](https://www.typescriptlang.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind-v4-38B2AC?logo=tailwind-css)](https://tailwindcss.com/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#贡献)
 
-[功能](#为什么是-bourse) ·
-[快速开始](#快速开始) ·
-[架构](#架构一图看懂) ·
-[路线图](#路线图)
+[产品亮点](#产品亮点) · [界面预览](#界面预览) · [快速开始](#快速开始) · [工作原理](#工作原理) · [路线图](#路线图)
 
 </div>
 
 ---
 
-## 为什么是 Bourse
+## 产品亮点
 
-> 市面上大多数"AI 股票助手"是把 ChatGPT 套层皮：让模型自己算 PE、自己拍 RSI、自己猜营收。
-> 数字幻觉随处可见，没法当严肃工具用。
+### 一只股票，一个研究入口
 
-Bourse 做了一个朴素但关键的架构选择：
+搜索股票代码或公司名，即可进入统一的研究工作台：查看综合分析、历史运行、自选股和财报速读。分析结果边生成边展示，失败的单个维度不会拖垮整份报告。
 
-| | 常见做法 | Bourse |
-|---|---|---|
-| 财务比率（PE / ROE / 毛利率…） | LLM 自己算 | **TypeScript 确定性计算**，结果注入 prompt |
-| 技术指标（RSI / MACD / 布林带） | LLM 自己拍 | **TypeScript 精确计算**，LLM 只负责解读 |
-| 同行对比 / 历史百分位 | LLM 一顿编 | **代码算出中位数和分位**，LLM 写结论 |
-| 数据来源 | 全靠 web search | **真实 connector**：SEC EDGAR / Yahoo / 东财 / akshare |
-| 引用链 | 没有或瞎编 | **每个 citation 强制带 `retrievedAt`** |
+### 9 个维度的深度分析
 
-**一句话：代码负责"事实"，LLM 只负责"判断"。** 这意味着分析的客观部分永远是准确、可复现、可审计的。
+综合分析覆盖基本面、估值、行业竞争、风险、技术面、情绪、情景、组合和治理。每个维度都有独立的结构化结果、结论和来源，适合从全局扫描到单点追问。
+
+### 财报速读：从公告原文到可核对卡片
+
+Bourse 会定期检测美股和 A 股公告，抓取不可变原文，解析章节，抽取逐指标事实，并进行自动一致性检查和结构化数据对账。卡片保留来源、版本和冲突状态：
+
+- 数字带单位、币种、期间、合并范围和原文定位。
+- 未通过检查的数字不展示，并标出省略数量。
+- 8-K、10-Q 等材料可以作为同一财报事件的补充、替代或更正版本。
+- 财报卡可直接追问，Chat 会绑定具体卡片版本回答。
+
+当前财报速读支持 **美股 / A 股**；港股入口保留，但财报速读仍在 Phase 3。
+
+### 代码负责事实，模型负责判断
+
+财务比率、技术指标、同比和同行统计由 TypeScript 计算；模型负责解释、归纳和提出风险。所有可展示的结论都带有来源和抓取时间，便于复核。
 
 ---
 
-## 核心能力
+## 界面预览
 
-### 9 维度并行分析
+### 工作台首页
 
-一次"综合分析"，并行跑 9 个独立维度，互不阻塞，谁先好谁先显示：
+搜索入口、自选股和最近分析集中在同一页，适合反复查看和继续研究。
 
-| 维度 | 覆盖范围 |
-|---|---|
-| **基本面** | 商业模式 / 财务趋势 / 盈利质量 |
-| **估值** | DCF / 反向 DCF / 相对估值 |
-| **行业竞争** | 行业格局 / 护城河 / 竞争地位 |
-| **风险** | 公司风险 / 宏观风险 / 监管合规 |
-| **技术面** | 趋势 / 关键价位 / SMA·RSI·MACD·Bollinger |
-| **情绪** | 分析师共识 / 机构动向 / 内部交易 |
-| **情景** | 牛 / 基 / 熊三情景 + 概率 + 催化剂 |
-| **组合** | 风险/期限/风格匹配 + 仓位建议 |
-| **治理** | 股权结构 / 管理层激励 / ROIC 趋势 |
+![Bourse 工作台首页](docs/screenshots/home.png)
 
-### 6 位投资大师视角
+### 财报卡片
 
-可选 persona 让分析带上特定流派的判断框架：
+财报期间、对账状态、公告来源、关联材料和逐项数字在一个可扫描的卡片中呈现。
 
-**巴菲特**（价值 + 护城河） · **芒格**（多元思维模型） · **伯里**（逆向 + 危机嗅觉）
-**伍德**（颠覆式增长） · **达摩达兰**（学院派估值） · **格雷厄姆**（深度价值）
+![Bourse 财报卡片](docs/screenshots/analysis-result.png)
 
-### 多市场原生支持
+> 以上截图来自本地运行版本；数据内容取决于当前公告源、结构化数据和配置的 AI provider。
 
-| 市场 | 数据源 | 特色能力 |
-|---|---|---|
-| **A 股** | 东方财富 / akshare 镜像 | 北向资金 / 龙虎榜 / 解禁 |
-| **美股** | Yahoo Finance / SEC EDGAR XBRL | 10-K / 10-Q / Insider Trading |
-| **港股** | Yahoo Finance | 通用财务 + 技术指标 |
+---
 
-### 实时 SSE 流式输出
+## 核心功能
 
-不是等几分钟最后给你一段，而是边算边推：
+| 功能 | 现在能做什么 |
+| --- | --- |
+| 综合分析 | 9 个维度、6 种投资大师视角、结构化结论和引用 |
+| 财报速读 | US SEC / A 股公告发现、原文保存、解析、抽取、对账和版本历史 |
+| 实时生成 | SSE 流式输出，显示阶段进度，支持断线续传和单维度重试 |
+| Chat | 基于股票和财报卡片上下文追问，回答关联原文章节 |
+| 自选股 | 添加、删除和管理股票，检测器按自选股并集工作 |
+| 历史记录 | 查看过往分析、状态、信号和生成时间 |
+| 主动触达 | 财报新卡、更新、更正可发送到 Webhook、飞书、Telegram 和 Daily Brief |
+| Provider 配置 | Anthropic、OpenAI 及 OpenAI-compatible provider，可按用户配置 key |
+| 部署模式 | 默认本地匿名模式；生产环境可开启 GitHub OAuth、JWT 和 CSRF |
 
-```
-section_start → report_chunk × N → report_complete → structured_data
-              → citation × N → section_complete → ... → done
+### 分析流的用户体验
+
+```text
+创建分析 → section_start → report_chunk × N → report_complete
+         → structured_data → section_complete → summary_chunk → done
 ```
 
-支持断线续传（`?afterSeq=N`）+ 15 秒心跳 + 部分维度失败时其余维度照常完成。
+每个 section 独立记录状态。某个维度失败时，其他维度仍然可以完成；用户可以只重试失败的 section。
 
-### 自由切换 AI Provider
+### 财报速读的数据链路
 
-- 内置 Anthropic（Claude）+ OpenAI / OpenAI-compatible（DeepSeek / Kimi / 智谱 / 通义 / 火山方舟…）
-- 每个用户可独立配置自己的 API Key，平台不强绑供应商
-- 三层模型路由（Primary 主分析 / Utility 结构化抽取）
+```text
+公告源轮询
+  → 发现合格公告
+  → 保存不可变原文（Filing）
+  → 生成可重跑解析产物（FilingDerivation）
+  → 抽取 MetricFact / Guidance / 管理层表述
+  → 自动一致性检查
+  → 与结构化数据逐指标对账
+  → 生成 CardRevision
+  → 页面、Chat、Daily Brief、Webhook
+```
 
-### 还有
+轮询默认每 5 分钟运行一次，使用 cursor、lease、advisory lock 和并发上限避免重复抓取。检测器当前只处理 US / A 股，Phase 1 页面打开时也支持懒生成。
 
-- **GitHub OAuth + JWT + CSRF** 全套就位
-- **私部署模式** —— `AUTH_REQUIRED=false` 一键关闭登录，内网用
-- **一键 Docker 部署** —— `docker compose up` 完事
+---
+
+## 可信度设计
+
+| 常见问题 | Bourse 的处理 |
+| --- | --- |
+| 模型自己编财务数字 | 数字优先来自 connector 或结构化数据，模型只解释 |
+| 单季和 YTD 混淆 | MetricFact 保存期间起止日、periodKind 和 accumulation |
+| 公告版本覆盖历史 | 原文 insert-only，解析和卡片按版本保存 |
+| 8-K / 10-Q 关系混乱 | Filing、EarningsEvent、CardRevision 分层，并记录 SUPPLEMENTS / CORRECTS / SUPERSEDES |
+| 财报后的共识污染比较 | 只使用 `asOf < filingPublishedAt` 的冻结快照 |
+| 错误数字仍然出现在卡片 | 引用定位、期间、币种、口径、YoY 和冲突检查不通过即剔除 |
+
+自动一致性检查是概率性拦截，不是数学证明。产品不会承诺“100% 正确”，而是明确显示“已对账”“待对账”或“冲突”。
 
 ---
 
 ## 快速开始
 
-### ⚡ 2 分钟极速体验（推荐 · 无需 GitHub OAuth）
+### 本地体验：默认免登录
+
+需要 Docker、Node.js 20+、pnpm 9+。
 
 ```bash
-git clone https://github.com/crisweb1994/bourse.git && cd bourse
+git clone https://github.com/crisweb1994/bourse.git
+cd bourse
 cp .env.example .env
-# 编辑 .env：粘贴一个 AI key（Anthropic 或 OpenAI/OpenAI 兼容任选其一）
+# 在 .env 中至少配置一个 ANTHROPIC_API_KEY 或 OPENAI_API_KEY
 docker compose --profile app up -d --build
 ```
 
-打开 `http://localhost:3000`，搜索 `AAPL` 或 `贵州茅台`，直接开跑。
-默认 `AUTH_REQUIRED=false` —— 单用户模式，免登录、免 OAuth、免数据库手动初始化。
+打开 <http://localhost:3000>。默认 `AUTH_REQUIRED=false`，适合单人本地 review，不需要 GitHub OAuth。
 
-### 本地开发模式
+### 开发模式
 
 ```bash
-docker compose up -d                            # 仅起 Postgres
-pnpm install && cp .env.example .env            # 粘贴 AI key
-pnpm -F @bourse/api db:generate && db:push
-pnpm dev                                        # api :3001 + web :3000
+docker compose up -d                         # PostgreSQL :5434
+pnpm install
+pnpm db:generate && pnpm db:push
+pnpm dev                                     # Web :3000 + API :3001
 ```
+
+### 开启财报检测器
+
+```dotenv
+EARNINGS_DETECTION_ENABLED=true
+EARNINGS_DETECTION_INTERVAL_MS=300000       # 默认 5 分钟
+EARNINGS_DETECTION_BATCH_SIZE=50
+EARNINGS_DETECTION_CONCURRENCY=5
+```
+
+财报速读还会受到公告源可用性、LLM 开关和每日预算影响。`EARNINGS_LLM_ENABLED=false` 时，系统会尝试结构化数据降级；期间不匹配则关闭生成，避免发布错误卡片。
 
 ### 多用户 / 生产部署
 
-需要 GitHub OAuth 登录、跨子域 cookie、CORS 白名单等生产配置？
-参考 [`.env.production.example`](.env.production.example) 里的完整环境变量说明。
-
-API 与 Web 使用同一个版本化镜像、以两个独立容器运行。生产环境应固定到
-精确版本，避免直接部署可变的 `latest`：
+参考 [`.env.production.example`](.env.production.example) 配置 GitHub OAuth、JWT、CORS 和跨域 cookie。生产环境请固定镜像版本：
 
 ```bash
 BOURSE_IMAGE=ghcr.io/crisweb1994/bourse:0.1.0 docker compose up -d
 ```
 
-合并 Conventional Commit 后，Release Please 会维护 Release PR；合并该 PR
-会创建 `vX.Y.Z` GitHub Release，并发布对应的 GHCR 镜像。
-
-首次启用前，在 GitHub `Settings → Actions → General → Workflow permissions`
-中启用 Actions 的读写权限，并允许 Actions 创建 Pull Request。发布版本由根
-`package.json` 和 `.release-please-manifest.json` 共同记录；workspace 内部包
-不单独发布，也不作为产品版本来源。
-
 ---
 
-## 架构一图看懂
+## 工作原理
 
-```
-                 ┌─────────────────────────────────────────────┐
-                 │            apps/web (Next.js 15)            │
-                 │       Editorial Refined UI · SSE 渲染        │
-                 └────────────────────┬────────────────────────┘
-                                      │ JWT cookie + CSRF
-                 ┌────────────────────▼────────────────────────┐
-                 │          apps/api (NestJS · :3001)          │
-                 │  Auth · Analysis 编排 · SSE · Prisma        │
-                 └────────────────────┬────────────────────────┘
-                                      │
-                 ┌────────────────────▼────────────────────────┐
-                 │       packages/analysis (核心包 · FFI)        │
-                 │                                              │
-                 │  ┌─────────────┐  ┌─────────────────────┐   │
-                 │  │  Snapshot   │→ │      Compute        │   │
-                 │  │  fetch ×1   │  │  Ratios / 技术指标  │   │
-                 │  │  9 维共享    │  │  红旗 / 同行 / 百分位│   │
-                 │  └──────┬──────┘  └──────────┬──────────┘   │
-                 │         │ 注入 prompt        │              │
-                 │         ▼                    ▼              │
-                 │  ┌──────────────────────────────────┐       │
-                 │  │   Dimensions × 9 (LLM 解读)      │       │
-                 │  └──────────────────┬───────────────┘       │
-                 │                     │ SSE                   │
-                 │  ┌──────────────────▼───────────────┐       │
-                 │  │   Personas (Buffett / Burry…)    │       │
-                 │  └──────────────────────────────────┘       │
-                 └──────────────────────────────────────────────┘
-                          │
-       ┌──────────────────┼──────────────────┐
-       ▼                  ▼                  ▼
-  Yahoo Finance      东方财富 / akshare       SEC EDGAR (XBRL)
+```text
+apps/web (Next.js 15)
+  ├─ 工作台 / 自选股 / 历史 / Chat / 财报卡
+  └─ SSE 渲染与 API client
+             │ JWT cookie + CSRF
+apps/api (NestJS)
+  ├─ Auth / Analysis orchestration / Earnings scheduler
+  ├─ SSE / Chat / Notification delivery
+  └─ Prisma + PostgreSQL
+             │
+packages/analysis
+  ├─ SEC EDGAR / Yahoo / 巨潮 / 东方财富 connectors
+  ├─ snapshot / deterministic compute / earnings verify
+  └─ prompts / schemas / source provenance
 ```
 
-**6 条硬不变式**（违反就是 bug）：
+### 关键不变式
 
-1. **代码计算，LLM 判断** —— 数字一律由 TS 算出来注入 prompt
-2. **fetch 一次** —— 9 维共享 snapshot，不重复打外部接口
-3. **Snapshot 是值** —— 中间态不落库，只持久化用户可见结果
-4. **Schema-first** —— 所有 public 类型先写 zod，TS 类型 `z.infer` 派生
-5. **Provenance 必填** —— citation 强制带 `retrievedAt`
-6. **Auth + CSRF** —— mutating endpoint 必须带 `x-csrf-token`
+1. **代码计算，LLM 判断**：客观数字由代码或结构化来源提供。
+2. **原文不可变**：公告原文按来源 ID 和内容哈希保存。
+3. **解析可重跑**：parserVersion、modelVersion 和 schemaVersion 进入产物和卡片版本。
+4. **来源可定位**：每个可展示事实必须能回到公告章节、页码或字符范围。
+5. **失败关闭**：无法定位或无法对账的数字不悄悄展示。
+6. **请求幂等**：重复点击或并发请求会收敛到同一生成 run。
 
 ---
 
 ## 技术栈
 
 | 层 | 技术 |
-|---|---|
-| **Frontend** | Next.js 15 (App Router) · React 19 · Tailwind CSS v4 · lucide-react · react-markdown · `@microsoft/fetch-event-source` |
-| **Backend** | NestJS · Passport (GitHub OAuth) · JWT httpOnly · Prisma ORM · class-validator |
-| **Database** | PostgreSQL 16 (Docker · port 5434) |
-| **AI** | Anthropic SDK · OpenAI SDK · OpenAI-compatible 任意 provider |
-| **Connectors** | Yahoo Finance · SEC EDGAR XBRL · 东方财富 · akshare 镜像 · Tavily |
-| **Monorepo** | Turborepo · pnpm workspaces |
+| --- | --- |
+| Frontend | Next.js 15 · React 19 · Tailwind CSS v4 · lucide-react · react-markdown |
+| Backend | NestJS · Passport · JWT httpOnly cookie · Prisma · class-validator |
+| Database | PostgreSQL 16，Docker 默认端口 5434 |
+| AI | Anthropic SDK · OpenAI SDK · OpenAI-compatible providers |
+| Data | SEC EDGAR · Yahoo Finance · 巨潮 · 东方财富 · akshare 镜像 |
+| Monorepo | Turborepo · pnpm workspaces · TypeScript |
 
 ---
 
 ## 项目结构
 
-```
+```text
 stock-suggest/
 ├── apps/
-│   ├── api/                NestJS backend (:3001) · 6 Prisma models
-│   └── web/                Next.js 15 frontend (:3000)
-└── packages/
-    ├── analysis/           核心包：connectors + compute + dimensions
-    │                       + personas + workflows + snapshot + SSE 契约
-    └── shared-types/       跨包枚举与类型
+│   ├── api/                NestJS API、认证、分析、财报和通知
+│   └── web/                Next.js 工作台、Chat、财报卡片
+├── packages/
+│   ├── analysis/           connectors、compute、prompts、验证和工作流
+│   ├── shared-types/       跨包类型和枚举
+│   └── tsconfig/           共享 TypeScript 配置
+├── docs/
+│   └── screenshots/        README 产品截图
+└── docker-compose.yml
 ```
 
 ---
 
-## 路线图
+## 当前状态与路线图
 
-- [x] 9 维度并行分析 + COMPREHENSIVE workflow
-- [x] 6 位投资大师 persona
-- [x] A 股 / 美股 / 港股原生支持
-- [x] SSE 流式 + 断线续传 + 部分失败容忍
-- [x] 用户级 AI provider 自配
-- [x] 用户级 Web Search adapter（Tavily / SearXNG）
+### 已落地
+
+- [x] 9 维度综合分析和投资大师 persona
+- [x] A 股 / 美股 / 港股股票研究入口
+- [x] SSE 流式输出、断线续传和 section 重试
+- [x] 用户级 AI provider 和 Web Search adapter
+- [x] US / A 股财报公告检测与财报卡片
+- [x] MetricFact 一致性检查、结构化对账和版本历史
+- [x] Chat 财报追问、Daily Brief 和签名 Webhook
+- [x] 本地匿名模式与 GitHub OAuth 生产模式
+
+### 计划中
+
+- [ ] 财报速读港股支持（Phase 3）
 - [ ] 多语言 UI（英文 / 日文）
 - [ ] 移动端适配
-- [ ] 自托管 LLM 评估（eval harness 已就绪，待 UI）
-- [ ] 自定义维度 / 自定义 persona 编辑器
+- [ ] 自定义分析维度和 persona 编辑器
+- [ ] 自托管 LLM 评估与运营监控面板
+
+当前功能测试已覆盖真实 SEC / A 股公告、原文解析、财报卡、Chat、通知、预算降级、重启恢复和并发幂等；生产发布仍需更多样本证明检测器的 p90 SLA 和容量表现。
 
 ---
 
 ## 贡献
 
-欢迎 issue / PR / RFC。提交前请确认改动不违反上文「6 条硬不变式」——
-其中「代码计算，LLM 判断」与「Provenance 必填」是本项目的可信度底线，任何放宽需先开 issue 讨论。
+欢迎提交 issue、PR 和 RFC。特别欢迎：
 
-特别欢迎的方向：
-- 新 connector（券商 API / 财报数据源 / 另类数据）
-- 新 persona（你心目中的投资大师）
-- compute 层新指标（你觉得"代码该算却没算"的东西）
-- prompt 优化 + eval 用例
-
----
+- 新 connector 和公告源
+- 新投资大师 persona
+- 可由代码确定性计算的新指标
+- prompt 优化和 eval 用例
+- 财报速读的港股适配
 
 ## License
 
 MIT.
 
----
-
 <div align="center">
 
-**如果这个项目对你有帮助，欢迎 Star 支持一下。**
-**你的 Star 是开源继续投入的最大动力。**
+如果 Bourse 对你的研究流程有帮助，欢迎 Star。
 
 </div>
