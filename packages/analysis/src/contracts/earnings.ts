@@ -289,6 +289,7 @@ export const EarningsFilingDescriptorSchema = z
     sourceUrl: z.string().url(),
     publishedAt: z.string().datetime(),
     provider: z.string().min(1),
+    language: z.enum(['zh-CN', 'zh-HK', 'en-HK', 'en-US', 'unknown']).optional(),
     unaudited: z.boolean(),
     relationType: EarningsRelationTypeSchema.optional(),
   })
@@ -308,7 +309,6 @@ export const EarningsGenerationStatusSchema = z.enum([
   'RUNNING',
   'COMPLETED',
   'FAILED',
-  'BUDGET_EXHAUSTED',
 ]);
 
 export const EarningsCardPayloadSchema = z.object({

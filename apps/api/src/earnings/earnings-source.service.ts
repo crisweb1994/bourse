@@ -1,20 +1,18 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
-  computeContentHash,
-  sectionizeFilingText,
   type FilingDocument,
   type FilingPort,
   type FilingSummary,
 } from '@bourse/analysis';
-import { Prisma, type Stock } from '@prisma/client';
+import { type Stock } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CN_FILING_PORT,
+  HK_FILING_PORT,
   US_FILING_PORT,
 } from '../connectors/connectors.module';
-
-const PARSER_VERSION = 'earnings-text-v2';
-const DERIVATION_SCHEMA_VERSION = 'earnings-derivation-v2';
+import { FilingStoreError, FilingStoreService } from '../filings/filing-store.service';
+export { buildParserDerivationKey } from '../filings/filing-store.service';
 
 export interface PreparedEarningsSource {
   kind: 'filing';
@@ -33,6 +31,7 @@ export interface PreparedEarningsSource {
   normalizedText: string;
   derivationContentHash: string;
   pages?: FilingDocument['pages'];
+  language?: FilingDocument['language'];
 }
 
 export interface StructuredFallbackSource {
@@ -45,7 +44,8 @@ export interface StructuredFallbackSource {
   sourceUrl: string;
   publishedAt: string;
   expectedPeriodEndOn?: string;
-  reason: 'BODY_UNREADABLE' | 'LLM_DISABLED' | 'BUDGET_EXHAUSTED' | 'PROVIDER_UNAVAILABLE';
+  language?: FilingDocument['language'];
+  reason: 'BODY_UNREADABLE' | 'LLM_DISABLED' | 'PROVIDER_UNAVAILABLE';
 }
 
 export type EarningsRunSource = PreparedEarningsSource | StructuredFallbackSource;
@@ -58,17 +58,27 @@ export class EarningsSourceService {
     private readonly prisma: PrismaService,
     @Inject(US_FILING_PORT) private readonly usFilings: FilingPort,
     @Inject(CN_FILING_PORT) private readonly cnFilings: FilingPort,
+    @Inject(HK_FILING_PORT) private readonly hkFilings: FilingPort,
+    private readonly filingStore: FilingStoreService,
   ) {}
 
   async discoverAndIngest(stock: Stock): Promise<PreparedEarningsSource> {
     const instrumentId = `${stock.market}:${stock.symbol}`;
-    const port = stock.market === 'US' ? this.usFilings : stock.market === 'CN' ? this.cnFilings : null;
+    const port = stock.market === 'US'
+      ? this.usFilings
+      : stock.market === 'CN'
+        ? this.cnFilings
+        : stock.market === 'HK'
+          ? this.hkFilings
+          : null;
     if (!port?.getFiling) throw new EarningsSourceError('UNSUPPORTED_MARKET', false);
 
     const forms = stock.market === 'US'
       ? ['8-K', '10-Q', '10-K']
-      : ['preview', 'preliminary', 'quarterly', 'semiannual', 'annual'];
-    const listed = await port.searchFilings({ instrumentId, forms, limit: stock.market === 'US' ? 12 : 10 });
+      : stock.market === 'HK'
+        ? ['profit_warning', 'preliminary', 'quarterly', 'interim', 'annual']
+        : ['preview', 'preliminary', 'quarterly', 'semiannual', 'annual'];
+    const listed = await port.searchFilings({ instrumentId, forms, limit: stock.market === 'HK' ? 20 : stock.market === 'US' ? 12 : 10 });
     if (listed.data.length === 0) {
       throw new EarningsSourceError('NO_ELIGIBLE_FILING', true, listed.warnings[0]?.message);
     }
@@ -121,7 +131,37 @@ export class EarningsSourceService {
         failures.push(`${summary.id}: no EX-99.1 earnings exhibit`);
         continue;
       }
-      return this.persist(stock, summary, document);
+      try {
+        const stored = await this.filingStore.persist(stock, summary, document);
+        if (stock.market === 'HK' && summary.sourceGroupId) {
+          await this.persistGroupVariants(stock, port, listed.data, summary.sourceGroupId, summary.sourceDocumentId);
+        }
+        this.logger.log(`prepared ${stored.filing.provider}:${stored.filing.sourceDocumentId} for ${stock.market}:${stock.symbol}`);
+        return {
+          kind: 'filing',
+          filingId: stored.filing.id,
+          derivationId: stored.derivation.id,
+          provider: stored.filing.provider,
+          sourceDocumentId: stored.filing.sourceDocumentId,
+          sourceGroupId: stored.filing.sourceGroupId ?? undefined,
+          formType: stored.filing.formType,
+          title: stored.filing.title ?? undefined,
+          sourceUrl: stored.filing.sourceUrl,
+          publishedAt: stored.filing.publishedAt.toISOString(),
+          ...(summary.periodEndOn ? { expectedPeriodEndOn: summary.periodEndOn } : {}),
+          documentKind: stored.filing.documentKind,
+          contentHash: stored.filing.contentHash,
+          normalizedText: stored.normalizedText,
+          derivationContentHash: stored.derivation.contentHash,
+          pages: stored.pages,
+          language: document.language,
+        };
+      } catch (error) {
+        if (error instanceof FilingStoreError) {
+          throw new EarningsSourceError(error.code, error.code === 'BODY_UNREADABLE');
+        }
+        throw error;
+      }
     }
 
     if (failures.length === 0) {
@@ -130,112 +170,29 @@ export class EarningsSourceService {
     throw new EarningsSourceError('BODY_UNREADABLE', true, failures.join('; '), fallbackSource);
   }
 
-  private async persist(
+  private async persistGroupVariants(
     stock: Stock,
-    summary: FilingSummary,
-    document: FilingDocument,
-  ): Promise<PreparedEarningsSource> {
-    const normalizedText = document.text;
-    const contentHash = document.contentHash;
-    const rawContent = document.rawContent;
-    if (!normalizedText || !contentHash || !rawContent) {
-      throw new EarningsSourceError('BODY_UNREADABLE', true);
-    }
-    const provider = document.provider || summary.provider;
-    const sourceDocumentId = document.sourceDocumentId;
-    const existing = await this.prisma.filing.findUnique({
-      where: { provider_sourceDocumentId: { provider, sourceDocumentId } },
-    });
-    if (existing && existing.contentHash !== contentHash) {
-      throw new EarningsSourceError(
-        'FILING_CONTENT_CHANGED',
-        false,
-        `${provider}:${sourceDocumentId} changed content without a new source id`,
-      );
-    }
-
-    const filing =
-      existing ??
-      (await this.prisma.filing.create({
-        data: {
-          stockId: stock.id,
-          provider,
-          sourceDocumentId,
-          sourceGroupId: document.sourceGroupId ?? summary.sourceGroupId,
-          formType: summary.formType,
-          documentKind: document.documentKind ?? 'OTHER',
-          title: summary.title,
-          sourceUrl: document.filingUrl,
-          publishedAt: parsePublishedAt(summary.filingDate),
-          retrievedAt: document.retrievedAt ? new Date(document.retrievedAt) : new Date(),
-          mimeType: document.mimeType ?? 'text/plain',
-          contentHash,
-          rawContent: Buffer.from(rawContent),
-        },
-      }));
-
-    const derivationContentHash = computeContentHash({ text: normalizedText });
-    const derivationKey = buildParserDerivationKey(filing.id, filing.contentHash);
-    const derivation = await this.prisma.filingDerivation.upsert({
-      where: { derivationKey },
-      update: {},
-      create: {
-        filingId: filing.id,
-        derivationKey,
-        parserVersion: PARSER_VERSION,
-        modelVersion: 'none',
-        promptVersion: 'none',
-        schemaVersion: DERIVATION_SCHEMA_VERSION,
-        status: 'COMPLETE',
-        normalizedText,
-        contentHash: derivationContentHash,
-        pages: document.pages
-          ? (document.pages as unknown as Prisma.InputJsonValue)
-          : undefined,
-        sections: sectionizeFilingText(
-          normalizedText,
-          document.pages?.map((page) => ({
-            page: page.page,
-            startOffset: page.startOffset,
-            endOffset: page.endOffset,
-          })),
-        ) as unknown as Prisma.InputJsonValue,
-      },
-    });
-
-    this.logger.log(`prepared ${provider}:${sourceDocumentId} for ${stock.market}:${stock.symbol}`);
-    return {
-      kind: 'filing',
-      filingId: filing.id,
-      derivationId: derivation.id,
-      provider,
-      sourceDocumentId,
-      sourceGroupId: document.sourceGroupId,
-      formType: summary.formType,
-      title: summary.title,
-      sourceUrl: document.filingUrl,
-      publishedAt: filing.publishedAt.toISOString(),
-      ...(summary.periodEndOn ? { expectedPeriodEndOn: summary.periodEndOn } : {}),
-      documentKind: document.documentKind ?? 'OTHER',
-      contentHash: filing.contentHash,
-      normalizedText,
-      derivationContentHash,
-      pages: document.pages,
-    };
+    port: FilingPort,
+    listed: FilingSummary[],
+    sourceGroupId: string,
+    primarySourceDocumentId: string,
+  ): Promise<void> {
+    if (!port.getFiling) return;
+    const variants = listed.filter((candidate) =>
+      candidate.sourceGroupId === sourceGroupId && candidate.sourceDocumentId !== primarySourceDocumentId,
+    );
+    await Promise.allSettled(variants.map(async (variant) => {
+      const existing = await this.prisma.filing.findUnique({
+        where: { provider_sourceDocumentId: { provider: variant.provider, sourceDocumentId: variant.sourceDocumentId } },
+        select: { id: true },
+      });
+      if (existing) return;
+      const result = await port.getFiling!({ ...variant });
+      if (!result.data.text || !result.data.rawContent || !result.data.contentHash) return;
+      await this.filingStore.persist(stock, variant, result.data);
+    }));
   }
-}
 
-export function buildParserDerivationKey(filingId: string, filingHash: string): string {
-  return computeContentHash({
-    text: JSON.stringify({
-      filingId,
-      filingHash,
-      parserVersion: PARSER_VERSION,
-      modelVersion: 'none',
-      promptVersion: 'none',
-      schemaVersion: DERIVATION_SCHEMA_VERSION,
-    }),
-  });
 }
 
 export class EarningsSourceError extends Error {
@@ -265,6 +222,7 @@ function fallbackFromSummary(summary: FilingSummary): StructuredFallbackSource {
     sourceUrl: summary.filingUrl,
     publishedAt: parsePublishedAt(summary.filingDate).toISOString(),
     ...(summary.periodEndOn ? { expectedPeriodEndOn: summary.periodEndOn } : {}),
+    language: summary.language,
     reason: 'BODY_UNREADABLE',
   };
 }

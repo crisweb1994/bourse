@@ -12,6 +12,7 @@ function service() {
     {} as any,
     {} as any,
     {} as any,
+    { isEnabled: () => true } as any,
   );
 }
 
@@ -20,6 +21,26 @@ test('chat routes earnings intent before open research', () => {
     '最新财报里营收变化是什么？',
     undefined,
     { action: 'MAINTAIN' },
+  );
+  assert.equal(intent, 'EARNINGS_BRIEF');
+});
+
+test('chat routes investor relations only with explicit event context', () => {
+  const intent = (service() as any).routeIntent(
+    '最近业绩说明会里机构都问了什么？',
+    undefined,
+    { action: 'MAINTAIN' },
+    true,
+  );
+  assert.equal(intent, 'INVESTOR_RELATIONS');
+});
+
+test('natural-language IR wording no longer preempts the earnings route', () => {
+  const intent = (service() as any).routeIntent(
+    '最近业绩说明会里机构都问了什么？',
+    undefined,
+    { action: 'MAINTAIN' },
+    false,
   );
   assert.equal(intent, 'EARNINGS_BRIEF');
 });

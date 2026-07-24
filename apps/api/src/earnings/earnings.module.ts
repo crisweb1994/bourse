@@ -7,19 +7,19 @@ import { EarningsGenerationService } from './earnings-generation.service';
 import { EarningsQueryService } from './earnings-query.service';
 import { EarningsRunnerService } from './earnings-runner.service';
 import { EarningsSourceService } from './earnings-source.service';
-import { EarningsBudgetService } from './earnings-budget.service';
 import { FilingDetectionScheduler } from './filing-detection.scheduler';
 import { EarningsConsensusService } from './earnings-consensus.service';
 import { EarningsConsensusScheduler } from './earnings-consensus.scheduler';
 import { EarningsNoticeService } from './earnings-notice.service';
 import { EarningsSectionsService } from './earnings-sections.service';
+import { EarningsTrendService } from './earnings-trend.service';
+import { FilingsModule } from '../filings/filings.module';
 
 @Module({
-  imports: [AuthModule, ConnectorsModule],
+  imports: [AuthModule, ConnectorsModule, FilingsModule],
   controllers: [EarningsController],
   providers: [
     ProviderFactoryService,
-    EarningsBudgetService,
     FilingDetectionScheduler,
     EarningsConsensusService,
     EarningsConsensusScheduler,
@@ -29,6 +29,7 @@ import { EarningsSectionsService } from './earnings-sections.service';
     EarningsRunnerService,
     EarningsGenerationService,
     EarningsQueryService,
+    EarningsTrendService,
   ],
   exports: [EarningsQueryService, EarningsConsensusService, EarningsSectionsService],
 })

@@ -13,6 +13,7 @@ import { ROOT_ENV_FILE_PATHS } from './config/root-env';
 import { ChatModule } from './chat/chat.module';
 import { MetaController } from './meta/meta.controller';
 import { EarningsModule } from './earnings/earnings.module';
+import { InvestorRelationsModule } from './investor-relations/investor-relations.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { EarningsModule } from './earnings/earnings.module';
     AnalysisModule,
     ChatModule,
     EarningsModule,
+    InvestorRelationsModule,
     // plan-v2 Wave 2.6e — ResearchModule + PlannerModule removed. CRUD
     // surface for research / planner endpoints is gone; AnalysisModule
     // pulls port singletons through ConnectorsModule directly.

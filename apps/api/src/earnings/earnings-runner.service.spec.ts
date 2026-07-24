@@ -8,7 +8,6 @@ import {
   mergeEarningsCardPayload,
   normalizeManagementClaimCandidate,
   parseEarningsExtractionTimeoutMs,
-  parseEarningsGenerationConcurrency,
   structuredFallbackPeriodError,
 } from './earnings-runner.service';
 import type { EarningsCardPayload } from '@bourse/analysis';
@@ -167,13 +166,6 @@ test('earnings extraction timeout has a bounded production default', () => {
     () => parseEarningsExtractionTimeoutMs('not-a-number'),
     /EARNINGS_EXTRACTION_TIMEOUT_MS must be an integer/,
   );
-});
-
-test('generation concurrency has a bounded production default', () => {
-  assert.equal(parseEarningsGenerationConcurrency(undefined), 4);
-  assert.equal(parseEarningsGenerationConcurrency('8'), 8);
-  assert.throws(() => parseEarningsGenerationConcurrency('0'), /between 1 and 32/);
-  assert.throws(() => parseEarningsGenerationConcurrency('33'), /between 1 and 32/);
 });
 
 test('extraction derivations cannot cross filing ownership boundaries', () => {

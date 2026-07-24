@@ -142,7 +142,10 @@ describe('yahoo finance connector — getQuote', () => {
     const fetchLike = routedStubFetch({
       chart: chartResponse(nvdaMeta),
       summaryOk: false,
-      summaryStatus: 401,
+      // 401/403 intentionally refreshes Yahoo's cookie + crumb via global
+      // fetch. Use a normal upstream failure here so this fail-soft unit test
+      // remains isolated from the network.
+      summaryStatus: 500,
     });
     const c = createYahooFinanceConnector();
     const out = await c.getQuote({ instrumentId: 'US:NVDA' }, { fetchLike });

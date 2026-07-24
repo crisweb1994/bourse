@@ -41,11 +41,13 @@ export class EarningsQueryService {
       orderBy: { createdAt: 'desc' },
     });
     if (!card?.currentRevision) {
+      const hkSupported = stock.market === 'HK'
+        && this.config.get<string>('EARNINGS_HK_ENABLED')?.toLowerCase() === 'true';
       return {
         available: false,
-        supported: stock.market === 'US' || stock.market === 'CN',
+        supported: stock.market === 'US' || stock.market === 'CN' || hkSupported,
         generation: generation ? toGenerationRunDto(generation) : undefined,
-        reason: stock.market === 'HK' ? 'MARKET_NOT_YET_SUPPORTED' : undefined,
+        reason: stock.market === 'HK' && !hkSupported ? 'MARKET_NOT_YET_SUPPORTED' : undefined,
       };
     }
     return {

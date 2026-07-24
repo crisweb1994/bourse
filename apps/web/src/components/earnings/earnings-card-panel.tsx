@@ -104,7 +104,7 @@ export function EarningsCardPanel({
     return <GeneratingState generation={generation} />;
   }
 
-  if (generation && ['FAILED', 'BUDGET_EXHAUSTED'].includes(generation.status) && !response?.card) {
+  if (generation?.status === 'FAILED' && !response?.card) {
     return (
       <Card className="mb-6">
         <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center">
@@ -113,9 +113,7 @@ export function EarningsCardPanel({
             <div>
               <p className="m-0 text-[13px] font-medium">财报速读暂未生成</p>
               <p className="m-0 mt-1 text-[12px] leading-5 text-[var(--color-fg-2)]">
-                {generation.status === 'BUDGET_EXHAUSTED'
-                  ? '今日公共卡生成预算已用完，稍后可重新尝试。'
-                  : readableError(generation.errorCode, generation.errorMessage ?? error)}
+                {readableError(generation.errorCode, generation.errorMessage ?? error)}
               </p>
             </div>
           </div>

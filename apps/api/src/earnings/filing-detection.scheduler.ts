@@ -4,17 +4,16 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EarningsGenerationService } from './earnings-generation.service';
 import { EarningsConsensusService } from './earnings-consensus.service';
 
-const DETECTION_LOCK_KEY = 'bourse:earnings:filing-detection';
-const LEASE_MS = 8 * 60_000;
+const DEFAULT_INTERVAL_MS = 5 * 60_000;
 const MAX_BACKOFF_MS = 6 * 60 * 60_000;
+const BATCH_SIZE = 50;
+const CONCURRENCY = 5;
 
 @Injectable()
 export class FilingDetectionScheduler implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(FilingDetectionScheduler.name);
   private timer: NodeJS.Timeout | null = null;
   private readonly intervalMs: number;
-  private readonly batchSize: number;
-  private readonly concurrency: number;
   private running = false;
 
   constructor(
@@ -23,34 +22,17 @@ export class FilingDetectionScheduler implements OnModuleInit, OnModuleDestroy {
     private readonly generations: EarningsGenerationService,
     private readonly consensus: EarningsConsensusService,
   ) {
-    this.intervalMs = parsePositiveInteger(
-      this.config.get<string>('EARNINGS_DETECTION_INTERVAL_MS'),
-      300_000,
-      60_000,
-      600_000,
-      'EARNINGS_DETECTION_INTERVAL_MS',
-    );
-    this.batchSize = parsePositiveInteger(
-      this.config.get<string>('EARNINGS_DETECTION_BATCH_SIZE'),
-      50,
-      1,
-      1_000,
-      'EARNINGS_DETECTION_BATCH_SIZE',
-    );
-    this.concurrency = parsePositiveInteger(
-      this.config.get<string>('EARNINGS_DETECTION_CONCURRENCY'),
-      5,
-      1,
-      32,
-      'EARNINGS_DETECTION_CONCURRENCY',
-    );
+    const configured = Number(this.config.get<string>('EARNINGS_DETECTION_INTERVAL_MS'));
+    this.intervalMs = Number.isInteger(configured) && configured >= 60_000 && configured <= 600_000
+      ? configured
+      : DEFAULT_INTERVAL_MS;
   }
 
   onModuleInit(): void {
     if (this.config.get<string>('EARNINGS_DETECTION_ENABLED')?.toLowerCase() !== 'true') return;
     void this.tick();
     this.timer = setInterval(() => void this.tick(), this.intervalMs);
-    this.logger.log(`财报检测已启动（每 ${this.intervalMs / 60_000}min，独立于 Digest）`);
+    this.logger.log(`财报检测已启动（每 ${this.intervalMs / 60_000}min）`);
   }
 
   onModuleDestroy(): void {
@@ -66,15 +48,15 @@ export class FilingDetectionScheduler implements OnModuleInit, OnModuleDestroy {
     this.running = true;
     try {
       const watchlistStockIds = await this.syncWatchlistCursors();
-      let remaining = this.batchSize;
-      while (remaining > 0) {
-        const claims = await this.claimBatch(
-          watchlistStockIds,
-          Math.min(this.concurrency, remaining),
-        );
-        if (claims.length === 0) break;
-        await Promise.all(claims.map((claim) => this.scanOne(claim.stockId)));
-        remaining -= claims.length;
+      if (watchlistStockIds.length === 0) return;
+      const due = await this.prisma.filingDetectionCursor.findMany({
+        where: { stockId: { in: watchlistStockIds }, nextCheckAt: { lte: new Date() } },
+        orderBy: { nextCheckAt: 'asc' },
+        take: BATCH_SIZE,
+        select: { stockId: true },
+      });
+      for (let index = 0; index < due.length; index += CONCURRENCY) {
+        await Promise.all(due.slice(index, index + CONCURRENCY).map(({ stockId }) => this.scanOne(stockId)));
       }
     } finally {
       this.running = false;
@@ -82,58 +64,20 @@ export class FilingDetectionScheduler implements OnModuleInit, OnModuleDestroy {
   }
 
   private async syncWatchlistCursors(): Promise<string[]> {
-    const now = new Date();
-    return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${DETECTION_LOCK_KEY}))`;
-      const watchlist = await tx.watchlistItem.findMany({
-        where: { stock: { market: { in: ['US', 'CN'] } } },
-        distinct: ['stockId'],
-        select: { stockId: true },
-      });
-      for (const row of watchlist) {
-        await tx.filingDetectionCursor.upsert({
-          where: { stockId: row.stockId },
-          update: {},
-          create: { stockId: row.stockId, nextCheckAt: now },
-        });
-      }
-      return watchlist.map((row) => row.stockId);
+    const markets: Array<'US' | 'CN' | 'HK'> = ['US', 'CN'];
+    if (this.config.get<string>('EARNINGS_HK_ENABLED')?.toLowerCase() === 'true') markets.push('HK');
+    const watchlist = await this.prisma.watchlistItem.findMany({
+      where: { stock: { market: { in: markets } } },
+      distinct: ['stockId'],
+      select: { stockId: true },
     });
-  }
-
-  private async claimBatch(
-    watchlistStockIds: string[],
-    take: number,
-  ): Promise<Array<{ stockId: string }>> {
-    if (watchlistStockIds.length === 0 || take === 0) return [];
     const now = new Date();
-    return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${DETECTION_LOCK_KEY}))`;
-      const candidates = await tx.filingDetectionCursor.findMany({
-        where: {
-          stockId: { in: watchlistStockIds },
-          nextCheckAt: { lte: now },
-          OR: [{ leaseUntil: null }, { leaseUntil: { lt: now } }],
-        },
-        orderBy: { nextCheckAt: 'asc' },
-        take,
-        select: { stockId: true },
-      });
-      const leaseUntil = new Date(now.getTime() + LEASE_MS);
-      const claimed: Array<{ stockId: string }> = [];
-      for (const candidate of candidates) {
-        const result = await tx.filingDetectionCursor.updateMany({
-          where: {
-            stockId: candidate.stockId,
-            nextCheckAt: { lte: now },
-            OR: [{ leaseUntil: null }, { leaseUntil: { lt: now } }],
-          },
-          data: { leaseUntil },
-        });
-        if (result.count === 1) claimed.push(candidate);
-      }
-      return claimed;
-    });
+    await Promise.all(watchlist.map((row) => this.prisma.filingDetectionCursor.upsert({
+      where: { stockId: row.stockId },
+      update: {},
+      create: { stockId: row.stockId, nextCheckAt: now },
+    })));
+    return watchlist.map((row) => row.stockId);
   }
 
   private async scanOne(stockId: string): Promise<void> {
@@ -142,22 +86,16 @@ export class FilingDetectionScheduler implements OnModuleInit, OnModuleDestroy {
       const stock = await this.prisma.stock.findUnique({ where: { id: stockId } });
       if (stock) await this.consensus.capture(stock).catch(() => 0);
       const run = await this.generations.createDetected(stockId);
-      const descriptor = run?.sourceDescriptor;
       await this.prisma.filingDetectionCursor.update({
         where: { stockId },
         data: {
-          leaseUntil: null,
           lastCheckedAt: new Date(),
           nextCheckAt: new Date(Date.now() + this.intervalMs),
           failureCount: 0,
           lastError: null,
           ...(run ? {
             lastDiscoveredAt: run.createdAt,
-            lastSourceDocumentId: descriptor && typeof descriptor === 'object' && !Array.isArray(descriptor)
-              ? typeof (descriptor as Record<string, unknown>).sourceDocumentId === 'string'
-                ? (descriptor as Record<string, string>).sourceDocumentId
-                : undefined
-              : undefined,
+            lastSourceDocumentId: descriptorValue(run.sourceDescriptor, 'sourceDocumentId'),
           } : {}),
         },
       });
@@ -171,7 +109,6 @@ export class FilingDetectionScheduler implements OnModuleInit, OnModuleDestroy {
       await this.prisma.filingDetectionCursor.update({
         where: { stockId },
         data: {
-          leaseUntil: null,
           lastCheckedAt: new Date(),
           nextCheckAt: new Date(Date.now() + (normalNoFiling ? this.intervalMs : backoff)),
           failureCount: normalNoFiling ? 0 : failureCount,
@@ -185,19 +122,11 @@ export class FilingDetectionScheduler implements OnModuleInit, OnModuleDestroy {
   }
 }
 
-export function parsePositiveInteger(
-  value: string | undefined,
-  fallback: number,
-  min: number,
-  max: number,
-  name: string,
-): number {
-  if (value === undefined || value.trim() === '') return fallback;
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
-    throw new Error(`${name} must be an integer between ${min} and ${max}`);
-  }
-  return parsed;
+function descriptorValue(value: unknown, key: string): string | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    && typeof (value as Record<string, unknown>)[key] === 'string'
+    ? (value as Record<string, string>)[key]
+    : undefined;
 }
 
 function extractErrorCode(error: unknown): string | undefined {

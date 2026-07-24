@@ -38,7 +38,7 @@ export class EarningsGenerationService {
     if (!watchlistItem) {
       throw new ForbiddenException('Stock must be in your watchlist before generating an earnings brief');
     }
-    if (watchlistItem.stock.market === 'HK') {
+    if (watchlistItem.stock.market === 'HK' && !this.isHkEnabled()) {
       throw new ConflictException('HK earnings briefs are planned for Phase 3');
     }
 
@@ -60,7 +60,7 @@ export class EarningsGenerationService {
     if (!this.isEnabled()) return null;
     const stock = await this.prisma.stock.findUnique({ where: { id: stockId } });
     if (!stock) throw new NotFoundException('Stock not found');
-    if (stock.market === 'HK') return null;
+    if (stock.market === 'HK' && !this.isHkEnabled()) return null;
     const watchlistCount = await this.prisma.watchlistItem.count({ where: { stockId } });
     if (watchlistCount === 0) return null;
     const retry = await this.retryDetectedFailure(stockId);
@@ -74,7 +74,7 @@ export class EarningsGenerationService {
       where: {
         stockId,
         retryable: true,
-        status: { in: ['FAILED', 'BUDGET_EXHAUSTED'] },
+        status: 'FAILED',
         completedAt: { not: null },
       },
       orderBy: { completedAt: 'asc' },
@@ -139,6 +139,7 @@ export class EarningsGenerationService {
           publishedAt: source.publishedAt,
           ...(source.expectedPeriodEndOn ? { expectedPeriodEndOn: source.expectedPeriodEndOn } : {}),
           documentKind: source.documentKind,
+          language: source.language,
         }
       : source;
 
@@ -170,7 +171,7 @@ export class EarningsGenerationService {
     const run = await this.prisma.earningsGenerationRun.findUnique({ where: { id: runId } });
     if (!run) throw new NotFoundException('Earnings generation not found');
     await this.assertStockScope(userId, run.stockId);
-    if (!run.retryable || !['FAILED', 'BUDGET_EXHAUSTED'].includes(run.status)) {
+    if (!run.retryable || run.status !== 'FAILED') {
       throw new ConflictException('This earnings generation cannot be retried');
     }
     const updated = await this.prisma.earningsGenerationRun.update({
@@ -214,23 +215,20 @@ export class EarningsGenerationService {
       });
     }
   }
+
+  private isHkEnabled(): boolean {
+    return this.config.get<string>('EARNINGS_HK_ENABLED')?.toLowerCase() === 'true';
+  }
 }
 
 const DETECTED_RETRY_BASE_MS = 5 * 60_000;
 const DETECTED_RETRY_MAX_MS = 6 * 60 * 60_000;
 
 export function detectedRetryAt(
-  status: string,
+  _status: string,
   attempt: number,
   completedAt: Date,
 ): Date {
-  if (status === 'BUDGET_EXHAUSTED') {
-    return new Date(Date.UTC(
-      completedAt.getUTCFullYear(),
-      completedAt.getUTCMonth(),
-      completedAt.getUTCDate() + 1,
-    ));
-  }
   const delay = Math.min(
     DETECTED_RETRY_BASE_MS * 2 ** Math.min(Math.max(attempt - 1, 0), 8),
     DETECTED_RETRY_MAX_MS,

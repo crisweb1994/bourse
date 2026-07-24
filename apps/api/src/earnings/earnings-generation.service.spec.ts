@@ -58,7 +58,7 @@ test('structured fallback reasons have separate idempotency identities', () => {
   );
 });
 
-test('detected failures back off while budget exhaustion waits for the next UTC day', () => {
+test('detected failures use exponential backoff', () => {
   const completedAt = new Date('2026-07-21T23:58:00.000Z');
   assert.equal(
     detectedRetryAt('FAILED', 1, completedAt).toISOString(),
@@ -67,10 +67,6 @@ test('detected failures back off while budget exhaustion waits for the next UTC 
   assert.equal(
     detectedRetryAt('FAILED', 2, completedAt).toISOString(),
     '2026-07-22T00:08:00.000Z',
-  );
-  assert.equal(
-    detectedRetryAt('BUDGET_EXHAUSTED', 9, completedAt).toISOString(),
-    '2026-07-22T00:00:00.000Z',
   );
 });
 

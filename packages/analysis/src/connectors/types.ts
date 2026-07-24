@@ -11,6 +11,8 @@ export type FetchLike = (
 ) => Promise<{
   ok: boolean;
   status: number;
+  /** Final response URL after redirects, when exposed by the fetch implementation. */
+  url?: string;
   json(): Promise<unknown>;
   /** Some upstreams (tencent qt.gtimg.cn) return text/javascript; optional so
    *  json-only stubs in tests keep working. Connectors that need text must

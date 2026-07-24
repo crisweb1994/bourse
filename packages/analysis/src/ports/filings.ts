@@ -23,6 +23,7 @@ export interface FilingSummary {
   filingUrl: string;
   title?: string;
   provider: string;
+  language?: 'zh-CN' | 'zh-HK' | 'en-HK' | 'en-US' | 'unknown';
   documentKind?: 'PRIMARY' | 'EARNINGS_RELEASE' | 'PDF' | 'OTHER';
 }
 
@@ -37,6 +38,7 @@ export interface FilingGetInput {
   formType?: string;
   title?: string;
   provider?: string;
+  language?: 'zh-CN' | 'zh-HK' | 'en-HK' | 'en-US' | 'unknown';
 }
 
 export interface FilingPage {

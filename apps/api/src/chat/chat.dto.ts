@@ -51,4 +51,8 @@ export class CreateChatGenerationDto {
   @IsArray()
   @IsString({ each: true })
   sectionTypes?: string[];
+
+  @IsOptional()
+  @IsString()
+  investorRelationsEventId?: string;
 }

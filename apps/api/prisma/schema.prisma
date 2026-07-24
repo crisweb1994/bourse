@@ -16,15 +16,16 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  aiProviderSettings     AiProviderSetting[]
-  watchlistItems         WatchlistItem[]
-  analyses               Analysis[]
-  webSearchSetting       WebSearchSetting?
-  digestSubscription     DigestSubscription?
-  deliveryRecords        DeliveryRecord[]
-  earningsDeliveryRecords EarningsDeliveryRecord[]
-  researchThreads        ResearchThread[]
-  earningsGenerationRuns EarningsGenerationRun[]
+  aiProviderSettings              AiProviderSetting[]
+  watchlistItems                  WatchlistItem[]
+  analyses                        Analysis[]
+  webSearchSetting                WebSearchSetting?
+  digestSubscription              DigestSubscription?
+  deliveryRecords                 DeliveryRecord[]
+  earningsDeliveryRecords         EarningsDeliveryRecord[]
+  researchThreads                 ResearchThread[]
+  earningsGenerationRuns          EarningsGenerationRun[]
+  investorRelationsGenerationRuns InvestorRelationsGenerationRun[]
 }
 
 model Stock {
@@ -40,17 +41,19 @@ model Stock {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  watchlistItems         WatchlistItem[]
-  analyses               Analysis[]
-  researchThreads        ResearchThread[]
-  openResearchSnapshots  OpenResearchSnapshot[]
-  filings                Filing[]
-  earningsEvents         EarningsEvent[]
-  earningsGenerationRuns EarningsGenerationRun[]
-  earningsGuidance       EarningsGuidance[]
-  earningsConsensusSnapshots EarningsConsensusSnapshot[]
-  filingDetectionCursor  FilingDetectionCursor?
-  earningsDeliveryRecords EarningsDeliveryRecord[]
+  watchlistItems                   WatchlistItem[]
+  analyses                         Analysis[]
+  researchThreads                  ResearchThread[]
+  openResearchSnapshots            OpenResearchSnapshot[]
+  filings                          Filing[]
+  earningsEvents                   EarningsEvent[]
+  earningsGenerationRuns           EarningsGenerationRun[]
+  earningsGuidance                 EarningsGuidance[]
+  earningsConsensusSnapshots       EarningsConsensusSnapshot[]
+  filingDetectionCursor            FilingDetectionCursor?
+  earningsDeliveryRecords          EarningsDeliveryRecord[]
+  investorRelationsEvents         InvestorRelationsEvent[]
+  investorRelationsGenerationRuns InvestorRelationsGenerationRun[]
 
   @@unique([symbol, market])
   @@index([sector])
@@ -133,16 +136,16 @@ model WebSearchSetting {
 
 // 定时行情简报订阅 + IM/Webhook 投递记录。完整简报只在 IM，不落库。
 model DigestSubscription {
-  id        String          @id @default(cuid())
-  userId    String          @unique
-  markets   Market[] // ["US","CN","HK"] 子集
-  sessions  DigestSession[] // ["PRE","POST"] 子集
-  channels  Json // ChannelConfig[]（discriminated union，含凭证）
-  enabled   Boolean         @default(true)
-  earningsImmediateEnabled Boolean @default(false)
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
-  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                       String          @id @default(cuid())
+  userId                   String          @unique
+  markets                  Market[] // ["US","CN","HK"] 子集
+  sessions                 DigestSession[] // ["PRE","POST"] 子集
+  channels                 Json // ChannelConfig[]（discriminated union，含凭证）
+  enabled                  Boolean         @default(true)
+  earningsImmediateEnabled Boolean         @default(false)
+  createdAt                DateTime        @default(now())
+  updatedAt                DateTime        @updatedAt
+  user                     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model DeliveryRecord {
@@ -178,8 +181,8 @@ model EarningsDeliveryRecord {
   attemptedAt        DateTime             @default(now())
   deliveredAt        DateTime?
 
-  user     User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  stock    Stock                 @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  user     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stock    Stock                @relation(fields: [stockId], references: [id], onDelete: Cascade)
   revision EarningsCardRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
 
   @@index([userId, stockId, attemptedAt])
@@ -241,6 +244,7 @@ model AnalysisSection {
 enum ChatIntent {
   OPEN_RESEARCH
   EARNINGS_BRIEF
+  INVESTOR_RELATIONS
   EXPLAIN_EXISTING
   COMPARE_HISTORY
   REFRESH_REQUIRED
@@ -295,31 +299,33 @@ model ResearchThread {
 }
 
 model ChatGeneration {
-  id                        String               @id @default(cuid())
-  threadId                  String
-  clientRequestId           String
-  intent                    ChatIntent
-  status                    ChatGenerationStatus @default(PENDING)
-  contextSnapshot           Json
-  analysisContextSnapshotId String?
-  earningsRevisionId       String?
-  linkedAnalysisRunId       String?
-  promptVersion             String
-  actualProvider            String?
-  actualModel               String?
-  inputTokens               Int?
-  outputTokens              Int?
-  groundedSources           Json?
-  errorCode                 String?
-  createdAt                 DateTime             @default(now())
-  completedAt               DateTime?
+  id                          String               @id @default(cuid())
+  threadId                    String
+  clientRequestId             String
+  intent                      ChatIntent
+  status                      ChatGenerationStatus @default(PENDING)
+  contextSnapshot             Json
+  analysisContextSnapshotId   String?
+  earningsRevisionId          String?
+  investorRelationsRevisionId String?
+  linkedAnalysisRunId         String?
+  promptVersion               String
+  actualProvider              String?
+  actualModel                 String?
+  inputTokens                 Int?
+  outputTokens                Int?
+  groundedSources             Json?
+  errorCode                   String?
+  createdAt                   DateTime             @default(now())
+  completedAt                 DateTime?
 
-  thread                  ResearchThread               @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  messages                ChatMessage[]
-  openResearchSnapshot    OpenResearchSnapshot?
-  streamEvents            ChatStreamEvent[]
-  analysisContextSnapshot ChatAnalysisContextSnapshot? @relation(fields: [analysisContextSnapshotId], references: [id], onDelete: SetNull)
-  earningsRevision        EarningsCardRevision? @relation(fields: [earningsRevisionId], references: [id], onDelete: SetNull)
+  thread                    ResearchThread               @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  messages                  ChatMessage[]
+  openResearchSnapshot      OpenResearchSnapshot?
+  streamEvents              ChatStreamEvent[]
+  analysisContextSnapshot   ChatAnalysisContextSnapshot? @relation(fields: [analysisContextSnapshotId], references: [id], onDelete: SetNull)
+  earningsRevision          EarningsCardRevision?        @relation(fields: [earningsRevisionId], references: [id], onDelete: SetNull)
+  investorRelationsRevision InvestorRelationsRevision?   @relation(fields: [investorRelationsRevisionId], references: [id], onDelete: SetNull)
 
   @@unique([threadId, clientRequestId])
   @@index([threadId, status])
@@ -422,17 +428,20 @@ model Filing {
   publishedAt      DateTime
   retrievedAt      DateTime
   mimeType         String
+  language         String?
   contentHash      String
   rawContent       Bytes
   createdAt        DateTime           @default(now())
 
-  stock       Stock                 @relation(fields: [stockId], references: [id], onDelete: Cascade)
-  derivations FilingDerivation[]
-  eventLinks  EarningsEventFiling[]
-  guidance    EarningsGuidance[]
+  stock                       Stock                          @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  derivations                 FilingDerivation[]
+  eventLinks                  EarningsEventFiling[]
+  investorRelationsEventLinks InvestorRelationsEventFiling[]
+  guidance                    EarningsGuidance[]
 
   @@unique([provider, sourceDocumentId])
   @@index([stockId, publishedAt])
+  @@index([stockId, sourceGroupId])
   @@index([contentHash])
 }
 
@@ -462,26 +471,26 @@ model FilingDerivation {
 // Forward-looking company guidance. It stays separate from actuals and is
 // eligible only when issued before the actual filing publication time.
 model EarningsGuidance {
-  id                 String                  @id @default(cuid())
-  dedupeKey          String                  @unique
+  id                 String                 @id @default(cuid())
+  dedupeKey          String                 @unique
   stockId            String
   filingId           String?
   metricCode         String
-  targetPeriodEndOn  DateTime                @db.Date
+  targetPeriodEndOn  DateTime               @db.Date
   targetPeriodType   EarningsPeriodType
-  valueMin           Decimal                 @db.Decimal(30, 8)
-  valueMax           Decimal                 @db.Decimal(30, 8)
+  valueMin           Decimal                @db.Decimal(30, 8)
+  valueMax           Decimal                @db.Decimal(30, 8)
   unit               String
   currency           String?
-  scale              Int                     @default(1)
+  scale              Int                    @default(1)
   accountingBasis    String
   consolidationScope EarningsReportingScope
   issuedAt           DateTime
   provider           String
-  sourceUrl           String
-  sourceSpan          Json
-  supersededAt        DateTime?
-  createdAt           DateTime                @default(now())
+  sourceUrl          String
+  sourceSpan         Json
+  supersededAt       DateTime?
+  createdAt          DateTime               @default(now())
 
   stock  Stock   @relation(fields: [stockId], references: [id], onDelete: Cascade)
   filing Filing? @relation(fields: [filingId], references: [id], onDelete: SetNull)
@@ -492,16 +501,16 @@ model EarningsGuidance {
 
 // Only snapshots captured before publication can be attached to a card.
 model EarningsConsensusSnapshot {
-  id           String             @id @default(cuid())
+  id           String    @id @default(cuid())
   stockId      String
   metricCode   String
-  periodEndOn  DateTime           @db.Date
+  periodEndOn  DateTime  @db.Date
   periodType   String
-  value        Decimal            @db.Decimal(30, 8)
+  value        Decimal   @db.Decimal(30, 8)
   unit         String
   currency     String?
   asOf         DateTime
-  capturedAt   DateTime           @default(now())
+  capturedAt   DateTime  @default(now())
   provider     String
   sourceUrl    String
   analystCount Int?
@@ -574,9 +583,9 @@ model EarningsCardRevision {
   generatedAt   DateTime                   @default(now())
   supersededAt  DateTime?
 
-  card           EarningsCard            @relation("EarningsCardRevisions", fields: [cardId], references: [id], onDelete: Cascade)
-  currentFor     EarningsCard?           @relation("CurrentEarningsRevision")
-  generationRuns EarningsGenerationRun[]
+  card            EarningsCard          @relation("EarningsCardRevisions", fields: [cardId], references: [id], onDelete: Cascade)
+  currentFor      EarningsCard?         @relation("CurrentEarningsRevision")
+  generationRuns  EarningsGenerationRun[]
   chatGenerations ChatGeneration[]
   deliveryRecords EarningsDeliveryRecord[]
 
@@ -604,7 +613,6 @@ model EarningsGenerationRun {
   inputTokens       Int                      @default(0)
   outputTokens      Int                      @default(0)
   costUsd           Decimal                  @default(0) @db.Decimal(12, 6)
-  budgetReservedUsd Decimal                  @default(0) @db.Decimal(12, 6)
   createdAt         DateTime                 @default(now())
   startedAt         DateTime?
   completedAt       DateTime?
@@ -620,30 +628,111 @@ model EarningsGenerationRun {
 }
 
 model FilingDetectionCursor {
-  stockId              String   @id
-  nextCheckAt          DateTime @default(now())
-  leaseUntil           DateTime?
+  stockId              String    @id
+  nextCheckAt          DateTime  @default(now())
   lastCheckedAt        DateTime?
   lastDiscoveredAt     DateTime?
   lastSourceDocumentId String?
-  failureCount         Int      @default(0)
+  failureCount         Int       @default(0)
   lastError            String?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   stock Stock @relation(fields: [stockId], references: [id], onDelete: Cascade)
 
-  @@index([nextCheckAt, leaseUntil])
+  @@index([nextCheckAt])
 }
 
-model EarningsSchedulerLease {
-  key        String   @id
-  ownerToken String?
-  leaseUntil DateTime
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+model InvestorRelationsEvent {
+  id                String                        @id @default(cuid())
+  stockId           String
+  title             String
+  activityType      InvestorRelationsActivityType
+  occurredAt        DateTime
+  publishedAt       DateTime
+  currentRevisionId String?                       @unique
+  createdAt         DateTime                      @default(now())
+  updatedAt         DateTime                      @updatedAt
 
-  @@index([leaseUntil])
+  stock           Stock                            @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  filingLinks     InvestorRelationsEventFiling[]
+  revisions       InvestorRelationsRevision[]      @relation("InvestorRelationsEventRevisions")
+  currentRevision InvestorRelationsRevision?       @relation("CurrentInvestorRelationsRevision", fields: [currentRevisionId], references: [id], onDelete: SetNull)
+  generationRuns  InvestorRelationsGenerationRun[]
+
+  @@index([stockId, occurredAt])
+}
+
+model InvestorRelationsEventFiling {
+  eventId      String
+  filingId     String
+  relationType InvestorRelationsFilingRelation
+  createdAt    DateTime                        @default(now())
+
+  event  InvestorRelationsEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  filing Filing                 @relation(fields: [filingId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, filingId])
+  @@index([filingId])
+}
+
+model InvestorRelationsRevision {
+  id            String                          @id @default(cuid())
+  eventId       String
+  revisionNo    Int
+  status        InvestorRelationsRevisionStatus
+  schemaVersion String
+  promptVersion String
+  model         String?
+  payload       Json
+  contentHash   String
+  inputTokens   Int                             @default(0)
+  outputTokens  Int                             @default(0)
+  costUsd       Decimal                         @default(0) @db.Decimal(12, 6)
+  generatedAt   DateTime                        @default(now())
+  supersededAt  DateTime?
+
+  event           InvestorRelationsEvent           @relation("InvestorRelationsEventRevisions", fields: [eventId], references: [id], onDelete: Cascade)
+  currentFor      InvestorRelationsEvent?          @relation("CurrentInvestorRelationsRevision")
+  generationRuns  InvestorRelationsGenerationRun[]
+  chatGenerations ChatGeneration[]
+
+  @@unique([eventId, revisionNo])
+  @@index([eventId, generatedAt])
+}
+
+model InvestorRelationsGenerationRun {
+  id                String                            @id @default(cuid())
+  stockId           String
+  eventId           String?
+  requestedByUserId String?
+  revisionId        String?
+  clientRequestId   String?
+  idempotencyKey    String                            @unique
+  sourceDescriptor  Json
+  status            InvestorRelationsGenerationStatus @default(QUEUED)
+  stage             InvestorRelationsGenerationStage  @default(DISCOVER)
+  attempt           Int                               @default(1)
+  retryable         Boolean                           @default(true)
+  errorCode         String?
+  errorMessage      String?
+  provider          String?
+  model             String?
+  inputTokens       Int                               @default(0)
+  outputTokens      Int                               @default(0)
+  costUsd           Decimal                           @default(0) @db.Decimal(12, 6)
+  createdAt         DateTime                          @default(now())
+  startedAt         DateTime?
+  completedAt       DateTime?
+
+  stock       Stock                      @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  event       InvestorRelationsEvent?    @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  requestedBy User?                      @relation(fields: [requestedByUserId], references: [id], onDelete: SetNull)
+  revision    InvestorRelationsRevision? @relation(fields: [revisionId], references: [id], onDelete: SetNull)
+
+  @@unique([requestedByUserId, clientRequestId])
+  @@index([status, createdAt])
+  @@index([stockId, createdAt])
 }
 
 enum FilingDocumentKind {
@@ -683,12 +772,49 @@ enum EarningsCardRevisionStatus {
   COMPLETE
 }
 
+enum InvestorRelationsActivityType {
+  INSTITUTIONAL_RESEARCH
+  EARNINGS_BRIEFING
+  ANALYST_MEETING
+  ROADSHOW
+  PHONE_CALL
+  SITE_VISIT
+  OTHER
+}
+
+enum InvestorRelationsFilingRelation {
+  PRIMARY
+  SUPPLEMENTS
+  CORRECTS
+}
+
+enum InvestorRelationsRevisionStatus {
+  PARTIAL
+  COMPLETE
+}
+
+enum InvestorRelationsGenerationStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum InvestorRelationsGenerationStage {
+  DISCOVER
+  FETCH
+  DERIVE
+  EXTRACT
+  CHECK
+  PERSIST
+  DONE
+}
+
 enum EarningsGenerationStatus {
   QUEUED
   RUNNING
   COMPLETED
   FAILED
-  BUDGET_EXHAUSTED
 }
 
 enum EarningsGenerationStage {

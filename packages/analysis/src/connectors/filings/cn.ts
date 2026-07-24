@@ -33,6 +33,7 @@ export type CnFilingType =
   | 'preview'
   | 'preliminary'
   | 'extraordinary'
+  | 'investor_relations'
   | 'other';
 
 interface ParsedFiling {
@@ -470,7 +471,16 @@ function isTrustedCnFilingUrl(value: string): boolean {
 export async function parsePdfText(
   bytes: Uint8Array,
 ): Promise<{ text: string; pages: FilingPage[] }> {
-  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  ensurePdfTextGlobals();
+  // Nest compiles this package to CommonJS. Keep the import native so the
+  // ESM-only pdfjs entry point is not rewritten to require().
+  const nativeImport = new Function(
+    'specifier',
+    'return import(specifier)',
+  ) as (
+    specifier: string,
+  ) => Promise<typeof import('pdfjs-dist/legacy/build/pdf.mjs')>;
+  const pdfjs = await nativeImport('pdfjs-dist/legacy/build/pdf.mjs');
   const loadingTask = pdfjs.getDocument({
     data: bytes,
     useSystemFonts: true,
@@ -504,6 +514,65 @@ export async function parsePdfText(
   return { text: fullText, pages };
 }
 
+/** pdfjs v6 loads browser geometry globals even for text-only extraction on
+ * Node 20. The parser never renders paths, so a standards-shaped 2D matrix is
+ * sufficient and avoids adding a native canvas dependency to the API image. */
+function ensurePdfTextGlobals(): void {
+  const globals = globalThis as unknown as Record<string, unknown>;
+  globals.DOMMatrix ??= TextOnlyDOMMatrix;
+  globals.Path2D ??= TextOnlyPath2D;
+}
+
+class TextOnlyPath2D {
+  addPath(): void {}
+}
+
+class TextOnlyDOMMatrix {
+  a = 1; b = 0; c = 0; d = 1; e = 0; f = 0;
+
+  constructor(values?: number[] | Float32Array | Float64Array) {
+    if (values && values.length >= 6) [this.a, this.b, this.c, this.d, this.e, this.f] = [...values].slice(0, 6);
+  }
+
+  multiplySelf(other: TextOnlyDOMMatrix) {
+    const { a, b, c, d, e, f } = this;
+    this.a = a * other.a + c * other.b;
+    this.b = b * other.a + d * other.b;
+    this.c = a * other.c + c * other.d;
+    this.d = b * other.c + d * other.d;
+    this.e = a * other.e + c * other.f + e;
+    this.f = b * other.e + d * other.f + f;
+    return this;
+  }
+
+  preMultiplySelf(other: TextOnlyDOMMatrix) {
+    const current = new TextOnlyDOMMatrix([this.a, this.b, this.c, this.d, this.e, this.f]);
+    Object.assign(this, other);
+    return this.multiplySelf(current);
+  }
+
+  translateSelf(x = 0, y = 0) { return this.multiplySelf(new TextOnlyDOMMatrix([1, 0, 0, 1, x, y])); }
+  scaleSelf(x = 1, y = x) { return this.multiplySelf(new TextOnlyDOMMatrix([x, 0, 0, y, 0, 0])); }
+  rotateSelf(degrees = 0) {
+    const radians = degrees * Math.PI / 180;
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+    return this.multiplySelf(new TextOnlyDOMMatrix([cos, sin, -sin, cos, 0, 0]));
+  }
+  invertSelf() {
+    const determinant = this.a * this.d - this.b * this.c;
+    if (!determinant) return this;
+    const { a, b, c, d, e, f } = this;
+    this.a = d / determinant;
+    this.b = -b / determinant;
+    this.c = -c / determinant;
+    this.d = a / determinant;
+    this.e = (c * f - d * e) / determinant;
+    this.f = (b * e - a * f) / determinant;
+    return this;
+  }
+}
+
 function documentFailure(
   input: FilingGetInput,
   retrievedAt: string,
@@ -529,6 +598,7 @@ function documentFailure(
  * matters (semiannual before annual etc).
  */
 export function classifyFilingTitle(title: string): CnFilingType {
+  if (/投资者关系活动记录(?:表)?|机构调研活动|业绩说明会活动记录|分析师会议记录/.test(title)) return 'investor_relations';
   if (/中期报告|半年度报告|半年报/.test(title)) return 'semiannual';
   if (/第[一三]季度报告|一季报|三季报|季度报告/.test(title)) return 'quarterly';
   if (/业绩预告/.test(title)) return 'preview';

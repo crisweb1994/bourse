@@ -32,6 +32,7 @@ import type { FinancialsPort } from '@bourse/analysis';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CN_FINANCIALS_PORT,
+  HK_FINANCIALS_PORT,
   US_FINANCIALS_PORT,
 } from '../connectors/connectors.module';
 import { ProviderFactoryService } from '../analysis/provider-factory.service';
@@ -40,7 +41,6 @@ import {
   type PreparedEarningsSource,
   type StructuredFallbackSource,
 } from './earnings-source.service';
-import { EarningsBudgetService } from './earnings-budget.service';
 import { EarningsConsensusService } from './earnings-consensus.service';
 import { EarningsNoticeService } from './earnings-notice.service';
 
@@ -54,22 +54,18 @@ export class EarningsRunnerService implements OnModuleInit {
   private readonly scheduled = new Set<string>();
   private readonly pending: string[] = [];
   private activeRuns = 0;
-  private readonly concurrency: number;
+  private readonly concurrency = 4;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly providerFactory: ProviderFactoryService,
-    private readonly budget: EarningsBudgetService,
     @Inject(US_FINANCIALS_PORT) private readonly usFinancials: FinancialsPort,
     @Inject(CN_FINANCIALS_PORT) private readonly cnFinancials: FinancialsPort,
+    @Inject(HK_FINANCIALS_PORT) private readonly hkFinancials: FinancialsPort,
     private readonly consensus: EarningsConsensusService,
     private readonly notices: EarningsNoticeService,
-  ) {
-    this.concurrency = parseEarningsGenerationConcurrency(
-      this.config.get<string>('EARNINGS_GENERATION_CONCURRENCY'),
-    );
-  }
+  ) {}
 
   async onModuleInit(): Promise<void> {
     await this.prisma.earningsGenerationRun.updateMany({
@@ -81,7 +77,6 @@ export class EarningsRunnerService implements OnModuleInit {
         retryable: true,
         errorCode: 'SERVER_RESTARTED',
         errorMessage: 'Server restarted; generation was safely requeued',
-        budgetReservedUsd: new Prisma.Decimal(0),
         startedAt: null,
         completedAt: null,
       },
@@ -174,18 +169,10 @@ export class EarningsRunnerService implements OnModuleInit {
           },
           run.stock,
         );
-        const reservation = await this.budget.reserve(
-          runId,
-          model,
-          EARNINGS_EXTRACTION_SYSTEM_PROMPT,
-          extractionPrompt,
-          EARNINGS_MAX_OUTPUT_TOKENS,
-        );
-        if (!reservation.available) {
-          await this.completeStructuredFallback(runId, run.stock, toFallbackSource(source, reservation.code));
+        if (this.config.get<string>('EARNINGS_LLM_ENABLED')?.toLowerCase() === 'false') {
+          await this.completeStructuredFallback(runId, run.stock, toFallbackSource(source, 'LLM_DISABLED'));
           return;
         }
-        let settled = false;
         let result;
         try {
           result = await structuredOutputWithRepair(
@@ -205,14 +192,7 @@ export class EarningsRunnerService implements OnModuleInit {
             result.usage.tokensIn,
             result.usage.tokensOut,
           );
-          await this.budget.settle(runId, costUsd);
-          settled = true;
         } catch (error) {
-          if (!settled) {
-            costUsd += reservation.reservedUsd;
-            await this.budget.settle(runId, costUsd);
-            settled = true;
-          }
           if (isProviderFailure(error)) {
             await this.completeStructuredFallback(
               runId,
@@ -223,13 +203,6 @@ export class EarningsRunnerService implements OnModuleInit {
             return;
           }
           throw error;
-        } finally {
-          // Provider failures do not always return usage. Charging the
-          // conservative reservation keeps the hard daily cap intact.
-          if (!settled) {
-            costUsd += reservation.reservedUsd;
-            await this.budget.settle(runId, costUsd);
-          }
         }
         extraction = EarningsExtractionSchema.parse(result.data);
         await this.prisma.filingDerivation.upsert({
@@ -280,6 +253,7 @@ export class EarningsRunnerService implements OnModuleInit {
         data: { eventId: event.id },
       });
       const filingRelation = await this.linkFiling(event, filing);
+      const supportingFilings = await this.linkSiblingFilings(event, filing);
       await this.extractAndPersistGuidance(
         run.stock,
         filing,
@@ -354,10 +328,11 @@ export class EarningsRunnerService implements OnModuleInit {
           sourceUrl: filing.sourceUrl,
           publishedAt: filing.publishedAt.toISOString(),
           provider: filing.provider,
+          language: filing.language ?? undefined,
           unaudited: isUnaudited(filing.formType, filing.title, parserDerivation.normalizedText),
           relationType: filingRelation,
         },
-        supportingFilings: [],
+        supportingFilings,
         facts,
         managementClaims,
         omittedFactCount: extraction.facts.length - verified.facts.length,
@@ -391,15 +366,13 @@ export class EarningsRunnerService implements OnModuleInit {
       });
     } catch (error) {
       const runError = normalizeRunError(error);
-      await this.budget.release(runId).catch(() => undefined);
       await this.prisma.earningsGenerationRun.update({
         where: { id: runId },
         data: {
-          status: runError.code === 'BUDGET_EXHAUSTED' ? 'BUDGET_EXHAUSTED' : 'FAILED',
+          status: 'FAILED',
           retryable: runError.retryable,
           errorCode: runError.code,
           errorMessage: runError.message.slice(0, 1000),
-          budgetReservedUsd: new Prisma.Decimal(0),
           completedAt: new Date(),
         },
       });
@@ -414,7 +387,13 @@ export class EarningsRunnerService implements OnModuleInit {
     actualCostUsd = 0,
   ): Promise<void> {
     await this.updateStage(runId, 'RECONCILE', { provider: source.provider, model: 'structured-only' });
-    const port = stock.market === 'US' ? this.usFinancials : stock.market === 'CN' ? this.cnFinancials : null;
+    const port = stock.market === 'US'
+      ? this.usFinancials
+      : stock.market === 'CN'
+        ? this.cnFinancials
+        : stock.market === 'HK'
+          ? this.hkFinancials
+          : null;
     if (!port) throw new RunError(source.reason, true, 'No structured financials source is available');
     let projection: ReturnType<typeof latestFinancialsToStructuredProjection>;
     try {
@@ -502,7 +481,6 @@ export class EarningsRunnerService implements OnModuleInit {
         inputTokens: 0,
         outputTokens: 0,
         costUsd: new Prisma.Decimal(actualCostUsd),
-        budgetReservedUsd: new Prisma.Decimal(0),
         completedAt: new Date(),
       },
     });
@@ -567,8 +545,45 @@ export class EarningsRunnerService implements OnModuleInit {
     return relationType;
   }
 
+  private async linkSiblingFilings(event: EarningsEvent, filing: Filing) {
+    if (!filing.sourceGroupId) return [];
+    const siblings = await this.prisma.filing.findMany({
+      where: {
+        stockId: filing.stockId,
+        sourceGroupId: filing.sourceGroupId,
+        id: { not: filing.id },
+      },
+      orderBy: [{ language: 'asc' }, { publishedAt: 'asc' }],
+    });
+    for (const sibling of siblings) {
+      await this.prisma.earningsEventFiling.upsert({
+        where: { eventId_filingId: { eventId: event.id, filingId: sibling.id } },
+        update: { relationType: 'SUPPLEMENTS' },
+        create: { eventId: event.id, filingId: sibling.id, relationType: 'SUPPLEMENTS' },
+      });
+    }
+    return siblings.map((sibling) => ({
+      sourceKind: 'filing' as const,
+      filingId: sibling.id,
+      formType: sibling.formType,
+      title: sibling.title ?? undefined,
+      sourceUrl: sibling.sourceUrl,
+      publishedAt: sibling.publishedAt.toISOString(),
+      provider: sibling.provider,
+      language: sibling.language as 'zh-CN' | 'zh-HK' | 'en-HK' | 'en-US' | 'unknown' | undefined,
+      unaudited: isUnaudited(sibling.formType, sibling.title, ''),
+      relationType: 'SUPPLEMENTS' as const,
+    }));
+  }
+
   private async reconcile(stock: Stock, facts: MetricFact[]): Promise<MetricFact[]> {
-    const port = stock.market === 'US' ? this.usFinancials : stock.market === 'CN' ? this.cnFinancials : null;
+    const port = stock.market === 'US'
+      ? this.usFinancials
+      : stock.market === 'CN'
+        ? this.cnFinancials
+        : stock.market === 'HK'
+          ? this.hkFinancials
+          : null;
     if (!port) return facts;
     try {
       const result = await port.fetchFinancials({
@@ -906,7 +921,7 @@ function parseSourceDescriptor(value: Prisma.JsonValue): EarningsRunSource {
     if (typeof source[key] !== 'string' || !source[key]) throw new RunError('INVALID_SOURCE_DESCRIPTOR', false);
   }
   if (source.kind === 'structuredFallback') {
-    if (!['BODY_UNREADABLE', 'LLM_DISABLED', 'BUDGET_EXHAUSTED', 'PROVIDER_UNAVAILABLE'].includes(String(source.reason))) {
+    if (!['BODY_UNREADABLE', 'LLM_DISABLED', 'PROVIDER_UNAVAILABLE'].includes(String(source.reason))) {
       throw new RunError('INVALID_SOURCE_DESCRIPTOR', false);
     }
     if (source.expectedPeriodEndOn !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(String(source.expectedPeriodEndOn))) {
@@ -934,6 +949,7 @@ function toFallbackSource(
     sourceUrl: source.sourceUrl,
     publishedAt: source.publishedAt,
     ...(source.expectedPeriodEndOn ? { expectedPeriodEndOn: source.expectedPeriodEndOn } : {}),
+    language: source.language,
     reason,
   };
 }
@@ -1095,19 +1111,6 @@ export function parseEarningsExtractionTimeoutMs(value: string | undefined): num
       'INVALID_EARNINGS_TIMEOUT_CONFIG',
       false,
       `EARNINGS_EXTRACTION_TIMEOUT_MS must be an integer between 1000 and ${MAX_EARNINGS_EXTRACTION_TIMEOUT_MS}`,
-    );
-  }
-  return parsed;
-}
-
-export function parseEarningsGenerationConcurrency(value: string | undefined): number {
-  if (value === undefined || value.trim() === '') return 4;
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 32) {
-    throw new RunError(
-      'INVALID_EARNINGS_CONCURRENCY_CONFIG',
-      false,
-      'EARNINGS_GENERATION_CONCURRENCY must be an integer between 1 and 32',
     );
   }
   return parsed;
