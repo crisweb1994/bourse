@@ -1,5 +1,4 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import type { LatestEarningsResponseDto } from '@bourse/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { EarningsGenerationService } from './earnings-generation.service';
@@ -17,17 +16,12 @@ const revisionInclude = {
 export class EarningsQueryService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
     private readonly generations: EarningsGenerationService,
   ) {}
 
   async latest(stockId: string): Promise<LatestEarningsResponseDto> {
     const stock = await this.prisma.stock.findUnique({ where: { id: stockId } });
     if (!stock) throw new NotFoundException('Stock not found');
-    if (this.config.get<string>('EARNINGS_BRIEF_ENABLED')?.toLowerCase() === 'false') {
-      return { available: false, supported: false, reason: 'FEATURE_DISABLED' };
-    }
-
     const card = await this.prisma.earningsCard.findFirst({
       where: { event: { stockId }, currentRevisionId: { not: null } },
       orderBy: { event: { periodEndOn: 'desc' } },
@@ -41,13 +35,12 @@ export class EarningsQueryService {
       orderBy: { createdAt: 'desc' },
     });
     if (!card?.currentRevision) {
-      const hkSupported = stock.market === 'HK'
-        && this.config.get<string>('EARNINGS_HK_ENABLED')?.toLowerCase() === 'true';
+      const supported = stock.market === 'US' || stock.market === 'CN' || stock.market === 'HK';
       return {
         available: false,
-        supported: stock.market === 'US' || stock.market === 'CN' || hkSupported,
+        supported,
         generation: generation ? toGenerationRunDto(generation) : undefined,
-        reason: stock.market === 'HK' && !hkSupported ? 'MARKET_NOT_YET_SUPPORTED' : undefined,
+        reason: supported ? undefined : 'MARKET_NOT_YET_SUPPORTED',
       };
     }
     return {
@@ -74,7 +67,6 @@ export class EarningsQueryService {
   }
 
   async history(stockId: string) {
-    if (this.config.get<string>('EARNINGS_BRIEF_ENABLED')?.toLowerCase() === 'false') return [];
     const cards = await this.prisma.earningsCard.findMany({
       where: { event: { stockId } },
       orderBy: { event: { periodEndOn: 'desc' } },

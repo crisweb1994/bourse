@@ -1,5 +1,4 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { computeContentHash, INVESTOR_RELATIONS_PROMPT_VERSION, INVESTOR_RELATIONS_SCHEMA_VERSION } from '@bourse/analysis';
 import { Prisma, type Stock } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -12,13 +11,11 @@ export class InvestorRelationsGenerationService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
     private readonly sources: InvestorRelationsSourceService,
     private readonly runner: InvestorRelationsRunnerService,
   ) {}
 
   async create(userId: string, stockId: string, clientRequestId: string) {
-    this.assertEnabled();
     const item = await this.prisma.watchlistItem.findFirst({ where: { userId, stockId }, include: { stock: true } });
     if (!item) throw new ForbiddenException('Stock must be in your watchlist before generating investor relations records');
     if (item.stock.market !== 'CN') throw new ConflictException('Investor relations records currently support A-shares only');
@@ -26,7 +23,6 @@ export class InvestorRelationsGenerationService {
   }
 
   async retry(userId: string, runId: string) {
-    this.assertEnabled();
     const run = await this.prisma.investorRelationsGenerationRun.findUnique({ where: { id: runId } });
     if (!run) throw new NotFoundException('Investor relations generation not found');
     await this.assertStockScope(userId, run.stockId);
@@ -96,11 +92,4 @@ export class InvestorRelationsGenerationService {
     return task;
   }
 
-  private isEnabled() {
-    return this.config.get<string>('IR_RECORDS_ENABLED')?.toLowerCase() === 'true';
-  }
-
-  private assertEnabled() {
-    if (!this.isEnabled()) throw new ServiceUnavailableException({ code: 'FEATURE_DISABLED', message: 'Investor relations records are disabled' });
-  }
 }

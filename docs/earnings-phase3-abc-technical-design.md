@@ -157,18 +157,9 @@ model Filing {
 
 `sourceGroupId` 继续承担“同一披露下的附件/语言变体归组”，不再增加重复的 `variantGroupId`。
 
-### 5.3 配置开关
+### 5.3 配置原则
 
-```dotenv
-EARNINGS_HK_ENABLED=false
-EARNINGS_CROSS_PERIOD_ENABLED=false
-
-IR_RECORDS_ENABLED=false
-IR_RECORDS_LLM_ENABLED=true
-IR_RECORDS_EXTRACTION_TIMEOUT_MS=120000
-```
-
-配置解析必须沿用现有正整数上下界校验；非法配置在启动时失败，不能静默使用错误值。
+Phase 3 不新增环境变量。港股、跨期趋势和投关记录安装后默认可用；财报检测固定每 5 分钟运行，共识固定每 6 小时更新，财报/投关抽取分别使用 180 秒/120 秒硬超时。上述值是开源单实例的代码内保护常量，不属于用户配置面。
 
 ## 6. Phase 3A：港股财报速读
 
@@ -224,7 +215,7 @@ export const HK_FILING_PORT = Symbol('HK_FILING_PORT');
 ```ts
 US -> US_FILING_PORT
 CN -> CN_FILING_PORT
-HK -> HK_FILING_PORT（仅 EARNINGS_HK_ENABLED=true）
+HK -> HK_FILING_PORT
 ```
 
 HK 搜索 forms：
@@ -299,8 +290,7 @@ stock.market === 'HK' -> HK_FINANCIALS_PORT
 
 不新建第二个港股财报检测器。扩展现有 `FilingDetectionScheduler`：
 
-- `EARNINGS_HK_ENABLED=false` 时 watchlist union 仍只选择 US/CN。
-- 开启后加入 HK。
+- watchlist union 统一选择 US/CN/HK。
 - 保持相同 cursor、lease、advisory lock 和幂等策略。
 - provider 层设置独立速率限制，不能让 HKEX 限流拖住 SEC/CN 批次。
 - 日志和指标增加 market/provider 标签。
@@ -315,17 +305,11 @@ GET  /api/earnings/stocks/:stockId/history
 POST /api/earnings/stocks/:stockId/generations
 ```
 
-`LatestEarningsResponseDto.supported` 规则：
-
-```text
-US/CN: EARNINGS_BRIEF_ENABLED
-HK:    EARNINGS_BRIEF_ENABLED && EARNINGS_HK_ENABLED
-```
+`LatestEarningsResponseDto.supported` 对 US/CN/HK 均为 `true`。
 
 UI 改动：
 
-- HK flag 关闭：维持“当前市场的财报速读尚未开放”。
-- 开启且无公告：显示“暂未发现可生成速读卡的港股业绩公告”。
+- 无公告时显示“暂未发现可生成速读卡的港股业绩公告”。
 - 卡片显示来源语言和可用的中英文原公告链接。
 - `reconciliationOverdue` 使用文字和图标，不只依赖颜色。
 - 移动端继续使用现有两行 MetricFact 布局。
@@ -984,7 +968,7 @@ IR 不提供 structured-only 降级；没有可定位正文就不发布卡片。
 - runner 重启恢复、实际成本记录和 retry 行为可验证。
 - Chat 能绑定具体 IR revision，混合问题能区分财报事实与管理层说法。
 - 移动端时间线无裁切，引用展开可键盘操作。
-- feature flag 关闭后停止扫描、生成、查询和 Chat 意图路由。
+- 应用版本回滚后停止新增生成；已保存数据保持可审计。
 
 ## 9. 数据迁移策略
 
@@ -994,7 +978,7 @@ IR 不提供 structured-only 降级；没有可定位正文就不发布卡片。
 
 - `Filing.language`。
 - `EarningsMetricFactProjection` 及枚举、索引和关系。
-- 部署代码但保持 `EARNINGS_CROSS_PERIOD_ENABLED=false`。
+- 部署代码后趋势查询直接可用。
 - 执行 dry-run 和分批 projection 回填。
 
 ### Migration B：3A HK
@@ -1139,16 +1123,14 @@ errorCode
 本地 fixture
 → staging 手动生成
 → staging detector 小自选股
-→ production flag on、detector off
+→ production 手动生成验证
 → production 5 只白名单
 → 全体自选股并集
 ```
 
 ### 13.2 回滚
 
-- 3A：关闭 `EARNINGS_HK_ENABLED`，US/CN 不受影响。
-- 3B：关闭 `EARNINGS_CROSS_PERIOD_ENABLED`，projection 可保留。
-- 3C：先关闭 `IR_RECORDS_ENABLED` 停止查询和生成，再停止 scheduler timer。
+- 通过回滚应用版本停止新增生成，不维护功能级环境开关。
 - 所有已保存 Filing、Derivation 和 Revision 保留，避免丢失审计链。
 
 ### 13.3 发布门槛

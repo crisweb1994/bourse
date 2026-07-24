@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import type {
   EarningsMetricValueDto,
   EarningsTrendOptionDto,
@@ -54,10 +53,7 @@ type FingerprintFact = Pick<
 
 @Injectable()
 export class EarningsTrendService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async options(stockId: string): Promise<EarningsTrendOptionDto[]> {
     await this.assertEnabledStock(stockId);
@@ -173,9 +169,6 @@ export class EarningsTrendService {
   }
 
   private async assertEnabledStock(stockId: string): Promise<void> {
-    if (this.config.get<string>('EARNINGS_CROSS_PERIOD_ENABLED')?.toLowerCase() !== 'true') {
-      throw new NotFoundException('Earnings trends are disabled');
-    }
     const exists = await this.prisma.stock.findUnique({ where: { id: stockId }, select: { id: true } });
     if (!exists) throw new NotFoundException('Stock not found');
   }

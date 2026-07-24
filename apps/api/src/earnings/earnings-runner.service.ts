@@ -45,8 +45,7 @@ import { EarningsConsensusService } from './earnings-consensus.service';
 import { EarningsNoticeService } from './earnings-notice.service';
 
 type EarningsExtractionValue = ReturnType<typeof EarningsExtractionSchema.parse>;
-const DEFAULT_EARNINGS_EXTRACTION_TIMEOUT_MS = 180_000;
-const MAX_EARNINGS_EXTRACTION_TIMEOUT_MS = 600_000;
+const EXTRACTION_TIMEOUT_MS = 180_000;
 
 @Injectable()
 export class EarningsRunnerService implements OnModuleInit {
@@ -124,9 +123,6 @@ export class EarningsRunnerService implements OnModuleInit {
         include: { stock: true },
       });
       if (!run) return;
-      if (this.config.get<string>('EARNINGS_BRIEF_ENABLED')?.toLowerCase() === 'false') {
-        throw new RunError('FEATURE_DISABLED', false, 'Earnings brief is disabled');
-      }
       const source = parseSourceDescriptor(run.sourceDescriptor);
       if (source.kind === 'structuredFallback') {
         await this.completeStructuredFallback(runId, run.stock, source);
@@ -141,9 +137,6 @@ export class EarningsRunnerService implements OnModuleInit {
       const providerName = this.config.get<string>('AI_PROVIDER') || 'claude';
       const provider = this.providerFactory.buildProvider(providerName);
       const model = provider.getUtilityModel();
-      const extractionTimeoutMs = parseEarningsExtractionTimeoutMs(
-        this.config.get<string>('EARNINGS_EXTRACTION_TIMEOUT_MS'),
-      );
       const extractionKey = buildEarningsExtractionDerivationKey({
         filingId: filing.id,
         parserDerivationId: parserDerivation.id,
@@ -169,10 +162,6 @@ export class EarningsRunnerService implements OnModuleInit {
           },
           run.stock,
         );
-        if (this.config.get<string>('EARNINGS_LLM_ENABLED')?.toLowerCase() === 'false') {
-          await this.completeStructuredFallback(runId, run.stock, toFallbackSource(source, 'LLM_DISABLED'));
-          return;
-        }
         let result;
         try {
           result = await structuredOutputWithRepair(
@@ -182,7 +171,7 @@ export class EarningsRunnerService implements OnModuleInit {
             EarningsExtractionSchema,
             {
               maxTokens: EARNINGS_MAX_OUTPUT_TOKENS,
-              signal: AbortSignal.timeout(extractionTimeoutMs),
+              signal: AbortSignal.timeout(EXTRACTION_TIMEOUT_MS),
             },
           );
           inputTokens += result.usage.tokensIn;
@@ -1101,19 +1090,6 @@ function normalizeRunError(error: unknown): RunError {
 
 function isProviderFailure(error: unknown): boolean {
   return !(error instanceof RunError);
-}
-
-export function parseEarningsExtractionTimeoutMs(value: string | undefined): number {
-  if (value === undefined || value.trim() === '') return DEFAULT_EARNINGS_EXTRACTION_TIMEOUT_MS;
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1_000 || parsed > MAX_EARNINGS_EXTRACTION_TIMEOUT_MS) {
-    throw new RunError(
-      'INVALID_EARNINGS_TIMEOUT_CONFIG',
-      false,
-      `EARNINGS_EXTRACTION_TIMEOUT_MS must be an integer between 1000 and ${MAX_EARNINGS_EXTRACTION_TIMEOUT_MS}`,
-    );
-  }
-  return parsed;
 }
 
 export function buildEarningsExtractionDerivationKey(input: {

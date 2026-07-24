@@ -1,8 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { EarningsGenerationService } from './earnings-generation.service';
-import { EarningsConsensusService } from './earnings-consensus.service';
 
 const DEFAULT_INTERVAL_MS = 5 * 60_000;
 const MAX_BACKOFF_MS = 6 * 60 * 60_000;
@@ -13,26 +11,17 @@ const CONCURRENCY = 5;
 export class FilingDetectionScheduler implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(FilingDetectionScheduler.name);
   private timer: NodeJS.Timeout | null = null;
-  private readonly intervalMs: number;
   private running = false;
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
     private readonly generations: EarningsGenerationService,
-    private readonly consensus: EarningsConsensusService,
-  ) {
-    const configured = Number(this.config.get<string>('EARNINGS_DETECTION_INTERVAL_MS'));
-    this.intervalMs = Number.isInteger(configured) && configured >= 60_000 && configured <= 600_000
-      ? configured
-      : DEFAULT_INTERVAL_MS;
-  }
+  ) {}
 
   onModuleInit(): void {
-    if (this.config.get<string>('EARNINGS_DETECTION_ENABLED')?.toLowerCase() !== 'true') return;
     void this.tick();
-    this.timer = setInterval(() => void this.tick(), this.intervalMs);
-    this.logger.log(`财报检测已启动（每 ${this.intervalMs / 60_000}min）`);
+    this.timer = setInterval(() => void this.tick(), DEFAULT_INTERVAL_MS);
+    this.logger.log(`财报检测已启动（每 ${DEFAULT_INTERVAL_MS / 60_000}min）`);
   }
 
   onModuleDestroy(): void {
@@ -64,10 +53,8 @@ export class FilingDetectionScheduler implements OnModuleInit, OnModuleDestroy {
   }
 
   private async syncWatchlistCursors(): Promise<string[]> {
-    const markets: Array<'US' | 'CN' | 'HK'> = ['US', 'CN'];
-    if (this.config.get<string>('EARNINGS_HK_ENABLED')?.toLowerCase() === 'true') markets.push('HK');
     const watchlist = await this.prisma.watchlistItem.findMany({
-      where: { stock: { market: { in: markets } } },
+      where: { stock: { market: { in: ['US', 'CN', 'HK'] } } },
       distinct: ['stockId'],
       select: { stockId: true },
     });
@@ -83,14 +70,12 @@ export class FilingDetectionScheduler implements OnModuleInit, OnModuleDestroy {
   private async scanOne(stockId: string): Promise<void> {
     const startedAt = Date.now();
     try {
-      const stock = await this.prisma.stock.findUnique({ where: { id: stockId } });
-      if (stock) await this.consensus.capture(stock).catch(() => 0);
       const run = await this.generations.createDetected(stockId);
       await this.prisma.filingDetectionCursor.update({
         where: { stockId },
         data: {
           lastCheckedAt: new Date(),
-          nextCheckAt: new Date(Date.now() + this.intervalMs),
+          nextCheckAt: new Date(Date.now() + DEFAULT_INTERVAL_MS),
           failureCount: 0,
           lastError: null,
           ...(run ? {
@@ -103,14 +88,14 @@ export class FilingDetectionScheduler implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       const current = await this.prisma.filingDetectionCursor.findUnique({ where: { stockId } });
       const failureCount = (current?.failureCount ?? 0) + 1;
-      const backoff = Math.min(this.intervalMs * 2 ** Math.min(failureCount - 1, 8), MAX_BACKOFF_MS);
+      const backoff = Math.min(DEFAULT_INTERVAL_MS * 2 ** Math.min(failureCount - 1, 8), MAX_BACKOFF_MS);
       const code = extractErrorCode(error);
       const normalNoFiling = code === 'NO_ELIGIBLE_FILING' || code === 'NO_NEW_ELIGIBLE_FILING';
       await this.prisma.filingDetectionCursor.update({
         where: { stockId },
         data: {
           lastCheckedAt: new Date(),
-          nextCheckAt: new Date(Date.now() + (normalNoFiling ? this.intervalMs : backoff)),
+          nextCheckAt: new Date(Date.now() + (normalNoFiling ? DEFAULT_INTERVAL_MS : backoff)),
           failureCount: normalNoFiling ? 0 : failureCount,
           lastError: normalNoFiling ? null : String(error).slice(0, 500),
         },

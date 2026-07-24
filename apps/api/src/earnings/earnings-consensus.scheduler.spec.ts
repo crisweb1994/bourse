@@ -13,7 +13,6 @@ test('consensus scheduler covers the watchlist union with fixed bounded concurre
   let captured = 0;
   const scheduler = new EarningsConsensusScheduler(
     { stock: { findMany: async () => stocks } } as any,
-    { get: () => undefined } as any,
     {
       capture: async () => {
         active += 1;

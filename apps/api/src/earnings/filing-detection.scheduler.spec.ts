@@ -12,7 +12,6 @@ function scheduler(input: { createDetected?: () => Promise<any>; failureCount?: 
       findUnique: async () => ({ failureCount: input.failureCount ?? 0 }),
       update: async (args: any) => { updates.push(args.data); return args.data; },
     },
-    stock: { findUnique: async () => ({ id: 'stock-1', symbol: 'AAPL', market: 'US' }) },
   };
   const queued: string[] = [];
   const generations = {
@@ -26,9 +25,7 @@ function scheduler(input: { createDetected?: () => Promise<any>; failureCount?: 
   return {
     instance: new FilingDetectionScheduler(
       prisma as any,
-      { get: (key: string) => key === 'EARNINGS_DETECTION_INTERVAL_MS' ? '300000' : undefined } as any,
       generations as any,
-      { capture: async () => 0 } as any,
     ),
     queued,
     updates,

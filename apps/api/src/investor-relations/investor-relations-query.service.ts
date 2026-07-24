@@ -1,5 +1,4 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import type { InvestorRelationsTimelineResponseDto } from '@bourse/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { InvestorRelationsGenerationService } from './investor-relations-generation.service';
@@ -11,19 +10,13 @@ const revisionInclude = { event: { include: { stock: true } } } as const;
 export class InvestorRelationsQueryService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
     private readonly generations: InvestorRelationsGenerationService,
   ) {}
-
-  isEnabled(): boolean {
-    return this.config.get<string>('IR_RECORDS_ENABLED')?.toLowerCase() === 'true';
-  }
 
   async timeline(stockId: string, cursor?: string, requestedLimit = 20): Promise<InvestorRelationsTimelineResponseDto> {
     const stock = await this.prisma.stock.findUnique({ where: { id: stockId } });
     if (!stock) throw new NotFoundException('Stock not found');
-    const enabled = this.isEnabled();
-    if (!enabled || stock.market !== 'CN') return { supported: false, events: [], reason: enabled ? 'MARKET_NOT_SUPPORTED' : 'FEATURE_DISABLED' };
+    if (stock.market !== 'CN') return { supported: false, events: [], reason: 'MARKET_NOT_SUPPORTED' };
     const limit = Math.min(Math.max(requestedLimit || 20, 1), 50);
     const decoded = decodeCursor(cursor);
     const events = await this.prisma.investorRelationsEvent.findMany({
@@ -48,7 +41,6 @@ export class InvestorRelationsQueryService {
   }
 
   async detail(eventId: string, expectedStockId?: string) {
-    if (!this.isEnabled()) throw new NotFoundException('Investor relations records are disabled');
     const event = await this.prisma.investorRelationsEvent.findFirst({
       where: { id: eventId, ...(expectedStockId ? { stockId: expectedStockId } : {}) },
       include: { currentRevision: { include: revisionInclude } },

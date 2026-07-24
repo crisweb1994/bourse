@@ -126,17 +126,14 @@ export class ChatGenerationService implements OnModuleInit {
         })
       : undefined;
 
-    const irRequested = this.investorRelations.isEnabled() && Boolean(dto.investorRelationsEventId);
+    const irRequested = Boolean(dto.investorRelationsEventId);
     const earningsResponse = !irRequested && isEarningsQuestion(dto.question)
       ? await this.earnings.latest(thread.primaryStockId).catch(() => null)
       : null;
     const earningsCard = earningsResponse?.card;
-    const irResponse = irRequested
-      ? await this.investorRelations.timeline(thread.primaryStockId, undefined, 1).catch(() => null)
-      : null;
     const irEvent = irRequested && dto.investorRelationsEventId
       ? await this.investorRelations.detail(dto.investorRelationsEventId, thread.primaryStockId)
-      : irResponse?.events[0] ?? null;
+      : null;
     const intent = this.routeIntent(dto.question, context, scope, irRequested);
     const sectionSources = intent === 'EARNINGS_BRIEF' && earningsCard
       ? await this.earningsSections.retrieve(earningsCard.revisionId, dto.question).catch(() => [])

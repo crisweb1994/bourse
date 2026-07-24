@@ -132,7 +132,7 @@
 - **已删除 `EarningsMetricFactProjection` 持久化投影**：趋势数据直接从各期 current revision 的 `payload.facts` 读取，查询时做兼容性筛选、YTD 差分和 YoY/QoQ；同步投影、回填脚本和 `isCurrent` 维护已移除。
 - **投关记录改为懒生成**：股票页首次打开时生成，失败可显式重试；独立 `InvestorRelationsDetectionScheduler` 和第二套 DetectionCursor 已删除。
 - **财报和共识调度改为单实例模型**：保留 `running` 防重入、固定保守并发和失败退避；多副本 advisory lock、DB lease/续租和 scheduler claim 已删除。
-- **配置项已收敛**：删除检测 batch/concurrency、生成 concurrency 和投关检测参数；保留功能开关、轮询间隔和抽取超时。
+- **配置项已收敛为零**：财报、港股、趋势和投关默认可用；检测周期、共识周期、最大快照年龄、抽取超时、批次和并发均为代码内保守常量，不再暴露财报/投关环境变量。
 - **每日预算体系已删除**：财报/投关不再维护预算预占、结算、释放和过期回收；只记录实际 token/cost。
 
 ### 必须保留

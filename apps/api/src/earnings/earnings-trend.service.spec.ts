@@ -95,7 +95,7 @@ function service(cards: ReturnType<typeof card>[]) {
     stock: { findUnique: async () => ({ id: 'stock-1' }) },
     earningsCard: { findMany: async () => cards },
   };
-  return new EarningsTrendService(prisma as any, { get: () => 'true' } as any);
+  return new EarningsTrendService(prisma as any);
 }
 
 function sourceFingerprint() {

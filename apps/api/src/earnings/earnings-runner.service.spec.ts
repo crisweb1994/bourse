@@ -7,7 +7,6 @@ import {
   isUnaudited,
   mergeEarningsCardPayload,
   normalizeManagementClaimCandidate,
-  parseEarningsExtractionTimeoutMs,
   structuredFallbackPeriodError,
 } from './earnings-runner.service';
 import type { EarningsCardPayload } from '@bourse/analysis';
@@ -153,19 +152,6 @@ test('correction replaces the affected metric while retaining an immutable sourc
   assert.equal(merged.facts[0]?.value.kind, 'scalar');
   assert.equal(merged.facts[0]?.value.kind === 'scalar' ? merged.facts[0].value.value : '', '98');
   assert.equal(merged.supportingFilings[0]?.filingId, 'release-1');
-});
-
-test('earnings extraction timeout has a bounded production default', () => {
-  assert.equal(parseEarningsExtractionTimeoutMs(undefined), 180_000);
-  assert.equal(parseEarningsExtractionTimeoutMs('45000'), 45_000);
-  assert.throws(
-    () => parseEarningsExtractionTimeoutMs('0'),
-    /EARNINGS_EXTRACTION_TIMEOUT_MS must be an integer/,
-  );
-  assert.throws(
-    () => parseEarningsExtractionTimeoutMs('not-a-number'),
-    /EARNINGS_EXTRACTION_TIMEOUT_MS must be an integer/,
-  );
 });
 
 test('extraction derivations cannot cross filing ownership boundaries', () => {

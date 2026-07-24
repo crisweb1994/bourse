@@ -94,7 +94,6 @@ test('detector atomically requeues a due retryable generation before rediscovery
     prisma as any,
     { discoverAndIngest: async () => { sourceCalls += 1; throw new Error('should not run'); } } as any,
     { schedule: (id: string) => scheduled.push(id) } as any,
-    { get: () => undefined } as any,
   );
 
   const run = await service.createDetected('stock-1');
@@ -102,17 +101,4 @@ test('detector atomically requeues a due retryable generation before rediscovery
   assert.equal(run?.status, 'QUEUED');
   assert.deepEqual(scheduled, ['run-1']);
   assert.equal(sourceCalls, 0);
-});
-
-test('feature flag stops detector work before any database or upstream access', async () => {
-  let accessed = false;
-  const service = new EarningsGenerationService(
-    { stock: { findUnique: async () => { accessed = true; } } } as any,
-    { discoverAndIngest: async () => { accessed = true; } } as any,
-    { schedule: () => { accessed = true; } } as any,
-    { get: (key: string) => key === 'EARNINGS_BRIEF_ENABLED' ? 'false' : undefined } as any,
-  );
-
-  assert.equal(await service.createDetected('stock-1'), null);
-  assert.equal(accessed, false);
 });

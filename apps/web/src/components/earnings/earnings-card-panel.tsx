@@ -83,7 +83,6 @@ export function EarningsCardPanel({
 }) {
   if (!response && loading) return <EarningsSkeleton />;
   if (response && !response.supported) {
-    if (response.reason === 'FEATURE_DISABLED') return null;
     return (
       <div className="mb-6 flex items-start gap-3 border-y border-[var(--color-border-soft)] px-1 py-3 text-[12px] text-[var(--color-fg-2)]">
         <FileSearch className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.5} />

@@ -55,7 +55,6 @@ test('consensus capture persists an auditable pre-publication snapshot', async (
   };
   const service = new EarningsConsensusService(
     prisma as any,
-    { get: () => undefined } as any,
     {} as any,
     yahoo as any,
   );
@@ -95,7 +94,6 @@ test('consensus query enforces asOf and capturedAt before publication', async ()
   };
   const service = new EarningsConsensusService(
     prisma as any,
-    { get: () => undefined } as any,
     {} as any,
     {} as any,
   );

@@ -20,6 +20,8 @@ import { ProviderFactoryService } from '../analysis/provider-factory.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { PreparedInvestorRelationsSource } from './investor-relations-source.service';
 
+const INVESTOR_RELATIONS_EXTRACTION_TIMEOUT_MS = 120_000;
+
 @Injectable()
 export class InvestorRelationsRunnerService implements OnModuleInit {
   private readonly logger = new Logger(InvestorRelationsRunnerService.name);
@@ -82,9 +84,6 @@ export class InvestorRelationsRunnerService implements OnModuleInit {
     });
     if (claimed.count === 0) return;
     try {
-      if (this.config.get<string>('IR_RECORDS_ENABLED')?.toLowerCase() !== 'true') {
-        throw new IrRunError('FEATURE_DISABLED', false);
-      }
       const run = await this.prisma.investorRelationsGenerationRun.findUnique({
         where: { id: runId },
         include: { stock: true },
@@ -116,15 +115,12 @@ export class InvestorRelationsRunnerService implements OnModuleInit {
       if (cached?.extraction) {
         extraction = InvestorRelationsExtractionSchema.parse(cached.extraction);
       } else {
-        if (this.config.get<string>('IR_RECORDS_LLM_ENABLED')?.toLowerCase() === 'false') {
-          throw new IrRunError('LLM_DISABLED', false);
-        }
         const result = await structuredOutputWithRepair(
           provider,
           INVESTOR_RELATIONS_SYSTEM_PROMPT,
           prompt,
           InvestorRelationsExtractionSchema,
-          { maxTokens: INVESTOR_RELATIONS_MAX_OUTPUT_TOKENS, signal: AbortSignal.timeout(parseTimeout(this.config.get<string>('IR_RECORDS_EXTRACTION_TIMEOUT_MS'))) },
+          { maxTokens: INVESTOR_RELATIONS_MAX_OUTPUT_TOKENS, signal: AbortSignal.timeout(INVESTOR_RELATIONS_EXTRACTION_TIMEOUT_MS) },
         );
         extraction = result.data;
         inputTokens += result.usage.tokensIn;
@@ -324,12 +320,6 @@ function topicTitle(text: string): string {
 function validateActivityDate(occurredAt: string, publishedAt: Date): void {
   const date = new Date(`${occurredAt}T00:00:00.000Z`);
   if (Number.isNaN(date.getTime()) || date.getTime() > publishedAt.getTime() + 86_400_000) throw new IrRunError('ACTIVITY_DATE_UNRESOLVED', false);
-}
-
-function parseTimeout(value: string | undefined): number {
-  const parsed = Number(value ?? '120000');
-  if (!Number.isInteger(parsed) || parsed < 1_000 || parsed > 300_000) throw new Error('IR_RECORDS_EXTRACTION_TIMEOUT_MS must be between 1000 and 300000');
-  return parsed;
 }
 
 class IrRunError extends Error {

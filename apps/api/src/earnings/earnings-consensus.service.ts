@@ -1,5 +1,4 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import {
   EarningsConsensusBundleSchema,
   type FinancePort,
@@ -17,14 +16,12 @@ export class EarningsConsensusService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
     @Inject(CN_FINANCE_PORT) private readonly cnFinance: FinancePort,
     @Inject(YAHOO_FINANCE_PORT) private readonly yahooFinance: FinancePort,
   ) {}
 
   maxAgeMs(): number {
-    const configured = Number(this.config.get<string>('EARNINGS_CONSENSUS_MAX_AGE_MS') ?? DEFAULT_MAX_AGE_MS);
-    return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_MAX_AGE_MS;
+    return DEFAULT_MAX_AGE_MS;
   }
 
   async capture(stock: Stock): Promise<number> {

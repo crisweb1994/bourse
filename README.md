@@ -133,22 +133,11 @@ pnpm db:generate && pnpm db:push
 pnpm dev                                     # Web :3000 + API :3001
 ```
 
-### 开启财报检测器
-
-```dotenv
-EARNINGS_DETECTION_ENABLED=true
-EARNINGS_DETECTION_INTERVAL_MS=300000       # 默认 5 分钟
-```
-
-财报速读还会受到公告源可用性和 LLM 开关影响。`EARNINGS_LLM_ENABLED=false` 时，系统会尝试结构化数据降级；期间不匹配则关闭生成，避免发布错误卡片。系统会记录实际 token 和费用，但开源版不维护每日预算预占、结算和回收体系。
+财报公告默认每 5 分钟检测一次，共识快照每 6 小时更新一次。港股、跨期趋势和 A 股投关记录安装后即可使用，不需要额外功能开关。公告源或模型不可用时，财报链路会尝试结构化数据降级；期间不匹配则关闭生成，避免发布错误卡片。系统记录实际 token 和费用，但不维护每日预算预占、结算和回收体系。
 
 ### 多用户 / 生产部署
 
-参考 [`.env.production.example`](.env.production.example) 配置 GitHub OAuth、JWT、CORS 和跨域 cookie。生产环境请固定镜像版本：
-
-```bash
-BOURSE_IMAGE=ghcr.io/crisweb1994/bourse:0.1.0 docker compose up -d
-```
+参考 [`.env.production.example`](.env.production.example) 配置 GitHub OAuth、JWT、CORS 和跨域 cookie。生产部署使用发布流水线生成的版本化镜像，或直接从当前源码执行 `docker compose up -d --build`。
 
 ---
 

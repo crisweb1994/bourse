@@ -3,9 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-  ServiceUnavailableException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { computeContentHash } from '@bourse/analysis';
 import { EARNINGS_EXTRACTION_PROMPT_VERSION, EARNINGS_SCHEMA_VERSION } from './earnings-prompts';
 import { Prisma, type Stock } from '@prisma/client';
@@ -26,11 +24,9 @@ export class EarningsGenerationService {
     private readonly prisma: PrismaService,
     private readonly sources: EarningsSourceService,
     private readonly runner: EarningsRunnerService,
-    private readonly config: ConfigService,
   ) {}
 
   async create(userId: string, stockId: string, clientRequestId: string) {
-    this.assertEnabled();
     const watchlistItem = await this.prisma.watchlistItem.findFirst({
       where: { userId, stockId },
       include: { stock: true },
@@ -38,10 +34,6 @@ export class EarningsGenerationService {
     if (!watchlistItem) {
       throw new ForbiddenException('Stock must be in your watchlist before generating an earnings brief');
     }
-    if (watchlistItem.stock.market === 'HK' && !this.isHkEnabled()) {
-      throw new ConflictException('HK earnings briefs are planned for Phase 3');
-    }
-
     let source: EarningsRunSource;
     try {
       source = await this.prepareSource(watchlistItem.stock);
@@ -57,10 +49,8 @@ export class EarningsGenerationService {
   /** Detector-only entry point. The persisted watchlist union is the scope;
    * public-card generation never depends on an individual user's AI key. */
   async createDetected(stockId: string) {
-    if (!this.isEnabled()) return null;
     const stock = await this.prisma.stock.findUnique({ where: { id: stockId } });
     if (!stock) throw new NotFoundException('Stock not found');
-    if (stock.market === 'HK' && !this.isHkEnabled()) return null;
     const watchlistCount = await this.prisma.watchlistItem.count({ where: { stockId } });
     if (watchlistCount === 0) return null;
     const retry = await this.retryDetectedFailure(stockId);
@@ -167,7 +157,6 @@ export class EarningsGenerationService {
   }
 
   async retry(userId: string, runId: string) {
-    this.assertEnabled();
     const run = await this.prisma.earningsGenerationRun.findUnique({ where: { id: runId } });
     if (!run) throw new NotFoundException('Earnings generation not found');
     await this.assertStockScope(userId, run.stockId);
@@ -203,22 +192,6 @@ export class EarningsGenerationService {
     return task;
   }
 
-  private isEnabled(): boolean {
-    return this.config.get<string>('EARNINGS_BRIEF_ENABLED')?.toLowerCase() !== 'false';
-  }
-
-  private assertEnabled(): void {
-    if (!this.isEnabled()) {
-      throw new ServiceUnavailableException({
-        code: 'FEATURE_DISABLED',
-        message: 'Earnings brief is disabled',
-      });
-    }
-  }
-
-  private isHkEnabled(): boolean {
-    return this.config.get<string>('EARNINGS_HK_ENABLED')?.toLowerCase() === 'true';
-  }
 }
 
 const DETECTED_RETRY_BASE_MS = 5 * 60_000;
