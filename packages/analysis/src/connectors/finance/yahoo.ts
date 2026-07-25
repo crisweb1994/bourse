@@ -3,6 +3,8 @@ import { RESEARCH_SCHEMA_VERSION, type ResearchResult } from '../../contracts/re
 import type { ResearchWarning } from '../../contracts/warning';
 import type {
   CompanyProfile,
+  EarningsConsensusBundle,
+  EarningsConsensusEstimate,
   FinancePort,
   HistoryInput,
   PriceBar,
@@ -154,6 +156,24 @@ interface YahooSummaryResponse {
     result?: Array<{
       summaryDetail?: YahooSummaryDetail;
       price?: YahooPriceModule;
+    }> | null;
+    error?: { code?: string; description?: string } | null;
+  };
+}
+
+interface YahooEarningsTrendRow {
+  period?: string;
+  endDate?: string;
+  earningsEstimate?: { avg?: YahooRawValue };
+  revenueEstimate?: { avg?: YahooRawValue };
+}
+
+interface YahooEarningsTrendResponse {
+  quoteSummary?: {
+    result?: Array<{
+      earningsTrend?: {
+        trend?: YahooEarningsTrendRow[];
+      };
     }> | null;
     error?: { code?: string; description?: string } | null;
   };
@@ -607,7 +627,94 @@ export function createYahooFinanceConnector(): FinancePort {
         });
       }
     },
+
+    async fetchEarningsConsensus(
+      input: { instrumentId: string },
+      ctx: ConnectorRunContext = {},
+    ): Promise<ResearchResult<EarningsConsensusBundle | null>> {
+      const retrievedAt = new Date().toISOString();
+      const parsed = parseInstrumentId(input.instrumentId);
+      if (!parsed || !YAHOO_SUPPORTED.has(parsed.market)) {
+        return httpFailure<EarningsConsensusBundle | null>(PROVIDER, null, {
+          retrievedAt,
+          code: parsed ? 'UNSUPPORTED_MARKET' : 'INVALID_INSTRUMENT',
+          message: parsed
+            ? `Yahoo earnings consensus does not support ${parsed.market}`
+            : `Invalid instrumentId: ${input.instrumentId}`,
+        });
+      }
+      const yahooSymbol = toYahooSymbol(parsed.market, parsed.symbol);
+      const fetchLike = resolveFetch(ctx);
+      const timeoutMs = ctx.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+      try {
+        return await withTimeout(ctx, timeoutMs, async (signal) => {
+          const out = await fetchYahooEarningsTrend(fetchLike, yahooSymbol, signal);
+          if (!out) {
+            return {
+              schemaVersion: RESEARCH_SCHEMA_VERSION,
+              data: null,
+              citations: [],
+              freshness: [{ provider: PROVIDER, asOf: retrievedAt, retrievedAt, stale: true, reason: 'earningsTrend unavailable' }],
+              warnings: [{ code: 'SOURCE_UNAVAILABLE', message: 'Yahoo earningsTrend unavailable', provider: PROVIDER }],
+            };
+          }
+          const currency = CURRENCY_BY_MARKET[parsed.market];
+          const estimates: EarningsConsensusEstimate[] = [];
+          for (const trend of out) {
+            if (!trend.endDate || trend.earningsEstimate?.avg?.raw == null) continue;
+            const periodType = trend.period === '0y' || trend.period === '+1y' ? 'FY' : 'QUARTER';
+            const value = trend.earningsEstimate.avg.raw;
+            if (!Number.isFinite(value)) continue;
+            estimates.push({
+              metricCode: 'epsBasic',
+              periodEndOn: trend.endDate.slice(0, 10),
+              periodType,
+              value: value.toString(),
+              unit: 'per_share',
+              currency,
+            });
+          }
+          return {
+            schemaVersion: RESEARCH_SCHEMA_VERSION,
+            data: { asOf: retrievedAt, estimates },
+            citations: [{
+              title: `Yahoo Finance earnings consensus: ${parsed.symbol}`,
+              url: `https://finance.yahoo.com/quote/${encodeURIComponent(yahooSymbol)}/analysis/`,
+              sourceType: 'OTHER',
+              provider: PROVIDER,
+              retrievedAt,
+              qualityTier: 'B',
+            }],
+            freshness: [{ provider: PROVIDER, asOf: retrievedAt, retrievedAt, stale: estimates.length === 0, ...(estimates.length === 0 ? { reason: 'no earnings estimates' } : {}) }],
+            warnings: [],
+          };
+        });
+      } catch (error) {
+        return httpFailure<EarningsConsensusBundle | null>(PROVIDER, null, {
+          retrievedAt,
+          code: 'SOURCE_UNAVAILABLE',
+          message: `Yahoo earnings consensus failed: ${String(error)}`,
+        });
+      }
+    },
   };
+}
+
+async function fetchYahooEarningsTrend(
+  fetchLike: FetchLike,
+  yahooSymbol: string,
+  signal: AbortSignal,
+): Promise<YahooEarningsTrendRow[] | null> {
+  const auth = await getCrumb();
+  if (!auth) return null;
+  const url = `${SUMMARY_URL}/${encodeURIComponent(yahooSymbol)}?modules=earningsTrend&crumb=${encodeURIComponent(auth.crumb)}`;
+  const response = await fetchLike(url, {
+    headers: { 'User-Agent': YAHOO_UA, Cookie: auth.cookie },
+    signal,
+  });
+  if (!response.ok) return null;
+  const body = (await response.json()) as YahooEarningsTrendResponse;
+  return body.quoteSummary?.result?.[0]?.earningsTrend?.trend ?? null;
 }
 
 function toYahooSymbol(market: MarketCode, symbol: string): string {

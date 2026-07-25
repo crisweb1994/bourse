@@ -54,6 +54,7 @@ export class DigestSubscriptionService {
     }
 
     const enabled = dto.enabled ?? true;
+    const earningsImmediateEnabled = dto.earningsImmediateEnabled ?? false;
     const row = await this.prisma.digestSubscription.upsert({
       where: { userId },
       create: {
@@ -62,12 +63,14 @@ export class DigestSubscriptionService {
         sessions: dto.sessions,
         channels: parsed.data,
         enabled,
+        earningsImmediateEnabled,
       },
       update: {
         markets: dto.markets,
         sessions: dto.sessions,
         channels: parsed.data,
         enabled,
+        earningsImmediateEnabled,
       },
     });
     return this.toPublic(row);
@@ -93,6 +96,7 @@ export class DigestSubscriptionService {
     sessions: string[];
     channels: unknown;
     enabled: boolean;
+    earningsImmediateEnabled: boolean;
     createdAt: Date;
     updatedAt: Date;
   }) {
@@ -101,6 +105,7 @@ export class DigestSubscriptionService {
       sessions: row.sessions,
       channels: (row.channels as ChannelConfig[]).map(maskChannel),
       enabled: row.enabled,
+      earningsImmediateEnabled: row.earningsImmediateEnabled,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };

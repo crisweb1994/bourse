@@ -233,12 +233,43 @@ export function pickFactForPeriod(
   for (const [unit, entries] of Object.entries(concept.units)) {
     const matches = entries.filter((e) => e.fy === target.fy && e.fp === target.fp);
     if (matches.length === 0) continue;
-    // 重述：同一 period 多份 filing，取 filed 最新。
-    const latest = [...matches].sort((a, b) =>
-      b.filed.localeCompare(a.filed),
-    )[0];
+    // A single 10-Q repeats comparative periods and may expose both discrete
+    // and YTD values under the same (fy, fp, filed). Prefer the latest filing,
+    // then the latest period end, then a framed/shorter discrete duration.
+    const latest = [...matches].sort(compareCurrentFact)[0];
     return { unit, entry: latest };
   }
   return undefined;
 }
 
+/** Selects the current cumulative duration fact for cash-flow differencing. */
+export function pickCumulativeFactForPeriod(
+  concept: XbrlConcept,
+  target: { fy: number; fp: 'FY' | 'Q1' | 'Q2' | 'Q3' | 'Q4' },
+): { unit: string; entry: XbrlFactEntry } | undefined {
+  for (const [unit, entries] of Object.entries(concept.units)) {
+    const matches = entries.filter((entry) => entry.fy === target.fy && entry.fp === target.fp);
+    if (matches.length === 0) continue;
+    const currentEnd = [...matches].sort(compareCurrentFact)[0]?.end;
+    const current = matches
+      .filter((entry) => entry.end === currentEnd)
+      .sort((a, b) => {
+        const filed = b.filed.localeCompare(a.filed);
+        if (filed !== 0) return filed;
+        // Earlier start means a longer fiscal-year-to-date duration.
+        return (a.start ?? a.end).localeCompare(b.start ?? b.end);
+      })[0];
+    return current ? { unit, entry: current } : undefined;
+  }
+  return undefined;
+}
+
+export function compareCurrentFact(a: XbrlFactEntry, b: XbrlFactEntry): number {
+  const filed = b.filed.localeCompare(a.filed);
+  if (filed !== 0) return filed;
+  const end = b.end.localeCompare(a.end);
+  if (end !== 0) return end;
+  const framed = Number(Boolean(b.frame)) - Number(Boolean(a.frame));
+  if (framed !== 0) return framed;
+  return (b.start ?? '').localeCompare(a.start ?? '');
+}

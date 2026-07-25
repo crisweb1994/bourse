@@ -413,6 +413,7 @@ export class OpenAIChatCompletionsRoute implements OpenAIRoute {
         { role: 'user', content: userPrompt },
       ],
     };
+    if (options.maxTokens) completeParams.max_tokens = options.maxTokens;
     if (process.env?.OPENAI_CHAT_RESPONSE_FORMAT === 'true') {
       completeParams.response_format = { type: 'json_object' };
     }

@@ -93,7 +93,20 @@ export function useStockResolution({
   const handleAddToWatchlist = async () => {
     if (watchlistItemId || watchlistBusy) return;
     const candidate = detail?.candidates?.[0];
-    const seed = candidate ?? (symbol
+    const resolved = detail?.stock
+      ? {
+          symbol: detail.stock.symbol,
+          name: detail.stock.name,
+          market: detail.stock.market,
+          exchange: detail.stock.exchange,
+          currency: detail.stock.currency,
+          yahooSymbol: detail.stock.yahooSymbol ?? undefined,
+        }
+      : null;
+    // CN/HK routes use yahooSymbol (for example 000858.SZ), while Stock.symbol
+    // stores the canonical code. Reuse the resolved Stock when available so
+    // adding from a detail route cannot create a duplicate identity.
+    const seed = candidate ?? resolved ?? (symbol
       ? {
           symbol,
           name: name || symbol,

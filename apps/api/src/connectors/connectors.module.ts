@@ -4,6 +4,7 @@ import {
   createCnFinanceConnector,
   createEastmoneyFinancialsConnector,
   createEastmoneyHkFinancialsConnector,
+  createHkexFilingsConnector,
   createSecEdgarFilingsConnector,
   createSecEdgarXbrlFinancialsConnector,
   createYahooFinanceConnector,
@@ -34,6 +35,7 @@ export const CN_FILING_PORT = Symbol('CN_FILING_PORT');
 export const US_FINANCIALS_PORT = Symbol('US_FINANCIALS_PORT');
 export const CN_FINANCIALS_PORT = Symbol('CN_FINANCIALS_PORT');
 export const HK_FINANCIALS_PORT = Symbol('HK_FINANCIALS_PORT');
+export const HK_FILING_PORT = Symbol('HK_FILING_PORT');
 
 const SEC_USER_AGENT_FALLBACK = 'stock-suggest-research contact@example.com';
 
@@ -65,6 +67,10 @@ const SEC_USER_AGENT_FALLBACK = 'stock-suggest-research contact@example.com';
       useFactory: (): FilingPort => createCnFilingsConnector(),
     },
     {
+      provide: HK_FILING_PORT,
+      useFactory: (): FilingPort => createHkexFilingsConnector(),
+    },
+    {
       provide: US_FINANCIALS_PORT,
       useFactory: (): FinancialsPort => {
         const userAgent =
@@ -86,6 +92,7 @@ const SEC_USER_AGENT_FALLBACK = 'stock-suggest-research contact@example.com';
     CN_FINANCE_PORT,
     US_FILING_PORT,
     CN_FILING_PORT,
+    HK_FILING_PORT,
     US_FINANCIALS_PORT,
     CN_FINANCIALS_PORT,
     HK_FINANCIALS_PORT,

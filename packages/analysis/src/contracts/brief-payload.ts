@@ -88,6 +88,22 @@ export const WatchlistItemBrief = z.object({
   vsSma50: z.number().nullable(),
   vsSma200: z.number().nullable(),
   events: z.array(z.object({ kind: z.string(), date: z.string() })).default([]),
+  /** Latest completed earnings revision, when one exists for this stock. */
+  earnings: z.object({
+    revisionId: z.string(),
+    periodEndOn: z.string(),
+    periodType: z.string(),
+    publishedAt: z.string(),
+    sourceUrl: z.string().url(),
+    statusSummary: z.object({
+      total: z.number().int().nonnegative(),
+      reconciled: z.number().int().nonnegative(),
+      pending: z.number().int().nonnegative(),
+      conflicted: z.number().int().nonnegative(),
+      structuredOnly: z.number().int().nonnegative(),
+    }),
+    topFacts: z.array(z.object({ metricCode: z.string(), value: z.unknown() })).max(6),
+  }).nullable().optional(),
   /** 异动深入 markdown。null = 未命中异动触发 / 用户未配 provider。 */
   deepDive: z.string().nullable(),
 });
@@ -125,3 +141,35 @@ export const BriefPayload = z.object({
   }),
 });
 export type BriefPayload = z.infer<typeof BriefPayload>;
+
+export const EarningsNoticePayload = z.object({
+  kind: z.enum(['NEW_CARD', 'UPDATE', 'CORRECTION']),
+  revisionId: z.string(),
+  previousRevisionId: z.string().optional(),
+  stockId: z.string(),
+  symbol: z.string(),
+  name: z.string(),
+  market: z.nativeEnum(SharedMarket),
+  periodEndOn: z.string(),
+  periodType: z.string(),
+  publishedAt: z.string().datetime(),
+  generatedAt: z.string().datetime(),
+  sourceUrl: z.string().url(),
+  statusSummary: z.object({
+    total: z.number().int().nonnegative(),
+    reconciled: z.number().int().nonnegative(),
+    pending: z.number().int().nonnegative(),
+    conflicted: z.number().int().nonnegative(),
+    structuredOnly: z.number().int().nonnegative(),
+  }),
+  topFacts: z.array(z.object({
+    metricCode: z.string(),
+    value: z.union([
+      z.object({ kind: z.literal('scalar'), value: z.string() }),
+      z.object({ kind: z.literal('range'), min: z.string(), max: z.string() }),
+    ]),
+    currency: z.string().optional(),
+    unit: z.string(),
+  })).max(6),
+});
+export type EarningsNoticePayload = z.infer<typeof EarningsNoticePayload>;

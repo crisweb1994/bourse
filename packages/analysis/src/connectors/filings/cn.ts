@@ -6,7 +6,7 @@
 import { RESEARCH_SCHEMA_VERSION, type ResearchResult } from '../../contracts/result';
 import type { ResearchCitation } from '../../contracts/research-citation';
 import type { ResearchWarning } from '../../contracts/warning';
-import { computeContentHash } from '../../util/content-hash';
+import { computeBinaryContentHash, computeContentHash } from '../../util/content-hash';
 import { parseInstrumentId } from '../../util/instrument-id';
 import type { ConnectorRunContext, FetchLike } from '../types';
 import { failure as httpFailure, resolveFetch, withTimeout } from '../http';
@@ -14,6 +14,7 @@ import { CN_BROWSER_HEADERS, type Exchange, inferExchange } from '../cn-common';
 import type {
   FilingDocument,
   FilingGetInput,
+  FilingPage,
   FilingPort,
   FilingSearchInput,
   FilingSummary,
@@ -23,6 +24,7 @@ const PROVIDER = 'cn-filings';
 const DEFAULT_TIMEOUT_MS = 5_000;
 const DEFAULT_LIMIT = 10;
 const HARD_LIMIT = 30;
+const FILTERED_SOURCE_WINDOW = 100;
 
 export type CnFilingType =
   | 'annual'
@@ -31,9 +33,11 @@ export type CnFilingType =
   | 'preview'
   | 'preliminary'
   | 'extraordinary'
+  | 'investor_relations'
   | 'other';
 
 interface ParsedFiling {
+  sourceDocumentId: string;
   title: string;
   url: string;
   publishedAt: string;
@@ -43,6 +47,7 @@ interface ParsedFiling {
 export interface CnFilingsOptions {
   fetchLike?: FetchLike;
   sources?: ReadonlyArray<'cninfo' | 'eastmoney'>;
+  pdfParser?: (bytes: Uint8Array) => Promise<{ text: string; pages: FilingPage[] }>;
 }
 
 export function createCnFilingsConnector(options: CnFilingsOptions = {}): FilingPort {
@@ -73,18 +78,30 @@ export function createCnFilingsConnector(options: CnFilingsOptions = {}): Filing
       const warnings: ResearchWarning[] = [];
 
       for (const source of sources) {
-        const result = await fetchFromSource(source, parsed.symbol, exchange, limit, fetchLike, ctx, retrievedAt);
+        const result = await fetchFromSource(
+          source,
+          parsed.symbol,
+          exchange,
+          limit,
+          wantedForms,
+          fetchLike,
+          ctx,
+          retrievedAt,
+        );
         if (result.ok) {
           const filings: FilingSummary[] = result.filings
-            .filter((f) => !wantedForms?.length || wantedForms.includes(f.type))
             .map((f) => ({
-              id: computeContentHash({ canonicalUrl: f.url }),
+              id: computeContentHash({ text: `${source}:${f.sourceDocumentId}` }),
+              sourceDocumentId: f.sourceDocumentId,
+              sourceGroupId: f.sourceDocumentId,
               instrumentId: parsed.raw,
               formType: f.type,
               filingDate: f.publishedAt,
+              periodEndOn: inferCnPeriodEndOn(f.title, f.type),
               filingUrl: f.url,
               title: f.title,
               provider: source,
+              documentKind: 'PDF',
             }));
 
           const citations: ResearchCitation[] = filings.slice(0, 5).map((f) => ({
@@ -127,23 +144,78 @@ export function createCnFilingsConnector(options: CnFilingsOptions = {}): Filing
       };
     },
 
-    async getFiling(_input: FilingGetInput): Promise<ResearchResult<FilingDocument>> {
+    async getFiling(input: FilingGetInput, ctx: ConnectorRunContext = {}): Promise<ResearchResult<FilingDocument>> {
       const retrievedAt = new Date().toISOString();
-      return {
-        schemaVersion: RESEARCH_SCHEMA_VERSION,
-        data: { id: '', instrumentId: '', formType: '', filingDate: '', filingUrl: '', provider: PROVIDER },
-        citations: [],
-        freshness: [
-          { provider: PROVIDER, asOf: retrievedAt, retrievedAt, stale: true, reason: 'getFiling not implemented' },
-        ],
-        warnings: [
-          {
-            code: 'PARTIAL_DATA',
-            message: 'CN getFiling (full text/PDF parse) not implemented; only listings available.',
-            provider: PROVIDER,
-          },
-        ],
-      };
+      if (!input.filingUrl || !isTrustedCnFilingUrl(input.filingUrl)) {
+        return documentFailure(input, retrievedAt, 'INVALID_INSTRUMENT', 'CN filingUrl is required and must point to cninfo/eastmoney');
+      }
+      const fetchLike = resolveFetch(ctx, options);
+      try {
+        const response = await withTimeout(ctx, ctx.timeoutMs ?? DEFAULT_TIMEOUT_MS * 3, (signal) =>
+          fetchLike(input.filingUrl!, {
+            headers: { ...CN_BROWSER_HEADERS, Accept: 'application/pdf' },
+            signal,
+          }),
+        );
+        if (!response.ok || !response.arrayBuffer) {
+          return documentFailure(
+            input,
+            retrievedAt,
+            response.status === 429 ? 'RATE_LIMITED' : 'SOURCE_UNAVAILABLE',
+            `CN filing PDF HTTP ${response.status}`,
+          );
+        }
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        // pdfjs may transfer/detach the supplied ArrayBuffer. Preserve the wire
+        // bytes and give the parser its own buffer so rawContent stays immutable.
+        const parserBytes = bytes.slice();
+        const contentHash = computeBinaryContentHash(bytes);
+        const parsed = await (options.pdfParser ?? parsePdfText)(parserBytes);
+        if (!parsed.text.trim()) {
+          return documentFailure(input, retrievedAt, 'PARTIAL_DATA', 'CN filing PDF has no extractable text (possibly scanned)');
+        }
+        const provider = input.provider ?? PROVIDER;
+        const document: FilingDocument = {
+          id: input.id,
+          sourceDocumentId: input.sourceDocumentId ?? input.id,
+          sourceGroupId: input.sourceGroupId ?? input.sourceDocumentId ?? input.id,
+          instrumentId: input.instrumentId ?? '',
+          formType: input.formType ?? '',
+          filingDate: input.filingDate ?? '',
+          periodEndOn: input.periodEndOn,
+          filingUrl: input.filingUrl,
+          title: input.title,
+          provider,
+          documentKind: 'PDF',
+          mimeType: 'application/pdf',
+          rawContent: bytes,
+          text: parsed.text,
+          pages: parsed.pages,
+          contentHash,
+          retrievedAt,
+        };
+        return {
+          schemaVersion: RESEARCH_SCHEMA_VERSION,
+          data: document,
+          citations: [{
+            title: input.title ?? 'A-share filing',
+            url: input.filingUrl,
+            sourceType: 'FILING',
+            provider,
+            retrievedAt,
+            qualityTier: provider === 'cninfo' ? 'A' : 'B',
+          }],
+          freshness: [{ provider, asOf: retrievedAt, retrievedAt, stale: false }],
+          warnings: [],
+        };
+      } catch (err) {
+        return documentFailure(
+          input,
+          retrievedAt,
+          'SOURCE_UNAVAILABLE',
+          `CN filing PDF fetch/parse failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
     },
   };
 }
@@ -166,6 +238,7 @@ async function fetchFromSource(
   symbol: string,
   exchange: Exchange,
   limit: number,
+  wantedForms: string[] | undefined,
   fetchLike: FetchLike,
   ctx: ConnectorRunContext,
   retrievedAt: string,
@@ -173,8 +246,10 @@ async function fetchFromSource(
   const timeoutMs = ctx.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   try {
     return await withTimeout(ctx, timeoutMs, (signal) => {
-      if (source === 'cninfo') return fetchCninfo(symbol, exchange, limit, fetchLike, signal);
-      return fetchEastmoney(symbol, limit, fetchLike, signal);
+      if (source === 'cninfo') {
+        return fetchCninfo(symbol, exchange, limit, wantedForms, fetchLike, signal);
+      }
+      return fetchEastmoney(symbol, limit, wantedForms, fetchLike, signal);
     });
   } catch (err) {
     void retrievedAt;
@@ -187,6 +262,7 @@ async function fetchCninfo(
   symbol: string,
   exchange: Exchange,
   limit: number,
+  wantedForms: string[] | undefined,
   fetchLike: FetchLike,
   signal: AbortSignal,
 ): Promise<FetchOk | FetchErr> {
@@ -194,13 +270,15 @@ async function fetchCninfo(
   const column = exchange === 'SS' ? 'sse' : exchange === 'SZ' ? 'szse' : 'bj';
   const url = 'http://www.cninfo.com.cn/new/hisAnnouncement/query';
 
+  const orgId = await resolveCninfoOrgId(symbol, fetchLike, signal);
+  const sourceWindow = wantedForms?.length ? FILTERED_SOURCE_WINDOW : limit;
   const form = new URLSearchParams({
     pageNum: '1',
-    pageSize: String(Math.min(limit, HARD_LIMIT)),
+    pageSize: String(sourceWindow),
     column,
     tabName: 'fulltext',
     plate,
-    stock: symbol,
+    stock: orgId ? `${symbol},${orgId}` : symbol,
     searchkey: '',
     secid: '',
     category: '',
@@ -243,11 +321,54 @@ async function fetchCninfo(
     return { ok: false, code: 'PARTIAL_DATA', message: 'cninfo: missing announcements array' };
   }
   const filings = raw
-    .slice(0, limit)
     .map((item) => parseCninfoItem(item))
-    .filter((x): x is ParsedFiling => x !== null);
-  if (!filings.length) return { ok: false, code: 'PARTIAL_DATA', message: 'cninfo: no parseable filings' };
+    .filter((x): x is ParsedFiling => x !== null)
+    .filter((filing) => matchesWantedForm(filing, wantedForms))
+    .slice(0, limit);
+  if (!filings.length) {
+    return {
+      ok: false,
+      code: 'PARTIAL_DATA',
+      message: wantedForms?.length
+        ? `cninfo: no matching filings in latest ${sourceWindow} announcements`
+        : 'cninfo: no parseable filings',
+    };
+  }
   return { ok: true, filings };
+}
+
+async function resolveCninfoOrgId(
+  symbol: string,
+  fetchLike: FetchLike,
+  signal: AbortSignal,
+): Promise<string | null> {
+  const url = 'http://www.cninfo.com.cn/new/information/topSearch/query';
+  try {
+    const res = await fetchLike(url, {
+      method: 'POST',
+      headers: {
+        ...CN_BROWSER_HEADERS,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: new URLSearchParams({ keyWord: symbol, maxSecNum: '10', maxListNum: '5' }).toString(),
+      signal,
+    });
+    if (!res.ok) return null;
+    const parsed = await res.json();
+    if (!Array.isArray(parsed)) return null;
+    const match = parsed.find((item) => {
+      if (!item || typeof item !== 'object') return false;
+      return (item as Record<string, unknown>).code === symbol;
+    });
+    if (!match || typeof match !== 'object') return null;
+    const orgId = (match as Record<string, unknown>).orgId;
+    return typeof orgId === 'string' && orgId.trim() ? orgId : null;
+  } catch {
+    // The primary query can still succeed on deployments where a bare symbol is accepted.
+    return null;
+  }
 }
 
 function parseCninfoItem(raw: unknown): ParsedFiling | null {
@@ -255,12 +376,17 @@ function parseCninfoItem(raw: unknown): ParsedFiling | null {
   const o = raw as Record<string, unknown>;
   const title = typeof o.announcementTitle === 'string' ? o.announcementTitle : null;
   const adjunct = typeof o.adjunctUrl === 'string' ? o.adjunctUrl : null;
+  const announcementId =
+    typeof o.announcementId === 'string' || typeof o.announcementId === 'number'
+      ? String(o.announcementId)
+      : null;
   const tsRaw = o.announcementTime;
   if (!title || !adjunct) return null;
   const ms = typeof tsRaw === 'number' ? tsRaw : Number(tsRaw);
   if (!Number.isFinite(ms) || ms <= 0) return null;
   const url = `http://static.cninfo.com.cn/${adjunct}`;
   return {
+    sourceDocumentId: announcementId ?? adjunct,
     title,
     url,
     publishedAt: new Date(ms).toISOString(),
@@ -271,12 +397,14 @@ function parseCninfoItem(raw: unknown): ParsedFiling | null {
 async function fetchEastmoney(
   symbol: string,
   limit: number,
+  wantedForms: string[] | undefined,
   fetchLike: FetchLike,
   signal: AbortSignal,
 ): Promise<FetchOk | FetchErr> {
+  const sourceWindow = wantedForms?.length ? FILTERED_SOURCE_WINDOW : limit;
   const url =
     `https://np-anotice-stock.eastmoney.com/api/security/ann` +
-    `?cb=&sr=-1&page_size=${Math.min(limit, HARD_LIMIT)}&page_index=1` +
+    `?cb=&sr=-1&page_size=${sourceWindow}&page_index=1` +
     `&ann_type=A&client_source=web&stock_list=${symbol}&f_node=0&s_node=0`;
   const res = await fetchLike(url, { headers: CN_BROWSER_HEADERS, signal });
   if (!res.ok) {
@@ -289,11 +417,24 @@ async function fetchEastmoney(
     return { ok: false, code: 'PARTIAL_DATA', message: 'eastmoney: missing data.list array' };
   }
   const filings = list
-    .slice(0, limit)
     .map((item) => parseEastmoneyItem(item))
-    .filter((x): x is ParsedFiling => x !== null);
-  if (!filings.length) return { ok: false, code: 'PARTIAL_DATA', message: 'eastmoney: no parseable filings' };
+    .filter((x): x is ParsedFiling => x !== null)
+    .filter((filing) => matchesWantedForm(filing, wantedForms))
+    .slice(0, limit);
+  if (!filings.length) {
+    return {
+      ok: false,
+      code: 'PARTIAL_DATA',
+      message: wantedForms?.length
+        ? `eastmoney: no matching filings in latest ${sourceWindow} announcements`
+        : 'eastmoney: no parseable filings',
+    };
+  }
   return { ok: true, filings };
+}
+
+function matchesWantedForm(filing: ParsedFiling, wantedForms: string[] | undefined): boolean {
+  return !wantedForms?.length || wantedForms.includes(filing.type);
 }
 
 function parseEastmoneyItem(raw: unknown): ParsedFiling | null {
@@ -307,6 +448,7 @@ function parseEastmoneyItem(raw: unknown): ParsedFiling | null {
   const t = Date.parse(dateStr);
   if (!Number.isFinite(t)) return null;
   return {
+    sourceDocumentId: artCode,
     title,
     url: `https://pdf.dfcfw.com/pdf/H2_${artCode}_1.pdf`,
     publishedAt: new Date(t).toISOString(),
@@ -314,11 +456,149 @@ function parseEastmoneyItem(raw: unknown): ParsedFiling | null {
   };
 }
 
+function isTrustedCnFilingUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      (url.protocol === 'https:' || url.protocol === 'http:') &&
+      (url.hostname === 'static.cninfo.com.cn' || url.hostname === 'pdf.dfcfw.com')
+    );
+  } catch {
+    return false;
+  }
+}
+
+export async function parsePdfText(
+  bytes: Uint8Array,
+): Promise<{ text: string; pages: FilingPage[] }> {
+  ensurePdfTextGlobals();
+  // Nest compiles this package to CommonJS. Keep the import native so the
+  // ESM-only pdfjs entry point is not rewritten to require().
+  const nativeImport = new Function(
+    'specifier',
+    'return import(specifier)',
+  ) as (
+    specifier: string,
+  ) => Promise<typeof import('pdfjs-dist/legacy/build/pdf.mjs')>;
+  const pdfjs = await nativeImport('pdfjs-dist/legacy/build/pdf.mjs');
+  const loadingTask = pdfjs.getDocument({
+    data: bytes,
+    useSystemFonts: true,
+    disableFontFace: true,
+  });
+  const pdf = await loadingTask.promise;
+  const pages: FilingPage[] = [];
+  let fullText = '';
+  try {
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const content = await page.getTextContent();
+      const pageText = content.items
+        .map((item) => ('str' in item ? item.str : ''))
+        .join(' ')
+        .replace(/[ \t]+/g, ' ')
+        .trim();
+      if (fullText && pageText) fullText += '\n\n';
+      const adjustedStart = fullText.length;
+      fullText += pageText;
+      pages.push({
+        page: pageNumber,
+        text: pageText,
+        startOffset: adjustedStart,
+        endOffset: fullText.length,
+      });
+    }
+  } finally {
+    await loadingTask.destroy();
+  }
+  return { text: fullText, pages };
+}
+
+/** pdfjs v6 loads browser geometry globals even for text-only extraction on
+ * Node 20. The parser never renders paths, so a standards-shaped 2D matrix is
+ * sufficient and avoids adding a native canvas dependency to the API image. */
+function ensurePdfTextGlobals(): void {
+  const globals = globalThis as unknown as Record<string, unknown>;
+  globals.DOMMatrix ??= TextOnlyDOMMatrix;
+  globals.Path2D ??= TextOnlyPath2D;
+}
+
+class TextOnlyPath2D {
+  addPath(): void {}
+}
+
+class TextOnlyDOMMatrix {
+  a = 1; b = 0; c = 0; d = 1; e = 0; f = 0;
+
+  constructor(values?: number[] | Float32Array | Float64Array) {
+    if (values && values.length >= 6) [this.a, this.b, this.c, this.d, this.e, this.f] = [...values].slice(0, 6);
+  }
+
+  multiplySelf(other: TextOnlyDOMMatrix) {
+    const { a, b, c, d, e, f } = this;
+    this.a = a * other.a + c * other.b;
+    this.b = b * other.a + d * other.b;
+    this.c = a * other.c + c * other.d;
+    this.d = b * other.c + d * other.d;
+    this.e = a * other.e + c * other.f + e;
+    this.f = b * other.e + d * other.f + f;
+    return this;
+  }
+
+  preMultiplySelf(other: TextOnlyDOMMatrix) {
+    const current = new TextOnlyDOMMatrix([this.a, this.b, this.c, this.d, this.e, this.f]);
+    Object.assign(this, other);
+    return this.multiplySelf(current);
+  }
+
+  translateSelf(x = 0, y = 0) { return this.multiplySelf(new TextOnlyDOMMatrix([1, 0, 0, 1, x, y])); }
+  scaleSelf(x = 1, y = x) { return this.multiplySelf(new TextOnlyDOMMatrix([x, 0, 0, y, 0, 0])); }
+  rotateSelf(degrees = 0) {
+    const radians = degrees * Math.PI / 180;
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+    return this.multiplySelf(new TextOnlyDOMMatrix([cos, sin, -sin, cos, 0, 0]));
+  }
+  invertSelf() {
+    const determinant = this.a * this.d - this.b * this.c;
+    if (!determinant) return this;
+    const { a, b, c, d, e, f } = this;
+    this.a = d / determinant;
+    this.b = -b / determinant;
+    this.c = -c / determinant;
+    this.d = a / determinant;
+    this.e = (c * f - d * e) / determinant;
+    this.f = (b * e - a * f) / determinant;
+    return this;
+  }
+}
+
+function documentFailure(
+  input: FilingGetInput,
+  retrievedAt: string,
+  code: ResearchWarning['code'],
+  message: string,
+): ResearchResult<FilingDocument> {
+  return httpFailure<FilingDocument>(PROVIDER, {
+    id: input.id,
+    sourceDocumentId: input.sourceDocumentId ?? input.id,
+    sourceGroupId: input.sourceGroupId ?? input.sourceDocumentId ?? input.id,
+    instrumentId: input.instrumentId ?? '',
+    formType: input.formType ?? '',
+    filingDate: input.filingDate ?? '',
+    periodEndOn: input.periodEndOn,
+    filingUrl: input.filingUrl ?? '',
+    title: input.title,
+    provider: input.provider ?? PROVIDER,
+  }, { retrievedAt, code, message });
+}
+
 /**
  * Cheap regex-based classifier. Ported verbatim from agent — ordering
  * matters (semiannual before annual etc).
  */
 export function classifyFilingTitle(title: string): CnFilingType {
+  if (/投资者关系活动记录(?:表)?|机构调研活动|业绩说明会活动记录|分析师会议记录/.test(title)) return 'investor_relations';
   if (/中期报告|半年度报告|半年报/.test(title)) return 'semiannual';
   if (/第[一三]季度报告|一季报|三季报|季度报告/.test(title)) return 'quarterly';
   if (/业绩预告/.test(title)) return 'preview';
@@ -327,6 +607,28 @@ export function classifyFilingTitle(title: string): CnFilingType {
   if (/(?:^|[^半季])\d{4}\s*年报/.test(title) || /^\d{4}年报$/.test(title)) return 'annual';
   if (/临时公告|重大事项|关于.*的公告|关联交易|股权激励|回购/.test(title)) return 'extraordinary';
   return 'other';
+}
+
+/** A-share fiscal periods follow the calendar year. Return nothing when the
+ * announcement title does not identify one period unambiguously. */
+export function inferCnPeriodEndOn(title: string, type: CnFilingType): string | undefined {
+  const yearMatch = title.match(/(?:^|[^\d])(20\d{2})\s*年/);
+  if (!yearMatch) return undefined;
+  const year = yearMatch[1];
+  if (type === 'quarterly') {
+    if (/第一季度|一季报/.test(title)) return `${year}-03-31`;
+    if (/第三季度|三季报/.test(title)) return `${year}-09-30`;
+    return undefined;
+  }
+  if (type === 'semiannual' || /半年度|半年报|中期报告/.test(title)) return `${year}-06-30`;
+  if (type === 'annual' || /年度|年报/.test(title)) return `${year}-12-31`;
+  if (type === 'preview' || type === 'preliminary') {
+    if (/第一季度|一季报/.test(title)) return `${year}-03-31`;
+    if (/半年度|半年报/.test(title)) return `${year}-06-30`;
+    if (/第三季度|三季报/.test(title)) return `${year}-09-30`;
+    if (/年度|年报/.test(title)) return `${year}-12-31`;
+  }
+  return undefined;
 }
 
 // ─── helpers ───────────────────────────────────────────────────────────────

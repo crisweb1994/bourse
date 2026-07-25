@@ -14,6 +14,13 @@ import type {
   ChatSsePayload,
   StockSearchResult,
   WatchlistItemDto,
+  EarningsGenerationRunDto,
+  LatestEarningsResponseDto,
+  EarningsCardDto,
+  EarningsTrendOptionDto,
+  EarningsTrendSeriesDto,
+  InvestorRelationsGenerationRunDto,
+  InvestorRelationsTimelineResponseDto,
 } from '@bourse/shared-types';
 import { API_URL, csrfHeaders } from './utils';
 
@@ -41,6 +48,81 @@ export class ApiError extends Error {
   ) {
     super(message);
   }
+}
+
+// Earnings brief APIs
+export type {
+  EarningsCardDto,
+  EarningsGenerationRunDto,
+  LatestEarningsResponseDto,
+} from '@bourse/shared-types';
+
+export function getLatestEarnings(
+  stockId: string,
+): Promise<LatestEarningsResponseDto> {
+  return fetchApi(`/api/earnings/stocks/${encodeURIComponent(stockId)}/latest`);
+}
+
+export function createEarningsGeneration(
+  stockId: string,
+  clientRequestId: string,
+): Promise<EarningsGenerationRunDto> {
+  return fetchApi(
+    `/api/earnings/stocks/${encodeURIComponent(stockId)}/generations`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+      body: JSON.stringify({ clientRequestId }),
+    },
+  );
+}
+
+export function getEarningsGeneration(
+  runId: string,
+): Promise<EarningsGenerationRunDto> {
+  return fetchApi(`/api/earnings/generations/${encodeURIComponent(runId)}`);
+}
+
+export function retryEarningsGeneration(
+  runId: string,
+): Promise<EarningsGenerationRunDto> {
+  return fetchApi(`/api/earnings/generations/${encodeURIComponent(runId)}/retry`, {
+    method: 'POST',
+    headers: csrfHeaders(),
+  });
+}
+
+export function getEarningsHistory(stockId: string): Promise<EarningsCardDto[]> {
+  return fetchApi(`/api/earnings/stocks/${encodeURIComponent(stockId)}/history`);
+}
+
+export function getEarningsTrendOptions(stockId: string): Promise<EarningsTrendOptionDto[]> {
+  return fetchApi(`/api/earnings/stocks/${encodeURIComponent(stockId)}/trend-options`);
+}
+
+export function getEarningsTrend(stockId: string, metricCode: string, periods: 4 | 8 | 12, fingerprint: string): Promise<EarningsTrendSeriesDto> {
+  const query = new URLSearchParams({ periods: String(periods), fingerprint });
+  return fetchApi(`/api/earnings/stocks/${encodeURIComponent(stockId)}/trends/${encodeURIComponent(metricCode)}?${query.toString()}`);
+}
+
+export function getInvestorRelationsTimeline(stockId: string): Promise<InvestorRelationsTimelineResponseDto> {
+  return fetchApi(`/api/investor-relations/stocks/${encodeURIComponent(stockId)}/events`);
+}
+
+export function createInvestorRelationsGeneration(stockId: string, clientRequestId: string): Promise<InvestorRelationsGenerationRunDto> {
+  return fetchApi(`/api/investor-relations/stocks/${encodeURIComponent(stockId)}/generations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+    body: JSON.stringify({ clientRequestId }),
+  });
+}
+
+export function getInvestorRelationsGeneration(runId: string): Promise<InvestorRelationsGenerationRunDto> {
+  return fetchApi(`/api/investor-relations/generations/${encodeURIComponent(runId)}`);
+}
+
+export function retryInvestorRelationsGeneration(runId: string): Promise<InvestorRelationsGenerationRunDto> {
+  return fetchApi(`/api/investor-relations/generations/${encodeURIComponent(runId)}/retry`, { method: 'POST', headers: csrfHeaders() });
 }
 
 // Stock APIs
@@ -168,6 +250,7 @@ export async function createChatGeneration(
     analysisIds?: string[];
     sectionTypes?: string[];
     modeHint?: 'OPEN_RESEARCH' | 'ANALYSIS_GROUNDED';
+    investorRelationsEventId?: string;
   },
 ): Promise<ChatGenerationDto> {
   return fetchApi(`/api/chat/threads/${encodeURIComponent(threadId)}/generations`, {
@@ -675,6 +758,7 @@ export interface DigestSubscriptionDto {
   /** 后端 mask 过的 channels（secret/botToken 显示 •••• 末四位）。 */
   channels: DigestChannel[];
   enabled: boolean;
+  earningsImmediateEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -685,6 +769,7 @@ export interface UpsertDigestSubscriptionPayload {
   /** 真凭证（新建）或 mask 形态（编辑 keep-existing）。 */
   channels: DigestChannel[];
   enabled?: boolean;
+  earningsImmediateEnabled?: boolean;
 }
 
 export function getDigestSubscription(): Promise<DigestSubscriptionDto | null> {

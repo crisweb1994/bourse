@@ -65,6 +65,23 @@ describe('financials/concept-mapping — pickFactForPeriod', () => {
     expect(got?.entry.val).toBe(95); // 2024-03-15 是最新 filed
   });
 
+  it('does not select a comparative or YTD row repeated in the current filing', () => {
+    const concept = usdConcept([
+      { fy: 2026, fp: 'Q2', val: 111, filed: '2026-05-01', end: '2026-03-28' },
+      { fy: 2026, fp: 'Q2', val: 255, filed: '2026-05-01', end: '2026-03-28' },
+      { fy: 2026, fp: 'Q2', val: 95, filed: '2026-05-01', end: '2025-03-29' },
+    ]);
+    concept.units.USD![0]!.start = '2025-12-28';
+    concept.units.USD![0]!.frame = 'CY2026Q1';
+    concept.units.USD![1]!.start = '2025-09-28';
+    concept.units.USD![2]!.start = '2024-12-29';
+    concept.units.USD![2]!.frame = 'CY2025Q1';
+
+    const got = pickFactForPeriod(concept, { fy: 2026, fp: 'Q2' });
+    expect(got?.entry.end).toBe('2026-03-28');
+    expect(got?.entry.val).toBe(111);
+  });
+
   it('returns undefined when no entry matches (fy, fp)', () => {
     const concept = usdConcept([{ fy: 2024, fp: 'FY', val: 1 }]);
     expect(pickFactForPeriod(concept, { fy: 2024, fp: 'Q1' })).toBeUndefined();

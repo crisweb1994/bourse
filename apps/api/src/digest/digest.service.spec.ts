@@ -70,6 +70,7 @@ describe('DigestSubscriptionService · keep-existing secrets', () => {
     markets: ['US'],
     sessions: ['PRE'],
     enabled: true,
+    earningsImmediateEnabled: false,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -116,6 +117,27 @@ describe('DigestSubscriptionService · keep-existing secrets', () => {
     } as any);
     assert.equal(captured.channels[0].secret, 'NEW-SECRET-9999');
   });
+
+  it('persists the explicit earnings immediate-notice opt-in', async () => {
+    let captured: any;
+    const stub = {
+      digestSubscription: {
+        findUnique: async () => null,
+        upsert: async (args: any) => {
+          captured = args.create;
+          return { ...baseRow, ...args.create };
+        },
+      },
+    };
+    const svc = new DigestSubscriptionService(stub as any);
+    await svc.upsert('u1', {
+      markets: ['US'],
+      sessions: ['POST'],
+      channels: [FEISHU('SECRET')],
+      earningsImmediateEnabled: true,
+    } as any);
+    assert.equal(captured.earningsImmediateEnabled, true);
+  });
 });
 
 describe('DigestSubscriptionService · masking on get', () => {
@@ -127,6 +149,7 @@ describe('DigestSubscriptionService · masking on get', () => {
           markets: ['US'],
           sessions: ['PRE'],
           enabled: true,
+          earningsImmediateEnabled: true,
           channels: [
             FEISHU('abcdefgh5678'),
             { type: 'TELEGRAM', botToken: '1234567890:ABC', chatId: '99' },
@@ -145,6 +168,7 @@ describe('DigestSubscriptionService · masking on get', () => {
     assert.equal(ch[0].secret, '••••5678');
     assert.equal(ch[1].botToken, '••••:ABC');
     assert.equal(ch[2].url, 'https://y'); // WECOM 无敏感字段，不变
+    assert.equal(out!.earningsImmediateEnabled, true);
   });
 
   it('returns null when no subscription', async () => {

@@ -27,6 +27,7 @@ export { QualityTier } from './contracts/research-citation';
 export { ChannelConfig, ChannelType, BriefPayload } from './contracts/brief-payload';
 export {
   computeContentHash,
+  computeBinaryContentHash,
   formatInstrumentId,
   isInstrumentIdFormat,
   markdownToPlainText,
@@ -45,6 +46,7 @@ export * from './workflows';
 export * from './markets';
 export * from './guardrails';
 export * from './tools';
+export * from './prompts';
 
 // ---- Snapshot orchestration -----------------------------------------------
 export {

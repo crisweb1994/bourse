@@ -29,6 +29,10 @@ export class UpsertDigestSubscriptionDto {
   @IsOptional()
   @IsBoolean()
   enabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  earningsImmediateEnabled?: boolean;
 }
 
 /** GET / PUT response. channels 的敏感字段（secret/botToken）已 mask。 */
@@ -37,6 +41,7 @@ export interface DigestSubscriptionDto {
   sessions: DigestSession[];
   channels: unknown[];
   enabled: boolean;
+  earningsImmediateEnabled: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

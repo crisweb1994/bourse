@@ -164,4 +164,6 @@ export interface ProviderStreamOptions {
 export interface ProviderCompleteOptions {
   model?: string;
   signal?: AbortSignal;
+  /** Hard output-token ceiling for callers that must reserve spend up front. */
+  maxTokens?: number;
 }

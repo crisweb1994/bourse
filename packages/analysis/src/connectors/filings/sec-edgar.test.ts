@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { CikLookup } from './cik-lookup';
-import { createSecEdgarFilingsConnector } from './sec-edgar';
+import {
+  createSecEdgarFilingsConnector,
+  htmlToFilingText,
+  isEarningsReleaseText,
+  selectEarningsExhibit,
+} from './sec-edgar';
 import type { FetchLike } from '../types';
 
 function stubFetch(body: unknown, ok = true, status = 200): FetchLike {
@@ -23,6 +28,7 @@ const NVDA_SUBMISSIONS = {
     recent: {
       accessionNumber: ['0001045810-24-000123', '0001045810-24-000099', '0001045810-23-000777'],
       filingDate: ['2024-08-28', '2024-05-22', '2023-02-21'],
+      reportDate: ['2024-07-28', '2024-04-28', '2024-01-28'],
       form: ['10-Q', '8-K', '10-K'],
       primaryDocument: ['nvda-20240728.htm', 'nvda-8k.htm', 'nvda-20240128.htm'],
       primaryDocDescription: ['10-Q', 'Current report', '10-K'],
@@ -50,6 +56,7 @@ describe('createSecEdgarFilingsConnector', () => {
       instrumentId: 'US:NVDA',
       formType: '10-Q',
       filingDate: '2024-08-28',
+      periodEndOn: '2024-07-28',
       provider: 'sec-edgar',
     });
     expect(out.data[0].filingUrl).toBe(
@@ -163,12 +170,71 @@ describe('createSecEdgarFilingsConnector', () => {
     expect(out.warnings[0].cause).toContain('502');
   });
 
-  it('getFiling is a PARTIAL_DATA stub (full-text deferred)', async () => {
+  it('rejects getFiling without a trusted SEC Archives URL', async () => {
     const c = createSecEdgarFilingsConnector({
       userAgent: 'test',
       cikLookup: fakeLookup({ NVDA }),
     });
     const out = await c.getFiling!({ id: '0001045810-24-000123' });
-    expect(out.warnings[0].code).toBe('PARTIAL_DATA');
+    expect(out.warnings[0].code).toBe('INVALID_INSTRUMENT');
+  });
+
+  it('loads the 8-K index and selects the earnings EX-99.1 document', async () => {
+    const indexHtml = `
+      <table class="tableFile">
+        <tr><th>Seq</th><th>Description</th><th>Document</th><th>Type</th></tr>
+        <tr><td>1</td><td>8-K</td><td><a href="nvda-8k.htm">nvda-8k.htm</a></td><td>8-K</td></tr>
+        <tr><td>2</td><td>Earnings release</td><td><a href="earnings.htm">earnings.htm</a></td><td>EX-99.1</td></tr>
+      </table>`;
+    const fetchLike: FetchLike = async (url) => {
+      if (url.endsWith('-index.html')) {
+        return { ok: true, status: 200, json: async () => ({}), text: async () => indexHtml };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({}),
+        text: async () => '<html><body><h1>Quarterly financial results</h1><p>Revenue was $10 billion. Diluted earnings per share was $2.</p></body></html>',
+      };
+    };
+    const c = createSecEdgarFilingsConnector({ userAgent: 'test', fetchLike });
+    const out = await c.getFiling!({
+      id: '0001045810-24-000099',
+      sourceDocumentId: '0001045810-24-000099',
+      instrumentId: 'US:NVDA',
+      formType: '8-K',
+      filingUrl: 'https://www.sec.gov/Archives/edgar/data/1045810/000104581024000099/nvda-8k.htm',
+      title: 'Current report',
+    });
+    expect(out.warnings).toEqual([]);
+    expect(out.data.documentKind).toBe('EARNINGS_RELEASE');
+    expect(out.data.filingUrl).toContain('earnings.htm');
+    expect(out.data.sourceDocumentId).toContain(':earnings.htm');
+    expect(out.data.text).toContain('Revenue was $10 billion.');
+    expect(out.data.contentHash).toHaveLength(64);
+  });
+});
+
+describe('SEC filing document helpers', () => {
+  it('prefers a described earnings exhibit', () => {
+    const html = `<table class="tableFile">
+      <tr><td>1</td><td>Other exhibit</td><td><a href="other.htm">other</a></td><td>EX-99</td></tr>
+      <tr><td>2</td><td>Quarterly earnings results</td><td><a href="earnings.htm">earnings</a></td><td>EX-99.1</td></tr>
+    </table>`;
+    expect(selectEarningsExhibit(html, 'https://www.sec.gov/Archives/edgar/data/1/2'))
+      .toBe('https://www.sec.gov/Archives/edgar/data/1/2/earnings.htm');
+  });
+
+  it('removes scripts and preserves block boundaries', () => {
+    const text = htmlToFilingText('<body><h1>Title</h1><script>bad()</script><p>Revenue 10</p></body>');
+    expect(text).toContain('Title');
+    expect(text).toContain('Revenue 10');
+    expect(text).not.toContain('bad()');
+  });
+
+  it('rejects non-earnings EX-99.1 press releases', () => {
+    expect(isEarningsReleaseText('Alphabet announces an $80 billion equity capital raise.')).toBe(false);
+    expect(isEarningsReleaseText('Microsoft announces appointment of a new director to the board.')).toBe(false);
+    expect(isEarningsReleaseText('Company reports first quarter financial results. Revenue was $10 billion and diluted earnings per share was $2.')).toBe(true);
   });
 });

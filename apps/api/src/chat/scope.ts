@@ -94,3 +94,15 @@ export function requiresFreshAnalysis(question: string): boolean {
     question ?? '',
   );
 }
+
+/** Deterministic routing guard for questions that should use an immutable
+ * earnings-card snapshot instead of the general web research gateway. */
+export function isEarningsQuestion(question: string): boolean {
+  const value = question ?? '';
+  if (/(?:财报|业绩(?:预告|快报)?|季报|年报|季度报告|earnings?|10-[qk]|8-k)/i.test(value)) {
+    return true;
+  }
+  const mentionsMetric = /(?:revenue|net\s+income|cash\s+flow|eps|guidance|财务数字|利润|营收|现金流|毛利率|经营利润率|资本开支|指引)/i.test(value);
+  const hasEventSemantics = /(?:本期|这季|本季|当季|季度|同比|环比|去年同期|上季|披露|发布|指引|guidance|FY\s*\d{2,4}|Q[1-4]|比去年|低于去年|高于去年|数字变化)/i.test(value);
+  return mentionsMetric && hasEventSemantics;
+}

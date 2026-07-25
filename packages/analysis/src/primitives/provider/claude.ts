@@ -429,7 +429,7 @@ export class ClaudeProvider implements AgentProvider {
     const response = await this.client.messages.create(
       {
         model: this.getUtilityModel(options.model),
-        max_tokens: DEFAULT_MAX_TOKENS_COMPLETE,
+        max_tokens: options.maxTokens ?? DEFAULT_MAX_TOKENS_COMPLETE,
         system: toAnthropicSystemParam(systemPrompt),
         messages: [{ role: 'user', content: userPrompt }],
       },

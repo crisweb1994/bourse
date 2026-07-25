@@ -22,6 +22,7 @@ import type {
   ConsensusEpsBundle,
   ConsensusEpsInput,
   ConsensusEpsRow,
+  EarningsConsensusBundle,
   FinancePort,
   HistoryInput,
   PriceBar,
@@ -423,6 +424,56 @@ export function createCnFinanceConnector(options: CnFinanceOptions = {}): Financ
             ...(out.retryAfterMs ? { retryAfterMs: out.retryAfterMs } : {}),
           },
         ],
+      };
+    },
+
+    async fetchEarningsConsensus(
+      input: ConsensusEpsInput,
+      ctx: ConnectorRunContext = {},
+    ): Promise<ResearchResult<EarningsConsensusBundle | null>> {
+      const retrievedAt = new Date().toISOString();
+      const parsed = parseInstrumentId(input.instrumentId);
+      if (!parsed || parsed.market !== 'CN') {
+        return httpFailure<EarningsConsensusBundle | null>(PROVIDER, null, {
+          retrievedAt,
+          code: parsed ? 'UNSUPPORTED_MARKET' : 'INVALID_INSTRUMENT',
+          message: parsed
+            ? `earnings consensus connector only handles CN; got ${parsed.market}`
+            : `Invalid instrumentId: ${input.instrumentId}`,
+        });
+      }
+      const out = await fetchEastmoneyConsensusEps(
+        parsed.symbol,
+        resolveFetch(ctx, options),
+        ctx,
+        retrievedAt,
+      );
+      if (!out.ok) {
+        return {
+          schemaVersion: RESEARCH_SCHEMA_VERSION,
+          data: null,
+          citations: [],
+          freshness: [{ provider: PROVIDER, asOf: retrievedAt, retrievedAt, stale: true, reason: out.message }],
+          warnings: out.code === 'NO_DATA' ? [] : [{ code: out.code, message: out.message, provider: PROVIDER }],
+        };
+      }
+      return {
+        schemaVersion: RESEARCH_SCHEMA_VERSION,
+        data: {
+          asOf: out.bundle.asOf,
+          estimates: out.bundle.forecasts.map((forecast) => ({
+            metricCode: 'epsBasic' as const,
+            periodEndOn: `${forecast.year}-12-31`,
+            periodType: 'FY' as const,
+            value: forecast.value.toString(),
+            unit: 'per_share' as const,
+            currency: 'CNY',
+            ...(out.bundle.analystCount > 0 ? { analystCount: out.bundle.analystCount } : {}),
+          })),
+        },
+        citations: [out.citation],
+        freshness: [{ provider: PROVIDER, asOf: out.bundle.asOf, retrievedAt, stale: false }],
+        warnings: [],
       };
     },
 

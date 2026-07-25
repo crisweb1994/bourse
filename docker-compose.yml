@@ -14,7 +14,7 @@
 # =============================================================================
 
 x-bourse-service: &bourse-service
-  image: ${BOURSE_IMAGE:-ghcr.io/crisweb1994/bourse:latest}
+  image: ghcr.io/crisweb1994/bourse:latest
   build:
     context: .
     dockerfile: Dockerfile
@@ -23,9 +23,6 @@ x-bourse-service: &bourse-service
       # NEXT_PUBLIC_* values are baked into the shared image's Web bundle.
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
       NEXT_PUBLIC_AUTH_REQUIRED: ${AUTH_REQUIRED:-false}
-      APP_VERSION: ${BOURSE_VERSION:-0.0.1-dev}
-      GIT_SHA: ${BOURSE_GIT_SHA:-local}
-      BUILD_DATE: ${BOURSE_BUILD_DATE:-local}
   restart: unless-stopped
 
 services:
@@ -60,6 +57,7 @@ services:
       # api talks to postgres over the compose network (internal hostname).
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-bourse}
       JWT_SECRET: ${JWT_SECRET}
+      AI_CREDENTIALS_ENCRYPTION_KEY: ${AI_CREDENTIALS_ENCRYPTION_KEY}
       COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
       # GitHub OAuth — leave blank for AUTH_REQUIRED=false single-user mode.
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}

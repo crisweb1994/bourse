@@ -264,6 +264,7 @@ export class OpenAIResponsesRoute implements OpenAIRoute {
         { role: 'system', content: flattenSystem(systemPrompt) },
         { role: 'user', content: userPrompt },
       ],
+      ...(options.maxTokens ? { max_output_tokens: options.maxTokens } : {}),
     } as unknown as Parameters<typeof this.client.responses.create>[0];
 
     const response = (await this.client.responses.create(params, {
