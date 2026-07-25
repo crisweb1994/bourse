@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.0](https://github.com/crisweb1994/bourse/compare/v0.1.0...v0.2.0) (2026-07-25)
+
+
+### Features
+
+* add earnings brief workflow ([1a9d9bd](https://github.com/crisweb1994/bourse/commit/1a9d9bdc585ae47f90ca90782a9a7881b7cb62c3))
+* **earnings:** add phase 3 with oss simplification ([1460e94](https://github.com/crisweb1994/bourse/commit/1460e945beab3dc6799ce5872b8ba8688bd904e1))
+* **earnings:** 新增财报速读 Phase 3 ([ae6c469](https://github.com/crisweb1994/bourse/commit/ae6c46990362ba2e7a6e0db80aac590db13145d7))
+
+
+### Bug Fixes
+
+* **earnings:** harden functional acceptance paths ([5724b89](https://github.com/crisweb1994/bourse/commit/5724b89b941e090d36da116c96f8c1092b23f237))
+* harden earnings functional workflows ([54caff0](https://github.com/crisweb1994/bourse/commit/54caff07335bd25f81c6371c14f04be3b8e1fc8e))
+
 ## [0.1.0](https://github.com/crisweb1994/bourse/compare/v0.0.1...v0.1.0) (2026-07-19)
 
 
