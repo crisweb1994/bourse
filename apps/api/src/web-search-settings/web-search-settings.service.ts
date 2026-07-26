@@ -47,7 +47,6 @@ export class WebSearchSettingsService {
       baseUrl,
       primaryMode: dto.primaryMode ?? existing?.primaryMode ?? 'NATIVE_FIRST',
       timeoutMs: dto.timeoutMs ?? existing?.timeoutMs ?? null,
-      budgetUsdPerRun: dto.budgetUsdPerRun ?? existing?.budgetUsdPerRun ?? null,
       cacheTtlMs: dto.cacheTtlMs ?? existing?.cacheTtlMs ?? null,
     };
     const row = await this.prisma.webSearchSetting.upsert({
@@ -91,9 +90,6 @@ export class WebSearchSettingsService {
         ...(dto.apiKey ? { apiKey: dto.apiKey } : {}),
         ...(dto.baseUrl ? { baseUrl: dto.baseUrl } : {}),
         ...(dto.timeoutMs !== undefined ? { timeoutMs: dto.timeoutMs } : {}),
-        ...(dto.budgetUsdPerRun !== undefined
-          ? { budgetUsdPerRun: dto.budgetUsdPerRun }
-          : {}),
         ...(dto.cacheTtlMs !== undefined ? { cacheTtlMs: dto.cacheTtlMs } : {}),
       });
     } catch (err) {
@@ -155,7 +151,6 @@ export class WebSearchSettingsService {
     baseUrl: string | null;
     primaryMode: string;
     timeoutMs: number | null;
-    budgetUsdPerRun: { toNumber: () => number } | null;
     cacheTtlMs: number | null;
     createdAt: Date;
     updatedAt: Date;
@@ -166,7 +161,6 @@ export class WebSearchSettingsService {
       baseUrl: row.baseUrl,
       primaryMode: row.primaryMode as WebSearchSettingDto['primaryMode'],
       timeoutMs: row.timeoutMs,
-      budgetUsdPerRun: row.budgetUsdPerRun?.toNumber() ?? null,
       cacheTtlMs: row.cacheTtlMs,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,

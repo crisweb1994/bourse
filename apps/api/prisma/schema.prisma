@@ -127,7 +127,6 @@ model WebSearchSetting {
   baseUrl         String? // SearXNG only
   primaryMode     WebSearchPrimaryMode  @default(NATIVE_FIRST)
   timeoutMs       Int?
-  budgetUsdPerRun Decimal?              @db.Decimal(10, 4)
   cacheTtlMs      Int?
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
@@ -210,6 +209,10 @@ model Analysis {
   overallConfidence   Confidence?
   // null = 正常运行；'WEB_SEARCH_FALLBACK' = EvidencePack v2 失败后降级到 v1 web_search。
   degradedSource      String?
+  // 本次分析累计的 LLM 输入/输出 token 数；done 时从 workflow trace 落库。
+  // null = 未跑完或失败时未采集到。
+  inputTokens         Int?
+  outputTokens        Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -579,7 +582,6 @@ model EarningsCardRevision {
   contentHash   String
   inputTokens   Int                        @default(0)
   outputTokens  Int                        @default(0)
-  costUsd       Decimal                    @default(0) @db.Decimal(12, 6)
   generatedAt   DateTime                   @default(now())
   supersededAt  DateTime?
 
@@ -612,7 +614,6 @@ model EarningsGenerationRun {
   model             String?
   inputTokens       Int                      @default(0)
   outputTokens      Int                      @default(0)
-  costUsd           Decimal                  @default(0) @db.Decimal(12, 6)
   createdAt         DateTime                 @default(now())
   startedAt         DateTime?
   completedAt       DateTime?
@@ -688,7 +689,6 @@ model InvestorRelationsRevision {
   contentHash   String
   inputTokens   Int                             @default(0)
   outputTokens  Int                             @default(0)
-  costUsd       Decimal                         @default(0) @db.Decimal(12, 6)
   generatedAt   DateTime                        @default(now())
   supersededAt  DateTime?
 
@@ -720,7 +720,6 @@ model InvestorRelationsGenerationRun {
   model             String?
   inputTokens       Int                               @default(0)
   outputTokens      Int                               @default(0)
-  costUsd           Decimal                           @default(0) @db.Decimal(12, 6)
   createdAt         DateTime                          @default(now())
   startedAt         DateTime?
   completedAt       DateTime?

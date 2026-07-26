@@ -62,6 +62,12 @@ export interface AnalysisStreamEventPayloadMap {
   summary_complete: {
     summaryJson: unknown;
   };
+  cost_update: {
+    /** Cumulative input + output tokens across the run so far. */
+    totalTokens: number;
+    /** Cumulative provider tool calls (e.g. web_search) across the run. */
+    toolCalls: number;
+  };
   done: {
     analysisId: string;
     status?: AnalysisStatus;
@@ -84,6 +90,7 @@ const ANALYSIS_STREAM_EVENT_NAMES = [
   'section_complete',
   'summary_chunk',
   'summary_complete',
+  'cost_update',
   'done',
   'error',
 ] as const satisfies readonly AnalysisStreamEventName[];
@@ -117,6 +124,12 @@ export interface AnalysisStreamState {
   analysisId: string | null;
   degraded: DegradedInfo | null;
   /**
+   * Latest cumulative token totals seen from `cost_update` events. Null until
+   * the backend emits the first one (typically after the first dimension
+   * completes). Drives the live "$0.43 · 12k tokens" chip during streaming.
+   */
+  usage: { totalTokens: number; toolCalls: number } | null;
+  /**
    * True when another browser/process owns the live SSE run and this client is
    * polling for replay snapshots.
    */
@@ -132,6 +145,7 @@ export const INITIAL_ANALYSIS_STREAM_STATE: AnalysisStreamState = {
   error: null,
   analysisId: null,
   degraded: null,
+  usage: null,
   attachedElsewhere: false,
 };
 
@@ -384,15 +398,32 @@ export function applyAnalysisStreamEvent(
         summaryJson: data.summaryJson,
       };
 
+    case 'cost_update': {
+      const totalTokens =
+        typeof data?.totalTokens === 'number' ? data.totalTokens : null;
+      const toolCalls =
+        typeof data?.toolCalls === 'number' ? data.toolCalls : 0;
+      if (totalTokens === null) return state;
+      return {
+        ...state,
+        usage: { totalTokens, toolCalls },
+      };
+    }
+
     case 'done': {
       const terminal =
         typeof data?.status === 'string'
           ? (data.status as string).toUpperCase()
           : 'COMPLETED';
+      // CANCELLED is a user-initiated stop, not a failure — treat it as a
+      // normal terminal state so the UI doesn't flash an error banner. This
+      // also closes a race where SSE done/CANCELLED arrives before the abort
+      // POST resolves: previously done set status=error and the later
+      // stopWatchingStreamState() no-op'd (state was no longer 'streaming'),
+      // leaving the page stuck on "Run ended in CANCELLED". The stuck-run
+      // watchdog surfaces its own warning independently of this status.
       const failed =
-        terminal === 'FAILED' ||
-        terminal === 'CANCELLED' ||
-        terminal === 'BUDGET_EXHAUSTED';
+        terminal === 'FAILED' || terminal === 'BUDGET_EXHAUSTED';
       return {
         ...state,
         status: failed ? 'error' : 'completed',

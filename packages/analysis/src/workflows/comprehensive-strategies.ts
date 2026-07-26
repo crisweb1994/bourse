@@ -60,7 +60,6 @@ export interface HarvestTotals {
   tokensOut: number;
   llmCalls: number;
   toolCalls: number;
-  costUsd: number;
 }
 
 /** Mutable collections the caller owns; passed by reference. */
@@ -106,7 +105,6 @@ export async function harvestDimBuffered(
     toolCalls: 0,
     durationMs: 0,
     citationsCount: 0,
-    costUsd: 0,
   };
   const events: SseEvent[] = [];
   let lastError: Error | null = null;
@@ -136,7 +134,6 @@ export async function harvestDimBuffered(
         toolCalls: 0,
         durationMs: 0,
         citationsCount: 0,
-        costUsd: 0,
       });
       const attemptEvents: SseEvent[] = [];
       for await (const event of subGen) {
@@ -207,7 +204,6 @@ export async function* applyHarvest(
     totals.tokensOut += h.acc.usage.tokensOut;
     totals.llmCalls += h.acc.llmCalls;
     totals.toolCalls += h.acc.toolCalls;
-    totals.costUsd += h.acc.costUsd;
     collections.perDimTrace.set(h.dim.type, makePerDimTraceEntry(h.acc));
     collections.allCitations.push(...h.acc.citations);
     collections.allWarnings.push(...result.warnings);
@@ -228,7 +224,6 @@ export async function* applyHarvest(
       type: 'cost_update',
       runId,
       seq: nextSeq(),
-      totalUsd: totals.costUsd,
       totalTokens: totals.tokensIn + totals.tokensOut,
       toolCalls: totals.toolCalls,
     };
@@ -292,7 +287,7 @@ export interface SequentialStrategyCtx {
   budget: BudgetLimits;
   workflowStartedAt: number;
   /** Returns the first breached cap (inclusive: reach = halt) or false. */
-  overBudget: () => false | 'maxTokens' | 'maxCostUsd' | 'maxToolCalls';
+  overBudget: () => false | 'maxTokens' | 'maxToolCalls';
   seq: SeqHandle;
 }
 
@@ -317,13 +312,47 @@ export async function* runSequentialStrategy(
     aggregatedTokensOut: totals.tokensOut,
     aggregatedLlmCalls: totals.llmCalls,
     aggregatedToolCalls: totals.toolCalls,
-    aggregatedCostUsd: totals.costUsd,
     perDimTrace: collections.perDimTrace,
     workflowStartedAt: ctx.workflowStartedAt,
   });
 
   for (let i = 0; i < dims.length; i++) {
     const dim = dims[i]!;
+
+    // User abort before next dim starts — stop the run. The harvest catch
+    // below already records streamDimension abort errors on `lastError`, but
+    // a pre-dim check is needed so we don't even kick off the next dimension
+    // once the user pressed stop.
+    if (ctx.harvestCtx.signal?.aborted) {
+      yield {
+        type: 'error',
+        runId: ctx.harvestCtx.runId,
+        seq: seq.next(),
+        message: 'Analysis aborted by user',
+        recoverable: false,
+      };
+      const unrunDims = dims.slice(i).map((d) => d.type);
+      const result = yield* emitTerminalDone(
+        {
+          status: 'CANCELLED' as RunStatus,
+          dimResults: collections.dimResults,
+          failures: collections.failures,
+          unrunDimensions: unrunDims,
+          summary: null,
+          allCitations: collections.allCitations,
+          allWarnings: collections.allWarnings,
+          aggregatedTokensIn: totals.tokensIn,
+          aggregatedTokensOut: totals.tokensOut,
+          aggregatedLlmCalls: totals.llmCalls,
+          aggregatedToolCalls: totals.toolCalls,
+          perDimTrace: collections.perDimTrace,
+          workflowStartedAt: ctx.workflowStartedAt,
+        },
+        ctx.harvestCtx.runId,
+        seq.next,
+      );
+      return { status: 'terminal', result };
+    }
 
     // Budget check BEFORE next dim starts.
     const breach = ctx.overBudget();
@@ -364,7 +393,6 @@ export async function* runSequentialStrategy(
         toolCalls: 0,
         durationMs: 0,
         citationsCount: 0,
-        costUsd: 0,
       };
       try {
         for await (const event of streamDimension(
@@ -399,7 +427,6 @@ export async function* runSequentialStrategy(
         totals.tokensOut += acc.usage.tokensOut;
         totals.llmCalls += acc.llmCalls;
         totals.toolCalls += acc.toolCalls;
-        totals.costUsd += acc.costUsd;
         if (acc.toolCalls > 0) {
           // Route tool invocations through middleware.
           for (let n = 0; n < acc.toolCalls; n++) {
@@ -421,7 +448,6 @@ export async function* runSequentialStrategy(
           type: 'cost_update',
           runId: harvestCtx.runId,
           seq: seq.next(),
-          totalUsd: totals.costUsd,
           totalTokens: totals.tokensIn + totals.tokensOut,
           toolCalls: totals.toolCalls,
         };

@@ -10,7 +10,6 @@ import {
 } from './dimension-prompts';
 import { applyFixedDisclaimer } from './disclaimer';
 import { applyEvidenceGate } from './evidence-gate';
-import { computeUsd } from './pricing';
 import type {
   AgentProvider,
   ProviderStreamResult,
@@ -310,16 +309,6 @@ export async function* streamDimension(
     (s, n) => s + n,
     0,
   );
-  const streamCostUsd = computeUsd(
-    finalStream.model,
-    finalStream.usage?.tokensIn ?? 0,
-    finalStream.usage?.tokensOut ?? 0,
-  );
-  const structuredCostUsd = computeUsd(
-    structured.model,
-    structured.usage.tokensIn,
-    structured.usage.tokensOut,
-  );
 
   // RFC-01: aggregate cache + webSearch telemetry across stream + structured
   // passes. Each component is omitted from the SSE payload when it's 0 so
@@ -352,7 +341,6 @@ export async function* streamDimension(
       toolCalls: totalToolCalls,
       durationMs: Date.now() - startedAt,
       citationsCount: finalStream.citations.length,
-      costUsd: streamCostUsd + structuredCostUsd,
       ...(cacheReadTotal > 0 ? { cacheReadInputTokens: cacheReadTotal } : {}),
       ...(cacheCreationTotal > 0
         ? { cacheCreationInputTokens: cacheCreationTotal }

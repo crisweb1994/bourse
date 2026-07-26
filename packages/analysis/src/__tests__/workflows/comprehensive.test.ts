@@ -335,17 +335,16 @@ describe('workflows/streamComprehensive — budget enforcement', () => {
     expect(result.status).toBe('COMPLETED');
   });
 
-  it('halts with BUDGET_EXHAUSTED when maxCostUsd cap is reached', async () => {
-    // Per-dim cost (Sonnet defaults): stream 100/50 ≈ $0.00105 + complete
-    // 80/40 ≈ $0.00084 → $0.00189/dim. maxCostUsd 0.003 → halts after dim 2.
+  it('returns CANCELLED when the abort signal is already set', async () => {
     const result = await runComprehensive(buildProvider({}), minimalInput, {
       runId,
       todayDate: TODAY,
-      budget: { maxCostUsd: 0.003 },
+      // Pre-aborted signal mirrors what happens when the runner's registry
+      // aborts before wave 1 starts. Wave loop detects signal.aborted at the
+      // top and emits the CANCELLED terminal done — never COMPLETED/FAILED.
+      signal: AbortSignal.abort(),
     });
-    expect(result.status).toBe('BUDGET_EXHAUSTED');
-    expect(result.perDimension.size).toBeLessThan(8);
-    expect(result.trace.totalUsd).toBeGreaterThan(0);
+    expect(result.status).toBe('CANCELLED');
   });
 
   it('halts with BUDGET_EXHAUSTED when maxToolCalls cap is reached', async () => {
@@ -368,18 +367,6 @@ describe('workflows/streamComprehensive — budget enforcement', () => {
     // continue. Dim 2 adds 5 → 10 > 8 → check before dim 3 trips.
     expect(result.perDimension.size).toBe(2);
     expect(result.trace.toolCalls).toBe(10);
-  });
-});
-
-describe('workflows/streamComprehensive — trace USD totals', () => {
-  it('trace.totalUsd is non-zero (Sonnet default rates)', async () => {
-    const result = await runComprehensive(buildProvider({}), minimalInput, {
-      runId,
-      todayDate: TODAY,
-    });
-    // 8 dims × ~$0.00189 + summary ≈ $0.017
-    expect(result.trace.totalUsd).toBeGreaterThan(0.01);
-    expect(result.trace.totalUsd).toBeLessThan(0.02);
   });
 });
 
@@ -432,7 +419,7 @@ describe('workflows/streamComprehensive — budget and cost updates', () => {
   });
 
   it('emits cost_update per section with cumulative totals (P1 #2)', async () => {
-    const events: Array<{ type: string; totalUsd?: number; totalTokens?: number }> = [];
+    const events: Array<{ type: string; totalTokens?: number }> = [];
     const gen = streamComprehensive(buildProvider({}), minimalInput, {
       runId,
       todayDate: TODAY,
@@ -440,7 +427,7 @@ describe('workflows/streamComprehensive — budget and cost updates', () => {
     while (true) {
       const next = await gen.next();
       if (next.done) break;
-      events.push(next.value as { type: string; totalUsd?: number; totalTokens?: number });
+      events.push(next.value as { type: string; totalTokens?: number });
     }
     const costs = events.filter((e) => e.type === 'cost_update');
     // 8 per-dim + 2 summary cost_updates ≥ 10
@@ -450,7 +437,7 @@ describe('workflows/streamComprehensive — budget and cost updates', () => {
       expect(c.totalTokens).toBeGreaterThanOrEqual(prev);
       prev = c.totalTokens ?? 0;
     }
-    expect(costs[costs.length - 1]?.totalUsd).toBeGreaterThan(0);
+    expect(costs[costs.length - 1]?.totalTokens).toBeGreaterThan(0);
   });
 });
 

@@ -8,7 +8,7 @@ import { WEB_SEARCH_PROVIDER_IDS, type WebSearchProviderId } from './types';
  *   SEARXNG_BASE_URL=https://searxng.example.com
  *   SEARXNG_API_KEY=...                   # optional, for protected instances
  *   WEB_SEARCH_TIMEOUT_MS=12000           # optional
- *   WEB_SEARCH_BUDGET_PER_RUN_USD=0.10    # optional (informational; SearXNG is free)
+ *   WEB_SEARCH_MAX_SEARCHES_PER_RUN=50    # optional (default 50; SearXNG is free)
  *   WEB_SEARCH_CACHE_TTL_MS=300000        # optional, default 5min
  *
  * When `WEB_SEARCH_PROVIDER` is unset (or set to an unknown id), the
@@ -21,24 +21,18 @@ export interface WebSearchEnvConfig {
   baseUrl?: string;
   apiKey?: string;
   timeoutMs: number;
-  budgetPerRunUsd: number;
+  maxSearchesPerRun: number;
   cacheTtlMs: number;
 }
 
 const DEFAULT_TIMEOUT_MS = 12_000;
-const DEFAULT_BUDGET_PER_RUN_USD = 0.1;
+const DEFAULT_MAX_SEARCHES_PER_RUN = 50;
 const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000;
 
 function parseIntEnv(value: string | undefined, fallback: number): number {
   if (!value) return fallback;
   const n = Number.parseInt(value, 10);
   return Number.isFinite(n) && n > 0 ? n : fallback;
-}
-
-function parseFloatEnv(value: string | undefined, fallback: number): number {
-  if (!value) return fallback;
-  const n = Number.parseFloat(value);
-  return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
 
 /**
@@ -66,9 +60,9 @@ export function loadWebSearchConfigFromEnv(
       baseUrl,
       apiKey: env.SEARXNG_API_KEY?.trim() || undefined,
       timeoutMs: parseIntEnv(env.WEB_SEARCH_TIMEOUT_MS, DEFAULT_TIMEOUT_MS),
-      budgetPerRunUsd: parseFloatEnv(
-        env.WEB_SEARCH_BUDGET_PER_RUN_USD,
-        DEFAULT_BUDGET_PER_RUN_USD,
+      maxSearchesPerRun: parseIntEnv(
+        env.WEB_SEARCH_MAX_SEARCHES_PER_RUN,
+        DEFAULT_MAX_SEARCHES_PER_RUN,
       ),
       cacheTtlMs: parseIntEnv(env.WEB_SEARCH_CACHE_TTL_MS, DEFAULT_CACHE_TTL_MS),
     };

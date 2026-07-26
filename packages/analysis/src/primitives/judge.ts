@@ -4,7 +4,6 @@ import { JudgeResult } from '../contracts/judge-result';
 import type { Dimension } from '../dimensions/types';
 import { judgeNeutral } from '../personas/judge-neutral';
 import type { Persona } from '../personas/types';
-import { computeUsd } from './pricing';
 import type { AgentProvider } from './provider';
 import { structuredOutputWithRepair } from './structured-output';
 
@@ -119,8 +118,6 @@ export interface RunJudgeOutput {
   trace: {
     tokensIn: number;
     tokensOut: number;
-    /** USD computed from `computeUsd(model, tokensIn, tokensOut)`. */
-    costUsd: number;
     durationMs: number;
     /** 1 normally, 2 if the structured-output repair pass ran. */
     llmCalls: number;
@@ -165,14 +162,12 @@ export async function runJudge(
 
   const tokensIn = out.usage.tokensIn ?? 0;
   const tokensOut = out.usage.tokensOut ?? 0;
-  const costUsd = computeUsd(out.model, tokensIn, tokensOut);
 
   return {
     result: out.data,
     trace: {
       tokensIn,
       tokensOut,
-      costUsd,
       durationMs: Date.now() - startedAt,
       llmCalls: out.llmCalls,
       ...(out.model ? { model: out.model } : {}),

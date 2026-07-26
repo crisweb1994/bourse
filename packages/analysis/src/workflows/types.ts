@@ -10,8 +10,6 @@ import type { AgentProvider } from '../primitives/provider';
 export interface BudgetLimits {
   /** Hard cap on cumulative LLM tokens (input+output). */
   maxTokens?: number;
-  /** Hard cap on cumulative estimated LLM cost in USD. */
-  maxCostUsd?: number;
   /** Hard cap on cumulative tool calls. */
   maxToolCalls?: number;
 }

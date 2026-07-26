@@ -425,6 +425,9 @@ export interface AnalysisDto {
   overallSignal: Signal | null;
   overallConfidence: Confidence | null;
   degradedSource?: 'WEB_SEARCH_FALLBACK' | null;
+  /** Cumulative input/output tokens from the terminal trace; null when unknown. */
+  inputTokens?: number | null;
+  outputTokens?: number | null;
   createdAt: string;
   /** Free-form payload; COMPREHENSIVE stores the summary block here. */
   summaryJson?: unknown;
@@ -668,7 +671,6 @@ export interface WebSearchSettingDto {
   baseUrl: string | null;
   primaryMode: WebSearchPrimaryMode;
   timeoutMs: number | null;
-  budgetUsdPerRun: number | null;
   cacheTtlMs: number | null;
   createdAt: string;
   updatedAt: string;
@@ -680,7 +682,6 @@ export interface UpsertWebSearchSettingPayload {
   baseUrl?: string;
   primaryMode?: WebSearchPrimaryMode;
   timeoutMs?: number;
-  budgetUsdPerRun?: number;
   cacheTtlMs?: number;
 }
 

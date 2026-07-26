@@ -5,7 +5,6 @@ import type { EvidencePackAny } from '../contracts/evidence-pack';
 import type { SseEvent } from '../contracts/sse-events';
 import { ALL_DIMENSIONS } from '../dimensions';
 import type { Dimension, DimensionRunResult } from '../dimensions/types';
-import { computeUsd } from '../primitives/pricing';
 import type { AgentProvider } from '../primitives/provider';
 import { ToolMiddlewareRunner } from '../tools/middleware';
 import { runJudge, shouldJudge } from '../primitives/judge';
@@ -117,7 +116,6 @@ export async function* streamComprehensive(
   let aggregatedTokensOut = 0;
   let aggregatedLlmCalls = 0;
   let aggregatedToolCalls = 0;
-  let aggregatedCostUsd = 0;
 
   // Day 11.5b: every per-tool invocation goes through ToolMiddleware
   // (CLAUDE.md §3 #16). Runner observes + computes cost; workflow's
@@ -242,16 +240,11 @@ export async function* streamComprehensive(
 
   // Helper: detect budget exhaustion (inclusive: a cap reached exactly
   // must halt before the next dim starts — comprehensive checks pre-dim).
-  const overBudget = ():
-    | false
-    | 'maxTokens'
-    | 'maxCostUsd'
-    | 'maxToolCalls' =>
+  const overBudget = (): false | 'maxTokens' | 'maxToolCalls' =>
     checkBudget(
       budget,
       {
         tokens: aggregatedTokensIn + aggregatedTokensOut,
-        costUsd: aggregatedCostUsd,
         toolCalls: aggregatedToolCalls,
       },
       true,
@@ -313,12 +306,6 @@ export async function* streamComprehensive(
     set toolCalls(v) {
       aggregatedToolCalls = v;
     },
-    get costUsd() {
-      return aggregatedCostUsd;
-    },
-    set costUsd(v) {
-      aggregatedCostUsd = v;
-    },
   };
   const nextSeq = (): number => seq++;
 
@@ -330,6 +317,22 @@ export async function* streamComprehensive(
     let abortReason = '';
 
     waveLoop: for (const group of waveGroups) {
+      // User abort: stop before this wave starts. Abort propagation goes:
+      //   registry.abort → signal.aborted true → streamDimension's provider
+      //   call rejects with AbortError → harvestDimBuffered records it on
+      //   `error` (kept as data, not rethrown, so runWithSemaphore stays
+      //   allSettled-shaped) → this top-of-wave check stops the loop and
+      //   emits the terminal CANCELLED done.
+      if (options.signal?.aborted) {
+        yield {
+          type: 'error',
+          runId,
+          seq: seq++,
+          message: 'Analysis aborted by user',
+          recoverable: false,
+        };
+        break waveLoop;
+      }
       // Budget pre-check (RFC-05 §7).
       const breach = overBudget();
       if (breach) {
@@ -383,6 +386,30 @@ export async function* streamComprehensive(
       }
     }
 
+    // User abort: skip summary/judge phases entirely — emit CANCELLED done
+    // with whatever dims completed before the abort fired.
+    if (options.signal?.aborted) {
+      const result = yield* emitTerminalDone(
+        {
+          status: 'CANCELLED' as RunStatus,
+          dimResults,
+          failures,
+          summary: null,
+          allCitations,
+          allWarnings,
+          aggregatedTokensIn,
+          aggregatedTokensOut,
+          aggregatedLlmCalls,
+          aggregatedToolCalls,
+          perDimTrace,
+          workflowStartedAt,
+        },
+        runId,
+        nextSeq,
+      );
+      return result;
+    }
+
     if (waveAborted === 'budget') {
       // Emit terminal done + return. Build result with BUDGET_EXHAUSTED
       // status; partial dims completed so far remain in dimResults.
@@ -401,7 +428,6 @@ export async function* streamComprehensive(
           aggregatedTokensOut,
           aggregatedLlmCalls,
           aggregatedToolCalls,
-          aggregatedCostUsd,
           perDimTrace,
           workflowStartedAt,
         },
@@ -423,7 +449,6 @@ export async function* streamComprehensive(
           aggregatedTokensOut,
           aggregatedLlmCalls,
           aggregatedToolCalls,
-          aggregatedCostUsd,
           perDimTrace,
           workflowStartedAt,
         },
@@ -475,7 +500,6 @@ export async function* streamComprehensive(
         aggregatedTokensOut,
         aggregatedLlmCalls,
         aggregatedToolCalls,
-        aggregatedCostUsd,
         perDimTrace,
         workflowStartedAt,
       },
@@ -535,7 +559,6 @@ export async function* streamComprehensive(
             aggregatedTokensOut,
             aggregatedLlmCalls,
             aggregatedToolCalls,
-            aggregatedCostUsd,
             perDimTrace,
             workflowStartedAt,
           },
@@ -608,7 +631,6 @@ export async function* streamComprehensive(
             aggregatedTokensIn += out.trace.tokensIn;
             aggregatedTokensOut += out.trace.tokensOut;
             aggregatedLlmCalls += out.trace.llmCalls;
-            aggregatedCostUsd += out.trace.costUsd;
             yield {
               type: 'judge_complete',
               runId,
@@ -617,7 +639,6 @@ export async function* streamComprehensive(
               result: out.result,
               traceTokensIn: out.trace.tokensIn,
               traceTokensOut: out.trace.tokensOut,
-              traceCostUsd: out.trace.costUsd,
               traceDurationMs: out.trace.durationMs,
             };
           } else {
@@ -683,17 +704,11 @@ export async function* streamComprehensive(
   aggregatedToolCalls += summaryToolCount;
   // Day 11.5b: route summary-phase tools through middleware too.
   recordToolUses(summaryStream.toolUseCounts, summaryStream.usage);
-  aggregatedCostUsd += computeUsd(
-    summaryStream.model,
-    summaryStream.usage?.tokensIn ?? 0,
-    summaryStream.usage?.tokensOut ?? 0,
-  );
 
   yield {
     type: 'cost_update',
     runId,
     seq: seq++,
-    totalUsd: aggregatedCostUsd,
     totalTokens: aggregatedTokensIn + aggregatedTokensOut,
     toolCalls: aggregatedToolCalls,
   };
@@ -716,7 +731,6 @@ export async function* streamComprehensive(
   aggregatedTokensIn += summaryTrace.tokensIn;
   aggregatedTokensOut += summaryTrace.tokensOut;
   aggregatedLlmCalls += summaryTrace.llmCalls;
-  aggregatedCostUsd += summaryTrace.costUsd;
 
   yield {
     type: 'summary_complete',
@@ -730,7 +744,6 @@ export async function* streamComprehensive(
     type: 'cost_update',
     runId,
     seq: seq++,
-    totalUsd: aggregatedCostUsd,
     totalTokens: aggregatedTokensIn + aggregatedTokensOut,
     toolCalls: aggregatedToolCalls,
   };
@@ -748,7 +761,6 @@ export async function* streamComprehensive(
     aggregatedTokensOut,
     aggregatedLlmCalls,
     aggregatedToolCalls,
-    aggregatedCostUsd,
     perDimTrace,
     workflowStartedAt,
   });

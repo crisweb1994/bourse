@@ -9,7 +9,6 @@ import {
   InvestorRelationsRevisionPayloadSchema,
   buildInvestorRelationsUserPrompt,
   computeContentHash,
-  computeUsd,
   locateSourceSpan,
   structuredOutputWithRepair,
   type FilingPage,
@@ -111,7 +110,6 @@ export class InvestorRelationsRunnerService implements OnModuleInit {
       let extraction;
       let inputTokens = run.inputTokens;
       let outputTokens = run.outputTokens;
-      let costUsd = run.costUsd.toNumber();
       if (cached?.extraction) {
         extraction = InvestorRelationsExtractionSchema.parse(cached.extraction);
       } else {
@@ -125,7 +123,6 @@ export class InvestorRelationsRunnerService implements OnModuleInit {
         extraction = result.data;
         inputTokens += result.usage.tokensIn;
         outputTokens += result.usage.tokensOut;
-        costUsd += computeUsd(result.model ?? model, result.usage.tokensIn, result.usage.tokensOut);
         await this.prisma.filingDerivation.create({
           data: {
             filingId: filing.id,
@@ -184,10 +181,10 @@ export class InvestorRelationsRunnerService implements OnModuleInit {
         omittedItemCount: extractedTopics.length + extractedClaims.length - topics.length - managementClaims.length,
         generatedAt: new Date().toISOString(),
       });
-      const revision = await this.persistRevision(event, payload, model, inputTokens, outputTokens, costUsd, relationType);
+      const revision = await this.persistRevision(event, payload, model, inputTokens, outputTokens, relationType);
       await this.prisma.investorRelationsGenerationRun.update({
         where: { id: runId },
-        data: { revisionId: revision.id, status: 'COMPLETED', stage: 'DONE', retryable: false, inputTokens, outputTokens, costUsd: new Prisma.Decimal(costUsd), completedAt: new Date() },
+        data: { revisionId: revision.id, status: 'COMPLETED', stage: 'DONE', retryable: false, inputTokens, outputTokens, completedAt: new Date() },
       });
     } catch (error) {
       const failure = error instanceof IrRunError ? error : new IrRunError('IR_GENERATION_FAILED', true, error instanceof Error ? error.message : String(error));
@@ -232,7 +229,6 @@ export class InvestorRelationsRunnerService implements OnModuleInit {
     model: string,
     inputTokens: number,
     outputTokens: number,
-    costUsd: number,
     relationType: 'PRIMARY' | 'SUPPLEMENTS' | 'CORRECTS',
   ) {
     return this.prisma.$transaction(async (tx) => {
@@ -253,7 +249,7 @@ export class InvestorRelationsRunnerService implements OnModuleInit {
       if (current?.contentHash === contentHash) return current;
       const latest = await tx.investorRelationsRevision.findFirst({ where: { eventId: event.id }, orderBy: { revisionNo: 'desc' }, select: { revisionNo: true } });
       const revision = await tx.investorRelationsRevision.create({
-        data: { eventId: event.id, revisionNo: (latest?.revisionNo ?? 0) + 1, status: mergedPayload.managementClaims.length && mergedPayload.topics.length ? 'COMPLETE' : 'PARTIAL', schemaVersion: INVESTOR_RELATIONS_SCHEMA_VERSION, promptVersion: INVESTOR_RELATIONS_PROMPT_VERSION, model, payload: mergedPayload as unknown as Prisma.InputJsonValue, contentHash, inputTokens, outputTokens, costUsd: new Prisma.Decimal(costUsd) },
+        data: { eventId: event.id, revisionNo: (latest?.revisionNo ?? 0) + 1, status: mergedPayload.managementClaims.length && mergedPayload.topics.length ? 'COMPLETE' : 'PARTIAL', schemaVersion: INVESTOR_RELATIONS_SCHEMA_VERSION, promptVersion: INVESTOR_RELATIONS_PROMPT_VERSION, model, payload: mergedPayload as unknown as Prisma.InputJsonValue, contentHash, inputTokens, outputTokens },
       });
       if (lockedEvent.currentRevisionId) {
         await tx.investorRelationsRevision.update({

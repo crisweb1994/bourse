@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { extractUrlsFromText } from '../../../primitives/provider/openai';
+import { extractUrlsFromText, OpenAIProvider } from '../../../primitives/provider/openai';
+import type { WebSearchExecutor } from '../../../tools/web-search/executor';
 
 describe('openai/extractUrlsFromText', () => {
   it('returns empty for text with no URLs', () => {
@@ -63,5 +64,39 @@ describe('openai/extractUrlsFromText', () => {
     expect(extractUrlsFromText(text)).toEqual([
       { url: 'https://example.com/page' },
     ]);
+  });
+});
+
+describe('OpenAIProvider — web-search executor lifecycle', () => {
+  it('memoizes the executor across factory calls (per-run, not per-stream)', () => {
+    // Regression: previously the factory was invoked fresh on every provider
+    // stream, so each dimension / summary / judge phase got its own executor
+    // and its own maxSearchesPerRun budget — one analysis could burn
+    // `cap × (9 + summary + judge)` searches. The provider now memoizes the
+    // executor for its own lifetime (one provider == one analysis run).
+    let invocations = 0;
+    const sentinel = {} as unknown as WebSearchExecutor;
+    const provider = new OpenAIProvider({
+      apiKey: 'k',
+      webSearchExecutorFactory: () => {
+        invocations += 1;
+        return sentinel;
+      },
+    });
+    // Reach into the private factory via the same path chat-completions-route
+    // uses — three simulated streams should all see the SAME executor.
+    // The factory field is private; cast to access it.
+    const factory = (
+      provider as unknown as {
+        webSearchExecutorFactory: () => WebSearchExecutor | null;
+      }
+    ).webSearchExecutorFactory;
+    const a = factory();
+    const b = factory();
+    const c = factory();
+    expect(a).toBe(sentinel);
+    expect(b).toBe(sentinel);
+    expect(c).toBe(sentinel);
+    expect(invocations).toBe(1);
   });
 });

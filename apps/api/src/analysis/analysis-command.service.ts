@@ -15,6 +15,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAnalysisDto } from './analysis.dto';
+import { AnalysisRunRegistry } from './analysis-run-registry.service';
 import { ProviderResolverService } from './provider-resolver.service';
 
 @Injectable()
@@ -22,6 +23,7 @@ export class AnalysisCommandService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly providerResolver: ProviderResolverService,
+    private readonly runRegistry: AnalysisRunRegistry,
   ) {}
 
   async create(userId: string, dto: CreateAnalysisDto) {
@@ -92,6 +94,13 @@ export class AnalysisCommandService {
         'Only PENDING or IN_PROGRESS analyses can be aborted',
       );
     }
+
+    // Interrupt the in-flight generator first (if it's running in this
+    // process). The signal is threaded through to the provider SDK, so the
+    // live LLM HTTP request is aborted and the adapter's catch block marks
+    // the run CANCELLED. Returns false when the run isn't in-memory (e.g.
+    // after a process restart); the DB flip below still covers that case.
+    this.runRegistry.abort(id);
 
     await this.prisma.analysisSection.updateMany({
       where: {

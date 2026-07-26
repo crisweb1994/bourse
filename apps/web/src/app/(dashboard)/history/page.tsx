@@ -224,6 +224,7 @@ export default function HistoryPage() {
                   <th>状态</th>
                   <th>信号</th>
                   <th>模型</th>
+                  <th>tokens</th>
                   <th>日期</th>
                   <th style={{ textAlign: 'right' }}></th>
                 </tr>
@@ -277,6 +278,16 @@ export default function HistoryPage() {
                           {PROVIDER_LABELS[item.aiProvider || ''] ||
                             item.aiProvider ||
                             '—'}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="font-mono text-[12px] text-[var(--color-fg-3)]">
+                          {item.inputTokens != null && item.outputTokens != null
+                            ? new Intl.NumberFormat('zh-CN', {
+                                notation: 'compact',
+                                maximumFractionDigits: 1,
+                              }).format(item.inputTokens + item.outputTokens)
+                            : '—'}
                         </span>
                       </td>
                       <td>

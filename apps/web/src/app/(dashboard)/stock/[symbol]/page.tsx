@@ -301,6 +301,7 @@ export default function StockAnalysisPage({
           compareOpen={compareOpen}
           onNavClick={handleNavClick}
           onOpenAnalysisForm={() => setShowAnalysisForm(true)}
+          onStop={handleAbortStuck}
           onAbortStuck={handleAbortStuck}
           onRetry={handleRetry}
           onAddToWatchlist={handleAddToWatchlist}

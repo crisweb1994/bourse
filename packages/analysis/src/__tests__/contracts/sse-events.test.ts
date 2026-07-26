@@ -28,7 +28,6 @@ const validResult = {
     toolCalls: 0,
     tokensIn: 0,
     tokensOut: 0,
-    totalUsd: 0,
     durationMs: 0,
   },
   warnings: [],
@@ -70,7 +69,6 @@ describe('contracts/SseEvent — discriminated union', () => {
     const evt = {
       ...baseFields,
       type: 'cost_update' as const,
-      totalUsd: 0.123,
       totalTokens: 1000,
       toolCalls: 5,
     };

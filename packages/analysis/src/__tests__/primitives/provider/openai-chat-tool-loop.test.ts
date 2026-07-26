@@ -9,7 +9,7 @@
  *            → role:'tool' message appended → loop continues
  *   round 1: assistant emits plain content → loop exits
  *
- * Plus a budget-exhausted variant where `result.budgetExhausted=true`
+ * Plus a limit-reached variant where `result.limitReached=true`
  * injects the "stop searching" user message.
  */
 import type OpenAI from 'openai';
@@ -75,7 +75,7 @@ function buildFakeExecutor(result: Partial<ExecuteResult>): WebSearchExecutor {
           ],
           results: { items: [{ title: 'Hit', url: 'https://src.example.com/a' }] },
         },
-        budgetExhausted: false,
+        limitReached: false,
         ...result,
       } as ExecuteResult;
     }),
@@ -178,7 +178,7 @@ describe('OpenAIProvider chat.completions — web_search tool-call loop', () => 
     expect(toolReply!.tool_call_id).toBe('call_1');
   });
 
-  it('budgetExhausted=true injects the "stop searching" user message', async () => {
+  it('limitReached=true injects the "stop searching" user message', async () => {
     const round0 = [
       {
         choices: [
@@ -203,7 +203,7 @@ describe('OpenAIProvider chat.completions — web_search tool-call loop', () => 
       { choices: [{ finish_reason: 'stop' }] },
     ];
 
-    const executor = buildFakeExecutor({ budgetExhausted: true });
+    const executor = buildFakeExecutor({ limitReached: true });
     const { client, captured } = buildScriptedClient([round0, round1]);
 
     const provider = new OpenAIProvider({
@@ -215,7 +215,7 @@ describe('OpenAIProvider chat.completions — web_search tool-call loop', () => 
 
     await provider.stream('sys', 'user', () => {});
 
-    // Round 1's message list contains the budget-stop user message
+    // Round 1's message list contains the limit-stop user message
     // (zh-CN body, distinctive prefix) right after the tool reply.
     const round1Messages = captured[1]!.messages as Array<{
       role: string;
@@ -225,7 +225,7 @@ describe('OpenAIProvider chat.completions — web_search tool-call loop', () => 
       (m) =>
         m.role === 'user' &&
         typeof m.content === 'string' &&
-        m.content.includes('网络搜索预算已用尽'),
+        m.content.includes('网络搜索次数已用尽'),
     );
     expect(stopMsg).toBeDefined();
   });

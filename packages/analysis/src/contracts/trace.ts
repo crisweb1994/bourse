@@ -16,9 +16,6 @@ export const PerDimensionTrace = z.object({
   // RFC-01: provider-internal web_search telemetry.
   webSearchRequests: z.number().int().nonnegative().optional(),
   webSearchErrorsCount: z.number().int().nonnegative().optional(),
-  // RFC-01: USD cost computed from pricing.ts. Already surfaced via
-  // SectionCompleteEvent.usage.costUsd, mirrored here for trace aggregation.
-  costUsd: z.number().nonnegative().optional(),
 });
 export type PerDimensionTrace = z.infer<typeof PerDimensionTrace>;
 
@@ -30,7 +27,6 @@ export const Trace = z.object({
   toolCalls: z.number().int().nonnegative(),
   tokensIn: z.number().int().nonnegative(),
   tokensOut: z.number().int().nonnegative(),
-  totalUsd: z.number().nonnegative(),
   durationMs: z.number().nonnegative(),
   perDimension: z.record(AnalysisType, PerDimensionTrace).optional(),
   // RFC-01: run-wide aggregates. Optional for backwards compatibility with

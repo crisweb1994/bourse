@@ -40,6 +40,12 @@ export interface AnalysisSsePayloadMap {
   summary_complete: {
     summaryJson: unknown;
   };
+  cost_update: {
+    /** Cumulative input + output tokens across the run so far. */
+    totalTokens: number;
+    /** Cumulative provider tool calls (e.g. web_search) across the run. */
+    toolCalls: number;
+  };
   done: {
     analysisId: string;
     status?: AnalysisStatus;

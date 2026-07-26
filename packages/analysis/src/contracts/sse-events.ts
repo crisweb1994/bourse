@@ -58,7 +58,6 @@ export const SectionCompleteEvent = baseEvent.extend({
       toolCalls: z.number().int().nonnegative().optional(),
       durationMs: z.number().nonnegative().optional(),
       citationsCount: z.number().int().nonnegative().optional(),
-      costUsd: z.number().nonnegative().optional(),
       // RFC-01: prompt cache telemetry. Non-zero starting Phase 3.
       cacheReadInputTokens: z.number().int().nonnegative().optional(),
       cacheCreationInputTokens: z.number().int().nonnegative().optional(),
@@ -99,7 +98,6 @@ export const SummaryCompleteEvent = baseEvent.extend({
 
 export const CostUpdateEvent = baseEvent.extend({
   type: z.literal('cost_update'),
-  totalUsd: z.number().nonnegative(),
   totalTokens: z.number().int().nonnegative(),
   toolCalls: z.number().int().nonnegative(),
   // RFC-01: optional run-wide cache + web_search aggregates. All new fields
@@ -188,10 +186,9 @@ export const JudgeCompleteEvent = baseEvent.extend({
   type: z.literal('judge_complete'),
   sectionType: SectionType,
   result: JudgeResult,
-  /** Token + USD breakdown for telemetry attribution. */
+  /** Token breakdown for telemetry attribution. */
   traceTokensIn: z.number().int().nonnegative(),
   traceTokensOut: z.number().int().nonnegative(),
-  traceCostUsd: z.number().nonnegative(),
   traceDurationMs: z.number().nonnegative(),
 });
 

@@ -89,6 +89,20 @@ state = applyAnalysisStreamEvent(state, 'summary_complete', {
 assert.equal(state.summaryMarkdown, 'overall');
 assert.deepEqual(state.summaryJson, { overallSignal: 'BULLISH' });
 
+// cost_update carries cumulative token totals → state.usage.
+assert.equal(state.usage, null);
+state = applyAnalysisStreamEvent(state, 'cost_update', {
+  totalTokens: 1234,
+  toolCalls: 3,
+});
+assert.deepEqual(state.usage, { totalTokens: 1234, toolCalls: 3 });
+// A later cost_update overrides (cumulative totals).
+state = applyAnalysisStreamEvent(state, 'cost_update', {
+  totalTokens: 5678,
+  toolCalls: 4,
+});
+assert.deepEqual(state.usage, { totalTokens: 5678, toolCalls: 4 });
+
 state = applyAnalysisStreamEvent(state, 'done', {
   analysisId: 'analysis-1',
   status: 'BUDGET_EXHAUSTED',
@@ -96,6 +110,22 @@ state = applyAnalysisStreamEvent(state, 'done', {
 assert.equal(state.status, 'error');
 assert.equal(state.error, 'Run ended in BUDGET_EXHAUSTED');
 assert.equal(state.attachedElsewhere, false);
+
+// Regression: CANCELLED is a user-initiated stop, NOT a failure. Previously
+// it was bucketed with FAILED/BUDGET_EXHAUSTED, so the UI flashed an error
+// banner and — worse — if SSE done/CANCELLED arrived before the abort POST
+// resolved, stopWatchingStreamState() no-op'd (state was no longer
+// 'streaming') and the page stuck on "Run ended in CANCELLED".
+const cancelledState = startStreamState(
+  INITIAL_ANALYSIS_STREAM_STATE,
+  'analysis-cancel',
+);
+const afterCancel = applyAnalysisStreamEvent(cancelledState, 'done', {
+  analysisId: 'analysis-cancel',
+  status: 'CANCELLED',
+});
+assert.equal(afterCancel.status, 'completed');
+assert.equal(afterCancel.error, null);
 
 let attached = markAttachedElsewhere(
   startStreamState(INITIAL_ANALYSIS_STREAM_STATE, 'analysis-2'),

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  BudgetExhaustedError,
+  SearchLimitReachedError,
   WebSearchExecutor,
 } from '../../../tools/web-search/executor';
 import type {
@@ -50,7 +50,7 @@ describe('WebSearchExecutor', () => {
     const ex = new WebSearchExecutor({
       adapter,
       timeoutMs: 5000,
-      budgetUsdPerRun: 1,
+      maxSearchesPerRun: 50,
       cacheTtlMs: 60_000,
     });
     const a = await ex.execute({ query: '沪电股份' });
@@ -61,20 +61,20 @@ describe('WebSearchExecutor', () => {
     expect(ex.stats().cacheHits).toBe(1);
   });
 
-  it('throws BudgetExhaustedError when over cap', async () => {
-    const adapter = fakeAdapter({ costPerCall: 0.6 });
+  it('throws SearchLimitReachedError when over cap', async () => {
+    const adapter = fakeAdapter({ costPerCall: 0 });
     const ex = new WebSearchExecutor({
       adapter,
       timeoutMs: 5000,
-      budgetUsdPerRun: 1,
+      maxSearchesPerRun: 2,
       cacheTtlMs: 0,
     });
     const first = await ex.execute({ query: 'q1' });
-    expect(first.budgetExhausted).toBe(false);
+    expect(first.limitReached).toBe(false);
     const second = await ex.execute({ query: 'q2' });
-    expect(second.budgetExhausted).toBe(true);
+    expect(second.limitReached).toBe(true);
     await expect(ex.execute({ query: 'q3' })).rejects.toBeInstanceOf(
-      BudgetExhaustedError,
+      SearchLimitReachedError,
     );
   });
 
@@ -83,7 +83,7 @@ describe('WebSearchExecutor', () => {
     const ex = new WebSearchExecutor({
       adapter,
       timeoutMs: 5000,
-      budgetUsdPerRun: 1,
+      maxSearchesPerRun: 50,
       cacheTtlMs: 0,
     });
     const r = await ex.execute({ query: 'q' });
@@ -91,12 +91,34 @@ describe('WebSearchExecutor', () => {
     expect(adapter.calls).toBe(2);
   });
 
+  it('does NOT let a retry bust the cap when only one slot is left', async () => {
+    // Regression: previously the cap was checked only at execute() entry, so
+    // a single execute() with cap=1 could burn 2 adapter calls when the
+    // first attempt threw a retryable error. Now every adapter call (incl.
+    // retry) consumes a slot AND is gated by a fresh cap check.
+    const adapter = fakeAdapter({ failTimes: 5, failWith: 'http 429' });
+    const ex = new WebSearchExecutor({
+      adapter,
+      timeoutMs: 5000,
+      maxSearchesPerRun: 1,
+      cacheTtlMs: 0,
+    });
+    // First attempt burns the only slot (callCount 0→1) and throws 429; the
+    // retry must hit the in-loop cap check (1 >= 1) and reject with
+    // SearchLimitReachedError instead of making a second adapter call.
+    await expect(ex.execute({ query: 'q' })).rejects.toBeInstanceOf(
+      SearchLimitReachedError,
+    );
+    expect(adapter.calls).toBe(1);
+    expect(ex.stats().callCount).toBe(1);
+  });
+
   it('surfaces non-retryable error to caller', async () => {
     const adapter = fakeAdapter({ failTimes: 5, failWith: 'invalid input' });
     const ex = new WebSearchExecutor({
       adapter,
       timeoutMs: 5000,
-      budgetUsdPerRun: 1,
+      maxSearchesPerRun: 50,
       cacheTtlMs: 0,
     });
     const r = await ex.execute({ query: 'q' });
@@ -109,7 +131,7 @@ describe('WebSearchExecutor', () => {
     const ex = new WebSearchExecutor({
       adapter,
       timeoutMs: 5000,
-      budgetUsdPerRun: 1,
+      maxSearchesPerRun: 50,
       cacheTtlMs: 0,
     });
     const r = await ex.execute({ query: 'hello' });
@@ -124,7 +146,7 @@ describe('WebSearchExecutor', () => {
     const ex = new WebSearchExecutor({
       adapter,
       timeoutMs: 5000,
-      budgetUsdPerRun: 1,
+      maxSearchesPerRun: 50,
       cacheTtlMs: 0,
     });
     const r = await ex.execute({ query: 'q' });
@@ -137,7 +159,7 @@ describe('WebSearchExecutor', () => {
     const ex = new WebSearchExecutor({
       adapter,
       timeoutMs: 5000,
-      budgetUsdPerRun: 1,
+      maxSearchesPerRun: 50,
       cacheTtlMs: 0,
     });
     const r = await ex.execute({ query: 'q' });
@@ -169,7 +191,7 @@ describe('WebSearchExecutor', () => {
     const ex = new WebSearchExecutor({
       adapter,
       timeoutMs: 5000,
-      budgetUsdPerRun: 1,
+      maxSearchesPerRun: 50,
       cacheTtlMs: 0,
       domainTierFilter: {
         tiers: {

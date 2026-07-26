@@ -19,7 +19,6 @@ export class InvalidContractError extends Error {
  * Limits:
  *   - 'maxTokens'    — workflow-level token cap (BudgetLimits.maxTokens)
  *   - 'maxToolCalls' — ToolMiddlewareConfig per-tool / total call cap
- *   - 'maxCostUsd'   — workflow-level USD cap
  *   - 'toolBudget'   — RFC-09 P2: ToolPolicy.budgetCapUsd per-call USD
  *                      ceiling exceeded after a successful tool run
  */
@@ -29,7 +28,6 @@ export class BudgetExhaustedError extends Error {
     public readonly limit:
       | 'maxTokens'
       | 'maxToolCalls'
-      | 'maxCostUsd'
       | 'toolBudget',
   ) {
     super(message);

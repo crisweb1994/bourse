@@ -41,6 +41,17 @@ type RightInsightsSummary = ComponentProps<
   typeof RightInsightsPanel
 >['summaryJson'];
 
+const TOKEN_COMPACT = new Intl.NumberFormat('zh-CN', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+});
+
+/** 856 → "856"; 12_300 → "1.2万" (compact zh-CN). */
+function formatTokenCount(tokens: number): string {
+  if (!Number.isFinite(tokens)) return '0';
+  return TOKEN_COMPACT.format(tokens);
+}
+
 interface AnalysisStreamViewProps {
   stream: AnalysisStream;
   currentAnalysisMeta: AnalysisHistoryItemDto | null;
@@ -63,6 +74,12 @@ interface AnalysisStreamViewProps {
   compareOpen: boolean;
   onNavClick: (id: string) => void;
   onOpenAnalysisForm: () => void;
+  /**
+   * User-initiated stop: triggers the real backend abort (interrupts the
+   * in-flight LLM call), then flips the local UI out of streaming. Distinct
+   * from `onAbortStuck`, which is the watchdog path for runs that stalled.
+   */
+  onStop: () => void | Promise<void>;
   onAbortStuck: () => void | Promise<void>;
   onRetry: (sectionId: string) => void | Promise<void>;
   onAddToWatchlist: () => void | Promise<void>;
@@ -93,6 +110,7 @@ export function AnalysisStreamView({
   compareOpen,
   onNavClick,
   onOpenAnalysisForm,
+  onStop,
   onAbortStuck,
   onRetry,
   onAddToWatchlist,
@@ -240,10 +258,15 @@ export function AnalysisStreamView({
 
       {stream.status === 'streaming' && (
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" onClick={stream.stopStream}>
+          <Button size="sm" onClick={onStop}>
             <Square className="w-3 h-3" strokeWidth={1.5} />
             停止
           </Button>
+          {stream.usage && (
+            <span className="font-mono text-[10.5px] text-[var(--color-fg-3)] uppercase tracking-[0.04em]">
+              {formatTokenCount(stream.usage.totalTokens)} tokens
+            </span>
+          )}
           {stuckSuspected && (
             <span
               className={

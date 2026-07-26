@@ -15,7 +15,6 @@ import {
   attachComparisons,
   attachEarningsBenchmarks,
   computeContentHash,
-  computeUsd,
   financialsToComparableFacts,
   latestFinancialsToStructuredProjection,
   locateSourceSpan,
@@ -147,7 +146,6 @@ export class EarningsRunnerService implements OnModuleInit {
       let extraction: EarningsExtractionValue;
       let inputTokens = run.inputTokens;
       let outputTokens = run.outputTokens;
-      let costUsd = run.costUsd.toNumber();
       const cached = await this.prisma.filingDerivation.findUnique({
         where: { derivationKey: extractionKey },
       });
@@ -176,18 +174,12 @@ export class EarningsRunnerService implements OnModuleInit {
           );
           inputTokens += result.usage.tokensIn;
           outputTokens += result.usage.tokensOut;
-          costUsd += computeUsd(
-            result.model ?? model,
-            result.usage.tokensIn,
-            result.usage.tokensOut,
-          );
         } catch (error) {
           if (isProviderFailure(error)) {
             await this.completeStructuredFallback(
               runId,
               run.stock,
               toFallbackSource(source, 'PROVIDER_UNAVAILABLE'),
-              costUsd,
             );
             return;
           }
@@ -330,7 +322,7 @@ export class EarningsRunnerService implements OnModuleInit {
       });
 
       await this.updateStage(runId, 'PERSIST');
-      const revision = await this.persistRevision(event, payload, model, inputTokens, outputTokens, costUsd, filingRelation);
+      const revision = await this.persistRevision(event, payload, model, inputTokens, outputTokens, filingRelation);
       await this.notices.notify(
         run.stock.id,
         revision.cardPayload,
@@ -349,7 +341,6 @@ export class EarningsRunnerService implements OnModuleInit {
           model,
           inputTokens,
           outputTokens,
-          costUsd: new Prisma.Decimal(costUsd),
           completedAt: new Date(),
         },
       });
@@ -373,7 +364,6 @@ export class EarningsRunnerService implements OnModuleInit {
     runId: string,
     stock: Stock,
     source: StructuredFallbackSource,
-    actualCostUsd = 0,
   ): Promise<void> {
     await this.updateStage(runId, 'RECONCILE', { provider: source.provider, model: 'structured-only' });
     const port = stock.market === 'US'
@@ -450,7 +440,7 @@ export class EarningsRunnerService implements OnModuleInit {
       generatedAt: new Date().toISOString(),
     });
     await this.updateStage(runId, 'PERSIST', { provider: source.provider, model: 'structured-only' });
-    const revision = await this.persistRevision(event, payload, 'structured-only', 0, 0, actualCostUsd, 'SUPPLEMENTS');
+    const revision = await this.persistRevision(event, payload, 'structured-only', 0, 0, 'SUPPLEMENTS');
     await this.notices.notify(
       stock.id,
       revision.cardPayload,
@@ -469,7 +459,6 @@ export class EarningsRunnerService implements OnModuleInit {
         model: 'structured-only',
         inputTokens: 0,
         outputTokens: 0,
-        costUsd: new Prisma.Decimal(actualCostUsd),
         completedAt: new Date(),
       },
     });
@@ -720,7 +709,6 @@ export class EarningsRunnerService implements OnModuleInit {
     model: string,
     inputTokens: number,
     outputTokens: number,
-    costUsd: number,
     relationType: 'SUPPLEMENTS' | 'CORRECTS' | 'SUPERSEDES',
   ) {
     return this.prisma.$transaction(async (tx) => {
@@ -760,7 +748,6 @@ export class EarningsRunnerService implements OnModuleInit {
           contentHash,
           inputTokens,
           outputTokens,
-          costUsd: new Prisma.Decimal(costUsd),
         },
       });
       if (card.currentRevisionId && advancesCurrent) {

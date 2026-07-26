@@ -117,6 +117,18 @@ export function mapSummaryCompleteEvent(
   };
 }
 
+export function mapCostUpdateEvent(
+  event: Extract<SseEvent, { type: 'cost_update' }>,
+): ApiSseFrame<'cost_update'> {
+  return {
+    event: 'cost_update',
+    data: {
+      totalTokens: event.totalTokens,
+      toolCalls: event.toolCalls,
+    },
+  };
+}
+
 export function mapDoneEvent(
   analysisId: string,
   status: Extract<SseEvent, { type: 'done' }>['status'],
