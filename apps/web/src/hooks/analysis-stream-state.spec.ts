@@ -111,6 +111,22 @@ assert.equal(state.status, 'error');
 assert.equal(state.error, 'Run ended in BUDGET_EXHAUSTED');
 assert.equal(state.attachedElsewhere, false);
 
+// Regression: CANCELLED is a user-initiated stop, NOT a failure. Previously
+// it was bucketed with FAILED/BUDGET_EXHAUSTED, so the UI flashed an error
+// banner and — worse — if SSE done/CANCELLED arrived before the abort POST
+// resolved, stopWatchingStreamState() no-op'd (state was no longer
+// 'streaming') and the page stuck on "Run ended in CANCELLED".
+const cancelledState = startStreamState(
+  INITIAL_ANALYSIS_STREAM_STATE,
+  'analysis-cancel',
+);
+const afterCancel = applyAnalysisStreamEvent(cancelledState, 'done', {
+  analysisId: 'analysis-cancel',
+  status: 'CANCELLED',
+});
+assert.equal(afterCancel.status, 'completed');
+assert.equal(afterCancel.error, null);
+
 let attached = markAttachedElsewhere(
   startStreamState(INITIAL_ANALYSIS_STREAM_STATE, 'analysis-2'),
 );

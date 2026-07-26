@@ -147,15 +147,32 @@ export class AnalysisRunnerService {
         modelHint: analysis.aiModel,
       });
 
-      // Abort that arrived during provider resolution: persist CANCELLED
-      // (the DB row is currently IN_PROGRESS) and surface to the client.
-      // Skip the workflow entirely so we don't burn tokens on a run the
-      // user already cancelled.
+      // Abort that arrived during provider resolution — checked TWO ways
+      // because there's a race between claim and registry.register that the
+      // in-memory signal alone can't close:
+      //   (a) abortController.signal.aborted — covers aborts that landed
+      //       after register() but before this check.
+      //   (b) DB row already CANCELLED — covers aborts that landed in the
+      //       window between claim (line above) and register(). In that
+      //       window registry.abort() returns false (no controller yet), so
+      //       the abort endpoint just flips the DB; we must re-read it here
+      //       or we'd kick off the workflow on a run the user cancelled.
+      // Either way: don't burn tokens. Surface CANCELLED to the client.
       if (abortController.signal.aborted) {
         await this.prisma.analysis.update({
           where: { id: analysisId },
           data: { status: 'CANCELLED' },
         });
+        send('done', { analysisId, status: 'CANCELLED' });
+        return;
+      }
+      const currentRow = await this.prisma.analysis.findUnique({
+        where: { id: analysisId },
+        select: { status: true },
+      });
+      if (currentRow?.status === 'CANCELLED') {
+        // Abort endpoint already wrote CANCELLED during the claim/register
+        // race window — honor it instead of overriding back to IN_PROGRESS.
         send('done', { analysisId, status: 'CANCELLED' });
         return;
       }

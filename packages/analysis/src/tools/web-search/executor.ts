@@ -123,6 +123,16 @@ export class WebSearchExecutor {
 
     let lastErr: unknown;
     for (let attempt = 0; attempt < 2; attempt += 1) {
+      // Re-check the cap before every real adapter call (including the
+      // retry). The entry-time check at the top of execute() only covers
+      // the first attempt; without this, a single execute() with cap=1
+      // could burn 2 adapter calls (initial + retry) on a transient error.
+      if (this.callCount >= this.cfg.maxSearchesPerRun) {
+        throw new SearchLimitReachedError(
+          this.callCount,
+          this.cfg.maxSearchesPerRun,
+        );
+      }
       // Count every real adapter call (success, retry, and failure alike)
       // so a flaky upstream can't bypass the per-run cap. Done before the
       // call so a throw still consumes the slot.

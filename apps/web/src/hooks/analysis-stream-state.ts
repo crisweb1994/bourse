@@ -415,10 +415,15 @@ export function applyAnalysisStreamEvent(
         typeof data?.status === 'string'
           ? (data.status as string).toUpperCase()
           : 'COMPLETED';
+      // CANCELLED is a user-initiated stop, not a failure — treat it as a
+      // normal terminal state so the UI doesn't flash an error banner. This
+      // also closes a race where SSE done/CANCELLED arrives before the abort
+      // POST resolves: previously done set status=error and the later
+      // stopWatchingStreamState() no-op'd (state was no longer 'streaming'),
+      // leaving the page stuck on "Run ended in CANCELLED". The stuck-run
+      // watchdog surfaces its own warning independently of this status.
       const failed =
-        terminal === 'FAILED' ||
-        terminal === 'CANCELLED' ||
-        terminal === 'BUDGET_EXHAUSTED';
+        terminal === 'FAILED' || terminal === 'BUDGET_EXHAUSTED';
       return {
         ...state,
         status: failed ? 'error' : 'completed',

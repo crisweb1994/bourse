@@ -22,9 +22,16 @@ import { OpenAIChatCompletionsRoute } from './openai/chat-completions-route';
 export { extractUrlsFromText };
 
 /**
- * Default executor factory — builds a per-stream `WebSearchExecutor` from
- * env (Phase 1) when an adapter is configured, else returns null.
- * Each call yields a fresh executor so cache + search cap are per-stream.
+ * Default executor factory — builds a `WebSearchExecutor` from env (Phase 1)
+ * when an adapter is configured, else returns null.
+ *
+ * The factory itself is called lazily ONCE per provider instance (see
+ * `getWebSearchExecutor`); the OpenAIProvider is constructed once per
+ * analysis run, so the executor — and therefore the per-run search cap +
+ * LRU cache — correctly spans all dimensions, summary, and judge phases
+ * of a single analysis. Returning a fresh executor on every call would
+ * reset the cap to its default for each LLM stream and let one analysis
+ * burn `cap × (9 dims + summary + judge)` searches.
  */
 function defaultWebSearchExecutorFactory(): WebSearchExecutor | null {
   const built = buildAdapterFromEnv();
@@ -85,7 +92,12 @@ export class OpenAIProvider implements AgentProvider {
   private readonly utilityModel: string;
   /** Echo of config.baseUrl for diag logs only — SDK owns the real value. */
   private readonly baseUrl?: string;
-  /** Factory for the per-stream pluggable web-search executor. */
+  /**
+   * Factory for the pluggable web-search executor. Memoized per provider
+   * instance (and a provider instance spans one analysis run), so the
+   * per-run search cap + LRU cache correctly cover every dimension,
+   * summary, and judge phase instead of resetting per LLM stream.
+   */
   private readonly webSearchExecutorFactory: () => WebSearchExecutor | null;
   /** Per-instance override of the chat.completions routing decision. See OpenAIProviderConfig.forceChatCompletions. */
   private readonly forceChatCompletions?: boolean;
@@ -112,8 +124,18 @@ export class OpenAIProvider implements AgentProvider {
     this.utilityModel =
       config.utilityModel ?? config.model ?? DEFAULT_UTILITY_MODEL;
     this.baseUrl = config.baseUrl;
-    this.webSearchExecutorFactory =
+    // Wrap the raw factory in a per-instance memo: the first call builds the
+    // executor, every subsequent call (one per LLM stream within this run)
+    // returns the SAME executor. This is what makes the per-run search cap
+    // and LRU cache actually per-run instead of per-stream. A provider
+    // instance is constructed once per analysis run by ProviderResolver.
+    const rawFactory =
       config.webSearchExecutorFactory ?? defaultWebSearchExecutorFactory;
+    let cached: { executor: WebSearchExecutor | null } | null = null;
+    this.webSearchExecutorFactory = () => {
+      if (cached === null) cached = { executor: rawFactory() };
+      return cached.executor;
+    };
     this.forceChatCompletions = config.forceChatCompletions;
     this.responsesRoute = new OpenAIResponsesRoute(
       this.client,
