@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/crisweb1994/bourse/compare/v0.2.0...v0.3.0) (2026-07-26)
+
+
+### Features
+
+* **analysis:** real abort + per-run token visibility ([53a3740](https://github.com/crisweb1994/bourse/commit/53a3740757f948c64379e77740a5cd36bcd204ee))
+
+
+### Bug Fixes
+
+* **analysis:** close abort race, web-search cap gaps, cancel UI state ([22448e9](https://github.com/crisweb1994/bourse/commit/22448e9e7e9df09ffefcbffc02c92c4c7619d9c1))
+
 ## [0.2.0](https://github.com/crisweb1994/bourse/compare/v0.1.0...v0.2.0) (2026-07-25)
 
 
