@@ -62,6 +62,12 @@ export interface AnalysisStreamEventPayloadMap {
   summary_complete: {
     summaryJson: unknown;
   };
+  cost_update: {
+    /** Cumulative input + output tokens across the run so far. */
+    totalTokens: number;
+    /** Cumulative provider tool calls (e.g. web_search) across the run. */
+    toolCalls: number;
+  };
   done: {
     analysisId: string;
     status?: AnalysisStatus;
@@ -84,6 +90,7 @@ const ANALYSIS_STREAM_EVENT_NAMES = [
   'section_complete',
   'summary_chunk',
   'summary_complete',
+  'cost_update',
   'done',
   'error',
 ] as const satisfies readonly AnalysisStreamEventName[];
@@ -117,6 +124,12 @@ export interface AnalysisStreamState {
   analysisId: string | null;
   degraded: DegradedInfo | null;
   /**
+   * Latest cumulative token totals seen from `cost_update` events. Null until
+   * the backend emits the first one (typically after the first dimension
+   * completes). Drives the live "$0.43 · 12k tokens" chip during streaming.
+   */
+  usage: { totalTokens: number; toolCalls: number } | null;
+  /**
    * True when another browser/process owns the live SSE run and this client is
    * polling for replay snapshots.
    */
@@ -132,6 +145,7 @@ export const INITIAL_ANALYSIS_STREAM_STATE: AnalysisStreamState = {
   error: null,
   analysisId: null,
   degraded: null,
+  usage: null,
   attachedElsewhere: false,
 };
 
@@ -383,6 +397,18 @@ export function applyAnalysisStreamEvent(
         ...state,
         summaryJson: data.summaryJson,
       };
+
+    case 'cost_update': {
+      const totalTokens =
+        typeof data?.totalTokens === 'number' ? data.totalTokens : null;
+      const toolCalls =
+        typeof data?.toolCalls === 'number' ? data.toolCalls : 0;
+      if (totalTokens === null) return state;
+      return {
+        ...state,
+        usage: { totalTokens, toolCalls },
+      };
+    }
 
     case 'done': {
       const terminal =

@@ -8,6 +8,7 @@ import { AnalysisCommandService } from './analysis-command.service';
 import { AnalysisLifecycleService } from './analysis-lifecycle.service';
 import { AnalysisQueryService } from './analysis-query.service';
 import { AnalysisReplayService } from './analysis-replay.service';
+import { AnalysisRunRegistry } from './analysis-run-registry.service';
 import { AnalysisRunnerService } from './analysis-runner.service';
 import { ProviderResolverService } from './provider-resolver.service';
 import { ProviderFactoryService } from './provider-factory.service';
@@ -31,6 +32,7 @@ import { AnalysisChatService } from './analysis-chat.service';
     AnalysisQueryService,
     AnalysisReplayService,
     AnalysisLifecycleService,
+    AnalysisRunRegistry,
     AnalysisRunnerService,
     ProviderFactoryService,
     SnapshotV2Service,

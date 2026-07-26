@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { parseAnalysisConcurrency } from './concurrency';
 import { AnalysisReplayService } from './analysis-replay.service';
+import { AnalysisRunRegistry } from './analysis-run-registry.service';
 import { EvidencePackService } from './evidence-pack.service';
 import { ProviderResolverService } from './provider-resolver.service';
 import { runAnalysisWorkflowAdapter } from './analysis-workflow-adapter';
@@ -66,6 +67,7 @@ export class AnalysisRunnerService {
     private config: ConfigService,
     private evidencePackService: EvidencePackService,
     private replayService: AnalysisReplayService,
+    private runRegistry: AnalysisRunRegistry,
   ) {}
 
   async runAnalysis(analysisId: string, send: SseCallback) {
@@ -127,32 +129,57 @@ export class AnalysisRunnerService {
       return;
     }
 
-    const isComprehensive = analysis.analysisType === 'COMPREHENSIVE';
-    const {
-      primary: provider,
-      aiModel,
-    } = await this.providerResolver.resolveWorkflowProvider(analysis.userId, {
-      settingIdHint: analysis.aiProviderSettingId,
-      providerNameHint: analysis.aiProvider,
-      modelHint: analysis.aiModel,
-    });
-    const tag = this.logTag(analysisId);
+    // Register the abort handle IMMEDIATELY after claim, so the user-facing
+    // abort endpoint can interrupt the run even during provider resolution
+    // (which can take seconds for the lazy WebSearchExecutor build). The
+    // signal is checked again below to honor an abort that landed in the
+    // window between claim and provider resolution.
+    const abortController = new AbortController();
+    this.runRegistry.register(analysisId, abortController);
+    try {
+      const isComprehensive = analysis.analysisType === 'COMPREHENSIVE';
+      const {
+        primary: provider,
+        aiModel,
+      } = await this.providerResolver.resolveWorkflowProvider(analysis.userId, {
+        settingIdHint: analysis.aiProviderSettingId,
+        providerNameHint: analysis.aiProvider,
+        modelHint: analysis.aiModel,
+      });
 
-    const mode = isComprehensive ? 'comprehensive' : 'single';
-    this.logger.log(`${tag} adapter path engaged (mode=${mode})`);
-    await runAnalysisWorkflowAdapter({
-      mode,
-      analysisId,
-      analysis,
-      provider,
-      send,
-      prisma: this.prisma,
-      evidencePackService: this.evidencePackService,
-      aiModel,
-      waveSemaphore: parseAnalysisConcurrency(
-        this.config.get('ANALYSIS_PARALLEL_CONCURRENCY'),
-      ),
-    });
+      // Abort that arrived during provider resolution: persist CANCELLED
+      // (the DB row is currently IN_PROGRESS) and surface to the client.
+      // Skip the workflow entirely so we don't burn tokens on a run the
+      // user already cancelled.
+      if (abortController.signal.aborted) {
+        await this.prisma.analysis.update({
+          where: { id: analysisId },
+          data: { status: 'CANCELLED' },
+        });
+        send('done', { analysisId, status: 'CANCELLED' });
+        return;
+      }
+
+      const tag = this.logTag(analysisId);
+      const mode = isComprehensive ? 'comprehensive' : 'single';
+      this.logger.log(`${tag} adapter path engaged (mode=${mode})`);
+      await runAnalysisWorkflowAdapter({
+        mode,
+        analysisId,
+        analysis,
+        provider,
+        send,
+        prisma: this.prisma,
+        evidencePackService: this.evidencePackService,
+        aiModel,
+        waveSemaphore: parseAnalysisConcurrency(
+          this.config.get('ANALYSIS_PARALLEL_CONCURRENCY'),
+        ),
+        signal: abortController.signal,
+      });
+    } finally {
+      this.runRegistry.release(analysisId);
+    }
   }
 
   private logTag(analysisId: string, sectionType?: string) {

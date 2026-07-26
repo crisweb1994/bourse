@@ -76,6 +76,10 @@ export interface PersistRunDoneInput {
   summaryDataAsOf: string | null;
   todayDate: string;
   degradedSourceMark: 'WEB_SEARCH_FALLBACK' | null;
+  /** Final cumulative input tokens from the terminal trace; null when unknown. */
+  inputTokens: number | null;
+  /** Final cumulative output tokens from the terminal trace; null when unknown. */
+  outputTokens: number | null;
   doneEvent: Extract<SseEvent, { type: 'done' }>;
 }
 
@@ -209,6 +213,8 @@ export class AnalysisPersistenceMapper {
         ...(input.degradedSourceMark
           ? { degradedSource: input.degradedSourceMark }
           : {}),
+        ...(input.inputTokens !== null ? { inputTokens: input.inputTokens } : {}),
+        ...(input.outputTokens !== null ? { outputTokens: input.outputTokens } : {}),
       },
     });
   }
@@ -217,6 +223,27 @@ export class AnalysisPersistenceMapper {
     await this.prisma.analysis.update({
       where: { id: analysisId },
       data: { status: PrismaAnalysisStatus.FAILED },
+    });
+  }
+
+  /**
+   * Abort path: mark CANCELLED without overwriting generatedAt (the run did
+   * NOT complete) or summary/signal fields (those stay as whatever earlier
+   * sections produced). Token totals captured so far are still worth keeping
+   * for the history view.
+   */
+  async persistRunCancelled(input: {
+    analysisId: string;
+    inputTokens: number | null;
+    outputTokens: number | null;
+  }) {
+    await this.prisma.analysis.update({
+      where: { id: input.analysisId },
+      data: {
+        status: PrismaAnalysisStatus.CANCELLED,
+        ...(input.inputTokens !== null ? { inputTokens: input.inputTokens } : {}),
+        ...(input.outputTokens !== null ? { outputTokens: input.outputTokens } : {}),
+      },
     });
   }
 

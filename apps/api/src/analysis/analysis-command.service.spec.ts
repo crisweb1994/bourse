@@ -28,6 +28,10 @@ function createService() {
         settingId: 'setting-1',
       }),
     } as never,
+    {
+      abort: () => false,
+      isRunning: () => false,
+    } as never,
   );
 
   return { service, createCalls };
@@ -150,6 +154,10 @@ describe('AnalysisCommandService', () => {
           providerName: 'openai',
           settingId: null,
         }),
+      } as never,
+      {
+        abort: () => false,
+        isRunning: () => false,
       } as never,
     );
 

@@ -19,6 +19,7 @@ import {
 } from './analysis-persistence.mapper';
 import {
   mapCitationEvent,
+  mapCostUpdateEvent,
   mapDoneEvent,
   mapErrorEvent,
   mapEvidencePackReadyEvent,
@@ -93,6 +94,12 @@ export interface AdapterContext {
   /** Per-wave concurrency cap forwarded into streamComprehensive. */
   waveSemaphore?: number;
   /**
+   * Abort signal from the runner's registry. Threaded into streamComprehensive
+   * / streamSingle so the user-facing abort endpoint can interrupt the live
+   * LLM request. The catch block treats AbortError as CANCELLED, not FAILED.
+   */
+  signal?: AbortSignal;
+  /**
    * Test-only: substitute `streamComprehensive`. Production callers MUST
    * pass undefined; the adapter then uses the real agent workflow.
    */
@@ -158,6 +165,14 @@ export async function runAnalysisWorkflowAdapter(
   let degradedSourceMark: 'WEB_SEARCH_FALLBACK' | null = null;
   let summaryDataAsOf: string | null = null;
   let capturedEvidencePack: EvidencePackAny | undefined;
+  // Final cumulative token totals for the Analysis row. Accumulated from
+  // section_complete / judge_complete events as they arrive so an abort
+  // mid-run still has meaningful numbers to persist (the terminal `done`
+  // event's trace overrides these on the normal completion path).
+  let accumulatedInputTokens = 0;
+  let accumulatedOutputTokens = 0;
+  let finalInputTokens: number | null = null;
+  let finalOutputTokens: number | null = null;
 
   // ===== Event handlers (close over mutable run state above) =====
 
@@ -241,6 +256,10 @@ export async function runAnalysisWorkflowAdapter(
     } else {
       failedSectionTypes.push(event.sectionType); // mutates outer state
     }
+    if (event.usage) {
+      accumulatedInputTokens += event.usage.tokensIn;
+      accumulatedOutputTokens += event.usage.tokensOut;
+    }
     sendFrame(ctx.send, mapSectionCompleteEvent(event));
   }
 
@@ -249,6 +268,8 @@ export async function runAnalysisWorkflowAdapter(
     if (acc) {
       await persistence.persistJudgeResult(ctx.analysisId, event, acc);
     }
+    accumulatedInputTokens += event.traceTokensIn;
+    accumulatedOutputTokens += event.traceTokensOut;
   }
 
   function onSummaryChunk(event: Extract<SseEvent, { type: 'summary_chunk' }>) {
@@ -366,6 +387,7 @@ export async function runAnalysisWorkflowAdapter(
       gen = streamSingle(ctx.provider, dimension, dimInput, {
         runId: `analysis-${ctx.analysisId}`,
         todayDate,
+        signal: ctx.signal,
         ...(prebuiltPack ? { evidencePack: prebuiltPack } : {}),
         ...(marketAllowedDomains && marketAllowedDomains.length > 0
           ? { allowedDomains: marketAllowedDomains }
@@ -379,6 +401,7 @@ export async function runAnalysisWorkflowAdapter(
       runId: `analysis-${ctx.analysisId}`,
       todayDate,
       waveMode: 'auto',
+      signal: ctx.signal,
       ...(ctx.waveSemaphore ? { waveSemaphore: ctx.waveSemaphore } : {}),
       ...(marketProfile ? { marketProfile } : {}),
       ...(prebuiltPack ? { evidencePack: prebuiltPack } : {}),
@@ -412,11 +435,30 @@ export async function runAnalysisWorkflowAdapter(
         case 'judge_complete':      await onJudgeComplete(event); break;
         case 'summary_chunk':       onSummaryChunk(event); break;
         case 'summary_complete':    onSummaryComplete(event); break;
-        case 'cost_update':         break;  // not exposed in API SSE contract
+        case 'cost_update': {
+          // Forward cumulative token totals to the client for live display.
+          // We do NOT split input vs output here — the workflow only emits
+          // the combined `totalTokens`. The split is recovered from the
+          // terminal `done` event's trace for persistence (see `done` below).
+          sendFrame(ctx.send, mapCostUpdateEvent(event));
+          break;
+        }
         case 'error':               await onError(event); break;
 
         case 'done': {
           terminalStatus = event.status as AdapterResult['terminalStatus'];
+          // Final per-pass token totals come off the terminal trace; these
+          // are authoritative (the per-dim cost_update events only carry the
+          // combined total). Persisted to Analysis.inputTokens/outputTokens.
+          const result = event.result as
+            | { trace?: { tokensIn?: number; tokensOut?: number } }
+            | undefined;
+          if (result?.trace && typeof result.trace.tokensIn === 'number') {
+            finalInputTokens = result.trace.tokensIn;
+          }
+          if (result?.trace && typeof result.trace.tokensOut === 'number') {
+            finalOutputTokens = result.trace.tokensOut;
+          }
           await persistence.persistRunDone({
             analysisId: ctx.analysisId,
             mode: ctx.mode,
@@ -427,6 +469,8 @@ export async function runAnalysisWorkflowAdapter(
             summaryDataAsOf,
             todayDate,
             degradedSourceMark,
+            inputTokens: finalInputTokens,
+            outputTokens: finalOutputTokens,
             doneEvent: event,
           });
           if (
@@ -466,15 +510,38 @@ export async function runAnalysisWorkflowAdapter(
       }
     }
   } catch (err) {
-    terminalStatus = 'FAILED';
-    const message =
-      err instanceof Error ? err.message : String(err ?? 'Unknown error');
-    logger.error(
-      `${tag} streamComprehensive threw (${terminalStatus}): ${message}`,
-    );
-    await persistence.persistRunFailed(ctx.analysisId);
-    sendFrame(ctx.send, mapThrownError(message));
-    sendFrame(ctx.send, mapDoneEvent(ctx.analysisId, terminalStatus));
+    // AbortError comes from the user pressing "stop" — the runner's registry
+    // aborted the in-flight generator and the provider SDK rethrew it.
+    // Anthropic throws APIUserAbortError, OpenAI throws AbortError; we match
+    // by name substring + the signal's own aborted flag as a fallback.
+    const isAbort =
+      (err instanceof Error && /Abort/i.test(err.name)) ||
+      ctx.signal?.aborted === true;
+    if (isAbort) {
+      terminalStatus = 'CANCELLED';
+      logger.warn(`${tag} analysis aborted by user (CANCELLED)`);
+      // Use accumulated per-section/judge tokens (the done trace is never
+      // emitted on the abort path) so the history view still shows what
+      // was burned before the user pressed stop.
+      await persistence.persistRunCancelled({
+        analysisId: ctx.analysisId,
+        inputTokens:
+          accumulatedInputTokens > 0 ? accumulatedInputTokens : null,
+        outputTokens:
+          accumulatedOutputTokens > 0 ? accumulatedOutputTokens : null,
+      });
+      sendFrame(ctx.send, mapDoneEvent(ctx.analysisId, terminalStatus));
+    } else {
+      terminalStatus = 'FAILED';
+      const message =
+        err instanceof Error ? err.message : String(err ?? 'Unknown error');
+      logger.error(
+        `${tag} streamComprehensive threw (${terminalStatus}): ${message}`,
+      );
+      await persistence.persistRunFailed(ctx.analysisId);
+      sendFrame(ctx.send, mapThrownError(message));
+      sendFrame(ctx.send, mapDoneEvent(ctx.analysisId, terminalStatus));
+    }
   }
 
   // Every code path ends here: no section should remain PENDING/IN_PROGRESS

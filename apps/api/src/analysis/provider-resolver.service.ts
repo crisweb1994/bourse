@@ -162,9 +162,6 @@ export class ProviderResolverService {
       ...(row.apiKey ? { apiKey: row.apiKey } : {}),
       ...(row.baseUrl ? { baseUrl: row.baseUrl } : {}),
       ...(row.timeoutMs !== null ? { timeoutMs: row.timeoutMs } : {}),
-      ...(row.budgetUsdPerRun !== null
-        ? { budgetUsdPerRun: row.budgetUsdPerRun.toNumber() }
-        : {}),
       ...(row.cacheTtlMs !== null ? { cacheTtlMs: row.cacheTtlMs } : {}),
     });
     if (!executor) return {};

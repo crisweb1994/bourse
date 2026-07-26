@@ -89,6 +89,20 @@ state = applyAnalysisStreamEvent(state, 'summary_complete', {
 assert.equal(state.summaryMarkdown, 'overall');
 assert.deepEqual(state.summaryJson, { overallSignal: 'BULLISH' });
 
+// cost_update carries cumulative token totals → state.usage.
+assert.equal(state.usage, null);
+state = applyAnalysisStreamEvent(state, 'cost_update', {
+  totalTokens: 1234,
+  toolCalls: 3,
+});
+assert.deepEqual(state.usage, { totalTokens: 1234, toolCalls: 3 });
+// A later cost_update overrides (cumulative totals).
+state = applyAnalysisStreamEvent(state, 'cost_update', {
+  totalTokens: 5678,
+  toolCalls: 4,
+});
+assert.deepEqual(state.usage, { totalTokens: 5678, toolCalls: 4 });
+
 state = applyAnalysisStreamEvent(state, 'done', {
   analysisId: 'analysis-1',
   status: 'BUDGET_EXHAUSTED',
