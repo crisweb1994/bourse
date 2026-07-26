@@ -299,7 +299,7 @@ export class OpenAIChatCompletionsRoute implements OpenAIRoute {
                 (freshnessDays ? ` · ${freshnessDays}d` : '') +
                 ` · ${itemCount} hits · ${durationMs}ms` +
                 (result.error ? ` · ERROR ${result.error.code}` : '') +
-                (result.budgetExhausted ? ' · BUDGET_EXHAUSTED' : ''),
+                (result.limitReached ? ' · LIMIT_REACHED' : ''),
             );
           }
           messages.push({
@@ -312,12 +312,12 @@ export class OpenAIChatCompletionsRoute implements OpenAIRoute {
                 })
               : result.output.text,
           });
-          if (result.budgetExhausted) {
+          if (result.limitReached) {
             // Tell the model no more searches available.
             messages.push({
               role: 'user',
               content:
-                '(系统提示) 网络搜索预算已用尽，请基于现有信息完成分析，不要再请求 web_search。',
+                '(系统提示) 网络搜索次数已用尽，请基于现有信息完成分析，不要再请求 web_search。',
             });
           }
         } catch (err) {

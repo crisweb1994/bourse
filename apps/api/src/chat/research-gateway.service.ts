@@ -53,9 +53,6 @@ export class ResearchGatewayService implements ResearchGatewayPort {
         ...(setting?.timeoutMs !== null && setting?.timeoutMs !== undefined
           ? { timeoutMs: setting.timeoutMs }
           : {}),
-        ...(setting?.budgetUsdPerRun
-          ? { budgetUsdPerRun: setting.budgetUsdPerRun.toNumber() }
-          : {}),
         ...(setting?.cacheTtlMs !== null && setting?.cacheTtlMs !== undefined
           ? { cacheTtlMs: setting.cacheTtlMs }
           : {}),

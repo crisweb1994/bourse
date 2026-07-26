@@ -1,7 +1,6 @@
 import {
   IsIn,
   IsInt,
-  IsNumber,
   IsOptional,
   IsString,
   Max,
@@ -41,12 +40,6 @@ export class UpsertWebSearchSettingDto {
   timeoutMs?: number;
 
   @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Max(100)
-  budgetUsdPerRun?: number;
-
-  @IsOptional()
   @IsInt()
   @Min(0)
   @Max(24 * 60 * 60 * 1000)
@@ -68,7 +61,6 @@ export interface WebSearchSettingDto {
   baseUrl: string | null;
   primaryMode: WebSearchPrimaryModeStr;
   timeoutMs: number | null;
-  budgetUsdPerRun: number | null;
   cacheTtlMs: number | null;
   createdAt: Date;
   updatedAt: Date;

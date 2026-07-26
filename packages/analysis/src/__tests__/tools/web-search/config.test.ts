@@ -32,7 +32,7 @@ describe('loadWebSearchConfigFromEnv', () => {
       baseUrl: 'https://s.example.com',
       timeoutMs: 12000,
     });
-    expect(cfg?.budgetPerRunUsd).toBeGreaterThan(0);
+    expect(cfg?.maxSearchesPerRun).toBeGreaterThan(0);
   });
 
   it('respects override env vars', () => {
@@ -41,13 +41,13 @@ describe('loadWebSearchConfigFromEnv', () => {
       SEARXNG_BASE_URL: 'https://s.example.com',
       SEARXNG_API_KEY: 'k',
       WEB_SEARCH_TIMEOUT_MS: '5000',
-      WEB_SEARCH_BUDGET_PER_RUN_USD: '0.5',
+      WEB_SEARCH_MAX_SEARCHES_PER_RUN: '25',
       WEB_SEARCH_CACHE_TTL_MS: '60000',
     });
     expect(cfg).toMatchObject({
       apiKey: 'k',
       timeoutMs: 5000,
-      budgetPerRunUsd: 0.5,
+      maxSearchesPerRun: 25,
       cacheTtlMs: 60000,
     });
   });

@@ -35,8 +35,8 @@ export interface WebSearchSettingInput {
   engines?: string[];
   /** Provider-specific knobs (`cx` for Google PSE, `region` for Bing, …). */
   extraConfig?: Record<string, unknown>;
-  /** Soft cap per analysis run. */
-  budgetUsdPerRun?: number;
+  /** Hard cap on total searches per analysis run. */
+  maxSearchesPerRun?: number;
   /** Per-run cache TTL. */
   cacheTtlMs?: number;
   /** Per-search hard timeout. */
@@ -50,7 +50,7 @@ export interface WebSearchSettingInput {
 }
 
 const DEFAULT_TIMEOUT_MS = 8_000;
-const DEFAULT_BUDGET_USD = 0.5;
+const DEFAULT_MAX_SEARCHES_PER_RUN = 50;
 const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1_000;
 
 export function buildWebSearchExecutorFromSetting(
@@ -68,7 +68,7 @@ export function buildWebSearchExecutorFromSetting(
     ...(input.baseUrl ? { baseUrl: input.baseUrl } : {}),
     ...(input.apiKey ? { apiKey: input.apiKey } : {}),
     timeoutMs: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-    budgetPerRunUsd: input.budgetUsdPerRun ?? DEFAULT_BUDGET_USD,
+    maxSearchesPerRun: input.maxSearchesPerRun ?? DEFAULT_MAX_SEARCHES_PER_RUN,
     cacheTtlMs: input.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS,
   };
 
@@ -76,7 +76,7 @@ export function buildWebSearchExecutorFromSetting(
   const execCfg: WebSearchExecutorConfig = {
     adapter,
     timeoutMs: envCfg.timeoutMs,
-    budgetUsdPerRun: envCfg.budgetPerRunUsd,
+    maxSearchesPerRun: envCfg.maxSearchesPerRun,
     cacheTtlMs: envCfg.cacheTtlMs,
     ...(input.domainTierFilter
       ? { domainTierFilter: input.domainTierFilter }

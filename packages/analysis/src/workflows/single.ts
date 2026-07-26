@@ -5,7 +5,6 @@ import type { EvidencePackAny } from '../contracts/evidence-pack';
 import type { SseEvent } from '../contracts/sse-events';
 import type { Dimension, DimensionInput } from '../dimensions/types';
 import type { DomainTier } from '../markets/types';
-import { computeUsd } from '../primitives/pricing';
 import type { AgentProvider } from '../primitives/provider';
 import { streamDimension } from '../primitives/stream-dimension';
 import { ToolMiddlewareRunner } from '../tools/middleware';
@@ -47,7 +46,6 @@ interface DimAccumulator {
   llmCalls: number;
   toolCalls: number;
   durationMs: number;
-  costUsd: number;
 }
 
 /**
@@ -78,7 +76,6 @@ export async function* streamSingle(
     llmCalls: 0,
     toolCalls: 0,
     durationMs: 0,
-    costUsd: 0,
   };
   let dimError: Error | null = null;
 
@@ -127,12 +124,19 @@ export async function* streamSingle(
             acc.llmCalls = event.usage.llmCalls ?? 0;
             acc.toolCalls = event.usage.toolCalls ?? 0;
             acc.durationMs = event.usage.durationMs ?? 0;
-            acc.costUsd = event.usage.costUsd ?? 0;
           }
           break;
       }
     }
   } catch (e) {
+    // User abort must propagate as-is so the adapter's catch can mark the
+    // run CANCELLED — never translate AbortError into a section error.
+    if (
+      (e instanceof Error && /Abort/i.test(e.name)) ||
+      options.signal?.aborted === true
+    ) {
+      throw e;
+    }
     dimError = e as Error;
     yield {
       type: 'error',
@@ -167,11 +171,6 @@ export async function* streamSingle(
     }
   }
 
-  const computedCostUsd =
-    acc.costUsd > 0
-      ? acc.costUsd
-      : computeUsd(undefined, acc.usage.tokensIn, acc.usage.tokensOut);
-
   // Post-hoc budget check (CLAUDE.md §3 #16 — single dim: section already
   // ran, so we report overshoot rather than prevent it). inclusive=false
   // preserves the strict `>` semantics: overshoot, not reach.
@@ -179,17 +178,21 @@ export async function* streamSingle(
     options.budget,
     {
       tokens: acc.usage.tokensIn + acc.usage.tokensOut,
-      costUsd: computedCostUsd,
       toolCalls: acc.toolCalls,
     },
     false,
   );
 
-  const status: RunStatus = dimError
-    ? 'FAILED'
-    : breach
-      ? 'BUDGET_EXHAUSTED'
-      : 'COMPLETED';
+  // User abort takes precedence over the dimError/breach ladder — aborts
+  // must surface as CANCELLED so the apps/api adapter persists the right
+  // terminal state instead of overriding it with FAILED.
+  const status: RunStatus = options.signal?.aborted
+    ? 'CANCELLED'
+    : dimError
+      ? 'FAILED'
+      : breach
+        ? 'BUDGET_EXHAUSTED'
+        : 'COMPLETED';
 
   // Final cost_update with cumulative totals (cost_update events are now
   // emitted by the workflow layer, not streamDimension).
@@ -197,7 +200,6 @@ export async function* streamSingle(
     type: 'cost_update',
     runId: options.runId,
     seq: seq++,
-    totalUsd: computedCostUsd,
     totalTokens: acc.usage.tokensIn + acc.usage.tokensOut,
     toolCalls: acc.toolCalls,
   };
@@ -214,7 +216,6 @@ export async function* streamSingle(
       toolCalls: acc.toolCalls,
       tokensIn: acc.usage.tokensIn,
       tokensOut: acc.usage.tokensOut,
-      totalUsd: computedCostUsd,
       durationMs: Date.now() - startedAt,
     },
     warnings: breach ? [`Budget exhausted: ${breach}`] : [],

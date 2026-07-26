@@ -24,7 +24,7 @@ export { extractUrlsFromText };
 /**
  * Default executor factory — builds a per-stream `WebSearchExecutor` from
  * env (Phase 1) when an adapter is configured, else returns null.
- * Each call yields a fresh executor so cache + budget are per-stream.
+ * Each call yields a fresh executor so cache + search cap are per-stream.
  */
 function defaultWebSearchExecutorFactory(): WebSearchExecutor | null {
   const built = buildAdapterFromEnv();
@@ -32,7 +32,7 @@ function defaultWebSearchExecutorFactory(): WebSearchExecutor | null {
   const cfg: WebSearchExecutorConfig = {
     adapter: built.adapter,
     timeoutMs: built.config.timeoutMs,
-    budgetUsdPerRun: built.config.budgetPerRunUsd,
+    maxSearchesPerRun: built.config.maxSearchesPerRun,
     cacheTtlMs: built.config.cacheTtlMs,
   };
   return new WebSearchExecutor(cfg);

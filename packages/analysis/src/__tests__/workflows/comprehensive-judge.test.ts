@@ -188,7 +188,6 @@ describe('streamComprehensive — selective judge phase (RFC-10 P3)', () => {
       trace: {
         tokensIn: 100,
         tokensOut: 30,
-        costUsd: 0.001,
         durationMs: 50,
         llmCalls: 1,
         model: 'm',
@@ -213,7 +212,6 @@ describe('streamComprehensive — selective judge phase (RFC-10 P3)', () => {
     const sample = judgeCompletes[0] as Extract<SseEvent, { type: 'judge_complete' }>;
     expect(sample.result.pass).toBe(true);
     expect(sample.traceTokensIn).toBe(100);
-    expect(sample.traceCostUsd).toBe(0.001);
   });
 
   it('propagates per-dim confidenceAdjustment into judge_complete events', async () => {
@@ -228,7 +226,6 @@ describe('streamComprehensive — selective judge phase (RFC-10 P3)', () => {
         trace: {
           tokensIn: 50,
           tokensOut: 20,
-          costUsd: 0,
           durationMs: 10,
           llmCalls: 1,
         },
@@ -270,7 +267,6 @@ describe('streamComprehensive — selective judge phase (RFC-10 P3)', () => {
         trace: {
           tokensIn: 50,
           tokensOut: 20,
-          costUsd: 0,
           durationMs: 10,
           llmCalls: 1,
         },
@@ -312,7 +308,6 @@ describe('streamComprehensive — selective judge phase (RFC-10 P3)', () => {
         trace: {
           tokensIn: 10,
           tokensOut: 5,
-          costUsd: 0,
           durationMs: 5,
           llmCalls: 1,
         },

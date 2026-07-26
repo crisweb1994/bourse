@@ -6,7 +6,6 @@ const validTrace = {
   toolCalls: 7,
   tokensIn: 1500,
   tokensOut: 800,
-  totalUsd: 0.125,
   durationMs: 4321,
 };
 
@@ -32,7 +31,6 @@ describe('contracts/Trace', () => {
 
   it('rejects negative numbers', () => {
     expect(() => Trace.parse({ ...validTrace, tokensIn: -1 })).toThrow();
-    expect(() => Trace.parse({ ...validTrace, totalUsd: -0.01 })).toThrow();
   });
 
   it('rejects non-integer where int required', () => {

@@ -11,7 +11,7 @@ import {
  * Runtime gateway in front of a `WebSearchAdapter`. Responsibilities:
  *   - per-run LRU cache (default 5min) to dedupe repeated queries from the
  *     same model+section run
- *   - aggregate USD budget cap across all calls in this executor's lifetime
+ *   - hard cap on total search calls in this executor's lifetime
  *   - per-call retry (one retry on transient error)
  *   - normalize adapter output → tool message JSON + Citation[]
  *
@@ -38,8 +38,8 @@ export interface WebSearchExecutorConfig {
   adapter: WebSearchAdapter;
   /** Per-search hard timeout. */
   timeoutMs: number;
-  /** Soft cap across all calls in this executor. */
-  budgetUsdPerRun: number;
+  /** Hard cap on total search calls in this executor. */
+  maxSearchesPerRun: number;
   /** Per-run cache TTL. */
   cacheTtlMs: number;
   /** Cache capacity, default 64. Set to 0 to disable cache. */
@@ -52,7 +52,7 @@ export interface WebSearchExecutorConfig {
 
 export interface ExecuteResult {
   output: WebSearchToolOutput;
-  budgetExhausted: boolean;
+  limitReached: boolean;
   error?: { code: string; message: string };
 }
 
@@ -61,18 +61,17 @@ interface CacheEntry {
   results: SearchResults;
 }
 
-export class BudgetExhaustedError extends Error {
-  constructor(public readonly spentUsd: number, public readonly capUsd: number) {
+export class SearchLimitReachedError extends Error {
+  constructor(public readonly callCount: number, public readonly cap: number) {
     super(
-      `web-search budget exhausted: spent $${spentUsd.toFixed(4)} of $${capUsd.toFixed(4)}`,
+      `web-search limit reached: ${callCount} of ${cap} searches`,
     );
-    this.name = 'BudgetExhaustedError';
+    this.name = 'SearchLimitReachedError';
   }
 }
 
 export class WebSearchExecutor {
   readonly providerId: string;
-  private spentUsd = 0;
   private callCount = 0;
   private cacheHits = 0;
   private readonly cache = new Map<string, CacheEntry>();
@@ -88,18 +87,16 @@ export class WebSearchExecutor {
     providerId: string;
     callCount: number;
     cacheHits: number;
-    spentUsd: number;
   } {
     return {
       providerId: this.providerId,
       callCount: this.callCount,
       cacheHits: this.cacheHits,
-      spentUsd: this.spentUsd,
     };
   }
 
   /**
-   * Run one search. Throws BudgetExhaustedError when over cap; surfaces
+   * Run one search. Throws SearchLimitReachedError when over cap; surfaces
    * adapter errors as `result.error` (caller decides how to feed back to
    * the LLM — typically a tool message saying "search failed").
    */
@@ -107,8 +104,8 @@ export class WebSearchExecutor {
     raw: { query: string; freshnessDays?: number; count?: number },
     signal?: AbortSignal,
   ): Promise<ExecuteResult> {
-    if (this.spentUsd >= this.cfg.budgetUsdPerRun) {
-      throw new BudgetExhaustedError(this.spentUsd, this.cfg.budgetUsdPerRun);
+    if (this.callCount >= this.cfg.maxSearchesPerRun) {
+      throw new SearchLimitReachedError(this.callCount, this.cfg.maxSearchesPerRun);
     }
 
     const query = SearchQuery.parse({
@@ -121,22 +118,24 @@ export class WebSearchExecutor {
     const cached = this.readCache(key);
     if (cached) {
       this.cacheHits += 1;
-      return { output: this.materialize(cached), budgetExhausted: false };
+      return { output: this.materialize(cached), limitReached: false };
     }
 
     let lastErr: unknown;
     for (let attempt = 0; attempt < 2; attempt += 1) {
+      // Count every real adapter call (success, retry, and failure alike)
+      // so a flaky upstream can't bypass the per-run cap. Done before the
+      // call so a throw still consumes the slot.
+      this.callCount += 1;
       try {
         const results = await this.cfg.adapter.search(query, {
           signal,
           timeoutMs: this.cfg.timeoutMs,
         });
-        this.callCount += 1;
-        this.spentUsd += results.costUsd;
         this.writeCache(key, results);
         return {
           output: this.materialize(results),
-          budgetExhausted: this.spentUsd >= this.cfg.budgetUsdPerRun,
+          limitReached: this.callCount >= this.cfg.maxSearchesPerRun,
         };
       } catch (err) {
         lastErr = err;
@@ -159,7 +158,7 @@ export class WebSearchExecutor {
     };
     return {
       output: this.materialize(empty),
-      budgetExhausted: false,
+      limitReached: false,
       error: { code: 'search_failed', message: msg },
     };
   }

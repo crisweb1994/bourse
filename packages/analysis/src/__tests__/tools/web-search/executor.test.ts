@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  BudgetExhaustedError,
+  SearchLimitReachedError,
   WebSearchExecutor,
 } from '../../../tools/web-search/executor';
 import type {
@@ -50,7 +50,7 @@ describe('WebSearchExecutor', () => {
     const ex = new WebSearchExecutor({
       adapter,
       timeoutMs: 5000,
-      budgetUsdPerRun: 1,
+      maxSearchesPerRun: 50,
       cacheTtlMs: 60_000,
     });
     const a = await ex.execute({ query: '沪电股份' });
@@ -61,20 +61,20 @@ describe('WebSearchExecutor', () => {
     expect(ex.stats().cacheHits).toBe(1);
   });
 
-  it('throws BudgetExhaustedError when over cap', async () => {
-    const adapter = fakeAdapter({ costPerCall: 0.6 });
+  it('throws SearchLimitReachedError when over cap', async () => {
+    const adapter = fakeAdapter({ costPerCall: 0 });
     const ex = new WebSearchExecutor({
       adapter,
       timeoutMs: 5000,
-      budgetUsdPerRun: 1,
+      maxSearchesPerRun: 2,
       cacheTtlMs: 0,
     });
     const first = await ex.execute({ query: 'q1' });
-    expect(first.budgetExhausted).toBe(false);
+    expect(first.limitReached).toBe(false);
     const second = await ex.execute({ query: 'q2' });
-    expect(second.budgetExhausted).toBe(true);
+    expect(second.limitReached).toBe(true);
     await expect(ex.execute({ query: 'q3' })).rejects.toBeInstanceOf(
-      BudgetExhaustedError,
+      SearchLimitReachedError,
     );
   });
 
@@ -83,7 +83,7 @@ describe('WebSearchExecutor', () => {
     const ex = new WebSearchExecutor({
       adapter,
       timeoutMs: 5000,
-      budgetUsdPerRun: 1,
+      maxSearchesPerRun: 50,
       cacheTtlMs: 0,
     });
     const r = await ex.execute({ query: 'q' });
@@ -96,7 +96,7 @@ describe('WebSearchExecutor', () => {
     const ex = new WebSearchExecutor({
       adapter,
       timeoutMs: 5000,
-      budgetUsdPerRun: 1,
+      maxSearchesPerRun: 50,
       cacheTtlMs: 0,
     });
     const r = await ex.execute({ query: 'q' });
@@ -109,7 +109,7 @@ describe('WebSearchExecutor', () => {
     const ex = new WebSearchExecutor({
       adapter,
       timeoutMs: 5000,
-      budgetUsdPerRun: 1,
+      maxSearchesPerRun: 50,
       cacheTtlMs: 0,
     });
     const r = await ex.execute({ query: 'hello' });
@@ -124,7 +124,7 @@ describe('WebSearchExecutor', () => {
     const ex = new WebSearchExecutor({
       adapter,
       timeoutMs: 5000,
-      budgetUsdPerRun: 1,
+      maxSearchesPerRun: 50,
       cacheTtlMs: 0,
     });
     const r = await ex.execute({ query: 'q' });
@@ -137,7 +137,7 @@ describe('WebSearchExecutor', () => {
     const ex = new WebSearchExecutor({
       adapter,
       timeoutMs: 5000,
-      budgetUsdPerRun: 1,
+      maxSearchesPerRun: 50,
       cacheTtlMs: 0,
     });
     const r = await ex.execute({ query: 'q' });
@@ -169,7 +169,7 @@ describe('WebSearchExecutor', () => {
     const ex = new WebSearchExecutor({
       adapter,
       timeoutMs: 5000,
-      budgetUsdPerRun: 1,
+      maxSearchesPerRun: 50,
       cacheTtlMs: 0,
       domainTierFilter: {
         tiers: {

@@ -26,7 +26,6 @@ export interface DimAccumulator {
   toolCalls: number;
   durationMs: number;
   citationsCount: number;
-  costUsd: number;
 }
 
 /**
@@ -85,7 +84,6 @@ export function accumulate(event: SseEvent, acc: DimAccumulator): void {
         acc.toolCalls = event.usage.toolCalls ?? 0;
         acc.durationMs = event.usage.durationMs ?? 0;
         acc.citationsCount = event.usage.citationsCount ?? acc.citations.length;
-        acc.costUsd = event.usage.costUsd ?? 0;
       }
       break;
   }
@@ -140,7 +138,6 @@ export interface BuildResultArgs {
   aggregatedTokensOut: number;
   aggregatedLlmCalls: number;
   aggregatedToolCalls: number;
-  aggregatedCostUsd: number;
   perDimTrace: Map<
     SectionType,
     {
@@ -192,7 +189,6 @@ export function buildResult(args: BuildResultArgs): ComprehensiveResult {
       toolCalls: args.aggregatedToolCalls,
       tokensIn: args.aggregatedTokensIn,
       tokensOut: args.aggregatedTokensOut,
-      totalUsd: args.aggregatedCostUsd,
       durationMs: Date.now() - args.workflowStartedAt,
       perDimension,
     },
@@ -265,23 +261,21 @@ export function inferMissingPrivateFieldsComp(
  *    (`used.x >= cap`). Used because comprehensive checks BEFORE the next dim
  *    starts, so hitting the cap exactly must halt.
  *
- * Returns the first breached cap label (tokens → cost → toolCalls order), or
+ * Returns the first breached cap label (tokens → toolCalls order), or
  * `false` when no cap is configured or none is breached.
  */
 export function checkBudget(
   budget: BudgetLimits | undefined,
   used: {
     tokens: number;
-    costUsd: number;
     toolCalls: number;
   },
   inclusive: boolean,
-): false | 'maxTokens' | 'maxCostUsd' | 'maxToolCalls' {
+): false | 'maxTokens' | 'maxToolCalls' {
   if (!budget) return false;
   const hit = (cap: number | undefined, value: number): boolean =>
     cap !== undefined && (inclusive ? value >= cap : value > cap);
   if (hit(budget.maxTokens, used.tokens)) return 'maxTokens';
-  if (hit(budget.maxCostUsd, used.costUsd)) return 'maxCostUsd';
   if (hit(budget.maxToolCalls, used.toolCalls)) return 'maxToolCalls';
   return false;
 }

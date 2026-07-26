@@ -19,7 +19,7 @@ export {
 } from './from-setting';
 export {
   WebSearchExecutor,
-  BudgetExhaustedError,
+  SearchLimitReachedError,
   type WebSearchExecutorConfig,
   type ExecuteResult,
   type DomainTierFilterConfig,

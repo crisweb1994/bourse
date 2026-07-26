@@ -9,7 +9,6 @@ import type { Citation } from '../contracts/citation';
 import type { EvidencePackAny } from '../contracts/evidence-pack';
 import { applyFixedDisclaimerToSummary } from '../primitives/disclaimer';
 import { buildEvidencePack } from '../primitives/evidence-pack-builder';
-import { computeUsd } from '../primitives/pricing';
 import {
   ComprehensiveSummaryLenient,
   buildSummaryJsonPrompts,
@@ -97,7 +96,7 @@ export async function parseSummaryStructured(
   signal?: AbortSignal,
 ): Promise<{
   fixedSummary: ReturnType<typeof applyFixedDisclaimerToSummary>;
-  trace: { tokensIn: number; tokensOut: number; llmCalls: number; costUsd: number };
+  trace: { tokensIn: number; tokensOut: number; llmCalls: number };
 }> {
   const jsonPrompts = buildSummaryJsonPrompts(summaryMarkdown);
   const summaryStructured = await structuredOutputWithRepair(
@@ -119,11 +118,6 @@ export async function parseSummaryStructured(
       tokensIn: summaryStructured.usage.tokensIn,
       tokensOut: summaryStructured.usage.tokensOut,
       llmCalls: summaryStructured.llmCalls,
-      costUsd: computeUsd(
-        summaryStructured.model,
-        summaryStructured.usage.tokensIn,
-        summaryStructured.usage.tokensOut,
-      ),
     },
   };
 }

@@ -26,16 +26,16 @@ describe('buildWebSearchExecutorFromSetting', () => {
     ).toThrow(/baseUrl/);
   });
 
-  it('honors budget / cache TTL overrides', () => {
+  it('honors max-searches / cache TTL overrides', () => {
     const exec = buildWebSearchExecutorFromSetting({
       providerType: 'searxng',
       baseUrl: 'https://my-searxng.local',
-      budgetUsdPerRun: 1.25,
+      maxSearchesPerRun: 75,
       cacheTtlMs: 60_000,
       timeoutMs: 4_000,
     });
     expect(exec).toBeInstanceOf(WebSearchExecutor);
-    // Implementation details (budget / cache) are private — we mostly care
+    // Implementation details (search cap / cache) are private — we mostly care
     // that construction succeeds with custom values.
   });
 });

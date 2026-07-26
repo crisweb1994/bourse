@@ -95,22 +95,25 @@ describe('workflows/runSingle — budget enforcement (Day 11.5a P1 #1)', () => {
     expect(result.warnings[0]).toContain('maxTokens');
   });
 
-  it('returns BUDGET_EXHAUSTED when section overshoots maxCostUsd', async () => {
+  it('returns CANCELLED when the abort signal is already set', async () => {
+    // Mirrors the runner registry aborting the in-flight generator before
+    // the dim completes. status must be CANCELLED — never FAILED — so the
+    // apps/api adapter persists the right terminal state.
     const result = await runSingle(
       fakeProvider(),
       FUNDAMENTAL,
       { symbol: 'AAPL', market: 'US', locale: 'zh-CN' },
       {
-        runId: 'single_usd',
+        runId: 'single_abort',
         todayDate: '2026-05-10',
-        budget: { maxCostUsd: 0.0000001 },
+        signal: AbortSignal.abort(),
       },
     );
-    expect(result.status).toBe('BUDGET_EXHAUSTED');
+    expect(result.status).toBe('CANCELLED');
   });
 
   it('emits cost_update event with cumulative totals', async () => {
-    const events: Array<{ type: string; totalUsd?: number; totalTokens?: number }> = [];
+    const events: Array<{ type: string; totalTokens?: number }> = [];
     const gen = streamSingle(
       fakeProvider(),
       FUNDAMENTAL,
@@ -120,7 +123,7 @@ describe('workflows/runSingle — budget enforcement (Day 11.5a P1 #1)', () => {
     while (true) {
       const next = await gen.next();
       if (next.done) break;
-      events.push(next.value as { type: string; totalUsd?: number; totalTokens?: number });
+      events.push(next.value as { type: string; totalTokens?: number });
     }
     const cost = events.find((e) => e.type === 'cost_update');
     expect(cost).toBeDefined();
