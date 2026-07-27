@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0](https://github.com/crisweb1994/bourse/compare/v0.3.0...v0.4.0) (2026-07-27)
+
+
+### Features
+
+* **analysis:** strengthen research data coverage and fallbacks ([9e0f96e](https://github.com/crisweb1994/bourse/commit/9e0f96eeaefd22c1e05a3991d7c5be2ee549f767))
+* 完善研究数据覆盖与 US/HK 行情降级能力 ([6f0db33](https://github.com/crisweb1994/bourse/commit/6f0db33b824f1e4dab2a03d1f6c928100b7a9d58))
+
 ## [0.3.0](https://github.com/crisweb1994/bourse/compare/v0.2.0...v0.3.0) (2026-07-26)
 
 
