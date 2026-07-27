@@ -7,6 +7,7 @@ import type { Dimension, DimensionInput } from '../dimensions/types';
 import type { DomainTier } from '../markets/types';
 import type { AgentProvider } from '../primitives/provider';
 import { streamDimension } from '../primitives/stream-dimension';
+import { shouldSkipForCoverage } from '../snapshot/research-coverage';
 import { ToolMiddlewareRunner } from '../tools/middleware';
 import { checkBudget } from './comprehensive-helpers';
 import type { BudgetLimits } from './types';
@@ -88,6 +89,52 @@ export async function* streamSingle(
       seq: seq++,
       pack: options.evidencePack as never,
     };
+  }
+
+  const coverageSkip =
+    options.evidencePack?.schemaVersion === 'evidence-pack-v2'
+      ? shouldSkipForCoverage(
+          options.evidencePack.researchCoverage,
+          dimension.type,
+        )
+      : undefined;
+  if (coverageSkip) {
+    const status: RunStatus = 'PARTIAL_FAILED';
+    yield {
+      type: 'section_skipped',
+      runId: options.runId,
+      seq: seq++,
+      sectionType: dimension.type,
+      reason: 'INSUFFICIENT_REQUIRED_FACTS',
+      missingFields: coverageSkip.missingCriticalFacts,
+    };
+    const result: AnalysisResult = {
+      reportMarkdown: '',
+      structuredJson: null,
+      citations: [],
+      status,
+      signal: 'NEUTRAL',
+      confidence: 'LOW',
+      trace: {
+        llmCalls: 0,
+        toolCalls: 0,
+        tokensIn: 0,
+        tokensOut: 0,
+        durationMs: Date.now() - startedAt,
+      },
+      warnings: [
+        `Section skipped: missing required facts ${coverageSkip.missingCriticalFacts.join(', ')}`,
+      ],
+      partialDimensions: [dimension.type],
+    };
+    yield {
+      type: 'done',
+      runId: options.runId,
+      seq: seq++,
+      status,
+      result,
+    };
+    return result;
   }
 
   try {

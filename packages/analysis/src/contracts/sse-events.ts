@@ -78,11 +78,12 @@ export const SectionCompleteEvent = baseEvent.extend({
 export const SectionSkippedEvent = baseEvent.extend({
   type: z.literal('section_skipped'),
   sectionType: SectionType,
-  reason: z.literal('DEGRADED_SOURCE_MISSING_PRIVATE_DATA'),
-  /** Which private fields are missing (subset of dim.requiresPrivateData). */
-  missingFields: z.array(
-    z.enum(['northboundFlow', 'lhb', 'unlockCalendar', 'consensusEps']),
-  ),
+  reason: z.enum([
+    'DEGRADED_SOURCE_MISSING_PRIVATE_DATA',
+    'INSUFFICIENT_REQUIRED_FACTS',
+  ]),
+  /** Fields that made the section impossible to run safely. */
+  missingFields: z.array(z.string()),
 });
 
 export const SummaryChunkEvent = baseEvent.extend({

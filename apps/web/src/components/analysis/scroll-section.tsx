@@ -73,14 +73,14 @@ export function ScrollSection({
             <div className="rounded-[8px] border border-[var(--color-warn-line)] bg-[var(--color-warn-soft)] p-3 text-[13px] leading-[1.65]">
               <div className="font-medium mb-1">本维度已主动跳过</div>
               <div className="text-[var(--color-fg-2)] text-[12px]">
-                数据源降级 · 该维度依赖的私有数据
+                数据源降级 · 该维度依赖的结构化数据
                 {section.skipMissingFields &&
                 section.skipMissingFields.length > 0 ? (
                   <span className="font-mono mx-1">
                     ({section.skipMissingFields.join(', ')})
                   </span>
                 ) : null}
-                无法通过 web_search 重建，已跳过以避免误导性结论。
+                无法通过网页搜索可靠重建，已跳过以避免误导性结论。
               </div>
             </div>
           )}

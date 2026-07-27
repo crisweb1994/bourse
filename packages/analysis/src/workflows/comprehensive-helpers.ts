@@ -9,6 +9,7 @@ import type { SseEvent } from '../contracts/sse-events';
 import type { Dimension, DimensionRunResult } from '../dimensions/types';
 import type { JudgeTriggerContext } from '../primitives/judge';
 import type { MarketProfile } from '../markets/types';
+import type { ResearchCoverage } from '../snapshot/research-coverage';
 import type { BudgetLimits } from './types';
 import type { ComprehensiveResult, DimensionFailure } from './types';
 
@@ -360,6 +361,35 @@ export function filterDegradedDims(
       skipped.push({ dim: d, missingFields: overlap });
     } else {
       kept.push(d);
+    }
+  }
+  return { kept, skipped };
+}
+
+/**
+ * A small second skip pass for facts that cannot be recovered by web search.
+ * Currently this only skips TECHNICAL without a valid quote/history pair;
+ * other dimensions still produce a constrained, LOW-confidence report.
+ */
+export function filterInsufficientCoverageDims(
+  dims: readonly Dimension[],
+  coverage: ResearchCoverage | undefined,
+): {
+  kept: Dimension[];
+  skipped: Array<{ dim: Dimension; missingFields: string[] }>;
+} {
+  if (!coverage) return { kept: [...dims], skipped: [] };
+  const kept: Dimension[] = [];
+  const skipped: Array<{ dim: Dimension; missingFields: string[] }> = [];
+  for (const dim of dims) {
+    const decision = coverage.dimensions[dim.type];
+    if (decision?.skip) {
+      skipped.push({
+        dim,
+        missingFields: decision.missingCriticalFacts,
+      });
+    } else {
+      kept.push(dim);
     }
   }
   return { kept, skipped };

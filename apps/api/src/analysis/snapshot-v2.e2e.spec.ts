@@ -19,13 +19,16 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type {
   FilingPort,
+  CompanyProfilePort,
   FilingSummary,
   FinancePort,
   FinancialsBundle,
   FinancialsPort,
+  MacroPort,
   PriceBar,
   Quote,
   ResearchResult,
+  SearchPort,
 } from '@bourse/analysis';
 import { EvidencePackV2 as EvidencePackV2Schema } from '@bourse/analysis';
 import { SnapshotV2Service } from './snapshot-v2.service';
@@ -44,8 +47,20 @@ function envelope<T>(data: T): ResearchResult<T> {
   return {
     schemaVersion: '1.0',
     data,
-    citations: [],
-    freshness: [],
+    citations: [{
+      title: 'Test source',
+      url: 'https://example.test/source',
+      sourceType: 'OTHER',
+      provider: 'test',
+      retrievedAt: '2025-05-25T00:00:00.000Z',
+      qualityTier: 'B',
+    }],
+    freshness: [{
+      provider: 'test',
+      asOf: '2025-05-25T00:00:00.000Z',
+      retrievedAt: '2025-05-25T00:00:00.000Z',
+      stale: false,
+    }],
     warnings: [],
   } as unknown as ResearchResult<T>;
 }
@@ -118,8 +133,24 @@ function aaplFinancials(): FinancialsBundle {
 
 function aaplFilings(): FilingSummary[] {
   return [
-    { url: 'https://sec.gov/x.htm' } as unknown as FilingSummary,
-    { url: 'https://sec.gov/y.htm' } as unknown as FilingSummary,
+    {
+      id: 'x',
+      sourceDocumentId: 'x',
+      instrumentId: 'US:AAPL',
+      formType: '10-Q',
+      filingDate: '2025-05-01',
+      filingUrl: 'https://sec.gov/x.htm',
+      provider: 'sec-edgar',
+    },
+    {
+      id: 'y',
+      sourceDocumentId: 'y',
+      instrumentId: 'US:AAPL',
+      formType: '4',
+      filingDate: '2025-05-02',
+      filingUrl: 'https://sec.gov/y.htm',
+      provider: 'sec-edgar',
+    },
   ];
 }
 
@@ -228,6 +259,14 @@ function mockCnFinance(): FinancePort {
   } as unknown as FinancePort;
 }
 
+function mockUsProfile(): CompanyProfilePort {
+  return {
+    async getProfile() {
+      return envelope(aaplProfile());
+    },
+  };
+}
+
 function mockFinancials(returnVal: FinancialsBundle | null = aaplFinancials()): FinancialsPort {
   return {
     async fetchFinancials() {
@@ -247,25 +286,55 @@ function mockFilings(returnVal: FilingSummary[] = aaplFilings()): FilingPort {
   } as unknown as FilingPort;
 }
 
+function mockMacro(): MacroPort {
+  return {
+    async fetchMacro(input) {
+      return envelope({
+        market: input.market,
+        observations: [{
+          indicator: 'inflation' as const,
+          value: 2.5,
+          unit: 'percent' as const,
+          period: '2025',
+          frequency: 'ANNUAL' as const,
+          provider: 'world-bank' as const,
+          seriesId: 'FP.CPI.TOTL.ZG',
+        }],
+      });
+    },
+  } as MacroPort;
+}
+
 function buildService(
   overrides: {
     yahoo?: FinancePort;
+    nasdaq?: FinancePort;
     cn?: FinancePort;
     usFinancials?: FinancialsPort;
     cnFinancials?: FinancialsPort;
     hkFinancials?: FinancialsPort;
     usFilings?: FilingPort;
     cnFilings?: FilingPort;
+    hkFilings?: FilingPort;
+    macro?: MacroPort;
+    search?: SearchPort | null;
   } = {},
 ): SnapshotV2Service {
   return new SnapshotV2Service(
     overrides.yahoo ?? mockYahoo(),
+    overrides.nasdaq ?? mockYahoo(),
+    mockYahoo(), // Sina US fallback (unused while Yahoo fixture is healthy)
+    mockYahoo(), // Tencent HK fallback
+    mockUsProfile(),
     overrides.cn ?? mockCnFinance(),
     overrides.usFinancials ?? mockFinancials(),
     overrides.cnFinancials ?? mockFinancials(null),
     overrides.hkFinancials ?? mockFinancials(null),
     overrides.usFilings ?? mockFilings(),
     overrides.cnFilings ?? mockFilings([]),
+    overrides.hkFilings ?? mockFilings([]),
+    overrides.macro ?? mockMacro(),
+    overrides.search ?? null,
   );
 }
 
@@ -306,8 +375,8 @@ describe('SnapshotV2 · E2E (US AAPL full coverage)', () => {
     assert.ok(pack.dataAvailability.complete.includes('profile'));
     assert.equal(pack.facts.financials?.value.periods.length, 1);
     assert.deepEqual(pack.facts.latestFilingUrls?.value, [
-      'https://sec.gov/x.htm',
       'https://sec.gov/y.htm',
+      'https://sec.gov/x.htm',
     ]);
 
     // Compute layer fired

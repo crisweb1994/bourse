@@ -61,12 +61,21 @@ async function main() {
   const config = new (require('@nestjs/config').ConfigService)();
   const snapshotV2 = new SnapshotV2Service(
     require('@bourse/analysis').createYahooFinanceConnector(),
+    require('@bourse/analysis').createNasdaqFinanceConnector(),
+    require('@bourse/analysis').createSinaUsFinanceConnector(),
+    require('@bourse/analysis').createTencentHkFinanceConnector(),
+    require('@bourse/analysis').createSecEdgarProfileConnector({ userAgent: SEC_UA }),
     require('@bourse/analysis').createCnFinanceConnector(),
     require('@bourse/analysis').createSecEdgarXbrlFinancialsConnector({ userAgent: SEC_UA }),
     require('@bourse/analysis').createEastmoneyFinancialsConnector(),
     require('@bourse/analysis').createEastmoneyHkFinancialsConnector(),
     require('@bourse/analysis').createSecEdgarFilingsConnector({ userAgent: SEC_UA }),
     require('@bourse/analysis').createCnFilingsConnector(),
+    require('@bourse/analysis').createHkexFilingsConnector(),
+    require('@bourse/analysis').createOfficialMacroConnector(),
+    process.env.WEB_SEARCH_PROVIDER === 'tavily' && process.env.TAVILY_API_KEY
+      ? require('@bourse/analysis').createTavilySearchConnector({ apiKey: process.env.TAVILY_API_KEY })
+      : null,
   );
   const providerFactory = new ProviderFactoryService(config);
   const aiSettings = new AiSettingsService(prisma, config);

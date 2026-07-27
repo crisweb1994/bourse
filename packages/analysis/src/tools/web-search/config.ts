@@ -4,6 +4,10 @@ import { WEB_SEARCH_PROVIDER_IDS, type WebSearchProviderId } from './types';
  * Phase 1: env-driven configuration only. Phase 2 introduces a Prisma table
  * `WebSearchSetting` + REST + UI; for now an operator sets:
  *
+ *   WEB_SEARCH_PROVIDER=tavily
+ *   TAVILY_API_KEY=...
+ *
+ *   # Or use a self-hosted SearXNG instance:
  *   WEB_SEARCH_PROVIDER=searxng
  *   SEARXNG_BASE_URL=https://searxng.example.com
  *   SEARXNG_API_KEY=...                   # optional, for protected instances
@@ -59,6 +63,21 @@ export function loadWebSearchConfigFromEnv(
       providerId,
       baseUrl,
       apiKey: env.SEARXNG_API_KEY?.trim() || undefined,
+      timeoutMs: parseIntEnv(env.WEB_SEARCH_TIMEOUT_MS, DEFAULT_TIMEOUT_MS),
+      maxSearchesPerRun: parseIntEnv(
+        env.WEB_SEARCH_MAX_SEARCHES_PER_RUN,
+        DEFAULT_MAX_SEARCHES_PER_RUN,
+      ),
+      cacheTtlMs: parseIntEnv(env.WEB_SEARCH_CACHE_TTL_MS, DEFAULT_CACHE_TTL_MS),
+    };
+  }
+
+  if (providerId === 'tavily') {
+    const apiKey = env.TAVILY_API_KEY?.trim();
+    if (!apiKey) return null;
+    return {
+      providerId,
+      apiKey,
       timeoutMs: parseIntEnv(env.WEB_SEARCH_TIMEOUT_MS, DEFAULT_TIMEOUT_MS),
       maxSearchesPerRun: parseIntEnv(
         env.WEB_SEARCH_MAX_SEARCHES_PER_RUN,

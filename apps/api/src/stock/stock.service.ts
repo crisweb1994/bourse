@@ -4,6 +4,7 @@ import type { FinancePort } from '@bourse/analysis';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpsertStockDto } from './stock.dto';
 import { EastMoneyProvider } from './providers/eastmoney.provider';
+import { TencentProvider } from './providers/tencent.provider';
 import { YahooProvider } from './providers/yahoo.provider';
 import {
   CN_FINANCE_PORT,
@@ -49,6 +50,7 @@ export class StockService {
   constructor(
     private prisma: PrismaService,
     private eastMoney: EastMoneyProvider,
+    private tencent: TencentProvider,
     private yahoo: YahooProvider,
     // plan-v2 §12.1 — quote/profile now come off the analysis FinancePort
     // connectors (US/HK: Yahoo v8 chart + crumb'd summaryDetail; CN:
@@ -70,13 +72,19 @@ export class StockService {
     // East Money first — supports Chinese, A-shares, HK, US.
     let results = await this.eastMoney.search(q);
 
-    // Fall back to Yahoo when East Money returns nothing (e.g. JP/UK/EU
-    // markets, or queries it doesn't recognize).
+    // Tencent Smartbox is already used by our CN quote path and currently
+    // covers CN, HK and US symbols more reliably than the East Money suggest
+    // endpoint. Yahoo remains useful for JP/UK/EU when reachable.
+    if (results.length === 0) {
+      results = await this.tencent.search(q);
+    }
     if (results.length === 0) {
       results = await this.yahoo.search(q);
     }
 
-    this.cache.set(cacheKey, results);
+    // Do not turn a transient outage across all providers into five minutes
+    // of guaranteed empty search results.
+    if (results.length > 0) this.cache.set(cacheKey, results);
     return results;
   }
 

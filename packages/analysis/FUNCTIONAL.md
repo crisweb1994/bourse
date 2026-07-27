@@ -46,7 +46,7 @@ flowchart LR
 |---|---|
 | `contracts/` | 所有 public 类型的 **zod schema**(schema-first,TS 类型 `z.infer` 派生):evidence-pack(v1/v2)、sse-events、analysis-result、comprehensive-summary、cross-dim-validator、enums |
 | `ports/` | 连接器抽象接口(FinancePort / FinancialsPort / FilingPort + cache / rate-limiter)。host 注入实现 |
-| `connectors/` | 端口实现:finance(Yahoo / eastmoney)、financials(SEC XBRL / eastmoney)、filings(EDGAR / CNInfo)、search |
+| `connectors/` | 端口实现:finance(Yahoo / Nasdaq US 备用 / SEC Profile 备用 / eastmoney)、financials(SEC XBRL / eastmoney)、filings(EDGAR / CNInfo / HKEX)、macro(FRED / World Bank / HKMA)、search |
 | `snapshot/` | **fetch 一次** + 投影成 evidence pack:`fetch-snapshot` / `to-evidence-pack` / `market-config` / `fact-filter` |
 | `compute/` | **代码计算层**:ratios / technical-indicators / red-flags / relative / peer-table / valuation-helpers / units / read-bundle |
 | `dimensions/` | 9 维定义(`DIMENSION_CONFIGS` 单一真源 → `ALL_DIMENSIONS` 派生) |
@@ -54,7 +54,7 @@ flowchart LR
 | `primitives/` | provider 抽象、structured-output、stream-dimension、judge、summary-prompts、dimension-prompts、evidence-pack-builder(v1 web_search 兜底)、validate-cross-dim |
 | `tools/` | ToolMiddleware + 5 个 CN 信号工具(eastmoney) |
 | `markets/` | US / CN / HK MarketProfile(domainTiers / sourcePriorities) |
-| `personas/` | buffett / munger / burry / wood / damodaran / graham 视角 |
+| `personas/` | 当前仅 `judge-neutral`；投资方法论 Persona 已进入产品规划 |
 | `guardrails/` | 输出守卫 |
 | `evals/` | judge + vendor-fixture compute 回归 |
 | `util/` | content-hash / instrument-id / normalize-url |
@@ -93,9 +93,14 @@ flowchart TB
 ```
 
 - connector 数据走 `portToFetcher`(包装 host 注入的端口)。
+- US quote/history 优先 Yahoo；返回无效值时改用 Nasdaq，并在 citation 和 warning 中保留实际来源。
+- US Profile 优先 Yahoo；不可用时改用 SEC issuer submissions 的 SIC/发行人信息，并保留 A 级引用和 fallback warning。
 - CN 5 个信号走 `toolToFetcher`(包装 `ToolDescriptor.run()`);失败带结构化 reason
   码进 `dataAvailability`,而非静默空。
 - **fetch 一次**:9 维不再各自拉数据,全部读这一个 snapshot。
+- **覆盖矩阵**:snapshot 生成 `researchCoverage`。缺 quote/history 的 TECHNICAL 直接
+  `section_skipped`；其它维度在缺失或陈旧关键事实时保留报告，但由代码压低
+  confidence、标记 missing/stale facts，并移除不受支持的目标价。
 
 > **profile**:US(Yahoo assetProfile)+ CN(eastmoney F10 RPT_F10_BASIC_ORGINFO)
 > 已接,落 `facts.profile`(sector/industry/description/employees/website)。HK 暂无
@@ -134,7 +139,7 @@ flowchart TB
 - **V2** 是生产正路:`snapshotToEvidencePack(snapshot)` 把 rawFacts + computedFacts
   扁平投影,dimension prompts 实际消费它。
 - **V1** 仅在 web_search 兜底时出现(下一节)。
-- `formatEvidencePackBlock(v2Pack, allowWebSearchGaps)` 把 V2 渲染进 dimension prompt;
+- `formatEvidencePackBlock(v2Pack, sectionType)` 把 V2 与当前维度覆盖门禁渲染进 dimension prompt;
   默认明令 LLM **"数字字段必须引用 pack 内值,不允许 web_search 重取"**。开启
   `allowWebSearchGaps`(env `ANALYSIS_DIM_WEB_SEARCH_GAPS`,默认关)后,**仅** pack 标
   missing 的字段允许 LLM 自主 web_search 补,补来的值须标 `(网搜补充·未经代码核验)`、

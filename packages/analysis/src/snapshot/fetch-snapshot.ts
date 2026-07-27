@@ -36,12 +36,15 @@ import type {
   RawFacts,
   SnapshotCitation,
   SnapshotMissingField,
+  SnapshotMissingReason,
+  SnapshotSourceMetadata,
   StockSnapshot,
 } from './types';
 import type {
   Market,
   MarketConfig,
   MarketConfigMap,
+  SnapshotFetcherEnvelope,
 } from './market-config';
 
 // ----------------------------------------------------------------------------
@@ -122,13 +125,14 @@ export async function fetchSnapshot(
   // 2. Compute layer ---------------------------------------------------------
   const computedFacts = runComputeLayer(rawFacts, options.market, dataAvailability);
 
-  // 3. Citations -------------------------------------------------------------
-  // For Wave 2 we emit one synthetic citation per available fact key so
-  // downstream consumers see a non-empty array. Real per-fact citations
-  // will be threaded from the ports (Wave 2.3 integration). This is
-  // intentionally minimal here — citation provenance is a connector
-  // concern, not snapshot orchestrator's.
-  const citations: SnapshotCitation[] = [];
+  // 3. Preserve connector provenance. A source that did not produce a usable
+  // fact cannot become a citation for the run.
+  const citations = dedupeCitations(results.flatMap((result) => result.citations));
+  const sourceMetadata = Object.fromEntries(
+    results.flatMap((result) =>
+      result.metadata ? [[result.field, result.metadata] as const] : [],
+    ),
+  ) as Partial<Record<keyof RawFacts, SnapshotSourceMetadata>>;
 
   return {
     symbol: options.symbol,
@@ -138,6 +142,7 @@ export async function fetchSnapshot(
     computedFacts,
     citations,
     dataAvailability,
+    ...(Object.keys(sourceMetadata).length > 0 ? { sourceMetadata } : {}),
   };
 }
 
@@ -158,6 +163,9 @@ interface FetcherResult {
   field: keyof RawFacts;
   value: unknown;
   missing: SnapshotMissingField | null;
+  citations: SnapshotCitation[];
+  metadata?: SnapshotSourceMetadata;
+  warnings: string[];
 }
 
 async function runWithTimeout(
@@ -170,6 +178,8 @@ async function runWithTimeout(
       field: t.field,
       value: null,
       missing: { field: t.field, reason: 'not_configured' },
+      citations: [],
+      warnings: [],
     };
   }
   if (signal?.aborted) {
@@ -177,12 +187,14 @@ async function runWithTimeout(
       field: t.field,
       value: null,
       missing: { field: t.field, reason: 'timeout', detail: 'caller aborted' },
+      citations: [],
+      warnings: [],
     };
   }
 
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const value = await Promise.race([
+    const response = await Promise.race([
       t.fn(),
       new Promise<never>((_, reject) => {
         timer = setTimeout(
@@ -196,14 +208,50 @@ async function runWithTimeout(
         );
       }),
     ]);
+    const envelope = isSnapshotFetcherEnvelope(response) ? response : null;
+    const value = envelope ? envelope.data : response;
+    const metadata = envelope ? toSourceMetadata(envelope) : undefined;
+    const warnings = envelope ? formatConnectorWarnings(t.field, envelope) : [];
+
     if (value === null || value === undefined) {
       return {
         field: t.field,
         value: null,
-        missing: { field: t.field, reason: 'no_data' },
+        missing: {
+          field: t.field,
+          reason: envelope ? reasonFromWarnings(envelope) : 'no_data',
+          ...(envelopeWarningDetail(envelope) ? { detail: envelopeWarningDetail(envelope) } : {}),
+        },
+        citations: [],
+        ...(metadata ? { metadata } : {}),
+        warnings,
       };
     }
-    return { field: t.field, value, missing: null };
+
+    const usability = factUsability(t.field, value);
+    if (usability !== 'valid') {
+      return {
+        field: t.field,
+        value: null,
+        missing: {
+          field: t.field,
+          reason: usability,
+          detail: invalidFactDetail(t.field, value),
+        },
+        citations: [],
+        ...(metadata ? { metadata } : {}),
+        warnings,
+      };
+    }
+
+    return {
+      field: t.field,
+      value,
+      missing: null,
+      citations: envelope ? citationsFromEnvelope(t.field, envelope) : [],
+      ...(metadata ? { metadata } : {}),
+      warnings,
+    };
   } catch (err) {
     const reason = classifyError(err);
     const detail = err instanceof Error ? err.message : String(err);
@@ -211,6 +259,8 @@ async function runWithTimeout(
       field: t.field,
       value: null,
       missing: { field: t.field, reason, detail },
+      citations: [],
+      warnings: [],
     };
   } finally {
     if (timer) clearTimeout(timer);
@@ -228,6 +278,166 @@ function classifyError(err: unknown): SnapshotMissingField['reason'] {
     }
   }
   return 'connector_error';
+}
+
+function isSnapshotFetcherEnvelope(
+  value: unknown,
+): value is SnapshotFetcherEnvelope<unknown> {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    'data' in candidate &&
+    Array.isArray(candidate.citations) &&
+    (candidate.warnings === undefined || Array.isArray(candidate.warnings)) &&
+    (candidate.freshness === undefined || Array.isArray(candidate.freshness))
+  );
+}
+
+function toSourceMetadata(
+  envelope: SnapshotFetcherEnvelope<unknown>,
+): SnapshotSourceMetadata {
+  return {
+    freshness: envelope.freshness ? [...envelope.freshness] : [],
+    warnings: (envelope.warnings ?? []).map((warning) => ({
+      code: warning.code,
+      message: warning.message,
+      ...(warning.provider ? { provider: warning.provider } : {}),
+      ...(warning.cause ? { cause: warning.cause } : {}),
+    })),
+    ...(envelope.trace ? { trace: envelope.trace } : {}),
+    ...(envelope.cost !== undefined ? { cost: envelope.cost } : {}),
+  };
+}
+
+function citationsFromEnvelope(
+  field: keyof RawFacts,
+  envelope: SnapshotFetcherEnvelope<unknown>,
+): SnapshotCitation[] {
+  return envelope.citations.flatMap((citation) => {
+    if (!citation.url || !isHttpUrl(citation.url) || !isIsoDate(citation.retrievedAt)) {
+      return [];
+    }
+    const freshness = envelope.freshness?.find(
+      (item) => item.provider === citation.provider,
+    ) ?? envelope.freshness?.[0];
+    return [{
+      factKey: field,
+      title: citation.title,
+      url: citation.url,
+      retrievedAt: citation.retrievedAt,
+      ...(freshness?.asOf ? { asOf: freshness.asOf } : {}),
+      provider: citation.provider,
+      sourceType: citation.sourceType,
+      ...(citation.qualityTier ? { qualityTier: citation.qualityTier } : {}),
+    }];
+  });
+}
+
+function dedupeCitations(citations: SnapshotCitation[]): SnapshotCitation[] {
+  const seen = new Set<string>();
+  return citations.filter((citation) => {
+    const key = `${citation.factKey}:${citation.url}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function reasonFromWarnings(
+  envelope: SnapshotFetcherEnvelope<unknown>,
+): SnapshotMissingReason {
+  const codes = new Set((envelope.warnings ?? []).map((warning) => warning.code));
+  if (codes.has('RATE_LIMITED')) return 'rate_limited';
+  if (codes.has('AUTH_REQUIRED')) return 'auth_required';
+  if (codes.has('UNSUPPORTED_MARKET')) return 'not_implemented';
+  if (codes.has('INVALID_INSTRUMENT')) return 'invalid_data';
+  if (codes.has('SOURCE_UNAVAILABLE') || codes.has('SCRAPE_FAILED')) {
+    return 'connector_error';
+  }
+  return 'no_data';
+}
+
+function envelopeWarningDetail(
+  envelope: SnapshotFetcherEnvelope<unknown> | null,
+): string | undefined {
+  const messages = (envelope?.warnings ?? [])
+    .map((warning) => warning.message)
+    .filter(Boolean);
+  return messages.length > 0 ? messages.join('; ') : undefined;
+}
+
+function formatConnectorWarnings(
+  field: keyof RawFacts,
+  envelope: SnapshotFetcherEnvelope<unknown>,
+): string[] {
+  return (envelope.warnings ?? []).map((warning) => {
+    const provider = warning.provider ? `${warning.provider}: ` : '';
+    return `${field}/${warning.code}: ${provider}${warning.message}`;
+  });
+}
+
+type FactUsability = 'valid' | 'no_data' | 'invalid_data';
+
+function factUsability(field: keyof RawFacts, value: unknown): FactUsability {
+  if (field === 'history') {
+    if (!Array.isArray(value)) return 'invalid_data';
+    if (value.length === 0) return 'no_data';
+    const bars = value as Array<Record<string, unknown>>;
+    return bars.some(
+      (bar) =>
+        typeof bar.close === 'number' &&
+        Number.isFinite(bar.close) &&
+        bar.close > 0 &&
+        typeof bar.timestamp === 'string',
+    )
+      ? 'valid'
+      : 'invalid_data';
+  }
+  if (Array.isArray(value)) return value.length > 0 ? 'valid' : 'no_data';
+  if (!value || typeof value !== 'object') return 'invalid_data';
+
+  const record = value as Record<string, unknown>;
+  if (field === 'quote') {
+    return typeof record.price === 'number' && Number.isFinite(record.price) && record.price > 0
+      ? 'valid'
+      : 'invalid_data';
+  }
+  if (field === 'financials') {
+    return Array.isArray(record.periods) && record.periods.length > 0
+      ? 'valid'
+      : 'no_data';
+  }
+  if (field === 'macro') {
+    return Array.isArray(record.observations) && record.observations.length > 0
+      ? 'valid'
+      : 'no_data';
+  }
+
+  // Profiles containing only the instrument sentinel and empty wrapper
+  // objects are not research facts. Other object-shaped extras are accepted
+  // because their individual adapters own the detailed schema validation.
+  const keys = Object.keys(record).filter((key) => key !== 'instrument');
+  return keys.length > 0 ? 'valid' : 'no_data';
+}
+
+function invalidFactDetail(field: keyof RawFacts, value: unknown): string {
+  if (Array.isArray(value) && value.length === 0) return `${field} returned an empty array`;
+  if (field === 'quote') return 'quote.price must be a finite positive number';
+  if (field === 'history') return 'history contains no valid positive close prices';
+  return `${field} returned an unusable payload`;
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
+function isIsoDate(value: string): boolean {
+  return !Number.isNaN(Date.parse(value));
 }
 
 function assembleRawFacts(results: FetcherResult[]): RawFacts {
@@ -255,11 +465,13 @@ function assembleRawFacts(results: FetcherResult[]): RawFacts {
 function assembleAvailability(results: FetcherResult[]): DataAvailability {
   const available: string[] = [];
   const missing: SnapshotMissingField[] = [];
+  const warnings: string[] = [];
   for (const r of results) {
     if (r.missing) missing.push(r.missing);
     else available.push(r.field);
+    warnings.push(...r.warnings);
   }
-  return { available, missing, warnings: [] };
+  return { available, missing, warnings };
 }
 
 function runComputeLayer(

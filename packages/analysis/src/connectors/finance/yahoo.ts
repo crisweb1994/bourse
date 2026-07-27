@@ -432,7 +432,14 @@ export function createYahooFinanceConnector(): FinancePort {
         return {
           schemaVersion: RESEARCH_SCHEMA_VERSION,
           data: quote,
-          citations: [],
+          citations: [{
+            title: `Yahoo Finance quote: ${parsed.symbol}`,
+            url: `https://finance.yahoo.com/quote/${encodeURIComponent(yahooSymbol)}/`,
+            sourceType: 'PRICE',
+            provider: PROVIDER,
+            retrievedAt,
+            qualityTier: 'B',
+          }],
           freshness: [
             { provider: PROVIDER, asOf, retrievedAt, stale: false },
           ],
@@ -550,7 +557,14 @@ export function createYahooFinanceConnector(): FinancePort {
         return {
           schemaVersion: RESEARCH_SCHEMA_VERSION,
           data: bars,
-          citations: [],
+          citations: [{
+            title: `Yahoo Finance history: ${parsed.symbol}`,
+            url: `https://finance.yahoo.com/quote/${encodeURIComponent(yahooSymbol)}/history/`,
+            sourceType: 'PRICE',
+            provider: PROVIDER,
+            retrievedAt,
+            qualityTier: 'B',
+          }],
           freshness: [{ provider: PROVIDER, asOf: retrievedAt, retrievedAt, stale: false }],
           warnings,
         };
@@ -612,7 +626,14 @@ export function createYahooFinanceConnector(): FinancePort {
           return {
             schemaVersion: RESEARCH_SCHEMA_VERSION,
             data: { instrument, ...ap },
-            citations: [],
+            citations: [{
+              title: `Yahoo Finance profile: ${parsed.symbol}`,
+              url: `https://finance.yahoo.com/quote/${encodeURIComponent(yahooSymbol)}/profile/`,
+              sourceType: 'OTHER',
+              provider: PROVIDER,
+              retrievedAt,
+              qualityTier: 'B',
+            }],
             freshness: [{ provider: PROVIDER, asOf, retrievedAt, stale: false }],
             warnings: [],
           };

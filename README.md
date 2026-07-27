@@ -55,7 +55,7 @@ Bourse 会定期检测美股、A 股和港股公告，抓取不可变原文，�
 
 | 功能 | 现在能做什么 |
 | --- | --- |
-| 综合分析 | 9 个维度、6 种投资大师视角、结构化结论和引用 |
+| 综合分析 | 9 个维度、结构化结论和引用 |
 | 财报速读 | US SEC / A 股 / 港股公告发现、原文保存、解析、抽取、对账、跨期趋势和版本历史 |
 | 投关记录 | A 股投关活动时间线、摘要、来源材料和基于具体记录的 Chat 追问 |
 | 实时生成 | SSE 流式输出，显示阶段进度，支持断线续传和单维度重试 |
@@ -154,7 +154,7 @@ apps/api (NestJS)
   └─ Prisma + PostgreSQL
              │
 packages/analysis
-  ├─ SEC EDGAR / Yahoo / 巨潮 / 东方财富 connectors
+  ├─ SEC EDGAR / Yahoo / Nasdaq / 巨潮 / 东方财富 / 官方宏观 connectors
   ├─ snapshot / deterministic compute / earnings verify
   └─ prompts / schemas / source provenance
 ```
@@ -178,7 +178,7 @@ packages/analysis
 | Backend | NestJS · Passport · JWT httpOnly cookie · Prisma · class-validator |
 | Database | PostgreSQL 16，Docker 默认端口 5434 |
 | AI | Anthropic SDK · OpenAI SDK · OpenAI-compatible providers |
-| Data | SEC EDGAR · Yahoo Finance · 巨潮 · 东方财富 · akshare 镜像 |
+| Data | SEC EDGAR（含 US Profile 备用）· Yahoo Finance（US/HK）· Nasdaq（US 行情/日线备用）· 巨潮 · 东方财富 · FRED / World Bank / HKMA · Tavily（可选） |
 | Monorepo | Turborepo · pnpm workspaces · TypeScript |
 
 ---
@@ -204,7 +204,7 @@ stock-suggest/
 
 ### 已落地
 
-- [x] 9 维度综合分析和投资大师 persona
+- [x] 9 维度综合分析
 - [x] A 股 / 美股 / 港股股票研究入口
 - [x] SSE 流式输出、断线续传和 section 重试
 - [x] 用户级 AI provider 和 Web Search adapter
@@ -219,7 +219,7 @@ stock-suggest/
 
 - [ ] 多语言 UI（英文 / 日文）
 - [ ] 移动端适配
-- [ ] 自定义分析维度和 persona 编辑器
+- [ ] 多视角投资合议和方法论 Persona；自定义编辑器后续评估
 - [ ] 自托管 LLM 评估与运营监控面板
 
 当前功能测试已覆盖 SEC / A 股 / 港股公告 connector、原文解析、财报卡、跨期趋势、投关记录、Chat 路由、通知、重启恢复和并发幂等；生产发布仍需更多真实样本证明检测器的 p90 SLA 和容量表现。
@@ -231,7 +231,7 @@ stock-suggest/
 欢迎提交 issue、PR 和 RFC。特别欢迎：
 
 - 新 connector 和公告源
-- 新投资大师 persona
+- 新投资方法论 Persona
 - 可由代码确定性计算的新指标
 - prompt 优化和 eval 用例
 - 财报速读的港股适配

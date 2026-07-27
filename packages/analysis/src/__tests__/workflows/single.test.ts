@@ -7,6 +7,8 @@ import type {
   ProviderStreamResult,
 } from '../../primitives/provider';
 import { runSingle, streamSingle } from '../../workflows/single';
+import { buildResearchCoverage } from '../../snapshot/research-coverage';
+const TECHNICAL = getDimension('TECHNICAL');
 
 const URL = 'https://example.com/source';
 
@@ -182,6 +184,22 @@ describe('workflows/streamSingle — Path A evidence pack', () => {
       : String(sysArg);
     expect(sysText).toContain('【事实包 (EvidencePack v2)】');
     expect(sysText).toContain('- quote: 228.5');
+  });
+
+  it('skips technical analysis without a code-verified history series', async () => {
+    const pack = {
+      ...(v2Pack() as Record<string, unknown>),
+      researchCoverage: buildResearchCoverage(new Set(['quote', 'financials'])),
+    };
+    const provider = fakeProvider();
+    const result = await runSingle(
+      provider,
+      TECHNICAL,
+      { symbol: 'AAPL', market: 'US', locale: 'zh-CN' },
+      { runId: 'single_technical_skip', todayDate: '2026-05-10', evidencePack: pack as never },
+    );
+    expect(result.status).toBe('PARTIAL_FAILED');
+    expect(provider.stream).not.toHaveBeenCalled();
   });
 });
 

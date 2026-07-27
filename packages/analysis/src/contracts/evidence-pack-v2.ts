@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { FinancialsBundleSchema } from '../ports/financials';
+import { MacroSnapshotSchema } from '../ports/macro';
 import {
   ComputedFinancialRatiosSchema,
   ComputedTechnicalIndicatorsSchema,
@@ -10,6 +11,7 @@ import {
 } from '../compute';
 import { Citation } from './citation';
 import { Confidence } from './enums';
+import { ResearchCoverageSchema } from '../snapshot/research-coverage';
 
 /**
  * RFC-02 Phase 1 + 1.x · A 股 EvidencePack v2.
@@ -120,6 +122,8 @@ export const MinimalFacts = z.object({
   recentNews: Fact(z.array(RecentNewsItem)).optional(),
   /** v0.6 PRD §9.3 P0 — snapshot web/news documents grouped here. */
   webDocuments: Fact(z.array(WebDocumentItem)).optional(),
+  /** Key-free official macro observations for the instrument's market. */
+  macro: Fact(MacroSnapshotSchema).optional(),
   /**
    * RFC financials Phase 1 — 三表 + TTM bundle, US-only Phase 1。
    * `value` 是 FinancialsBundle (periods[] + currency + sourceUrl)，
@@ -392,6 +396,8 @@ export const EvidencePackV2 = z.object({
   trace: EvidencePackV2Trace,
   /** v0.6 PRD §9.2 — additive optional, set by snapshot-backed wrapper. */
   systemContext: EvidencePackSystemContext.optional(),
+  /** Static per-dimension data coverage and code-side confidence ceilings. */
+  researchCoverage: ResearchCoverageSchema.optional(),
   /**
    * plan-v2 Wave 1 — pre-computed numeric facts (ratios / indicators / red
    * flags) derived by the deterministic `compute/` layer from raw snapshot
@@ -414,11 +420,14 @@ export const EVIDENCE_PACK_V2_FACT_KEYS = [
   'profile',
   'latestFilingUrls',
   'recentNews',
+  'webDocuments',
+  'macro',
   'consensusEps',
   'peHistoricalPercentile',
   'northboundFlow',
   'lhbAppearances',
   'unlockCalendar',
   'shareholderConcentration',
+  'financials',
 ] as const;
 export type EvidencePackV2FactKey = (typeof EVIDENCE_PACK_V2_FACT_KEYS)[number];

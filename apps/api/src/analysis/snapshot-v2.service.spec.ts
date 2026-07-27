@@ -2,8 +2,10 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type {
   FilingPort,
+  CompanyProfilePort,
   FinancePort,
   FinancialsPort,
+  MacroPort,
   Quote,
   ResearchResult,
 } from '@bourse/analysis';
@@ -63,6 +65,62 @@ function mockCnFinance(): FinancePort {
   } as unknown as FinancePort;
 }
 
+function mockNasdaq(): FinancePort {
+  return {
+    async getQuote() {
+      return envelope({
+        instrument: { instrumentId: 'US:AAPL', market: 'US', symbol: 'AAPL' },
+        price: 201,
+        currency: 'USD',
+        timestamp: '2025-05-25T00:00:00.000Z',
+      });
+    },
+    async getHistory() {
+      return envelope(Array.from({ length: 30 }, (_, index) => ({
+        timestamp: new Date(Date.UTC(2025, 3, index + 1)).toISOString(),
+        open: 198 + index,
+        high: 202 + index,
+        low: 197 + index,
+        close: 201 + index,
+        volume: 1_000_000,
+      })));
+    },
+  } as unknown as FinancePort;
+}
+
+function mockSina(): FinancePort {
+  return {
+    async getQuote() {
+      return envelope({
+        instrument: { instrumentId: 'US:AAPL', market: 'US', symbol: 'AAPL' },
+        price: 202,
+        currency: 'USD',
+        timestamp: '2025-05-25T00:00:00.000Z',
+      });
+    },
+    async getHistory() {
+      return envelope(Array.from({ length: 30 }, (_, index) => ({
+        timestamp: new Date(Date.UTC(2025, 3, index + 1)).toISOString(),
+        open: 199 + index,
+        high: 203 + index,
+        low: 198 + index,
+        close: 202 + index,
+        volume: 900_000,
+      })));
+    },
+  } as unknown as FinancePort;
+}
+
+function mockUsProfile(): CompanyProfilePort {
+  return {
+    async getProfile() {
+      return envelope({
+        instrument: { instrumentId: 'US:AAPL', market: 'US', symbol: 'AAPL' },
+      });
+    },
+  };
+}
+
 function mockFinancials(): FinancialsPort {
   return {
     async fetchFinancials() {
@@ -82,16 +140,36 @@ function mockFilings(): FilingPort {
   } as unknown as FilingPort;
 }
 
-function buildService(overrides: { yahoo?: FinancePort } = {}): SnapshotV2Service {
+function mockMacro(): MacroPort {
+  return {
+    async fetchMacro(input) {
+      return envelope({ market: input.market, observations: [] });
+    },
+  } as MacroPort;
+}
+
+function buildService(overrides: {
+  yahoo?: FinancePort;
+  nasdaq?: FinancePort;
+  sina?: FinancePort;
+  usFilings?: FilingPort;
+} = {}): SnapshotV2Service {
   // Direct constructor — avoids @nestjs/testing dep
   return new SnapshotV2Service(
     overrides.yahoo ?? mockYahoo(),
+    overrides.nasdaq ?? mockNasdaq(),
+    overrides.sina ?? mockSina(),
+    mockSina(), // Tencent HK fallback (unused by US tests)
+    mockUsProfile(),
     mockCnFinance(),
     mockFinancials(), // US financials
     mockFinancials(), // CN financials
     mockFinancials(), // HK financials
+    overrides.usFilings ?? mockFilings(),
     mockFilings(),
     mockFilings(),
+    mockMacro(),
+    null,
   );
 }
 
@@ -109,7 +187,82 @@ describe('SnapshotV2Service', () => {
     assert.ok(snap.dataAvailability.available.includes('quote'));
   });
 
-  it('CN wiring: 5 CN tools + profile registered; only webSearch/macro stay not_configured', async () => {
+  it('uses Nasdaq quote and history when Yahoo returns unusable data', async () => {
+    const unavailableYahoo: FinancePort = {
+      async getQuote() {
+        return envelope({
+          instrument: { instrumentId: 'US:AAPL', market: 'US', symbol: 'AAPL' },
+          price: Number.NaN,
+          currency: 'USD',
+          timestamp: '1970-01-01T00:00:00.000Z',
+        });
+      },
+      async getHistory() {
+        return envelope([]);
+      },
+      async getProfile() {
+        return envelope({ instrument: { instrumentId: 'US:AAPL', market: 'US', symbol: 'AAPL' } });
+      },
+    } as unknown as FinancePort;
+    const svc = buildService({ yahoo: unavailableYahoo });
+    const snap = await svc.fetch('AAPL', 'US');
+
+    assert.equal(snap.rawFacts.quote?.price, 201);
+    assert.equal(snap.rawFacts.history?.length, 30);
+    assert.ok(
+      snap.dataAvailability.warnings.some((warning) =>
+        warning.includes('Nasdaq fallback was used'),
+      ),
+    );
+  });
+
+  it('uses Sina quote and history when Yahoo and Nasdaq are both unusable', async () => {
+    const unavailable: FinancePort = {
+      async getQuote() {
+        return envelope({
+          instrument: { instrumentId: 'US:AAPL', market: 'US', symbol: 'AAPL' },
+          price: Number.NaN,
+          currency: 'USD',
+          timestamp: '1970-01-01T00:00:00.000Z',
+        });
+      },
+      async getHistory() {
+        return envelope([]);
+      },
+      async getProfile() {
+        return envelope({ instrument: { instrumentId: 'US:AAPL', market: 'US', symbol: 'AAPL' } });
+      },
+    } as unknown as FinancePort;
+    const svc = buildService({ yahoo: unavailable, nasdaq: unavailable });
+    const snap = await svc.fetch('AAPL', 'US');
+
+    assert.equal(snap.rawFacts.quote?.price, 202);
+    assert.equal(snap.rawFacts.history?.length, 30);
+    assert.ok(
+      snap.dataAvailability.warnings.some((warning) =>
+        warning.includes('Sina Finance fallback was used'),
+      ),
+    );
+  });
+
+  it('collects periodic and issuer-side insider filings as separate SEC queries', async () => {
+    const forms: string[][] = [];
+    const usFilings: FilingPort = {
+      async searchFilings(input) {
+        forms.push([...(input.forms ?? [])]);
+        return envelope([]);
+      },
+    };
+    const svc = buildService({ usFilings });
+    await svc.fetch('AAPL', 'US');
+
+    assert.equal(forms.length, 2);
+    assert.ok(forms[0]?.includes('10-K'));
+    assert.ok(forms[0]?.includes('DEF 14A'));
+    assert.deepEqual(forms[1], ['3', '3/A', '4', '4/A', '5', '5/A']);
+  });
+
+  it('CN wiring: CN signals and macro are registered; only optional webSearch stays not configured', async () => {
     const svc = buildService();
     const snap = await svc.fetch('600519', 'CN', { perConnectorTimeoutMs: 100 });
     const notConfigured = snap.dataAvailability.missing
@@ -117,16 +270,16 @@ describe('SnapshotV2Service', () => {
       .map((m) => m.field);
     // CN config has quote / history / profile / financials / filings /
     // consensusEps / lhb / northboundFlow / unlockCalendar / shareholders wired.
-    // Unwired in current scope: webSearch / macro.
-    for (const expected of ['webSearch', 'macro']) {
+    // Tavily is optional when no API key is configured in the test runtime.
+    for (const expected of ['webSearch']) {
       assert.ok(
         notConfigured.includes(expected),
         `expected '${expected}' in not_configured set, got [${notConfigured.join(',')}]`,
       );
     }
-    // The 5 CN tools + profile must NOT be in not_configured — they're wired now.
+    // The 5 CN tools + profile + official macro must NOT be in not_configured.
     for (const cnTool of [
-      'profile', 'consensusEps', 'lhb', 'northboundFlow', 'unlockCalendar', 'shareholders',
+      'profile', 'consensusEps', 'lhb', 'northboundFlow', 'unlockCalendar', 'shareholders', 'macro',
     ]) {
       assert.ok(
         !notConfigured.includes(cnTool),

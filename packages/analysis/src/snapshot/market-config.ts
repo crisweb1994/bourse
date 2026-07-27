@@ -19,14 +19,34 @@ import type { ConnectorRunContext } from '../connectors/types';
 import type { FilingSummary } from '../ports/filings';
 import type { FinancialsBundle } from '../ports/financials';
 import type { PriceBar, Quote } from '../ports/finance';
+import type { DataFreshness } from '../contracts/freshness';
+import type { ResearchCitation } from '../contracts/research-citation';
 import type { ResearchResult } from '../contracts/result';
+import type { ResearchTrace } from '../contracts/result';
+import type { ResearchWarning } from '../contracts/warning';
+
+/**
+ * Connector envelopes preserve provenance at the Snapshot boundary. Test
+ * doubles may still return a bare value, but production ports return this
+ * shape so citations, freshness and warnings survive into EvidencePack.
+ */
+export interface SnapshotFetcherEnvelope<T> {
+  data: T;
+  citations: readonly ResearchCitation[];
+  freshness?: readonly DataFreshness[];
+  warnings?: readonly ResearchWarning[];
+  trace?: ResearchTrace;
+  cost?: unknown;
+  schemaVersion?: string;
+}
+export type SnapshotFetcherOutput<T> = T | SnapshotFetcherEnvelope<T | null> | null;
 
 // ----------------------------------------------------------------------------
 // Per-connector function shapes (caller-controlled, framework-free)
 // ----------------------------------------------------------------------------
 
 export interface QuoteFetcher {
-  (symbol: string, ctx?: ConnectorRunContext): Promise<Quote | null>;
+  (symbol: string, ctx?: ConnectorRunContext): Promise<SnapshotFetcherOutput<Quote>>;
 }
 export interface HistoryFetcher {
   (
@@ -34,24 +54,24 @@ export interface HistoryFetcher {
     from: string,
     to: string,
     ctx?: ConnectorRunContext,
-  ): Promise<PriceBar[] | null>;
+  ): Promise<SnapshotFetcherOutput<PriceBar[]>>;
 }
 export interface ProfileFetcher {
-  (symbol: string, ctx?: ConnectorRunContext): Promise<Record<string, unknown> | null>;
+  (symbol: string, ctx?: ConnectorRunContext): Promise<SnapshotFetcherOutput<Record<string, unknown>>>;
 }
 export interface FinancialsFetcher {
-  (symbol: string, ctx?: ConnectorRunContext): Promise<FinancialsBundle | null>;
+  (symbol: string, ctx?: ConnectorRunContext): Promise<SnapshotFetcherOutput<FinancialsBundle>>;
 }
 export interface FilingsFetcher {
   (
     symbol: string,
     limit: number,
     ctx?: ConnectorRunContext,
-  ): Promise<FilingSummary[] | null>;
+  ): Promise<SnapshotFetcherOutput<FilingSummary[]>>;
 }
 /** Generic extra fact fetcher — returns whatever the connector emits. */
 export interface ExtraFetcher<T> {
-  (symbol: string, ctx?: ConnectorRunContext): Promise<T | null>;
+  (symbol: string, ctx?: ConnectorRunContext): Promise<SnapshotFetcherOutput<T>>;
 }
 
 // ----------------------------------------------------------------------------
@@ -104,17 +124,14 @@ export function defineMarketConfig(
 }
 
 /**
- * Adapter helper: turn a ResearchPort-style result (envelope with
- * data/warnings) into the bare `T | null` callable shape this config
- * expects. Use when wiring real ports from research-core, e.g.:
+ * Adapter helper: preserve a ResearchPort envelope for Snapshot. Flattening
+ * it here would discard citations/freshness and makes a research result
+ * impossible to audit later.
  *
  *   quote: portToFetcher((s, ctx) => yahoo.getQuote({ instrumentId: s }, ctx))
  */
 export function portToFetcher<T>(
   call: (symbol: string, ctx?: ConnectorRunContext) => Promise<ResearchResult<T>>,
-): (symbol: string, ctx?: ConnectorRunContext) => Promise<T | null> {
-  return async (symbol, ctx) => {
-    const env = await call(symbol, ctx);
-    return env?.data ?? null;
-  };
+): (symbol: string, ctx?: ConnectorRunContext) => Promise<SnapshotFetcherEnvelope<T>> {
+  return (symbol, ctx) => call(symbol, ctx);
 }

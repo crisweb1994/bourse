@@ -15,6 +15,7 @@ export const VERSION = '0.1.0' as const;
 export * from './connectors/filings';
 export * from './connectors/finance';
 export * from './connectors/financials';
+export * from './connectors/macro';
 export * from './connectors/search';
 export * from './contracts';
 export * from './ports';
@@ -93,6 +94,7 @@ export {
   type DataAvailability,
   type RawFacts,
   type SnapshotCitation,
+  type SnapshotSourceMetadata,
   type SnapshotMissingField,
   type SnapshotMissingReason,
   type StockSnapshot,
@@ -102,6 +104,16 @@ export {
   snapshotToEvidencePack,
   type ToEvidencePackOptions,
 } from './snapshot/to-evidence-pack';
+export {
+  applyResearchCoverage,
+  buildResearchCoverage,
+  shouldSkipForCoverage,
+  ResearchCoverageSchema,
+  ResearchDimensionCoverageSchema,
+  type ResearchCoverage,
+  type ResearchDimensionCoverage,
+  type ResearchCoverageStatus,
+} from './snapshot/research-coverage';
 
 // ---- Fixture evals --------------------------------------------------------
 export * from './evals';

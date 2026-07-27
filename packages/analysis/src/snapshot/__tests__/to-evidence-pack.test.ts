@@ -7,6 +7,79 @@ import type { StockSnapshot } from '../types';
 // Builders
 // ============================================================================
 
+const RETRIEVED_AT = '2025-05-25T15:00:00.000Z';
+const QUOTE_AS_OF = '2025-05-25T00:00:00.000Z';
+
+function defaultCitations(): StockSnapshot['citations'] {
+  return [
+    {
+      factKey: 'quote',
+      title: 'Yahoo Finance: AAPL',
+      url: 'https://finance.yahoo.com/quote/AAPL',
+      asOf: QUOTE_AS_OF,
+      retrievedAt: RETRIEVED_AT,
+      provider: 'yahoo-finance',
+      sourceType: 'PRICE',
+      qualityTier: 'B',
+    },
+    {
+      factKey: 'financials',
+      title: 'SEC EDGAR: AAPL company filings',
+      url: 'https://www.sec.gov/cgi-bin/browse-edgar?CIK=AAPL',
+      asOf: '2025-03-31T00:00:00.000Z',
+      retrievedAt: RETRIEVED_AT,
+      provider: 'sec-edgar',
+      sourceType: 'FILING',
+      qualityTier: 'A',
+    },
+    {
+      factKey: 'filings',
+      title: 'SEC EDGAR: AAPL filings',
+      url: 'https://www.sec.gov/cgi-bin/browse-edgar?CIK=AAPL',
+      retrievedAt: RETRIEVED_AT,
+      provider: 'sec-edgar',
+      sourceType: 'FILING',
+      qualityTier: 'A',
+    },
+    {
+      factKey: 'consensusEps',
+      title: 'Eastmoney analyst estimates',
+      url: 'https://data.eastmoney.com/report/600519.html',
+      retrievedAt: RETRIEVED_AT,
+      provider: 'eastmoney',
+      sourceType: 'DATA_PROVIDER',
+      qualityTier: 'B',
+    },
+    {
+      factKey: 'northboundFlow',
+      title: 'Eastmoney northbound holdings',
+      url: 'https://data.eastmoney.com/hsgtcg/StockHdDetail.html?code=600519&market=1',
+      retrievedAt: RETRIEVED_AT,
+      provider: 'eastmoney',
+      sourceType: 'DATA_PROVIDER',
+      qualityTier: 'B',
+    },
+    {
+      factKey: 'lhb',
+      title: 'Eastmoney Dragon and Tiger List',
+      url: 'https://data.eastmoney.com/stock/lhb/600519.html',
+      retrievedAt: RETRIEVED_AT,
+      provider: 'eastmoney',
+      sourceType: 'DATA_PROVIDER',
+      qualityTier: 'B',
+    },
+    {
+      factKey: 'unlockCalendar',
+      title: 'Eastmoney restricted-share unlock calendar',
+      url: 'https://data.eastmoney.com/dxf/detail/600519.html',
+      retrievedAt: RETRIEVED_AT,
+      provider: 'eastmoney',
+      sourceType: 'DATA_PROVIDER',
+      qualityTier: 'B',
+    },
+  ];
+}
+
 function aaplQuote(): Quote {
   return {
     instrument: { instrumentId: 'US:AAPL', market: 'US', symbol: 'AAPL' },
@@ -22,7 +95,7 @@ function baseSnapshot(overrides: Partial<StockSnapshot> = {}): StockSnapshot {
   return {
     symbol: 'AAPL',
     market: 'US',
-    capturedAt: '2025-05-25T15:00:00.000Z',
+    capturedAt: RETRIEVED_AT,
     rawFacts: {
       quote: null,
       history: null,
@@ -45,7 +118,7 @@ function baseSnapshot(overrides: Partial<StockSnapshot> = {}): StockSnapshot {
       peerComparison: null,
       historicalContext: [],
     },
-    citations: [],
+    citations: defaultCitations(),
     dataAvailability: { available: [], missing: [], warnings: [] },
     ...overrides,
   };
@@ -62,6 +135,8 @@ describe('snapshotToEvidencePack · core fact projection', () => {
     expect(pack.symbol).toBe('AAPL');
     expect(pack.market).toBe('US');
     expect(pack.capturedAt).toBe('2025-05-25T15:00:00.000Z');
+    expect(pack.researchCoverage?.overallStatus).toBe('INSUFFICIENT_EVIDENCE');
+    expect(pack.systemContext?.confidenceCap).toBe('LOW');
   });
 
   it('extracts quote → facts.quote + marketCap + currency + pe', () => {
@@ -73,8 +148,9 @@ describe('snapshotToEvidencePack · core fact projection', () => {
     expect(pack.facts.marketCap?.value).toBe(600_000_000_000);
     expect(pack.facts.currency?.value).toBe('USD');
     expect(pack.facts.pe?.value).toBeCloseTo(28.5);
-    // All facts carry asOf/retrievedAt from snapshot.capturedAt
-    expect(pack.facts.quote?.asOf).toBe('2025-05-25T15:00:00.000Z');
+    // Provenance comes from the connector citation, not the snapshot clock.
+    expect(pack.facts.quote?.asOf).toBe(QUOTE_AS_OF);
+    expect(pack.facts.quote?.retrievedAt).toBe(RETRIEVED_AT);
     expect(pack.facts.quote?.origin).toBe('from_snapshot');
   });
 
@@ -229,6 +305,73 @@ describe('snapshotToEvidencePack · computedFacts passthrough', () => {
   });
 });
 
+describe('snapshotToEvidencePack · macro and web research', () => {
+  it('projects Tavily documents and official macro observations with their own sources', () => {
+    const snap = baseSnapshot({
+      rawFacts: {
+        ...baseSnapshot().rawFacts,
+        webSearch: [
+          {
+            title: 'Apple reports quarterly results',
+            url: 'https://www.apple.com/newsroom/2025/05/apple-reports-quarterly-results/',
+            publishedAt: '2025-05-01',
+            sourceType: 'NEWS',
+          },
+        ],
+        macro: {
+          market: 'US',
+          observations: [
+            {
+              indicator: 'policy_rate',
+              value: 4.5,
+              unit: 'percent',
+              period: '2025-05-01',
+              frequency: 'MONTHLY',
+              provider: 'fred',
+              seriesId: 'FEDFUNDS',
+            },
+          ],
+        },
+      },
+      citations: [
+        ...defaultCitations(),
+        {
+          factKey: 'webSearch',
+          title: 'Apple quarterly-results search',
+          url: 'https://www.apple.com/newsroom/2025/05/apple-reports-quarterly-results/',
+          retrievedAt: RETRIEVED_AT,
+          provider: 'tavily',
+          sourceType: 'NEWS',
+          qualityTier: 'D',
+        },
+        {
+          factKey: 'macro',
+          title: 'FRED: Federal Funds Effective Rate',
+          url: 'https://fred.stlouisfed.org/series/FEDFUNDS',
+          asOf: '2025-05-01T00:00:00.000Z',
+          retrievedAt: RETRIEVED_AT,
+          provider: 'fred',
+          sourceType: 'MACRO',
+          qualityTier: 'A',
+        },
+      ],
+    });
+
+    const pack = snapshotToEvidencePack(snap);
+    expect(pack.facts.webDocuments?.value).toEqual([
+      {
+        title: 'Apple reports quarterly results',
+        url: 'https://www.apple.com/newsroom/2025/05/apple-reports-quarterly-results/',
+        publishedAt: '2025-05-01T00:00:00.000Z',
+        sourceType: 'news',
+      },
+    ]);
+    expect(pack.facts.recentNews?.value).toHaveLength(1);
+    expect(pack.facts.macro?.value.observations[0]?.seriesId).toBe('FEDFUNDS');
+    expect(pack.facts.macro?.sourceTier).toBe('A');
+  });
+});
+
 describe('snapshotToEvidencePack · dataAvailability mapping', () => {
   it('maps missing entries to {field, reason} (concatenating detail)', () => {
     const snap = baseSnapshot({
@@ -288,11 +431,15 @@ describe('snapshotToEvidencePack · citation routing', () => {
     expect(pack.facts.quote?.sourceUrl).toBe('https://finance.yahoo.com/quote/AAPL');
   });
 
-  it('falls back to synthetic snapshot:// URL when no citation matches', () => {
+  it('omits a fact when no verifiable citation matches', () => {
     const snap = baseSnapshot({
       rawFacts: { ...baseSnapshot().rawFacts, quote: aaplQuote() },
+      citations: [],
     });
     const pack = snapshotToEvidencePack(snap);
-    expect(pack.facts.quote?.sourceUrl).toBe('snapshot://AAPL/quote');
+    expect(pack.facts.quote).toBeUndefined();
+    expect(pack.facts.marketCap).toBeUndefined();
+    expect(pack.facts.currency).toBeUndefined();
+    expect(pack.facts.pe).toBeUndefined();
   });
 });

@@ -35,7 +35,7 @@
 
 ### 不在 v1.1 范围（明确边界）
 
-加密货币 / 商品 / 外汇、毫秒级实时行情、App 推送 / 移动客户端、多 agent 辩论、投资 Persona、自动交易、量化回测、社区 UGC。
+加密货币 / 商品 / 外汇、毫秒级实时行情、App 推送 / 移动客户端、自动交易、量化回测、社区 UGC。
 
 ---
 
@@ -96,6 +96,35 @@
 ---
 
 ## Analysis 模块
+
+### 已确认方向：多视角投资合议（Persona + Debate）
+
+> 目标是让用户看到“同一组证据在不同投资方法下如何得出不同判断”，不是恢复旧版各 agent 独立抓数据、独立计算的 Debate runtime。
+
+#### 投资 Persona
+
+- Persona 只定义研究方法、关注重点和证据审查规则，不改变事实、计算结果和引用要求。
+- 首版内置少量方法论 Persona：价值、质量成长、逆向、宏观、风险优先；界面以方法论命名，不模仿名人语气。
+- Persona 复用同一份 EvidencePack 和 compute 结果，禁止自行推导财务数字。
+- 首版 Persona 只用于 Debate 的 Bull / Bear 视角，不注入现有单维度和综合分析，避免扩大 9 个维度的回归矩阵。
+- 自定义 Persona 编辑器放到后续版本，首版不增加任意 prompt 输入和分享市场。
+
+#### 多 Agent Debate
+
+- Debate 从一份已完成的 Analysis 发起，不重新运行 9 个维度，也不建立第二套数据管线。
+- 固定三角色：Bull、Bear、Judge。Bull / Bear 可选择不同 Persona，并行生成；Judge 最后汇总。
+- 三个角色共享原 Analysis 的不可变 Evidence Snapshot、结构化结论和引用；默认禁止额外 web search。
+- Judge 只输出共识、核心分歧、证据缺口和需要复研的问题，不覆盖原 Analysis 的 signal/confidence，也不提供个性化买卖或仓位指令。
+- 复用现有 Provider 设置、真实取消、token 统计和历史回放；正常运行只有 2 个观点调用 + 1 个 Judge 调用，结构化输出不合法时每阶段最多修复一次。
+
+#### 分阶段范围
+
+1. 领域基础：定义 Persona registry、Debate 结构化输出和有界共享上下文，并完成 prompt / 引用约束回归测试。
+2. Debate 后端：从已完成的综合 Analysis 发起，完成 Bull/Bear/Judge 三阶段执行、持久化、取消、重试和历史回放。
+3. Debate 前端：增加发起入口和独立结果页，展示观点对照、分歧摘要、引用回链和复研问题。
+4. 后续评估：根据 Debate 的真实使用反馈，再决定是否把 Persona 接入普通单维度或综合分析。
+
+明确不做：任意数量 agent、agent 自主选工具、循环互相对话、每角色独立抓取数据、自动交易、自定义 Persona 市场。
 
 ### 竞品吸收候选（2026-07-19 登记，来源：review ZhuLinsen/daily_stock_analysis）
 
