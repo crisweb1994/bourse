@@ -30,6 +30,8 @@ const GOVERNANCE = getDimension('GOVERNANCE');
 const SENTIMENT = getDimension('SENTIMENT');
 const VALUATION = getDimension('VALUATION');
 import { streamComprehensive } from '../../workflows/comprehensive';
+import { buildResearchCoverage } from '../../snapshot/research-coverage';
+const TECHNICAL = getDimension('TECHNICAL');
 
 const TODAY = '2026-05-19';
 const runId = 'r-degraded';
@@ -226,5 +228,28 @@ describe('streamComprehensive — skip dims on degraded pack', () => {
 
     expect(vi.mocked(buildEvidencePack)).not.toHaveBeenCalled();
     expect(events.filter((e) => e.type === 'section_skipped')).toHaveLength(0);
+  });
+
+  it('skips technical when the v2 coverage matrix has no usable history', async () => {
+    const pack = {
+      ...buildV2Pack(['quote']),
+      researchCoverage: buildResearchCoverage(new Set(['quote'])),
+    };
+    const streamCalls: string[] = [];
+    const { events } = await collect(
+      streamComprehensive(buildProvider(streamCalls), minimalInput, {
+        runId: 'r-technical-skip',
+        todayDate: TODAY,
+        dimensions: [TECHNICAL],
+        evidencePack: pack,
+      }),
+    );
+    const skipped = events.find((event) => event.type === 'section_skipped');
+    expect(skipped).toMatchObject({
+      sectionType: 'TECHNICAL',
+      reason: 'INSUFFICIENT_REQUIRED_FACTS',
+      missingFields: ['history'],
+    });
+    expect(streamCalls).toHaveLength(0);
   });
 });

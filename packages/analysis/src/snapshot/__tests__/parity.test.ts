@@ -120,11 +120,19 @@ function richSnapshot(): StockSnapshot {
         factKey: 'quote',
         title: 'Yahoo AAPL',
         url: 'https://finance.yahoo.com/quote/AAPL',
+        asOf: '2025-05-25T00:00:00.000Z',
         retrievedAt: '2025-05-25T15:00:00.000Z',
       },
       {
         factKey: 'financials',
         title: 'SEC AAPL',
+        url: 'https://www.sec.gov/cgi-bin/browse-edgar?CIK=AAPL',
+        asOf: '2025-03-31T00:00:00.000Z',
+        retrievedAt: '2025-05-25T15:00:00.000Z',
+      },
+      {
+        factKey: 'filings',
+        title: 'SEC AAPL filings',
         url: 'https://www.sec.gov/cgi-bin/browse-edgar?CIK=AAPL',
         retrievedAt: '2025-05-25T15:00:00.000Z',
       },
@@ -198,7 +206,39 @@ function cnSnapshot(): StockSnapshot {
       peerComparison: null,
       historicalContext: [],
     },
-    citations: [],
+    citations: [
+      {
+        factKey: 'quote',
+        title: 'Eastmoney: 600519 quote',
+        url: 'https://quote.eastmoney.com/sh600519.html',
+        asOf: '2025-05-25T00:00:00.000Z',
+        retrievedAt: '2025-05-25T15:00:00.000Z',
+      },
+      {
+        factKey: 'consensusEps',
+        title: 'Eastmoney: 600519 estimates',
+        url: 'https://data.eastmoney.com/report/600519.html',
+        retrievedAt: '2025-05-25T15:00:00.000Z',
+      },
+      {
+        factKey: 'northboundFlow',
+        title: 'Eastmoney: 600519 northbound holdings',
+        url: 'https://data.eastmoney.com/hsgtcg/StockHdDetail.html?code=600519&market=1',
+        retrievedAt: '2025-05-25T15:00:00.000Z',
+      },
+      {
+        factKey: 'lhb',
+        title: 'Eastmoney: 600519 Dragon and Tiger List',
+        url: 'https://data.eastmoney.com/stock/lhb/600519.html',
+        retrievedAt: '2025-05-25T15:00:00.000Z',
+      },
+      {
+        factKey: 'unlockCalendar',
+        title: 'Eastmoney: 600519 unlock calendar',
+        url: 'https://data.eastmoney.com/dxf/detail/600519.html',
+        retrievedAt: '2025-05-25T15:00:00.000Z',
+      },
+    ],
     dataAvailability: {
       available: ['quote', 'consensusEps', 'northboundFlow', 'lhb', 'unlockCalendar'],
       missing: [{ field: 'financials', reason: 'no_data' }],
@@ -288,14 +328,14 @@ describe('parity · fact coverage (regression guard)', () => {
 // ============================================================================
 
 describe('parity · provenance', () => {
-  it('every fact carries asOf + retrievedAt = snapshot.capturedAt', () => {
+  it('every fact carries citation-derived asOf + retrievedAt', () => {
     const pack = snapshotToEvidencePack(richSnapshot());
     const facts = pack.facts;
-    for (const key of Object.keys(facts) as Array<keyof typeof facts>) {
-      const f = facts[key];
-      if (!f) continue;
-      expect(f.asOf).toBe('2025-05-25T15:00:00.000Z');
-      expect(f.retrievedAt).toBe('2025-05-25T15:00:00.000Z');
+    expect(facts.quote?.asOf).toBe('2025-05-25T00:00:00.000Z');
+    expect(facts.financials?.asOf).toBe('2025-03-31T00:00:00.000Z');
+    expect(facts.latestFilingUrls?.asOf).toBe('2025-05-25T15:00:00.000Z');
+    for (const fact of Object.values(facts)) {
+      if (fact) expect(fact.retrievedAt).toBe('2025-05-25T15:00:00.000Z');
     }
   });
 
@@ -315,10 +355,11 @@ describe('parity · provenance', () => {
     );
   });
 
-  it('CN pack without snapshot citations uses synthetic snapshot:// URLs', () => {
-    const pack = snapshotToEvidencePack(cnSnapshot());
-    expect(pack.facts.quote?.sourceUrl).toBe('snapshot://600519/quote');
-    expect(pack.facts.consensusEps?.sourceUrl).toBe('snapshot://600519/consensusEps');
+  it('CN facts without citations are omitted instead of receiving synthetic URLs', () => {
+    const snapshot = cnSnapshot();
+    const pack = snapshotToEvidencePack({ ...snapshot, citations: [] });
+    expect(pack.facts.quote).toBeUndefined();
+    expect(pack.facts.consensusEps).toBeUndefined();
   });
 
   it('dataAvailability.missing preserves reason + detail', () => {

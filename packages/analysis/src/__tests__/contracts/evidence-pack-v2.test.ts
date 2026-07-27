@@ -276,11 +276,13 @@ describe('EvidencePackAny discriminated union', () => {
 });
 
 describe('EVIDENCE_PACK_V2_FACT_KEYS', () => {
-  it('lists all 13 fact field names', () => {
-    expect(EVIDENCE_PACK_V2_FACT_KEYS).toHaveLength(13);
+  it('lists all 16 fact field names', () => {
+    expect(EVIDENCE_PACK_V2_FACT_KEYS).toHaveLength(16);
     // Sanity check a few representative keys
     expect(EVIDENCE_PACK_V2_FACT_KEYS).toContain('quote');
     expect(EVIDENCE_PACK_V2_FACT_KEYS).toContain('profile');
+    expect(EVIDENCE_PACK_V2_FACT_KEYS).toContain('webDocuments');
+    expect(EVIDENCE_PACK_V2_FACT_KEYS).toContain('macro');
     expect(EVIDENCE_PACK_V2_FACT_KEYS).toContain('consensusEps');
     expect(EVIDENCE_PACK_V2_FACT_KEYS).toContain('shareholderConcentration');
   });

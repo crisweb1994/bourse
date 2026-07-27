@@ -37,6 +37,7 @@ import {
   checkBudget,
   deriveMarketRouting,
   filterDegradedDims,
+  filterInsufficientCoverageDims,
   selectJudgeTriggers,
   toAnalysisResult,
 } from './comprehensive-helpers';
@@ -236,6 +237,31 @@ export async function* streamComprehensive(
       }
       dims = kept as readonly Dimension[];
     }
+  }
+
+  // Structured coverage gates are independent of the web-search fallback
+  // path. Do not ask an LLM to reconstruct price history and emit technical
+  // indicators when the snapshot has neither usable quote nor daily bars.
+  if (evidencePack?.schemaVersion === 'evidence-pack-v2') {
+    const { kept, skipped } = filterInsufficientCoverageDims(
+      dims,
+      evidencePack.researchCoverage,
+    );
+    for (const { dim, missingFields } of skipped) {
+      yield {
+        type: 'section_skipped',
+        runId,
+        seq: seq++,
+        sectionType: dim.type,
+        reason: 'INSUFFICIENT_REQUIRED_FACTS',
+        missingFields,
+      };
+      failures.push({
+        type: dim.type,
+        error: `insufficient-required-facts-${missingFields.join(',')}`,
+      });
+    }
+    dims = kept as readonly Dimension[];
   }
 
   // Helper: detect budget exhaustion (inclusive: a cap reached exactly

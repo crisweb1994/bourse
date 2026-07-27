@@ -21,12 +21,10 @@
  *  - computedFacts → pack.computedFacts (Wave 1.2 field, byte passthrough)
  *
  * Provenance:
- *  - sourceUrl pulled from snapshot.citations matching by factKey when
- *    available; otherwise a synthetic "snapshot://<symbol>/<field>" URL
- *  - asOf + retrievedAt = snapshot.capturedAt (pack-level provenance per
- *    plan-v2 invariant #4)
- *  - sourceTier = 'B' default (snapshot loses per-field tier; future
- *    iterations can thread tier through citations)
+ *  - sourceUrl / asOf / retrievedAt / sourceTier come from the connector
+ *    citation matching the fact key
+ *  - facts without a verifiable HTTP source are omitted rather than being
+ *    stamped with a synthetic URL
  *  - origin = 'from_snapshot' (existing v0.6 PRD discriminator)
  *
  * Cosmetic: dataAvailability.missing reasons are mapped 1:1 from
@@ -44,6 +42,7 @@ import type {
 } from '../contracts/evidence-pack-v2';
 import type { FinancialsBundle } from '../ports/financials';
 import type { StockSnapshot } from './types';
+import { buildResearchCoverage } from './research-coverage';
 
 const DEFAULT_TIER: SourceTier = 'B';
 
@@ -58,41 +57,45 @@ export function snapshotToEvidencePack(
   snap: StockSnapshot,
   opts: ToEvidencePackOptions = {},
 ): EvidencePackV2 {
-  const provenance = {
-    asOf: snap.capturedAt,
-    retrievedAt: snap.capturedAt,
-    sourceTier: DEFAULT_TIER,
-    origin: 'from_snapshot' as const,
-  };
-
   const citationByField = indexCitationsByField(snap);
-  const sourceUrlFor = (field: string): string =>
-    citationByField.get(field)?.url ?? `snapshot://${snap.symbol}/${field}`;
-
-  const mkFact = <T>(field: string, value: T, extra?: Partial<FactOf<T>>): FactOf<T> => ({
-    value,
-    ...provenance,
-    sourceUrl: sourceUrlFor(field),
-    ...(extra ?? {}),
-  });
+  const mkFact = <T>(
+    field: string,
+    value: T,
+    extra?: Partial<FactOf<T>>,
+  ): FactOf<T> | undefined => {
+    const citation = citationByField.get(field);
+    if (!citation) return undefined;
+    return {
+      value,
+      asOf: citation.asOf ?? citation.retrievedAt,
+      retrievedAt: citation.retrievedAt,
+      sourceUrl: citation.url,
+      sourceTier: citation.qualityTier ?? DEFAULT_TIER,
+      origin: 'from_snapshot' as const,
+      ...(extra ?? {}),
+    };
+  };
 
   // ── facts construction ──────────────────────────────────────────────────
   const facts: EvidencePackV2['facts'] = {};
+  const putFact = <T>(key: string, fact: FactOf<T> | undefined): void => {
+    if (fact) (facts as Record<string, unknown>)[key] = fact;
+  };
 
   // Quote → quote / marketCap / currency / pe
   const q = snap.rawFacts.quote;
   if (q) {
-    if (q.price > 0) facts.quote = mkFact('quote', q.price, { unit: q.currency });
+    if (q.price > 0) putFact('quote', mkFact('quote', q.price, { unit: q.currency }));
     if (q.marketCap !== undefined && q.marketCap > 0) {
-      facts.marketCap = mkFact('quote', q.marketCap, {
+      putFact('marketCap', mkFact('quote', q.marketCap, {
         currency: q.currency,
-      });
+      }));
     }
     if (typeof q.currency === 'string' && q.currency.length === 3) {
-      facts.currency = mkFact('quote', q.currency);
+      putFact('currency', mkFact('quote', q.currency));
     }
     if (q.peRatio !== undefined && Number.isFinite(q.peRatio)) {
-      facts.pe = mkFact('quote', q.peRatio);
+      putFact('pe', mkFact('quote', q.peRatio));
     }
   }
 
@@ -111,15 +114,15 @@ export function snapshotToEvidencePack(
     if (typeof p.website === 'string' && p.website) value.website = p.website;
     if (typeof p.marketCap === 'number' && Number.isFinite(p.marketCap)) value.marketCap = p.marketCap;
     if (Object.keys(value).length > 0) {
-      facts.profile = mkFact('profile', value);
+      putFact('profile', mkFact('profile', value));
     }
   }
 
   // Financials passthrough
   if (snap.rawFacts.financials) {
-    facts.financials = mkFact('financials', snap.rawFacts.financials as FinancialsBundle, {
+    putFact('financials', mkFact('financials', snap.rawFacts.financials as FinancialsBundle, {
       sourceTier: pickFinancialsTier(snap.rawFacts.financials),
-    });
+    }));
   }
 
   // Filings → latestFilingUrls
@@ -129,8 +132,35 @@ export function snapshotToEvidencePack(
       .filter((u): u is string => typeof u === 'string' && u.length > 0)
       .slice(0, 10);
     if (urls.length > 0) {
-      facts.latestFilingUrls = mkFact('filings', urls);
+      putFact('latestFilingUrls', mkFact('filings', urls));
     }
+  }
+
+  // Search is evidence discovery, not a substitute for structured financial
+  // facts. Preserve the returned documents so qualitative dimensions can
+  // inspect their actual URLs and dates.
+  const webDocuments = projectWebDocuments(snap.rawFacts.webSearch);
+  if (webDocuments.length > 0) {
+    putFact('webDocuments', mkFact('webSearch', webDocuments));
+    const recentNews = webDocuments
+      .filter((item) => item.sourceType === 'news' && item.publishedAt)
+      .map((item) => ({
+        title: item.title,
+        url: item.url,
+        publishedAt: item.publishedAt!,
+      }));
+    if (recentNews.length > 0) {
+      putFact('recentNews', mkFact('webSearch', recentNews));
+    }
+  }
+
+  const macro = snap.rawFacts.macro;
+  if (
+    macro &&
+    typeof macro === 'object' &&
+    Array.isArray((macro as { observations?: unknown }).observations)
+  ) {
+    putFact('macro', mkFact('macro', macro as { market: string; observations: unknown[] }));
   }
 
   // consensusEps — recognize Eastmoney-shape {forecasts:[{year,value}]}
@@ -142,7 +172,7 @@ export function snapshotToEvidencePack(
       )
       .map((f) => ({ year: f.year as number, value: f.value as number }));
     if (forecasts.length > 0) {
-      facts.consensusEps = mkFact('consensusEps', forecasts);
+      putFact('consensusEps', mkFact('consensusEps', forecasts));
     }
   }
 
@@ -162,7 +192,7 @@ export function snapshotToEvidencePack(
         sgt: r.sgt as number,
       }));
     if (rows.length > 0) {
-      facts.northboundFlow = mkFact('northboundFlow', rows);
+      putFact('northboundFlow', mkFact('northboundFlow', rows));
     }
   } else if (Array.isArray(nbf)) {
     // Bare array shape (legacy callers)
@@ -180,7 +210,7 @@ export function snapshotToEvidencePack(
         sgt: r.sgt as number,
       }));
     if (rows.length > 0) {
-      facts.northboundFlow = mkFact('northboundFlow', rows);
+      putFact('northboundFlow', mkFact('northboundFlow', rows));
     }
   }
 
@@ -207,7 +237,7 @@ export function snapshotToEvidencePack(
           : [],
       }));
     if (apps.length > 0) {
-      facts.lhbAppearances = mkFact('lhb', apps);
+      putFact('lhbAppearances', mkFact('lhb', apps));
     }
   }
 
@@ -230,7 +260,7 @@ export function snapshotToEvidencePack(
         type: typeof e.type === 'string' ? (e.type as string) : 'unknown',
       }));
     if (events.length > 0) {
-      facts.unlockCalendar = mkFact('unlockCalendar', events);
+      putFact('unlockCalendar', mkFact('unlockCalendar', events));
     }
   }
 
@@ -265,13 +295,22 @@ export function snapshotToEvidencePack(
     })),
     fallbacks: [],
   };
+  const researchCoverage = buildResearchCoverage(
+    new Set(snap.dataAvailability.available),
+    new Set(
+      Object.entries(snap.sourceMetadata ?? {})
+        .filter(([, metadata]) => metadata?.freshness?.some((item) => item.stale))
+        .map(([field]) => field),
+    ),
+  );
 
   // ── citations ───────────────────────────────────────────────────────────
   const citations = snap.citations.map((c) => ({
     title: c.title,
     url: c.url,
-    sourceType: 'OTHER' as const,
+    sourceType: toCitationSourceType(c.sourceType),
     retrievedAt: c.retrievedAt,
+    ...(c.qualityTier ? { qualityTier: c.qualityTier } : {}),
     ...(c.provider ? { provider: c.provider } : {}),
   }));
 
@@ -312,6 +351,26 @@ export function snapshotToEvidencePack(
       augmentedFactKeys: [],
       snapshotFactMapping: [],
     },
+    systemContext: {
+      confidenceCap: researchCoverage.overallConfidenceCap,
+      minimumViable: researchCoverage.overallStatus !== 'INSUFFICIENT_EVIDENCE',
+      planDisclaimer: [
+        `研究数据覆盖状态: ${researchCoverage.overallStatus}`,
+        '未满足最低事实的维度会被降级或跳过；不得以网搜结果替代结构化核心数据。',
+      ],
+      blockedClaims: [],
+      degradedReasons: Object.values(researchCoverage.dimensions)
+        .filter((decision) => decision.status !== 'PASS')
+        .map((decision) => `${decision.sectionType}: ${decision.missingCriticalFacts.join(', ')}`),
+      skippedSlots: Object.values(researchCoverage.dimensions)
+        .filter((decision) => !decision.minimumViable)
+        .flatMap((decision) => decision.missingCriticalFacts.map((field) => ({
+          slot: `${decision.sectionType}.${field}`,
+          reason: 'required fact unavailable in this snapshot',
+          priority: 'critical' as const,
+        }))),
+    },
+    researchCoverage,
     computedFacts,
   };
 
@@ -338,6 +397,86 @@ function pickFinancialsTier(b: FinancialsBundle | null | undefined): SourceTier 
   const t = b.qualityTier;
   if (t === 'A' || t === 'B' || t === 'C' || t === 'D' || t === 'E') return t;
   return DEFAULT_TIER;
+}
+
+function toCitationSourceType(
+  sourceType: string | undefined,
+): 'NEWS' | 'FILING' | 'RESEARCH' | 'DATA_PROVIDER' | 'SOCIAL' | 'OTHER' {
+  switch (sourceType) {
+    case 'NEWS':
+      return 'NEWS';
+    case 'FILING':
+      return 'FILING';
+    case 'RESEARCH':
+      return 'RESEARCH';
+    case 'SOCIAL':
+      return 'SOCIAL';
+    case 'PRICE':
+    case 'MACRO':
+      return 'DATA_PROVIDER';
+    default:
+      return 'OTHER';
+  }
+}
+
+function projectWebDocuments(raw: unknown): Array<{
+  title: string;
+  url: string;
+  publishedAt?: string;
+  sourceType?: 'web' | 'news' | 'filing';
+}> {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const documents: Array<{
+    title: string;
+    url: string;
+    publishedAt?: string;
+    sourceType?: 'web' | 'news' | 'filing';
+  }> = [];
+
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const record = item as Record<string, unknown>;
+    if (typeof record.url !== 'string' || !isHttpUrl(record.url) || seen.has(record.url)) {
+      continue;
+    }
+    const title = typeof record.title === 'string' && record.title.trim()
+      ? record.title.trim()
+      : record.url;
+    const publishedAt = normalizeIsoDate(record.publishedAt);
+    const sourceType = toWebDocumentSourceType(record.sourceType);
+    documents.push({
+      title,
+      url: record.url,
+      ...(publishedAt ? { publishedAt } : {}),
+      ...(sourceType ? { sourceType } : {}),
+    });
+    seen.add(record.url);
+  }
+  return documents;
+}
+
+function toWebDocumentSourceType(
+  sourceType: unknown,
+): 'web' | 'news' | 'filing' | undefined {
+  if (sourceType === 'NEWS' || sourceType === 'news') return 'news';
+  if (sourceType === 'FILING' || sourceType === 'filing') return 'filing';
+  if (sourceType === 'WEB' || sourceType === 'web') return 'web';
+  return undefined;
+}
+
+function normalizeIsoDate(value: unknown): string | undefined {
+  if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) return undefined;
+  return new Date(value).toISOString();
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:';
+  } catch {
+    return false;
+  }
 }
 
 function extractFilingUrl(f: unknown): string | null {

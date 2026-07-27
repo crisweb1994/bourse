@@ -10,6 +10,7 @@ import {
 } from './dimension-prompts';
 import { applyFixedDisclaimer } from './disclaimer';
 import { applyEvidenceGate } from './evidence-gate';
+import { applyResearchCoverage } from '../snapshot/research-coverage';
 import type {
   AgentProvider,
   ProviderStreamResult,
@@ -109,7 +110,7 @@ export async function* streamDimension(
   const evidenceBlock =
     options.evidencePack &&
     options.evidencePack.schemaVersion === 'evidence-pack-v2'
-      ? `${formatEvidencePackBlock(options.evidencePack)}\n\n`
+      ? `${formatEvidencePackBlock(options.evidencePack, sectionType)}\n\n`
       : '';
 
   // RFC-04: split the system prompt into 2 blocks — the stable "dim
@@ -293,7 +294,8 @@ export async function* streamDimension(
       ? { requiredFactReferences }
       : {}),
   });
-  const fixedData = applyFixedDisclaimer(gated.data);
+  const coverage = packV2?.researchCoverage?.dimensions[sectionType];
+  const fixedData = applyFixedDisclaimer(applyResearchCoverage(gated.data, coverage));
 
   yield {
     type: 'structured_data',

@@ -200,6 +200,108 @@ describe('fetchSnapshot · orchestration', () => {
     expect(miss?.reason).toBe('no_data');
   });
 
+  it('rejects an invalid quote instead of marking the field available', async () => {
+    const configs = buildConfigs({
+      quote: async () => ({ ...aaplQuote(), price: Number.NaN }),
+    });
+    const snap = await fetchSnapshot({
+      symbol: 'AAPL',
+      market: 'US',
+      configs,
+    });
+    const miss = snap.dataAvailability.missing.find((m) => m.field === 'quote');
+    expect(snap.rawFacts.quote).toBeNull();
+    expect(miss?.reason).toBe('invalid_data');
+    expect(miss?.detail).toContain('finite positive');
+  });
+
+  it('classifies an empty history result as no_data', async () => {
+    const configs = buildConfigs({ history: async () => [] });
+    const snap = await fetchSnapshot({
+      symbol: 'AAPL',
+      market: 'US',
+      configs,
+    });
+    const miss = snap.dataAvailability.missing.find((m) => m.field === 'history');
+    expect(snap.rawFacts.history).toBeNull();
+    expect(miss?.reason).toBe('no_data');
+  });
+
+  it('preserves envelope citations, freshness, and warnings', async () => {
+    const configs = buildConfigs({
+      quote: async () => ({
+        data: aaplQuote(),
+        citations: [
+          {
+            title: 'Yahoo Finance: AAPL',
+            url: 'https://finance.yahoo.com/quote/AAPL',
+            sourceType: 'PRICE' as const,
+            provider: 'yahoo-finance',
+            retrievedAt: '2025-05-25T15:00:00.000Z',
+            qualityTier: 'B' as const,
+          },
+        ],
+        freshness: [
+          {
+            provider: 'yahoo-finance',
+            asOf: '2025-05-25T00:00:00.000Z',
+            retrievedAt: '2025-05-25T15:00:00.000Z',
+            stale: false,
+          },
+        ],
+        warnings: [
+          {
+            code: 'PARTIAL_DATA' as const,
+            message: 'pre-market quote has no volume',
+            provider: 'yahoo-finance',
+          },
+        ],
+      }),
+    });
+    const snap = await fetchSnapshot({
+      symbol: 'AAPL',
+      market: 'US',
+      configs,
+    });
+    expect(snap.citations).toEqual([
+      expect.objectContaining({
+        factKey: 'quote',
+        url: 'https://finance.yahoo.com/quote/AAPL',
+        asOf: '2025-05-25T00:00:00.000Z',
+      }),
+    ]);
+    expect(snap.sourceMetadata?.quote?.freshness[0]?.asOf).toBe('2025-05-25T00:00:00.000Z');
+    expect(snap.dataAvailability.warnings).toContain(
+      'quote/PARTIAL_DATA: yahoo-finance: pre-market quote has no volume',
+    );
+  });
+
+  it('recognizes a provenance envelope when optional freshness and warnings are absent', async () => {
+    const configs = buildConfigs({
+      quote: async () => ({
+        data: aaplQuote(),
+        citations: [
+          {
+            title: 'Yahoo Finance: AAPL',
+            url: 'https://finance.yahoo.com/quote/AAPL',
+            sourceType: 'PRICE' as const,
+            provider: 'yahoo-finance',
+            retrievedAt: '2025-05-25T15:00:00.000Z',
+          },
+        ],
+      }),
+    });
+    const snap = await fetchSnapshot({
+      symbol: 'AAPL',
+      market: 'US',
+      configs,
+    });
+    expect(snap.rawFacts.quote?.price).toBe(200);
+    expect(snap.citations.find((citation) => citation.factKey === 'quote')?.url).toBe(
+      'https://finance.yahoo.com/quote/AAPL',
+    );
+  });
+
   it('honors per-connector timeout (slow fetcher → timeout reason)', async () => {
     const configs = buildConfigs({
       quote: () => new Promise<Quote>(() => { /* never resolves */ }),

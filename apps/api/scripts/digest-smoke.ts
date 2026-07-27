@@ -43,8 +43,15 @@ import {
   createCnFinanceConnector,
   createEastmoneyFinancialsConnector,
   createEastmoneyHkFinancialsConnector,
+  createHkexFilingsConnector,
+  createNasdaqFinanceConnector,
+  createOfficialMacroConnector,
   createSecEdgarFilingsConnector,
+  createSecEdgarProfileConnector,
   createSecEdgarXbrlFinancialsConnector,
+  createSinaUsFinanceConnector,
+  createTencentHkFinanceConnector,
+  createTavilySearchConnector,
   createYahooFinanceConnector,
 } from '@bourse/analysis';
 import { DigestGeneratorService } from '../src/digest/brief.generator';
@@ -233,12 +240,21 @@ async function main(): Promise<void> {
   try {
     const snapshotV2 = new SnapshotV2Service(
       createYahooFinanceConnector() as any,
+      createNasdaqFinanceConnector() as any,
+      createSinaUsFinanceConnector() as any,
+      createTencentHkFinanceConnector() as any,
+      createSecEdgarProfileConnector({ userAgent: SEC_UA }) as any,
       createCnFinanceConnector() as any,
       createSecEdgarXbrlFinancialsConnector({ userAgent: SEC_UA }) as any,
       createEastmoneyFinancialsConnector() as any,
       createEastmoneyHkFinancialsConnector() as any,
       createSecEdgarFilingsConnector({ userAgent: SEC_UA }) as any,
       createCnFilingsConnector() as any,
+      createHkexFilingsConnector() as any,
+      createOfficialMacroConnector() as any,
+      process.env.WEB_SEARCH_PROVIDER === 'tavily' && process.env.TAVILY_API_KEY
+        ? createTavilySearchConnector({ apiKey: process.env.TAVILY_API_KEY }) as any
+        : null,
     );
     const providerFactory = new ProviderFactoryService(config);
     const aiSettings = new AiSettingsService(prisma, config);

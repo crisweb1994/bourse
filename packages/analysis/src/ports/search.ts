@@ -6,6 +6,8 @@ import type { SourceDocument } from '../contracts/source-document';
 export interface WebSearchInput {
   query: string;
   limit?: number;
+  /** Tavily-compatible search corpus; omitted means general web. */
+  topic?: 'general' | 'news' | 'finance';
   freshness?: '1d' | '7d' | '30d' | string;
   language?: string;
   market?: MarketCode;

@@ -74,6 +74,7 @@ export function createTavilySearchConnector(options: TavilyOptions = {}): Search
           search_depth: searchDepth,
           max_results: clampLimit(input.limit),
         };
+        if (input.topic) body.topic = input.topic;
         const days = parseFreshnessDays(input.freshness);
         if (days !== undefined) body.days = days;
         if (input.domainAllowlist?.length) body.include_domains = input.domainAllowlist;
@@ -113,11 +114,16 @@ export function createTavilySearchConnector(options: TavilyOptions = {}): Search
 
         const items: WebSearchResultItem[] = results
           .filter((r): r is TavilyResult & { url: string } => typeof r?.url === 'string')
-          .map((r, idx) => toItem(r, retrievedAt, idx));
+          .map((r, idx) => toItem(
+            r,
+            retrievedAt,
+            idx,
+            input.topic === 'news' ? 'NEWS' : 'WEB',
+          ));
         const citations: ResearchCitation[] = items.map((item) => ({
           title: item.title ?? item.url ?? '(untitled)',
           url: item.url,
-          sourceType: 'WEB',
+          sourceType: item.sourceType,
           provider: PROVIDER,
           publishedAt: item.publishedAt,
           retrievedAt: item.retrievedAt,
@@ -140,11 +146,16 @@ export function createTavilySearchConnector(options: TavilyOptions = {}): Search
   };
 }
 
-function toItem(r: TavilyResult & { url: string }, retrievedAt: string, rank: number): WebSearchResultItem {
+function toItem(
+  r: TavilyResult & { url: string },
+  retrievedAt: string,
+  rank: number,
+  sourceType: WebSearchResultItem['sourceType'],
+): WebSearchResultItem {
   const snippet = r.content ?? '';
   const contentHash = computeContentHash({ markdown: snippet, canonicalUrl: r.url });
   const item: WebSearchResultItem = {
-    sourceType: 'WEB',
+    sourceType,
     provider: PROVIDER,
     url: r.url,
     retrievedAt,

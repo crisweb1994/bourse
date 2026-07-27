@@ -135,6 +135,14 @@ export interface CompanyProfile {
   marketCap?: number;
 }
 
+/** A narrow profile-only port for authoritative fallback sources. */
+export interface CompanyProfilePort {
+  getProfile(
+    input: ProfileInput,
+    ctx?: ConnectorRunContext,
+  ): Promise<ResearchResult<CompanyProfile>>;
+}
+
 export interface FinancePort {
   getQuote(input: QuoteInput, ctx?: ConnectorRunContext): Promise<ResearchResult<Quote>>;
   getHistory(input: HistoryInput, ctx?: ConnectorRunContext): Promise<ResearchResult<PriceBar[]>>;

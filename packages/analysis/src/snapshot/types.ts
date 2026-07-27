@@ -38,7 +38,9 @@ import type {
 export const SnapshotMissingReasonSchema = z.enum([
   'connector_error',
   'no_data',
+  'invalid_data',
   'rate_limited',
+  'auth_required',
   'not_implemented',
   'timeout',
   'not_configured',
@@ -70,8 +72,30 @@ export const SnapshotCitationSchema = z.object({
   retrievedAt: z.string().datetime(),
   asOf: z.string().optional(),
   provider: z.string().optional(),
+  sourceType: z.string().optional(),
+  qualityTier: z.enum(['A', 'B', 'C', 'D', 'E']).optional(),
 });
 export type SnapshotCitation = z.infer<typeof SnapshotCitationSchema>;
+
+/** Connector metadata retained at the snapshot boundary for UI/debugging. */
+export interface SnapshotSourceMetadata {
+  freshness: Array<{
+    provider: string;
+    asOf: string;
+    retrievedAt: string;
+    stale: boolean;
+    ttlMs?: number;
+    reason?: string;
+  }>;
+  warnings: Array<{
+    code: string;
+    message: string;
+    provider?: string;
+    cause?: string;
+  }>;
+  trace?: unknown;
+  cost?: unknown;
+}
 
 // ----------------------------------------------------------------------------
 // StockSnapshot — the value all dimensions read
@@ -109,6 +133,7 @@ export interface StockSnapshot {
   computedFacts: ComputedFacts;
   citations: SnapshotCitation[];
   dataAvailability: DataAvailability;
+  sourceMetadata?: Partial<Record<keyof RawFacts, SnapshotSourceMetadata>>;
 }
 
 // Convenience zod for the parts that don't depend on cross-package types.

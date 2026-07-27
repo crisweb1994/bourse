@@ -1,5 +1,6 @@
 import type { StructuredJson } from '../contracts/analysis-result';
 import type { EvidencePackV2 } from '../contracts/evidence-pack-v2';
+import type { SectionType } from '../contracts/enums';
 
 /**
  * RFC-02 §13: Format an EvidencePack v2 as a Chinese-language prompt block
@@ -18,6 +19,7 @@ import type { EvidencePackV2 } from '../contracts/evidence-pack-v2';
  */
 export function formatEvidencePackBlock(
   pack: EvidencePackV2,
+  sectionType?: SectionType,
 ): string {
   const lines: string[] = [];
   lines.push('【事实包 (EvidencePack v2)】');
@@ -33,6 +35,26 @@ export function formatEvidencePackBlock(
     lines.push('');
     lines.push(formatSystemContextBlock(pack.systemContext));
   }
+  if (sectionType && pack.researchCoverage) {
+    const coverage = pack.researchCoverage.dimensions[sectionType];
+    if (coverage) {
+      lines.push('');
+      lines.push('【当前维度数据门禁】');
+      lines.push(`- 状态: ${coverage.status}; 置信度上限: ${coverage.confidenceCap}`);
+      if (coverage.missingCriticalFacts.length > 0) {
+        lines.push(`- 缺少关键事实: ${coverage.missingCriticalFacts.join(', ')}`);
+      }
+      if (coverage.staleFacts.length > 0) {
+        lines.push(`- 陈旧事实: ${coverage.staleFacts.join(', ')}；不得将其描述为最新数据`);
+      }
+      if (coverage.blockedClaims.length > 0) {
+        lines.push(`- 禁止输出: ${coverage.blockedClaims.join('；')}`);
+      }
+      if (coverage.skip) {
+        lines.push('- 当前维度将被工作流跳过，禁止用 web_search 重建技术指标。');
+      }
+    }
+  }
 
   lines.push('');
   lines.push(
@@ -46,8 +68,11 @@ export function formatEvidencePackBlock(
     'marketCap',
     'currency',
     'pe',
+    'profile',
     'latestFilingUrls',
     'recentNews',
+    'webDocuments',
+    'macro',
     'consensusEps',
     'peHistoricalPercentile',
     'northboundFlow',
