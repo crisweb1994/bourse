@@ -18,8 +18,7 @@
  */
 
 import { z } from 'zod';
-import type { FinancialsBundle } from '../ports/financials';
-import type { PriceBar, Quote } from '../ports/finance';
+import type { FinancialsBundle, PriceBar, Quote } from '@bourse/market-data';
 import type { ComputeWarning } from './types';
 import { normalizeCurrency, currencyForMarket } from './units';
 import {

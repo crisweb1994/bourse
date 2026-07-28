@@ -9,6 +9,7 @@ import type {
   Quote,
   ResearchResult,
 } from '@bourse/analysis';
+import { MarketDataClient } from '@bourse/market-data';
 import { SnapshotV2Service } from './snapshot-v2.service';
 
 // ============================================================================
@@ -155,22 +156,22 @@ function buildService(overrides: {
   usFilings?: FilingPort;
 } = {}): SnapshotV2Service {
   // Direct constructor — avoids @nestjs/testing dep
-  return new SnapshotV2Service(
-    overrides.yahoo ?? mockYahoo(),
-    overrides.nasdaq ?? mockNasdaq(),
-    overrides.sina ?? mockSina(),
-    mockSina(), // Tencent HK fallback (unused by US tests)
-    mockUsProfile(),
-    mockCnFinance(),
-    mockFinancials(), // US financials
-    mockFinancials(), // CN financials
-    mockFinancials(), // HK financials
-    overrides.usFilings ?? mockFilings(),
-    mockFilings(),
-    mockFilings(),
-    mockMacro(),
-    null,
-  );
+  return new SnapshotV2Service(new MarketDataClient({
+    yahoo: overrides.yahoo ?? mockYahoo(),
+    nasdaq: overrides.nasdaq ?? mockNasdaq(),
+    sinaUs: overrides.sina ?? mockSina(),
+    tencentHk: mockSina(),
+    secProfile: mockUsProfile(),
+    cnFinance: mockCnFinance(),
+    usFinancials: mockFinancials(),
+    cnFinancials: mockFinancials(),
+    hkFinancials: mockFinancials(),
+    usFilings: overrides.usFilings ?? mockFilings(),
+    cnFilings: mockFilings(),
+    hkFilings: mockFilings(),
+    macro: mockMacro(),
+    search: null,
+  }));
 }
 
 // ============================================================================

@@ -11,9 +11,12 @@
  */
 
 import { z } from 'zod';
-import type { FilingSummary } from '../ports/filings';
-import type { FinancialsBundle } from '../ports/financials';
-import type { PriceBar, Quote } from '../ports/finance';
+import type {
+  FilingSummary,
+  FinancialsBundle,
+  PriceBar,
+  Quote,
+} from '@bourse/market-data';
 import {
   ComputedFinancialRatiosSchema,
   ComputedTechnicalIndicatorsSchema,

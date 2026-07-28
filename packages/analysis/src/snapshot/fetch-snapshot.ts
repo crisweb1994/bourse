@@ -46,6 +46,7 @@ import type {
   MarketConfigMap,
   SnapshotFetcherEnvelope,
 } from './market-config';
+import type { ConnectorRunContext } from '@bourse/market-data';
 
 // ----------------------------------------------------------------------------
 // Options
@@ -93,26 +94,26 @@ export async function fetchSnapshot(
   const fromDate = isoDaysAgo(historyDays);
 
   const tasks: FetcherTask[] = [
-    task('quote', config.quote ? () => config.quote(options.symbol) : null),
+    task('quote', config.quote ? (ctx) => config.quote(options.symbol, ctx) : null),
     task(
       'history',
       config.history
-        ? () => config.history!(options.symbol, fromDate, today)
+        ? (ctx) => config.history!(options.symbol, fromDate, today, ctx)
         : null,
     ),
-    task('profile', config.profile ? () => config.profile!(options.symbol) : null),
-    task('financials', config.financials ? () => config.financials!(options.symbol) : null),
+    task('profile', config.profile ? (ctx) => config.profile!(options.symbol, ctx) : null),
+    task('financials', config.financials ? (ctx) => config.financials!(options.symbol, ctx) : null),
     task(
       'filings',
-      config.filings ? () => config.filings!(options.symbol, filingsLimit) : null,
+      config.filings ? (ctx) => config.filings!(options.symbol, filingsLimit, ctx) : null,
     ),
-    task('consensusEps', config.consensusEps ? () => config.consensusEps!(options.symbol) : null),
-    task('northboundFlow', config.northboundFlow ? () => config.northboundFlow!(options.symbol) : null),
-    task('lhb', config.lhb ? () => config.lhb!(options.symbol) : null),
-    task('unlockCalendar', config.unlockCalendar ? () => config.unlockCalendar!(options.symbol) : null),
-    task('shareholders', config.shareholders ? () => config.shareholders!(options.symbol) : null),
-    task('webSearch', config.webSearch ? () => config.webSearch!(options.symbol) : null),
-    task('macro', config.macro ? () => config.macro!(options.symbol) : null),
+    task('consensusEps', config.consensusEps ? (ctx) => config.consensusEps!(options.symbol, ctx) : null),
+    task('northboundFlow', config.northboundFlow ? (ctx) => config.northboundFlow!(options.symbol, ctx) : null),
+    task('lhb', config.lhb ? (ctx) => config.lhb!(options.symbol, ctx) : null),
+    task('unlockCalendar', config.unlockCalendar ? (ctx) => config.unlockCalendar!(options.symbol, ctx) : null),
+    task('shareholders', config.shareholders ? (ctx) => config.shareholders!(options.symbol, ctx) : null),
+    task('webSearch', config.webSearch ? (ctx) => config.webSearch!(options.symbol, ctx) : null),
+    task('macro', config.macro ? (ctx) => config.macro!(options.symbol, ctx) : null),
   ];
 
   const results = await Promise.all(
@@ -152,10 +153,13 @@ export async function fetchSnapshot(
 
 interface FetcherTask {
   field: keyof RawFacts;
-  fn: (() => Promise<unknown>) | null;
+  fn: ((ctx: ConnectorRunContext) => Promise<unknown>) | null;
 }
 
-function task(field: keyof RawFacts, fn: (() => Promise<unknown>) | null): FetcherTask {
+function task(
+  field: keyof RawFacts,
+  fn: ((ctx: ConnectorRunContext) => Promise<unknown>) | null,
+): FetcherTask {
   return { field, fn };
 }
 
@@ -192,20 +196,25 @@ async function runWithTimeout(
     };
   }
 
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  const controller = new AbortController();
+  let timedOut = false;
+  const onCallerAbort = () => controller.abort(signal?.reason);
+  if (signal?.aborted) onCallerAbort();
+  else signal?.addEventListener('abort', onCallerAbort, { once: true });
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort(new Error(`timeout after ${timeoutMs}ms`));
+  }, timeoutMs);
   try {
     const response = await Promise.race([
-      t.fn(),
+      t.fn({ signal: controller.signal, timeoutMs }),
       new Promise<never>((_, reject) => {
-        timer = setTimeout(
-          () =>
-            reject(
-              Object.assign(new Error(`timeout after ${timeoutMs}ms`), {
-                __timeout: true,
-              }),
-            ),
-          timeoutMs,
-        );
+        controller.signal.addEventListener('abort', () => {
+          reject(Object.assign(
+            new Error(timedOut ? `timeout after ${timeoutMs}ms` : 'caller aborted'),
+            { __timeout: true },
+          ));
+        }, { once: true });
       }),
     ]);
     const envelope = isSnapshotFetcherEnvelope(response) ? response : null;
@@ -263,7 +272,8 @@ async function runWithTimeout(
       warnings: [],
     };
   } finally {
-    if (timer) clearTimeout(timer);
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onCallerAbort);
   }
 }
 

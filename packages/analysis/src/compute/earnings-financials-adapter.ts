@@ -4,7 +4,7 @@ import type {
   FinancialsBundle,
   FinancialsLineItem,
   FinancialsPeriodEntry,
-} from '../ports/financials';
+} from '@bourse/market-data';
 import { normalize } from './units';
 
 const FIELD_PATHS: Partial<

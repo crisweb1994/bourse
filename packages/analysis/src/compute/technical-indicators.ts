@@ -21,7 +21,7 @@
  */
 
 import { z } from 'zod';
-import type { PriceBar } from '../ports/finance';
+import type { PriceBar } from '@bourse/market-data';
 import type { ComputeWarning } from './types';
 
 // ============================================================================

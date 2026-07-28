@@ -21,11 +21,10 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.0",
+    "@bourse/market-data": "workspace:*",
     "@bourse/shared-types": "workspace:*",
-    "cheerio": "^1.2.0",
     "decimal.js": "^10.6.0",
     "openai": "^6.36.0",
-    "pdfjs-dist": "^6.1.200",
     "zod": "^3.23.8"
   },
   "devDependencies": {

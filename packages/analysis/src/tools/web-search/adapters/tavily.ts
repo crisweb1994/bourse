@@ -1,4 +1,4 @@
-import { createTavilySearchConnector } from '../../../connectors/search/tavily';
+import { createTavilySearchConnector } from '@bourse/market-data';
 import type {
   AdapterContext,
   SearchQuery,

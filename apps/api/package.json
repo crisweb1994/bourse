@@ -16,6 +16,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.0",
     "@bourse/analysis": "workspace:*",
+    "@bourse/market-data": "workspace:*",
     "@bourse/shared-types": "workspace:*",
     "@nestjs/common": "^10.4.0",
     "@nestjs/config": "^3.3.0",

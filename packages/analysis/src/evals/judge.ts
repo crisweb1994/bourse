@@ -17,8 +17,7 @@ import {
   computeValuation,
   detectRedFlags,
 } from '../compute';
-import type { FinancialsBundle } from '../ports/financials';
-import type { PriceBar, Quote } from '../ports/finance';
+import type { FinancialsBundle, PriceBar, Quote } from '@bourse/market-data';
 import {
   NUMERIC_TOLERANCE,
   type ExpectedComputedFacts,

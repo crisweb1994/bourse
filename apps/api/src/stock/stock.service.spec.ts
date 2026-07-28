@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { StockSearchResult } from '@bourse/shared-types';
+import { MarketDataClient } from '@bourse/market-data';
 import { StockService } from './stock.service';
 
 const AAPL: StockSearchResult = {
@@ -19,11 +20,13 @@ function createService(options?: {
 }) {
   return new StockService(
     {} as never,
-    { search: options?.eastMoney ?? (async () => []) } as never,
-    { search: options?.tencent ?? (async () => []) } as never,
-    { search: options?.yahoo ?? (async () => []) } as never,
-    {} as never,
-    {} as never,
+    new MarketDataClient({
+      instrumentSearch: [
+        { search: options?.eastMoney ?? (async () => []) },
+        { search: options?.tencent ?? (async () => []) },
+        { search: options?.yahoo ?? (async () => []) },
+      ],
+    } as never),
   );
 }
 

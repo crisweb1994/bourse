@@ -18,8 +18,8 @@
 import type {
   FinancialsBundle,
   FinancialsPeriodEntry,
-} from '../ports/financials';
-import type { Quote } from '../ports/finance';
+} from '@bourse/market-data';
+import type { Quote } from '@bourse/market-data';
 import {
   type ComputedFinancialRatios,
   type ComputeWarning,

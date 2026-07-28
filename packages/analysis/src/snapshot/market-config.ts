@@ -15,15 +15,18 @@
  * surface that lets callers swap test doubles in / out.
  */
 
-import type { ConnectorRunContext } from '../connectors/types';
-import type { FilingSummary } from '../ports/filings';
-import type { FinancialsBundle } from '../ports/financials';
-import type { PriceBar, Quote } from '../ports/finance';
-import type { DataFreshness } from '../contracts/freshness';
-import type { ResearchCitation } from '../contracts/research-citation';
-import type { ResearchResult } from '../contracts/result';
-import type { ResearchTrace } from '../contracts/result';
-import type { ResearchWarning } from '../contracts/warning';
+import type {
+  ConnectorRunContext,
+  DataFreshness,
+  FilingSummary,
+  FinancialsBundle,
+  PriceBar,
+  Quote,
+  ResearchCitation,
+  ResearchResult,
+  ResearchTrace,
+  ResearchWarning,
+} from '@bourse/market-data';
 
 /**
  * Connector envelopes preserve provenance at the Snapshot boundary. Test

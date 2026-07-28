@@ -6,7 +6,7 @@ import {
   type MetricFactCandidate,
   type MetricValue,
 } from '../contracts/earnings';
-import { computeContentHash } from '../util/content-hash';
+import { computeContentHash } from '@bourse/market-data';
 
 const INSTANT_METRICS = new Set<MetricFact['metricCode']>([
   'totalAssets',
