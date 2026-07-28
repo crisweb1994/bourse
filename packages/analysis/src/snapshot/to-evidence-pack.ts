@@ -40,7 +40,7 @@ import type {
   FactOf,
   SourceTier,
 } from '../contracts/evidence-pack-v2';
-import type { FinancialsBundle } from '../ports/financials';
+import type { FinancialsBundle } from '@bourse/market-data';
 import type { StockSnapshot } from './types';
 import { buildResearchCoverage } from './research-coverage';
 

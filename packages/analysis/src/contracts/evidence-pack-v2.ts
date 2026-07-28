@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import { FinancialsBundleSchema } from '../ports/financials';
-import { MacroSnapshotSchema } from '../ports/macro';
+import { FinancialsBundleSchema, MacroSnapshotSchema } from '@bourse/market-data';
 import {
   ComputedFinancialRatiosSchema,
   ComputedTechnicalIndicatorsSchema,

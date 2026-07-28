@@ -1,12 +1,30 @@
 // plan-v2 Wave 3 D14: research-core + agent contracts merged into a single
 // barrel. Research data layer types (left half) and LLM-facing types
 // (right half) live side-by-side now.
-export * from './research-citation';
-export * from './freshness';
-export * from './instrument';
-export * from './result';
-export * from './source-document';
-export * from './warning';
+export {
+  DataFreshness,
+  InstrumentRef,
+  MarketCode,
+  QualityTier,
+  ResearchCitation,
+  ResearchTrace,
+  ResearchWarning,
+  ResearchWarningCode,
+  Sensitivity,
+  SourceDocument,
+  SourceType,
+} from '@bourse/market-data';
+export type {
+  ResearchResult,
+  ResearchSchemaVersion,
+} from '@bourse/market-data';
+export {
+  RESEARCH_SCHEMA_VERSION,
+  ResearchError,
+  isMarketSupported,
+  SUPPORTED_MARKETS_PHASE_1_4,
+} from '@bourse/market-data';
+export type { OrchestratorOptions } from '@bourse/market-data';
 
 export * from './enums';
 export * from './citation';

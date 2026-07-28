@@ -1,15 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Market, type StockSearchResult } from '@bourse/shared-types';
-import type { FinancePort } from '@bourse/analysis';
+import type { MarketDataClient } from '@bourse/market-data';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpsertStockDto } from './stock.dto';
-import { EastMoneyProvider } from './providers/eastmoney.provider';
-import { TencentProvider } from './providers/tencent.provider';
-import { YahooProvider } from './providers/yahoo.provider';
-import {
-  CN_FINANCE_PORT,
-  YAHOO_FINANCE_PORT,
-} from '../connectors/connectors.module';
+import { MARKET_DATA_CLIENT } from '../connectors/connectors.module';
 import { resolveMarketState } from './market-hours';
 import { TtlLruCache } from './search-cache';
 
@@ -49,16 +43,7 @@ export class StockService {
 
   constructor(
     private prisma: PrismaService,
-    private eastMoney: EastMoneyProvider,
-    private tencent: TencentProvider,
-    private yahoo: YahooProvider,
-    // plan-v2 §12.1 — quote/profile now come off the analysis FinancePort
-    // connectors (US/HK: Yahoo v8 chart + crumb'd summaryDetail; CN:
-    // Tencent/Eastmoney). The legacy YahooProvider.getQuote/getProfile path
-    // hit Yahoo's now-401'd v7/v10 endpoints; YahooProvider is kept only for
-    // its search() fallback.
-    @Inject(YAHOO_FINANCE_PORT) private readonly yahooFinance: FinancePort,
-    @Inject(CN_FINANCE_PORT) private readonly cnFinance: FinancePort,
+    @Inject(MARKET_DATA_CLIENT) private readonly marketData: MarketDataClient,
   ) {}
 
   async search(query: string): Promise<StockSearchResult[]> {
@@ -69,18 +54,7 @@ export class StockService {
     const cached = this.cache.get(cacheKey);
     if (cached) return cached;
 
-    // East Money first — supports Chinese, A-shares, HK, US.
-    let results = await this.eastMoney.search(q);
-
-    // Tencent Smartbox is already used by our CN quote path and currently
-    // covers CN, HK and US symbols more reliably than the East Money suggest
-    // endpoint. Yahoo remains useful for JP/UK/EU when reachable.
-    if (results.length === 0) {
-      results = await this.tencent.search(q);
-    }
-    if (results.length === 0) {
-      results = await this.yahoo.search(q);
-    }
+    const results = await this.marketData.searchInstruments(q) as StockSearchResult[];
 
     // Do not turn a transient outage across all providers into five minutes
     // of guaranteed empty search results.
@@ -152,7 +126,11 @@ export class StockService {
   async getDetail(symbol: string, market: string) {
     const stock = await this.findBySymbolAndMarket(symbol, market);
     if (!stock) {
-      const candidates = await this.search(symbol);
+      const normalizedMarket = market.trim().toUpperCase();
+      const searchSymbol = normalizeDetailSearchSymbol(symbol, normalizedMarket);
+      const candidates = (await this.search(searchSymbol)).filter(
+        (candidate) => candidate.market.trim().toUpperCase() === normalizedMarket,
+      );
       return { stock: null, quote: null, profile: null, candidates };
     }
 
@@ -163,24 +141,12 @@ export class StockService {
     return { stock, quote, profile, candidates: [] as const };
   }
 
-  private financePortFor(market: string): FinancePort | null {
-    switch (market.trim().toUpperCase()) {
-      case 'CN':
-        return this.cnFinance;
-      case 'US':
-      case 'HK':
-        return this.yahooFinance;
-      default:
-        return null;
-    }
-  }
-
   private async fetchQuoteAndProfile(stock: {
     symbol: string;
     market: string;
   }): Promise<{ quote: QuoteDto; profile: ProfileDto }> {
-    const port = this.financePortFor(stock.market);
-    if (!port) {
+    const market = stock.market.trim().toUpperCase();
+    if (market !== 'US' && market !== 'CN' && market !== 'HK') {
       const reason = 'UNSUPPORTED_MARKET';
       return {
         quote: { degraded: true, reason },
@@ -188,11 +154,10 @@ export class StockService {
       };
     }
 
-    const market = stock.market.trim().toUpperCase();
     const instrumentId = `${market}:${stock.symbol}`;
     let env;
     try {
-      env = await port.getQuote({ instrumentId });
+      env = await this.marketData.getQuote(instrumentId);
     } catch {
       const reason = 'UPSTREAM_FAILED';
       return {
@@ -251,6 +216,13 @@ export class StockService {
 
     return { quote, profile };
   }
+}
+
+function normalizeDetailSearchSymbol(symbol: string, market: string): string {
+  const normalized = symbol.trim().toUpperCase();
+  if (market === 'HK') return normalized.replace(/\.HK$/, '');
+  if (market === 'CN') return normalized.replace(/\.(SS|SZ)$/, '');
+  return normalized;
 }
 
 /**

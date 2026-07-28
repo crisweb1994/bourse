@@ -1,9 +1,11 @@
 /* eslint-disable no-console */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createCnFilingsConnector } from '../../connectors/filings/cn';
-import { createSecEdgarFilingsConnector } from '../../connectors/filings/sec-edgar';
-import type { FilingPort } from '../../ports/filings';
+import {
+  createCnFilingsConnector,
+  createSecEdgarFilingsConnector,
+  type FilingPort,
+} from '@bourse/market-data';
 
 interface Args {
   market: 'US' | 'CN';

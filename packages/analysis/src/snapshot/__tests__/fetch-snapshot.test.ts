@@ -316,6 +316,33 @@ describe('fetchSnapshot · orchestration', () => {
     expect(miss?.reason).toBe('timeout');
   });
 
+  it('passes timeout context and aborts the fetcher signal', async () => {
+    let receivedTimeout: number | undefined;
+    let observedAbort = false;
+    const configs = buildConfigs({
+      quote: async (_symbol, ctx) => {
+        receivedTimeout = ctx?.timeoutMs;
+        return new Promise<Quote>((_resolve, reject) => {
+          ctx?.signal?.addEventListener('abort', () => {
+            observedAbort = true;
+            reject(new Error('aborted'));
+          }, { once: true });
+        });
+      },
+    });
+
+    const snap = await fetchSnapshot({
+      symbol: 'AAPL',
+      market: 'US',
+      configs,
+      perConnectorTimeoutMs: 25,
+    });
+
+    expect(receivedTimeout).toBe(25);
+    expect(observedAbort).toBe(true);
+    expect(snap.dataAvailability.missing.find((item) => item.field === 'quote')?.reason).toBe('timeout');
+  });
+
   it('does not throw when entire market is dark (all fetchers fail)', async () => {
     const configs: MarketConfigMap = {
       US: defineMarketConfig('US', 'USD', {

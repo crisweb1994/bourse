@@ -12,17 +12,12 @@
 export const VERSION = '0.1.0' as const;
 
 // ---- Research data layer (formerly @bourse/research-core) ----------
-export * from './connectors/filings';
-export * from './connectors/finance';
-export * from './connectors/financials';
-export * from './connectors/macro';
-export * from './connectors/search';
+export * from '@bourse/market-data';
 export * from './contracts';
-export * from './ports';
 
 // Explicit value+type re-exports for zod schemas that share name with their
 // inferred type — required across package boundaries under isolatedModules.
-export { QualityTier } from './contracts/research-citation';
+export { QualityTier } from '@bourse/market-data';
 // Daily Brief (docs/prd-daily-brief.md) — zod schemas 同名 value+type，跨包
 // 需 explicit re-export（isolatedModules，同 QualityTier 模式）。
 export { ChannelConfig, ChannelType, BriefPayload } from './contracts/brief-payload';

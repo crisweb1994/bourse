@@ -17,7 +17,7 @@ import type {
   FinancialsBundle,
   FinancialsLineItem,
   FinancialsPeriodEntry,
-} from '../ports/financials';
+} from '@bourse/market-data';
 import type { ComputedFinancialRatios } from './types';
 import type { RedFlag } from './types';
 import { readLine } from './read-bundle';

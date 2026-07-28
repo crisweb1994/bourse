@@ -1,4 +1,4 @@
-import { computeContentHash } from '../util/content-hash';
+import { computeContentHash } from '@bourse/market-data';
 
 export interface FilingSection {
   id: string;

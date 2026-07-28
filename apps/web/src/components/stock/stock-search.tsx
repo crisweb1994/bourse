@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import type { StockSearchResult } from '@bourse/shared-types';
 import { searchStocks, addToWatchlist, ApiError } from '@/lib/api';
 import { MARKET_LABELS } from '@/lib/constants';
+import { stockHref } from '@/lib/stock-href';
 import { InputShell, Input, Kbd, toast } from '@/components/ui';
 import { cn } from '@/lib/utils';
 
@@ -72,8 +73,7 @@ export function StockSearch({
   };
 
   const handleOpen = (stock: StockSearchResult) => {
-    const routeSymbol = encodeURIComponent(stock.yahooSymbol || stock.symbol);
-    router.push(`/stock/${routeSymbol}`);
+    router.push(stockHref(stock));
     setOpen(false);
   };
 

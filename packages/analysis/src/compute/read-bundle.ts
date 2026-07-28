@@ -23,8 +23,8 @@
 import type {
   FinancialsLineItem,
   FinancialsPeriodEntry,
-} from '../ports/financials';
-import type { Quote } from '../ports/finance';
+} from '@bourse/market-data';
+import type { Quote } from '@bourse/market-data';
 import type { ComputeWarning } from './types';
 import { normalize } from './units';
 

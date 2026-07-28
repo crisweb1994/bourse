@@ -154,6 +154,46 @@ describe('WebSearchExecutor', () => {
     expect(r.output.citations[0]?.retrievedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
+  it('removes unusable URLs from tool results and citations', async () => {
+    const adapter: WebSearchAdapter = {
+      name: 'searxng',
+      async search(q: SearchQuery): Promise<SearchResults> {
+        return {
+          query: q.query,
+          items: [
+            { title: 'Valid', url: 'https://example.com/report', snippet: 's' },
+            { title: 'Missing video', url: 'https://www.youtube.com/watch?v=', snippet: 's' },
+            { title: 'Empty short link', url: 'https://youtu.be/', snippet: 's' },
+            { title: 'Non HTTP', url: 'ftp://example.com/file', snippet: 's' },
+          ],
+          provider: 'searxng',
+          costUsd: 0,
+          durationMs: 5,
+          cached: false,
+        };
+      },
+    };
+    const ex = new WebSearchExecutor({
+      adapter,
+      timeoutMs: 5000,
+      maxSearchesPerRun: 50,
+      cacheTtlMs: 0,
+    });
+
+    const r = await ex.execute({ query: 'q' });
+    const toolItems = JSON.parse(r.output.text).items as Array<{ url: string }>;
+
+    expect(r.output.results.items.map((item) => item.url)).toEqual([
+      'https://example.com/report',
+    ]);
+    expect(r.output.citations.map((citation) => citation.url)).toEqual([
+      'https://example.com/report',
+    ]);
+    expect(toolItems.map((item) => item.url)).toEqual([
+      'https://example.com/report',
+    ]);
+  });
+
   it('stamps searchAdapter on emitted citations (RFC ws-config §2.3)', async () => {
     const adapter = fakeAdapter({});
     const ex = new WebSearchExecutor({

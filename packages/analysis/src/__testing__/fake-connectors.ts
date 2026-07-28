@@ -1,5 +1,4 @@
-import type { CachePort } from '../ports/cache';
-import { RESEARCH_SCHEMA_VERSION } from '../contracts/result';
+import { RESEARCH_SCHEMA_VERSION, type CachePort } from '@bourse/market-data';
 
 export function inMemoryCache(): CachePort {
   const store = new Map<string, { value: unknown; expiresAt: number; storedAt: string }>();

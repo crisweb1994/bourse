@@ -19,12 +19,14 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createCnFinanceConnector } from '../connectors/finance/cn';
-import { createYahooFinanceConnector } from '../connectors/finance/yahoo';
-import { createEastmoneyFinancialsConnector } from '../connectors/financials/eastmoney';
-import { createSecEdgarXbrlFinancialsConnector } from '../connectors/financials/sec-edgar-xbrl';
-import type { FinancePort } from '../ports/finance';
-import type { FinancialsPort } from '../ports/financials';
+import {
+  createCnFinanceConnector,
+  createEastmoneyFinancialsConnector,
+  createSecEdgarXbrlFinancialsConnector,
+  createYahooFinanceConnector,
+  type FinancePort,
+  type FinancialsPort,
+} from '@bourse/market-data';
 import {
   fetchSnapshot,
   defineMarketConfig,

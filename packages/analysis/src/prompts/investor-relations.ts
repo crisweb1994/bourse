@@ -1,4 +1,4 @@
-import type { FilingPage } from '../ports/filings';
+import type { FilingPage } from '@bourse/market-data';
 
 export const INVESTOR_RELATIONS_SCHEMA_VERSION = 'investor-relations-v1';
 export const INVESTOR_RELATIONS_PROMPT_VERSION = 'investor-relations-extract-v3';

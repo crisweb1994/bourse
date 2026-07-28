@@ -31,6 +31,7 @@ import type {
   SearchPort,
 } from '@bourse/analysis';
 import { EvidencePackV2 as EvidencePackV2Schema } from '@bourse/analysis';
+import { MarketDataClient } from '@bourse/market-data';
 import { SnapshotV2Service } from './snapshot-v2.service';
 
 // Note: This test uses the production SnapshotV2Service which calls
@@ -320,22 +321,22 @@ function buildService(
     search?: SearchPort | null;
   } = {},
 ): SnapshotV2Service {
-  return new SnapshotV2Service(
-    overrides.yahoo ?? mockYahoo(),
-    overrides.nasdaq ?? mockYahoo(),
-    mockYahoo(), // Sina US fallback (unused while Yahoo fixture is healthy)
-    mockYahoo(), // Tencent HK fallback
-    mockUsProfile(),
-    overrides.cn ?? mockCnFinance(),
-    overrides.usFinancials ?? mockFinancials(),
-    overrides.cnFinancials ?? mockFinancials(null),
-    overrides.hkFinancials ?? mockFinancials(null),
-    overrides.usFilings ?? mockFilings(),
-    overrides.cnFilings ?? mockFilings([]),
-    overrides.hkFilings ?? mockFilings([]),
-    overrides.macro ?? mockMacro(),
-    overrides.search ?? null,
-  );
+  return new SnapshotV2Service(new MarketDataClient({
+    yahoo: overrides.yahoo ?? mockYahoo(),
+    nasdaq: overrides.nasdaq ?? mockYahoo(),
+    sinaUs: mockYahoo(),
+    tencentHk: mockYahoo(),
+    secProfile: mockUsProfile(),
+    cnFinance: overrides.cn ?? mockCnFinance(),
+    usFinancials: overrides.usFinancials ?? mockFinancials(),
+    cnFinancials: overrides.cnFinancials ?? mockFinancials(null),
+    hkFinancials: overrides.hkFinancials ?? mockFinancials(null),
+    usFilings: overrides.usFilings ?? mockFilings(),
+    cnFilings: overrides.cnFilings ?? mockFilings([]),
+    hkFilings: overrides.hkFilings ?? mockFilings([]),
+    macro: overrides.macro ?? mockMacro(),
+    search: overrides.search ?? null,
+  }));
 }
 
 // ============================================================================

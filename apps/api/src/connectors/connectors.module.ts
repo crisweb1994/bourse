@@ -1,41 +1,9 @@
-import { Module, Logger } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
 import {
-  createCnFilingsConnector,
-  createCnFinanceConnector,
-  createEastmoneyFinancialsConnector,
-  createEastmoneyHkFinancialsConnector,
-  createHkexFilingsConnector,
-  createNasdaqFinanceConnector,
-  createOfficialMacroConnector,
-  createSecEdgarFilingsConnector,
-  createSecEdgarProfileConnector,
-  createSecEdgarXbrlFinancialsConnector,
-  createSinaUsFinanceConnector,
-  createTencentHkFinanceConnector,
-  createTavilySearchConnector,
-  createYahooFinanceConnector,
-  type FilingPort,
-  type CompanyProfilePort,
-  type FinancePort,
-  type FinancialsPort,
-  type MacroPort,
-  type SearchPort,
-} from '@bourse/analysis';
-
-/**
- * plan-v2 Wave 2.6e — port DI tokens lifted out of the deleted
- * apps/api/src/research/ module so SnapshotV2Service (and any future
- * consumer) doesn't pull in the legacy planner machinery.
- *
- * Provides 6 port singletons:
- *   YAHOO_FINANCE_PORT      — US + HK Yahoo finance
- *   CN_FINANCE_PORT         — Tencent/Eastmoney CN finance
- *   US_FILING_PORT          — SEC EDGAR filings
- *   CN_FILING_PORT          — CNInfo filings
- *   US_FINANCIALS_PORT      — SEC EDGAR XBRL
- *   CN_FINANCIALS_PORT      — Eastmoney datacenter financials
- *   HK_FINANCIALS_PORT      — Eastmoney datacenter HK F10 financials
- */
+  createMarketDataProviders,
+  MarketDataClient,
+  type MarketDataProviders,
+} from '@bourse/market-data';
 
 export const YAHOO_FINANCE_PORT = Symbol('YAHOO_FINANCE_PORT');
 export const NASDAQ_FINANCE_PORT = Symbol('NASDAQ_FINANCE_PORT');
@@ -45,94 +13,74 @@ export const US_PROFILE_PORT = Symbol('US_PROFILE_PORT');
 export const CN_FINANCE_PORT = Symbol('CN_FINANCE_PORT');
 export const US_FILING_PORT = Symbol('US_FILING_PORT');
 export const CN_FILING_PORT = Symbol('CN_FILING_PORT');
+export const HK_FILING_PORT = Symbol('HK_FILING_PORT');
 export const US_FINANCIALS_PORT = Symbol('US_FINANCIALS_PORT');
 export const CN_FINANCIALS_PORT = Symbol('CN_FINANCIALS_PORT');
 export const HK_FINANCIALS_PORT = Symbol('HK_FINANCIALS_PORT');
-export const HK_FILING_PORT = Symbol('HK_FILING_PORT');
 export const OFFICIAL_MACRO_PORT = Symbol('OFFICIAL_MACRO_PORT');
 export const TAVILY_SEARCH_PORT = Symbol('TAVILY_SEARCH_PORT');
+export const MARKET_DATA_CLIENT = Symbol('MARKET_DATA_CLIENT');
 
+const MARKET_DATA_PROVIDERS = Symbol('MARKET_DATA_PROVIDERS');
 const SEC_USER_AGENT_FALLBACK = 'stock-suggest-research contact@example.com';
+
+const compatibilityProviders = [
+  [YAHOO_FINANCE_PORT, 'yahoo'],
+  [NASDAQ_FINANCE_PORT, 'nasdaq'],
+  [SINA_US_FINANCE_PORT, 'sinaUs'],
+  [TENCENT_HK_FINANCE_PORT, 'tencentHk'],
+  [US_PROFILE_PORT, 'secProfile'],
+  [CN_FINANCE_PORT, 'cnFinance'],
+  [US_FILING_PORT, 'usFilings'],
+  [CN_FILING_PORT, 'cnFilings'],
+  [HK_FILING_PORT, 'hkFilings'],
+  [US_FINANCIALS_PORT, 'usFinancials'],
+  [CN_FINANCIALS_PORT, 'cnFinancials'],
+  [HK_FINANCIALS_PORT, 'hkFinancials'],
+  [OFFICIAL_MACRO_PORT, 'macro'],
+  [TAVILY_SEARCH_PORT, 'search'],
+] as const;
 
 @Module({
   providers: [
     {
-      provide: YAHOO_FINANCE_PORT,
-      useFactory: (): FinancePort => createYahooFinanceConnector(),
-    },
-    {
-      provide: NASDAQ_FINANCE_PORT,
-      useFactory: (): FinancePort => createNasdaqFinanceConnector(),
-    },
-    {
-      provide: SINA_US_FINANCE_PORT,
-      useFactory: (): FinancePort => createSinaUsFinanceConnector(),
-    },
-    {
-      provide: TENCENT_HK_FINANCE_PORT,
-      useFactory: (): FinancePort => createTencentHkFinanceConnector(),
-    },
-    {
-      provide: US_PROFILE_PORT,
-      useFactory: (): CompanyProfilePort =>
-        createSecEdgarProfileConnector({
-          userAgent:
-            process.env.RESEARCH_CORE_USER_AGENT?.trim() || SEC_USER_AGENT_FALLBACK,
-        }),
-    },
-    {
-      provide: CN_FINANCE_PORT,
-      useFactory: (): FinancePort => createCnFinanceConnector(),
-    },
-    {
-      provide: US_FILING_PORT,
-      useFactory: (): FilingPort => {
-        const userAgent =
-          process.env.RESEARCH_CORE_USER_AGENT?.trim() || SEC_USER_AGENT_FALLBACK;
-        if (!process.env.RESEARCH_CORE_USER_AGENT) {
+      provide: MARKET_DATA_PROVIDERS,
+      useFactory: (): MarketDataProviders => {
+        const userAgent = process.env.RESEARCH_CORE_USER_AGENT?.trim();
+        if (!userAgent) {
           new Logger('ConnectorsModule').warn(
-            'RESEARCH_CORE_USER_AGENT not set — SEC EDGAR may 403 on stricter checks.',
+            'RESEARCH_CORE_USER_AGENT not set; SEC EDGAR may reject stricter requests.',
           );
         }
-        return createSecEdgarFilingsConnector({ userAgent });
+        const tavilyEnabled = process.env.WEB_SEARCH_PROVIDER?.trim().toLowerCase() === 'tavily';
+        return createMarketDataProviders({
+          secUserAgent: userAgent || SEC_USER_AGENT_FALLBACK,
+          ...(process.env.TWELVE_DATA_API_KEY?.trim()
+            ? { twelveDataApiKey: process.env.TWELVE_DATA_API_KEY.trim() }
+            : {}),
+          ...(process.env.ALPHA_VANTAGE_API_KEY?.trim()
+            ? { alphaVantageApiKey: process.env.ALPHA_VANTAGE_API_KEY.trim() }
+            : {}),
+          ...(process.env.EODHD_API_KEY?.trim()
+            ? { eodhdApiKey: process.env.EODHD_API_KEY.trim() }
+            : {}),
+          ...(tavilyEnabled && process.env.TAVILY_API_KEY?.trim()
+            ? { tavilyApiKey: process.env.TAVILY_API_KEY.trim() }
+            : {}),
+        });
       },
     },
+    ...compatibilityProviders.map(([provide, key]) => ({
+      provide,
+      inject: [MARKET_DATA_PROVIDERS],
+      useFactory: (providers: MarketDataProviders): MarketDataProviders[typeof key] =>
+        providers[key],
+    })),
     {
-      provide: CN_FILING_PORT,
-      useFactory: (): FilingPort => createCnFilingsConnector(),
-    },
-    {
-      provide: HK_FILING_PORT,
-      useFactory: (): FilingPort => createHkexFilingsConnector(),
-    },
-    {
-      provide: OFFICIAL_MACRO_PORT,
-      useFactory: (): MacroPort => createOfficialMacroConnector(),
-    },
-    {
-      provide: TAVILY_SEARCH_PORT,
-      useFactory: (): SearchPort | null => {
-        const provider = process.env.WEB_SEARCH_PROVIDER?.trim().toLowerCase();
-        const apiKey = process.env.TAVILY_API_KEY?.trim();
-        if (provider !== 'tavily' || !apiKey) return null;
-        return createTavilySearchConnector({ apiKey });
-      },
-    },
-    {
-      provide: US_FINANCIALS_PORT,
-      useFactory: (): FinancialsPort => {
-        const userAgent =
-          process.env.RESEARCH_CORE_USER_AGENT?.trim() || SEC_USER_AGENT_FALLBACK;
-        return createSecEdgarXbrlFinancialsConnector({ userAgent });
-      },
-    },
-    {
-      provide: CN_FINANCIALS_PORT,
-      useFactory: (): FinancialsPort => createEastmoneyFinancialsConnector(),
-    },
-    {
-      provide: HK_FINANCIALS_PORT,
-      useFactory: (): FinancialsPort => createEastmoneyHkFinancialsConnector(),
+      provide: MARKET_DATA_CLIENT,
+      inject: [MARKET_DATA_PROVIDERS],
+      useFactory: (providers: MarketDataProviders): MarketDataClient =>
+        new MarketDataClient(providers),
     },
   ],
   exports: [
@@ -150,6 +98,7 @@ const SEC_USER_AGENT_FALLBACK = 'stock-suggest-research contact@example.com';
     HK_FINANCIALS_PORT,
     OFFICIAL_MACRO_PORT,
     TAVILY_SEARCH_PORT,
+    MARKET_DATA_CLIENT,
   ],
 })
 export class ConnectorsModule {}
