@@ -6,7 +6,7 @@
  */
 
 interface StockRouteInfo {
-  id: string;
+  id?: string | null;
   symbol: string;
   yahooSymbol?: string | null;
   market: string;
@@ -25,11 +25,10 @@ export function stockHref(
   stock: StockRouteInfo,
   opts?: { analysisId?: string },
 ): string {
-  const params = new URLSearchParams({
-    stockId: stock.id,
-    market: stock.market,
-    name: stock.name,
-  });
+  const params = new URLSearchParams();
+  if (stock.id) params.set('stockId', stock.id);
+  params.set('market', stock.market);
+  params.set('name', stock.name);
   if (opts?.analysisId) params.set('analysisId', opts.analysisId);
   return `/stock/${routeSymbol(stock)}?${params.toString()}`;
 }

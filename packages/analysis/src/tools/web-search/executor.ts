@@ -174,7 +174,11 @@ export class WebSearchExecutor {
   }
 
   private materialize(results: SearchResults): WebSearchToolOutput {
-    const filtered = this.applyDomainTierFilter(results);
+    const validResults = {
+      ...results,
+      items: results.items.filter((item) => isUsableCitationUrl(item.url)),
+    };
+    const filtered = this.applyDomainTierFilter(validResults);
     const citations: Citation[] = resultsToCitations(
       filtered,
       this.retrievedAtIso,
@@ -228,6 +232,23 @@ export class WebSearchExecutor {
       expiresAt: now + this.cfg.cacheTtlMs,
       results,
     });
+  }
+}
+
+function isUsableCitationUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+
+    const host = url.hostname.toLowerCase().replace(/^www\./, '');
+    if (host === 'youtube.com' && url.pathname === '/watch') {
+      return Boolean(url.searchParams.get('v'));
+    }
+    if (host === 'youtu.be') return url.pathname.replace(/^\/+/, '').length > 0;
+
+    return true;
+  } catch {
+    return false;
   }
 }
 

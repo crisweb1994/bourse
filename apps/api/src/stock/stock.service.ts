@@ -126,7 +126,11 @@ export class StockService {
   async getDetail(symbol: string, market: string) {
     const stock = await this.findBySymbolAndMarket(symbol, market);
     if (!stock) {
-      const candidates = await this.search(symbol);
+      const normalizedMarket = market.trim().toUpperCase();
+      const searchSymbol = normalizeDetailSearchSymbol(symbol, normalizedMarket);
+      const candidates = (await this.search(searchSymbol)).filter(
+        (candidate) => candidate.market.trim().toUpperCase() === normalizedMarket,
+      );
       return { stock: null, quote: null, profile: null, candidates };
     }
 
@@ -212,6 +216,13 @@ export class StockService {
 
     return { quote, profile };
   }
+}
+
+function normalizeDetailSearchSymbol(symbol: string, market: string): string {
+  const normalized = symbol.trim().toUpperCase();
+  if (market === 'HK') return normalized.replace(/\.HK$/, '');
+  if (market === 'CN') return normalized.replace(/\.(SS|SZ)$/, '');
+  return normalized;
 }
 
 /**
