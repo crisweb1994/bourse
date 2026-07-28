@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0](https://github.com/crisweb1994/bourse/compare/v0.4.0...v0.5.0) (2026-07-28)
+
+
+### Features
+
+* extract market data package and add provider fallbacks ([4b9f767](https://github.com/crisweb1994/bourse/commit/4b9f7673e97f11b84937d6b8ea303c3ef0bdde39))
+* extract market data package and add provider fallbacks ([cd2aa34](https://github.com/crisweb1994/bourse/commit/cd2aa344e8321d224f9a6f5871e08d4cd992e2aa))
+
+
+### Bug Fixes
+
+* repair stock resolution and citation validation ([2fe66de](https://github.com/crisweb1994/bourse/commit/2fe66debd32326f216c0d18d40a134856d05158e))
+
 ## [0.4.0](https://github.com/crisweb1994/bourse/compare/v0.3.0...v0.4.0) (2026-07-27)
 
 
