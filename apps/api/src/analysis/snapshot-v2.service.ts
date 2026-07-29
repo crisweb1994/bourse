@@ -2,7 +2,6 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   defineMarketConfig,
   fetchSnapshot,
-  portToFetcher,
   snapshotToEvidencePack,
   type MarketConfigMap,
   type StockSnapshot,
@@ -19,7 +18,12 @@ import {
   type ToolDescriptor,
 } from '@bourse/analysis';
 import { getMarket } from '@bourse/analysis';
-import type { MarketDataClient, ResearchCitation } from '@bourse/market-data';
+import type {
+  ConnectorRunContext,
+  ResearchMarketDataClient,
+  ResearchCitation,
+  ResearchResultV2,
+} from '@bourse/market-data';
 import { MARKET_DATA_CLIENT } from '../connectors/connectors.module';
 
 /**
@@ -33,7 +37,7 @@ export class SnapshotV2Service {
   private readonly configs: MarketConfigMap;
 
   constructor(
-    @Inject(MARKET_DATA_CLIENT) private readonly marketData: MarketDataClient,
+    @Inject(MARKET_DATA_CLIENT) private readonly marketData: ResearchMarketDataClient,
   ) {
     this.configs = this.buildConfigs();
   }
@@ -102,36 +106,31 @@ export class SnapshotV2Service {
       `${market}:${symbol}`;
 
     const shared = (market: 'US' | 'CN' | 'HK') => ({
-      quote: portToFetcher((symbol, ctx) =>
-        this.marketData.getQuote(instrumentId(market, symbol), ctx)),
-      history: (symbol: string, from: string, to: string, ctx?: Parameters<MarketDataClient['getHistory']>[1]) =>
-        this.marketData.getHistory({
+      quote: async (symbol: string, ctx?: ConnectorRunContext) => snapshotEnvelope(
+        await this.marketData.getQuote(instrumentId(market, symbol), ctx),
+      ),
+      history: async (symbol: string, from: string, to: string, ctx?: ConnectorRunContext) => snapshotEnvelope(
+        await this.marketData.getHistory({
           instrumentId: instrumentId(market, symbol),
           from,
           to,
           interval: '1d',
         }, ctx),
-      profile: async (symbol: string, ctx?: Parameters<MarketDataClient['getProfile']>[1]) => {
+      ),
+      profile: async (symbol: string, ctx?: ConnectorRunContext) => {
         const result = await this.marketData.getProfile(instrumentId(market, symbol), ctx);
         return {
-          ...result,
+          ...snapshotEnvelope(result),
           data: result.data as unknown as Record<string, unknown> | null,
         };
       },
-      financials: portToFetcher((symbol, ctx) =>
-        this.marketData.getFinancials(instrumentId(market, symbol), ctx)),
-      filings: (symbol: string, limit: number, ctx?: Parameters<MarketDataClient['getFilings']>[2]) =>
-        this.marketData.getFilings(instrumentId(market, symbol), limit, ctx),
-      macro: portToFetcher((_, ctx) => this.marketData.getMacro(market, ctx)),
-      ...(this.marketData.hasSearchProvider
-        ? {
-            webSearch: portToFetcher(async (symbol: string, ctx) => {
-              const result = this.marketData.searchWeb(searchQuery(market, symbol), ctx);
-              if (!result) throw new Error('Web search provider is not configured.');
-              return result;
-            }),
-          }
-        : {}),
+      financials: async (symbol: string, ctx?: ConnectorRunContext) => snapshotEnvelope(
+        await this.marketData.getFinancials(instrumentId(market, symbol), ctx),
+      ),
+      filings: async (symbol: string, limit: number, ctx?: ConnectorRunContext) => snapshotEnvelope(
+        await this.marketData.getFilings(instrumentId(market, symbol), limit, ctx),
+      ),
+      macro: async (_: string, ctx?: ConnectorRunContext) => snapshotEnvelope(await this.marketData.getMacro(market, ctx)),
     });
 
     return {
@@ -218,23 +217,12 @@ function toolToFetcher(
   };
 }
 
-function searchQuery(
-  market: 'US' | 'CN' | 'HK',
-  symbol: string,
-): {
-  query: string;
-  limit: number;
-  topic: 'finance';
-  freshness: '30d';
-  market: 'US' | 'CN' | 'HK';
-} {
-  const marketLabel = market === 'CN' ? 'A-share' : market === 'HK' ? 'Hong Kong' : 'US';
+function snapshotEnvelope<T>(result: ResearchResultV2<T>) {
   return {
-    query: `${symbol} ${marketLabel} company latest earnings governance regulatory risk`,
-    limit: 8,
-    topic: 'finance',
-    freshness: '30d',
-    market,
+    data: result.data,
+    citations: result.citations,
+    freshness: result.freshness,
+    warnings: result.warnings,
   };
 }
 

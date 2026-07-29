@@ -59,24 +59,15 @@ async function main() {
 
   // ---- 手搓依赖图（同 digest-smoke.ts 的 Nest-free 路径）----
   const config = new (require('@nestjs/config').ConfigService)();
-  const snapshotV2 = new SnapshotV2Service(
-    require('@bourse/analysis').createYahooFinanceConnector(),
-    require('@bourse/analysis').createNasdaqFinanceConnector(),
-    require('@bourse/analysis').createSinaUsFinanceConnector(),
-    require('@bourse/analysis').createTencentHkFinanceConnector(),
-    require('@bourse/analysis').createSecEdgarProfileConnector({ userAgent: SEC_UA }),
-    require('@bourse/analysis').createCnFinanceConnector(),
-    require('@bourse/analysis').createSecEdgarXbrlFinancialsConnector({ userAgent: SEC_UA }),
-    require('@bourse/analysis').createEastmoneyFinancialsConnector(),
-    require('@bourse/analysis').createEastmoneyHkFinancialsConnector(),
-    require('@bourse/analysis').createSecEdgarFilingsConnector({ userAgent: SEC_UA }),
-    require('@bourse/analysis').createCnFilingsConnector(),
-    require('@bourse/analysis').createHkexFilingsConnector(),
-    require('@bourse/analysis').createOfficialMacroConnector(),
-    process.env.WEB_SEARCH_PROVIDER === 'tavily' && process.env.TAVILY_API_KEY
-      ? require('@bourse/analysis').createTavilySearchConnector({ apiKey: process.env.TAVILY_API_KEY })
-      : null,
-  );
+  const marketData = require('@bourse/market-data');
+  const snapshotV2 = new SnapshotV2Service(marketData.createResearchMarketDataClient(
+    marketData.createMarketDataProviders({
+      secUserAgent: SEC_UA,
+      ...(process.env.TWELVE_DATA_API_KEY ? { twelveDataApiKey: process.env.TWELVE_DATA_API_KEY } : {}),
+      ...(process.env.ALPHA_VANTAGE_API_KEY ? { alphaVantageApiKey: process.env.ALPHA_VANTAGE_API_KEY } : {}),
+      ...(process.env.EODHD_API_KEY ? { eodhdApiKey: process.env.EODHD_API_KEY } : {}),
+    }),
+  ));
   const providerFactory = new ProviderFactoryService(config);
   const aiSettings = new AiSettingsService(prisma, config);
   const generator = new DigestGeneratorService(prisma, snapshotV2, providerFactory, aiSettings, config);

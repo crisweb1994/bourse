@@ -86,7 +86,6 @@ function providers(overrides: Partial<MarketDataProviders> = {}): MarketDataProv
     cnFilings: { searchFilings: async () => result([]) },
     hkFilings: { searchFilings: async () => result([]) },
     macro: { fetchMacro: async ({ market }) => result({ market, observations: [] }) },
-    search: null,
     ...overrides,
   };
 }
@@ -118,7 +117,7 @@ describe('MarketDataClient', () => {
     const response = await client.getQuote('US:AAPL');
 
     expect(response.data.price).toBe(205);
-    expect(response.warnings.some((warning) => warning.message.includes('Yahoo fallback'))).toBe(true);
+    expect(response.warnings.some((warning) => warning.code === 'FALLBACK_USED')).toBe(true);
   });
 
   it('uses a configured commercial company profile before Yahoo', async () => {
@@ -164,7 +163,7 @@ describe('MarketDataClient', () => {
 
     expect(quoteResult.data.price).toBe(201);
     expect(historyResult.data).toHaveLength(30);
-    expect(quoteResult.warnings.some((warning) => warning.message.includes('Nasdaq fallback'))).toBe(true);
+    expect(quoteResult.warnings.some((warning) => warning.code === 'FALLBACK_USED')).toBe(true);
   });
 
   it('falls back from Yahoo to Tencent for HK quote', async () => {
@@ -175,7 +174,23 @@ describe('MarketDataClient', () => {
 
     const response = await client.getQuote('HK:0700');
     expect(response.data.price).toBe(550);
-    expect(response.warnings.some((warning) => warning.message.includes('Tencent Finance fallback'))).toBe(true);
+    expect(response.warnings.some((warning) => warning.code === 'FALLBACK_USED')).toBe(true);
+  });
+
+  it('resolves a source-specific HK symbol before invoking a connector', async () => {
+    let providerSymbol: string | undefined;
+    const client = new MarketDataClient(providers({
+      yahoo: finance({
+        getQuote: async ({ instrumentId }, ctx) => {
+          providerSymbol = ctx?.resolvedInstrument?.providerSymbol;
+          return result(quote(instrumentId, 550), 'yahoo');
+        },
+      }),
+    }));
+
+    await client.getQuote('HK:0700');
+
+    expect(providerSymbol).toBe('0700.HK');
   });
 
   it('falls back from Eastmoney to Tencent for CN history', async () => {
@@ -192,7 +207,7 @@ describe('MarketDataClient', () => {
     });
 
     expect(response.data).toHaveLength(30);
-    expect(response.warnings.some((warning) => warning.message.includes('Tencent Finance fallback'))).toBe(true);
+    expect(response.warnings.some((warning) => warning.code === 'FALLBACK_USED')).toBe(true);
   });
 
   it('uses SEC only when the US Yahoo profile has no descriptive data', async () => {
@@ -211,7 +226,7 @@ describe('MarketDataClient', () => {
 
     const response = await client.getProfile('US:AAPL');
     expect(response.data?.industry).toBe('Electronic Computers');
-    expect(response.warnings.some((warning) => warning.message.includes('SEC issuer-profile fallback'))).toBe(true);
+    expect(response.warnings.some((warning) => warning.code === 'FALLBACK_USED')).toBe(true);
   });
 
   it('returns the Yahoo profile for HK and does not call SEC', async () => {
@@ -242,7 +257,7 @@ describe('MarketDataClient', () => {
 
     const response = await client.getProfile('HK:0700');
     expect(response.data?.industry).toBe('Software Services');
-    expect(response.warnings.some((warning) => warning.message.includes('Eastmoney HK profile fallback'))).toBe(true);
+    expect(response.warnings.some((warning) => warning.code === 'FALLBACK_USED')).toBe(true);
     expect(hkProfile).toHaveBeenCalledOnce();
   });
 
@@ -257,12 +272,7 @@ describe('MarketDataClient', () => {
     expect(response.warnings.length).toBeGreaterThan(0);
   });
 
-  it('does not configure optional search without an API key', () => {
-    const client = createMarketData({ providers: providers() });
-    expect(client.hasSearchProvider).toBe(false);
-  });
-
-  it('searches instruments in fixed provider order until one returns data', async () => {
+  it('merges instrument search providers instead of stopping at the first hit', async () => {
     const first = vi.fn(async () => []);
     const second = vi.fn(async () => [{
       symbol: 'AAPL',
@@ -286,38 +296,9 @@ describe('MarketDataClient', () => {
     expect(response[0]?.symbol).toBe('AAPL');
     expect(first).toHaveBeenCalledWith('AAPL', undefined);
     expect(second).toHaveBeenCalledWith('AAPL', undefined);
-    expect(third).not.toHaveBeenCalled();
+    expect(third).toHaveBeenCalledWith('AAPL', undefined);
   });
 
-  it('assembles the complete bundle and includes configured web search', async () => {
-    const searchWeb = vi.fn(async () => result([{
-      title: 'Apple investor relations',
-      url: 'https://investor.apple.com/',
-      snippet: 'Official investor relations page.',
-      sourceType: 'WEB' as const,
-      provider: 'tavily',
-      retrievedAt: '2026-07-28T00:00:00.000Z',
-      sensitivity: 'public' as const,
-    }], 'tavily'));
-    const client = new MarketDataClient(providers({ search: { searchWeb } }));
-
-    const bundle = await client.getBundle('US:AAPL', {
-      historyFrom: '2026-06-01',
-      historyTo: '2026-07-28',
-      filingsLimit: 5,
-      search: { query: 'AAPL latest investor relations', limit: 3 },
-    });
-
-    expect(bundle.instrumentId).toBe('US:AAPL');
-    expect(bundle.quote.data.price).toBe(100);
-    expect(bundle.history.data).toHaveLength(30);
-    expect(bundle.profile.data?.industry).toBe('Software');
-    expect(bundle.financials.data).toBeNull();
-    expect(bundle.filings.data).toEqual([]);
-    expect(bundle.macro.data.market).toBe('US');
-    expect(bundle.search?.data[0]?.url).toBe('https://investor.apple.com/');
-    expect(searchWeb).toHaveBeenCalledOnce();
-  });
 });
 
 describe('connector cancellation', () => {

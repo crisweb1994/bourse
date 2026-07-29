@@ -10,7 +10,6 @@ const instruments = requested.length > 0
 
 const client = createMarketData({
   secUserAgent: process.env.RESEARCH_CORE_USER_AGENT,
-  tavilyApiKey: process.env.TAVILY_API_KEY,
   twelveDataApiKey: process.env.TWELVE_DATA_API_KEY,
   alphaVantageApiKey: process.env.ALPHA_VANTAGE_API_KEY,
   eodhdApiKey: process.env.EODHD_API_KEY,
@@ -34,18 +33,6 @@ async function main(): Promise<void> {
     await probeList('instruments', () => client.searchInstruments(instrumentId.split(':')[1] ?? instrumentId));
   }
 
-  if (client.hasSearchProvider) {
-    await probe('web-search', () => {
-      const result = client.searchWeb({
-        query: 'Apple AAPL latest investor relations earnings',
-        limit: 3,
-      });
-      if (!result) throw new Error('Web search provider is not configured.');
-      return result;
-    });
-  } else {
-    console.log('\nweb-search SKIP provider=none reason=TAVILY_API_KEY_not_configured');
-  }
 }
 
 void main().catch((error) => {

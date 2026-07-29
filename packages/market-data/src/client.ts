@@ -16,246 +16,256 @@ import { createEastmoneyFinancialsConnector } from './connectors/financials/east
 import { createEastmoneyHkFinancialsConnector } from './connectors/financials/eastmoney-hk';
 import { createSecEdgarXbrlFinancialsConnector } from './connectors/financials/sec-edgar-xbrl';
 import { createOfficialMacroConnector } from './connectors/macro/official';
-import { createTavilySearchConnector } from './connectors/search/tavily';
 import { EastMoneyInstrumentSearchProvider } from './connectors/instrument-search/eastmoney';
 import { TencentInstrumentSearchProvider } from './connectors/instrument-search/tencent';
 import { YahooInstrumentSearchProvider } from './connectors/instrument-search/yahoo';
 import type { ConnectorRunContext } from './connectors/types';
-import type { ResearchResult } from './contracts/result';
-import type { FilingPort, FilingSummary } from './ports/filings';
-import type {
-  CompanyProfile,
-  CompanyProfilePort,
-  FinancePort,
-  HistoryInput,
-  PriceBar,
-  Quote,
-} from './ports/finance';
-import type { FinancialsBundle, FinancialsPort } from './ports/financials';
-import type { MacroPort, MacroSnapshot } from './ports/macro';
-import type { SearchPort, WebSearchInput, WebSearchResultItem } from './ports/search';
-import type {
-  InstrumentSearchPort,
-  InstrumentSearchResult,
-} from './ports/instrument-search';
-import { sourcePriority, type SupportedMarket } from './sources';
+import type { ResearchResult, ResearchResultV2 } from './contracts/result';
+import type { RoutedResult, SourceResult } from './contracts/source-result';
+import type { FilingSummary } from './ports/filings';
+import type { CompanyProfile, HistoryInput, PriceBar, Quote } from './ports/finance';
+import type { FinancialsBundle } from './ports/financials';
+import type { MacroSnapshot } from './ports/macro';
+import type { InstrumentSearchResult } from './ports/instrument-search';
+import type { MarketSession } from './contracts/calendar';
+import type { CachePort } from './ports/cache';
+import type { SourceRequestContext } from './ports/request-context';
+import { MemoryCache } from './cache/memory-cache';
+import { createBuiltInSources, type BuiltInProviderPorts } from './sources/built-in';
+import { adaptLegacyResult, unavailable } from './sources/legacy-adapter';
+import { InMemorySourceHealth } from './sources/health';
+import { InMemoryRateLimiter } from './sources/rate-limit';
+import type { SourceInstance } from './sources/plugin';
+import { SourceRegistry } from './sources/registry';
+import { CapabilityPlanner, type RouteRequest } from './routing/planner';
+import { CapabilityRouter } from './routing/router';
+import { DEFAULT_ROUTING_POLICIES, RoutingPolicies, type RoutingPolicy } from './routing/policy';
+import { parseInstrumentId } from './util/instrument-id';
 
 const DEFAULT_SEC_USER_AGENT = 'stock-suggest-research contact@example.com';
+type SupportedMarket = 'US' | 'CN' | 'HK';
 
-export interface MarketDataProviders {
-  twelveData?: FinancePort;
-  alphaVantage?: FinancePort;
-  eodhd?: FinancePort;
-  yahoo: FinancePort;
-  nasdaq: FinancePort;
-  sinaUs: FinancePort;
-  tencentHk: FinancePort;
-  tencentCn?: FinancePort;
-  cnFinance: FinancePort;
-  secProfile: CompanyProfilePort;
-  hkProfile?: CompanyProfilePort;
-  usFinancials: FinancialsPort;
-  cnFinancials: FinancialsPort;
-  hkFinancials: FinancialsPort;
-  usFilings: FilingPort;
-  cnFilings: FilingPort;
-  hkFilings: FilingPort;
-  macro: MacroPort;
-  search: SearchPort | null;
-  instrumentSearch?: readonly InstrumentSearchPort[];
-}
+/** Deprecated provider bag retained only for API dependency-injection compatibility. */
+export interface MarketDataProviders extends BuiltInProviderPorts {}
 
 export interface CreateMarketDataOptions {
   secUserAgent?: string;
-  tavilyApiKey?: string;
   twelveDataApiKey?: string;
   alphaVantageApiKey?: string;
   eodhdApiKey?: string;
   providers?: Partial<MarketDataProviders>;
+  cache?: CachePort;
+  policies?: readonly RoutingPolicy[];
 }
 
-export interface MarketDataBundle {
-  instrumentId: string;
-  capturedAt: string;
-  quote: ResearchResult<Quote>;
-  history: ResearchResult<PriceBar[]>;
-  profile: ResearchResult<CompanyProfile | null>;
-  financials: ResearchResult<FinancialsBundle | null>;
-  filings: ResearchResult<FilingSummary[]>;
-  macro: ResearchResult<MacroSnapshot>;
-  search?: ResearchResult<WebSearchResultItem[]>;
+export interface ResearchMarketDataClientOptions {
+  cache?: CachePort;
+  policies?: readonly RoutingPolicy[];
 }
 
-export interface GetBundleOptions extends ConnectorRunContext {
-  historyFrom: string;
-  historyTo: string;
-  filingsLimit?: number;
-  search?: WebSearchInput;
-}
+/**
+ * v2 public client. It expresses capabilities only; it knows no provider IDs.
+ * The compatibility MarketDataClient below converts its nullable results back
+ * into the v1 envelope until API and analysis migrate.
+ */
+export class ResearchMarketDataClient {
+  private readonly router: CapabilityRouter;
 
-export class MarketDataClient {
-  constructor(private readonly providers: MarketDataProviders) {}
-
-  get hasSearchProvider(): boolean {
-    return this.providers.search !== null;
+  constructor(
+    private readonly registry: SourceRegistry,
+    options: ResearchMarketDataClientOptions = {},
+  ) {
+    const health = new InMemorySourceHealth();
+    this.router = new CapabilityRouter(
+      new CapabilityPlanner(registry, health),
+      new RoutingPolicies(options.policies ?? DEFAULT_ROUTING_POLICIES),
+      health,
+      new InMemoryRateLimiter(),
+      options.cache ?? new MemoryCache(),
+    );
   }
 
-  async searchInstruments(
-    query: string,
-    signal?: AbortSignal,
-  ): Promise<InstrumentSearchResult[]> {
+  getQuote(instrumentId: string, ctx: ConnectorRunContext = {}): Promise<ResearchResultV2<Quote>> {
+    return this.routeInstrument('quote', instrumentId, ctx, { instrumentId }, async (source, requestContext) => {
+      const port = source.ports.finance;
+      return port
+        ? adaptLegacyResult(source.manifest.id, await port.getQuote({ instrumentId }, connectorContext(requestContext, ctx)), usableQuote)
+        : unavailable(source.manifest.id, 'Source does not implement QuotePort.');
+    });
+  }
+
+  getHistory(input: HistoryInput, ctx: ConnectorRunContext = {}): Promise<ResearchResultV2<PriceBar[]>> {
+    return this.routeInstrument('history', input.instrumentId, ctx, input, async (source, requestContext) => {
+      const port = source.ports.finance;
+      return port
+        ? adaptLegacyResult(source.manifest.id, await port.getHistory(input, connectorContext(requestContext, ctx)), usableHistory)
+        : unavailable(source.manifest.id, 'Source does not implement HistoryPort.');
+    }, input.interval);
+  }
+
+  getProfile(instrumentId: string, ctx: ConnectorRunContext = {}): Promise<ResearchResultV2<CompanyProfile>> {
+    return this.routeInstrument('profile', instrumentId, ctx, { instrumentId }, async (source, requestContext) => {
+      const port = source.ports.profile ?? (source.ports.finance?.getProfile
+        ? { getProfile: source.ports.finance.getProfile.bind(source.ports.finance) }
+        : undefined);
+      return port
+        ? adaptLegacyResult(source.manifest.id, await port.getProfile({ instrumentId }, connectorContext(requestContext, ctx)), usableProfile)
+        : unavailable(source.manifest.id, 'Source does not implement ProfilePort.');
+    });
+  }
+
+  getFinancials(instrumentId: string, ctx: ConnectorRunContext = {}): Promise<ResearchResultV2<FinancialsBundle>> {
+    return this.routeInstrument('financials', instrumentId, ctx, { instrumentId }, async (source, requestContext) => {
+      const port = source.ports.financials;
+      return port
+        ? adaptLegacyResult(source.manifest.id, await port.fetchFinancials({ instrumentId }, connectorContext(requestContext, ctx)), (data) => data !== null)
+        : unavailable(source.manifest.id, 'Source does not implement FinancialsPort.');
+    });
+  }
+
+  getFilings(instrumentId: string, limit = 10, ctx: ConnectorRunContext = {}): Promise<ResearchResultV2<FilingSummary[]>> {
+    return this.routeInstrument('filings', instrumentId, ctx, { instrumentId, limit }, async (source, requestContext) => {
+      const port = source.ports.filings;
+      if (!port) return unavailable(source.manifest.id, 'Source does not implement FilingsPort.');
+      const result = await port.searchFilings({ instrumentId, limit }, connectorContext(requestContext, ctx));
+      return adaptLegacyResult(source.manifest.id, result, (data) => data.length > 0);
+    });
+  }
+
+  getMacro(market: SupportedMarket, ctx: ConnectorRunContext = {}): Promise<ResearchResultV2<MacroSnapshot>> {
+    const request = routeRequest('macro', market, { market }, ctx);
+    return this.toV2(this.router.fetch(request, async (source, requestContext) => {
+      const port = source.ports.macro;
+      return port
+        ? adaptLegacyResult(source.manifest.id, await port.fetchMacro({ market }, connectorContext(requestContext, ctx)), (data) => data.observations.length > 0)
+        : unavailable(source.manifest.id, 'Source does not implement MacroPort.');
+    }));
+  }
+
+  getMarketSession(market: SupportedMarket, at?: string): Promise<ResearchResultV2<MarketSession>> {
+    const request: RouteRequest = { capability: 'market-calendar', market, input: { market, at }, credentialScope: 'public', timeoutMs: 1_000 };
+    return this.toV2(this.router.fetch(request, async (source, context) => {
+      const port = source.ports.marketCalendar;
+      return port
+        ? port.getMarketSession({ market, ...(at ? { at } : {}) }, context)
+        : unavailable(source.manifest.id, 'Source does not implement MarketCalendarPort.');
+    }));
+  }
+
+  async searchInstruments(query: string, signal?: AbortSignal): Promise<ResearchResultV2<InstrumentSearchResult[]>> {
     const normalized = query.trim();
-    if (!normalized) return [];
-    for (const provider of this.providers.instrumentSearch ?? []) {
-      const results = await provider.search(normalized, signal);
-      if (results.length > 0) return results;
+    if (!normalized) return this.toV2<InstrumentSearchResult[]>({ status: 'empty', data: null, citations: [], freshness: [], warnings: [], attempts: [] });
+    const request: RouteRequest = { capability: 'instrument-search', market: 'US', input: { query: normalized }, credentialScope: 'public', signal, timeoutMs: 5_000 };
+    return this.toV2(this.router.fetch(request, async (source) => {
+      const port = source.ports.instrumentSearch;
+      if (!port) return unavailable(source.manifest.id, 'Source does not implement InstrumentSearchPort.');
+      const data = await port.search(normalized, signal);
+      return data.length > 0
+        ? { status: 'ok', data, sourceId: source.manifest.id, citations: [], freshness: [], warnings: [] }
+        : { status: 'empty', data: null, sourceId: source.manifest.id, citations: [], freshness: [], warnings: [] };
+    }, { merge: mergeInstrumentSearch }));
+  }
+
+  private async routeInstrument<T>(
+    capability: RouteRequest['capability'],
+    instrumentId: string,
+    ctx: ConnectorRunContext,
+    input: unknown,
+    operation: (source: SourceInstance, context: SourceRequestContext) => Promise<SourceResult<T>>,
+    interval?: RouteRequest['interval'],
+  ): Promise<ResearchResultV2<T>> {
+    const parsed = parseInstrumentId(instrumentId);
+    if (!parsed || !isSupportedMarket(parsed.market)) {
+      return this.toV2({
+        status: 'failed',
+        data: null,
+        citations: [],
+        freshness: [],
+        warnings: [{ code: 'INVALID_INSTRUMENT', message: `Unsupported instrumentId: ${instrumentId}` }],
+        attempts: [],
+        error: { code: 'UNSUPPORTED_REQUEST', message: `Unsupported instrumentId: ${instrumentId}` },
+      });
     }
-    return [];
+    return this.toV2(this.router.fetch(routeRequest(capability, parsed.market, input, ctx, interval, parsed.raw), operation));
   }
 
-  getQuote(
-    instrumentId: string,
-    ctx: ConnectorRunContext = {},
-  ): Promise<ResearchResult<Quote>> {
-    const market = marketFromInstrumentId(instrumentId);
-    return fallback(
-      orderedFinanceSources(this.providers, market, 'quote').map(([id, name, port]) => [
-        name,
-        () => port.getQuote({ instrumentId }, sourceContext(ctx, sourceTimeout(id, market, 'quote'))),
-      ] as const),
-      hasUsableQuote,
-      'quote',
-    );
+  private toV2<T>(result: Promise<RoutedResult<T>> | RoutedResult<T>): Promise<ResearchResultV2<T>> {
+    return Promise.resolve(result).then((value) => {
+      const trace = {
+        attempts: value.attempts,
+        ...((value.status === 'ok' || value.status === 'partial') && value.selectedSource
+          ? { selectedSource: value.selectedSource }
+          : {}),
+      };
+      if (value.status === 'ok' || value.status === 'partial') {
+        return { schemaVersion: '2.0', status: value.status, data: value.data, citations: value.citations, freshness: value.freshness, warnings: value.warnings, trace };
+      }
+      return { schemaVersion: '2.0', status: value.status, data: null, citations: value.citations, freshness: value.freshness, warnings: value.warnings, trace, ...(value.error ? { error: value.error } : {}) };
+    });
+  }
+}
+
+/** Compatibility facade. It exposes the v1 API but routes every core capability through v2. */
+export class MarketDataClient {
+  private readonly research: ResearchMarketDataClient;
+
+  constructor(
+    private readonly providers: MarketDataProviders,
+    options: ResearchMarketDataClientOptions = {},
+  ) {
+    this.research = new ResearchMarketDataClient(new SourceRegistry(createBuiltInSources(providers)), options);
   }
 
-  async getHistory(
-    input: HistoryInput,
-    ctx: ConnectorRunContext = {},
-  ): Promise<ResearchResult<PriceBar[]>> {
-    const market = marketFromInstrumentId(input.instrumentId);
-    return fallback(
-      orderedFinanceSources(this.providers, market, 'history').map(([id, name, port]) => [
-        name,
-        () => port.getHistory(input, sourceContext(ctx, sourceTimeout(id, market, 'history'))),
-      ] as const),
-      hasUsableHistory,
-      'history',
-    );
+  async searchInstruments(query: string, signal?: AbortSignal): Promise<InstrumentSearchResult[]> {
+    const result = await this.research.searchInstruments(query, signal);
+    return result.data ?? [];
   }
 
-  async getProfile(
-    instrumentId: string,
-    ctx: ConnectorRunContext = {},
-  ): Promise<ResearchResult<CompanyProfile | null>> {
-    const market = marketFromInstrumentId(instrumentId);
-    return profileFallback(orderedProfileSources(this.providers, market), instrumentId, ctx);
+  async getQuote(instrumentId: string, ctx: ConnectorRunContext = {}): Promise<ResearchResult<Quote>> {
+    return legacy(await this.research.getQuote(instrumentId, ctx), emptyQuote(instrumentId));
   }
 
-  getFinancials(
-    instrumentId: string,
-    ctx: ConnectorRunContext = {},
-  ): Promise<ResearchResult<FinancialsBundle | null>> {
-    const market = marketFromInstrumentId(instrumentId);
-    const port = market === 'US'
-      ? this.providers.usFinancials
-      : market === 'CN'
-        ? this.providers.cnFinancials
-        : this.providers.hkFinancials;
-    return port.fetchFinancials({ instrumentId }, ctx);
+  async getHistory(input: HistoryInput, ctx: ConnectorRunContext = {}): Promise<ResearchResult<PriceBar[]>> {
+    return legacy(await this.research.getHistory(input, ctx), []);
   }
 
-  getFilings(
-    instrumentId: string,
-    limit = 10,
-    ctx: ConnectorRunContext = {},
-  ): Promise<ResearchResult<FilingSummary[]>> {
-    const market = marketFromInstrumentId(instrumentId);
-    if (market === 'US') return fetchUsFilings(this.providers.usFilings, instrumentId, limit, ctx);
-    const port = market === 'CN' ? this.providers.cnFilings : this.providers.hkFilings;
-    return port.searchFilings({ instrumentId, limit }, ctx);
+  async getProfile(instrumentId: string, ctx: ConnectorRunContext = {}): Promise<ResearchResult<CompanyProfile | null>> {
+    return legacy(await this.research.getProfile(instrumentId, ctx), null);
   }
 
-  getMacro(
-    market: SupportedMarket,
-    ctx: ConnectorRunContext = {},
-  ): Promise<ResearchResult<MacroSnapshot>> {
-    return this.providers.macro.fetchMacro({ market }, ctx);
+  async getFinancials(instrumentId: string, ctx: ConnectorRunContext = {}): Promise<ResearchResult<FinancialsBundle | null>> {
+    return legacy(await this.research.getFinancials(instrumentId, ctx), null);
   }
 
-  searchWeb(
-    input: WebSearchInput,
-    ctx: ConnectorRunContext = {},
-  ): Promise<ResearchResult<WebSearchResultItem[]>> | null {
-    return this.providers.search?.searchWeb(input, ctx) ?? null;
+  async getFilings(instrumentId: string, limit = 10, ctx: ConnectorRunContext = {}): Promise<ResearchResult<FilingSummary[]>> {
+    return legacy(await this.research.getFilings(instrumentId, limit, ctx), []);
   }
 
-  async getBundle(
-    instrumentId: string,
-    options: GetBundleOptions,
-  ): Promise<MarketDataBundle> {
-    const market = marketFromInstrumentId(instrumentId);
-    const ctx: ConnectorRunContext = {
-      ...(options.fetchLike ? { fetchLike: options.fetchLike } : {}),
-      ...(options.signal ? { signal: options.signal } : {}),
-      ...(options.timeoutMs ? { timeoutMs: options.timeoutMs } : {}),
-      ...(options.disableSummaryDetail !== undefined
-        ? { disableSummaryDetail: options.disableSummaryDetail }
-        : {}),
-    };
-    const searchPromise = options.search ? this.searchWeb(options.search, ctx) : null;
-    const [quote, history, profile, financials, filings, macro, search] = await Promise.all([
-      this.getQuote(instrumentId, ctx),
-      this.getHistory({
-        instrumentId,
-        from: options.historyFrom,
-        to: options.historyTo,
-        interval: '1d',
-      }, ctx),
-      this.getProfile(instrumentId, ctx),
-      this.getFinancials(instrumentId, ctx),
-      this.getFilings(instrumentId, options.filingsLimit ?? 10, ctx),
-      this.getMacro(market, ctx),
-      searchPromise,
-    ]);
-    return {
-      instrumentId,
-      capturedAt: new Date().toISOString(),
-      quote,
-      history,
-      profile,
-      financials,
-      filings,
-      macro,
-      ...(search ? { search } : {}),
-    };
+  async getMacro(market: SupportedMarket, ctx: ConnectorRunContext = {}): Promise<ResearchResult<MacroSnapshot>> {
+    return legacy(await this.research.getMacro(market, ctx), { market, observations: [] });
   }
+
 }
 
 export function createMarketData(options: CreateMarketDataOptions = {}): MarketDataClient {
-  return new MarketDataClient(createMarketDataProviders(options));
+  return new MarketDataClient(createMarketDataProviders(options), options);
 }
 
-export function createMarketDataProviders(
-  options: CreateMarketDataOptions = {},
-): MarketDataProviders {
+/** Creates the v2 client from already-constructed source instances. */
+export function createResearchMarketDataClient(
+  providers: MarketDataProviders,
+  options: ResearchMarketDataClientOptions = {},
+): ResearchMarketDataClient {
+  return new ResearchMarketDataClient(new SourceRegistry(createBuiltInSources(providers)), options);
+}
+
+export function createMarketDataProviders(options: CreateMarketDataOptions = {}): MarketDataProviders {
   const secUserAgent = options.secUserAgent?.trim() || DEFAULT_SEC_USER_AGENT;
   const supplied = options.providers ?? {};
   return {
-    ...(supplied.twelveData
-      ? { twelveData: supplied.twelveData }
-      : options.twelveDataApiKey?.trim()
-        ? { twelveData: createTwelveDataFinanceConnector({ apiKey: options.twelveDataApiKey.trim() }) }
-        : {}),
-    ...(supplied.alphaVantage
-      ? { alphaVantage: supplied.alphaVantage }
-      : options.alphaVantageApiKey?.trim()
-        ? { alphaVantage: createAlphaVantageFinanceConnector({ apiKey: options.alphaVantageApiKey.trim() }) }
-        : {}),
-    ...(supplied.eodhd
-      ? { eodhd: supplied.eodhd }
-      : options.eodhdApiKey?.trim()
-        ? { eodhd: createEodhdFinanceConnector({ apiKey: options.eodhdApiKey.trim() }) }
-        : {}),
+    ...(supplied.twelveData ? { twelveData: supplied.twelveData } : options.twelveDataApiKey?.trim() ? { twelveData: createTwelveDataFinanceConnector({ apiKey: options.twelveDataApiKey.trim() }) } : {}),
+    ...(supplied.alphaVantage ? { alphaVantage: supplied.alphaVantage } : options.alphaVantageApiKey?.trim() ? { alphaVantage: createAlphaVantageFinanceConnector({ apiKey: options.alphaVantageApiKey.trim() }) } : {}),
+    ...(supplied.eodhd ? { eodhd: supplied.eodhd } : options.eodhdApiKey?.trim() ? { eodhd: createEodhdFinanceConnector({ apiKey: options.eodhdApiKey.trim() }) } : {}),
     yahoo: supplied.yahoo ?? createYahooFinanceConnector(),
     nasdaq: supplied.nasdaq ?? createNasdaqFinanceConnector(),
     sinaUs: supplied.sinaUs ?? createSinaUsFinanceConnector(),
@@ -271,251 +281,81 @@ export function createMarketDataProviders(
     cnFilings: supplied.cnFilings ?? createCnFilingsConnector(),
     hkFilings: supplied.hkFilings ?? createHkexFilingsConnector(),
     macro: supplied.macro ?? createOfficialMacroConnector(),
-    search: Object.prototype.hasOwnProperty.call(supplied, 'search')
-      ? supplied.search ?? null
-      : options.tavilyApiKey?.trim()
-        ? createTavilySearchConnector({ apiKey: options.tavilyApiKey.trim() })
-        : null,
-    instrumentSearch: supplied.instrumentSearch ?? [
-      new EastMoneyInstrumentSearchProvider(),
-      new TencentInstrumentSearchProvider(),
-      new YahooInstrumentSearchProvider(),
-    ],
+    instrumentSearch: supplied.instrumentSearch ?? [new EastMoneyInstrumentSearchProvider(), new TencentInstrumentSearchProvider(), new YahooInstrumentSearchProvider()],
   };
 }
 
-function marketFromInstrumentId(instrumentId: string): SupportedMarket {
-  const market = instrumentId.split(':', 1)[0];
-  if (market === 'US' || market === 'CN' || market === 'HK') return market;
-  throw new Error(`Unsupported instrumentId: ${instrumentId}`);
-}
-
-function sourceContext(ctx: ConnectorRunContext, timeoutMs: number): ConnectorRunContext {
-  return { ...ctx, timeoutMs: Math.min(ctx.timeoutMs ?? timeoutMs, timeoutMs) };
-}
-
-type FinanceSource = readonly [id: string, name: string, port: FinancePort];
-
-function orderedFinanceSources(
-  providers: MarketDataProviders,
+function routeRequest(
+  capability: RouteRequest['capability'],
   market: SupportedMarket,
-  kind: 'quote' | 'history',
-): FinanceSource[] {
-  return sourcePriority(market, kind).flatMap((id): FinanceSource[] => {
-    const source = financeSource(providers, id);
-    return source ? [[id, source.name, source.port]] : [];
-  });
+  input: unknown,
+  ctx: ConnectorRunContext,
+  interval?: RouteRequest['interval'],
+  instrumentId?: string,
+): RouteRequest {
+  return { capability, market, input, credentialScope: 'public', ...(ctx.signal ? { signal: ctx.signal } : {}), ...(ctx.timeoutMs ? { timeoutMs: ctx.timeoutMs } : {}), ...(interval ? { interval } : {}), ...(instrumentId ? { instrumentId } : {}) };
 }
 
-function orderedProfileSources(
-  providers: MarketDataProviders,
-  market: SupportedMarket,
-): Array<readonly [string, CompanyProfilePort, 'OTHER' | 'FILING']> {
-  return sourcePriority(market, 'profile').flatMap((id): Array<readonly [string, CompanyProfilePort, 'OTHER' | 'FILING']> => {
-    if (id === 'sec-edgar-profile') {
-      return [['SEC issuer-profile', providers.secProfile, 'FILING'] as const];
-    }
-    if (id === 'eastmoney-hk-profile') {
-      return providers.hkProfile
-        ? [['Eastmoney HK profile', providers.hkProfile, 'OTHER'] as const]
-        : [];
-    }
-    const source = financeSource(providers, id);
-    if (!source?.port.getProfile) return [];
-    return [[
-      source.name,
-      { getProfile: source.port.getProfile.bind(source.port) },
-      'OTHER',
-    ] as const];
-  });
+function connectorContext(context: SourceRequestContext, original: ConnectorRunContext): ConnectorRunContext {
+  return {
+    ...original,
+    signal: context.signal ?? original.signal,
+    timeoutMs: context.timeoutMs,
+    ...(context.resolvedInstrument ? { resolvedInstrument: context.resolvedInstrument } : {}),
+  };
 }
 
-function financeSource(
-  providers: MarketDataProviders,
-  id: string,
-): { name: string; port: FinancePort } | null {
-  switch (id) {
-    case 'twelve-data': return providers.twelveData ? { name: 'Twelve Data', port: providers.twelveData } : null;
-    case 'alpha-vantage': return providers.alphaVantage ? { name: 'Alpha Vantage', port: providers.alphaVantage } : null;
-    case 'eodhd': return providers.eodhd ? { name: 'EODHD', port: providers.eodhd } : null;
-    case 'yahoo': return { name: 'Yahoo', port: providers.yahoo };
-    case 'nasdaq': return { name: 'Nasdaq', port: providers.nasdaq };
-    case 'sina': return { name: 'Sina Finance', port: providers.sinaUs };
-    case 'tencent-hk': return { name: 'Tencent Finance', port: providers.tencentHk };
-    case 'cn-finance': return { name: 'Eastmoney', port: providers.cnFinance };
-    case 'tencent-cn-history': return providers.tencentCn ? { name: 'Tencent Finance', port: providers.tencentCn } : null;
-    default: return null;
-  }
+function legacy<T>(result: ResearchResultV2<T>, fallback: T): ResearchResult<T> {
+  return {
+    schemaVersion: '1.0',
+    data: result.data ?? fallback,
+    citations: result.citations,
+    freshness: result.freshness,
+    warnings: result.warnings,
+    trace: {
+      providerCalls: result.trace.attempts.filter((attempt) => attempt.latencyMs !== undefined).map((attempt) => ({
+        provider: attempt.sourceId,
+        operation: attempt.capability,
+        durationMs: attempt.latencyMs ?? 0,
+        status: attempt.outcome === 'hit' ? 'OK' : attempt.reasonCode === 'RATE_LIMITED' ? 'RATE_LIMITED' : attempt.reasonCode === 'TIMEOUT' ? 'TIMEOUT' : 'ERROR',
+      })),
+    },
+  };
 }
 
-function sourceTimeout(
-  id: string,
-  market: SupportedMarket,
-  kind: 'quote' | 'history',
-): number {
-  if (id === 'twelve-data' || id === 'alpha-vantage' || id === 'eodhd') return 5_000;
-  if (market === 'US') return kind === 'quote' ? 1_500 : id === 'sina' ? 4_500 : 1_500;
-  if (id === 'yahoo') return 2_000;
-  if (id === 'tencent-hk' && kind === 'history') return 4_000;
-  return 5_000;
-}
-
-function hasUsableQuote(quote: Quote): boolean {
+function usableQuote(quote: Quote): boolean {
   return Number.isFinite(quote.price) && quote.price > 0;
 }
 
-function hasUsableHistory(history: PriceBar[]): boolean {
-  return history.filter((bar) =>
-    Number.isFinite(bar.close) &&
-    bar.close > 0 &&
-    typeof bar.timestamp === 'string' &&
-    !Number.isNaN(Date.parse(bar.timestamp)),
-  ).length >= 20;
+function usableHistory(history: PriceBar[]): boolean {
+  return history.filter((bar) => Number.isFinite(bar.close) && bar.close > 0 && !Number.isNaN(Date.parse(bar.timestamp))).length >= 20;
 }
 
-function hasUsableProfile(profile: CompanyProfile | null | undefined): profile is CompanyProfile {
-  return Boolean(
-    profile &&
-    (profile.description || profile.sector || profile.industry || profile.website ||
-      typeof profile.employees === 'number'),
-  );
+function usableProfile(profile: CompanyProfile): boolean {
+  return Boolean(profile.description || profile.sector || profile.industry || profile.website || typeof profile.employees === 'number');
 }
 
-async function profileFallback(
-  sources: ReadonlyArray<readonly [string, CompanyProfilePort, 'OTHER' | 'FILING']>,
-  instrumentId: string,
-  ctx: ConnectorRunContext,
-): Promise<ResearchResult<CompanyProfile | null>> {
-  const priorWarnings: ResearchResult<CompanyProfile>['warnings'] = [];
-  let last: ResearchResult<CompanyProfile> | undefined;
-  for (let index = 0; index < sources.length; index += 1) {
-    const [name, port, sourceType] = sources[index]!;
-    try {
-      const result = await port.getProfile({ instrumentId }, sourceContext(ctx, 5_000));
-      last = result;
-      if (!hasUsableProfile(result.data)) {
-        priorWarnings.push(...result.warnings);
-        continue;
-      }
-      if (index === 0) return result;
-      const unavailable = sources.slice(0, index).map(([source]) => source).join(' and ');
-      return {
-        ...result,
-        warnings: [
-          ...priorWarnings,
-          ...result.warnings,
-          {
-            code: 'PARTIAL_DATA',
-            message: `${unavailable} profile ${index === 1 ? 'was' : 'were'} unavailable; ${name} fallback was used.`,
-            provider: result.citations[0]?.provider ?? name.toLowerCase(),
-            sourceType,
-          },
-        ],
-      };
-    } catch (error) {
-      priorWarnings.push({
-        code: warningCode(error),
-        message: `${name} profile failed: ${errorMessage(error)}`,
-        provider: name.toLowerCase(),
-        sourceType,
-      });
-    }
-  }
-  if (!last) throw new Error('All profile providers failed.');
-  return { ...last, data: null, warnings: priorWarnings };
-}
-
-async function fallback<T>(
-  sources: ReadonlyArray<readonly [string, () => Promise<ResearchResult<T>>]>,
-  usable: (data: T) => boolean,
-  fact: 'quote' | 'history',
-): Promise<ResearchResult<T>> {
-  const priorWarnings: ResearchResult<T>['warnings'] = [];
-  let last: ResearchResult<T> | undefined;
-  let lastError: unknown;
-  for (let index = 0; index < sources.length; index += 1) {
-    const [name, call] = sources[index]!;
-    try {
-      const result = await call();
-      last = result;
-      if (usable(result.data)) {
-        if (index === 0) return result;
-        const unavailable = sources.slice(0, index).map(([source]) => source).join(' and ');
-        return {
-          ...result,
-          warnings: [
-            ...priorWarnings,
-            ...result.warnings,
-            {
-              code: 'PARTIAL_DATA',
-              message: `${unavailable} ${fact} ${index === 1 ? 'was' : 'were'} unavailable; ${name} fallback was used.`,
-              provider: result.citations[0]?.provider ?? name.toLowerCase(),
-              sourceType: 'PRICE',
-            },
-          ],
-        };
-      }
-      priorWarnings.push(...result.warnings);
-    } catch (error) {
-      lastError = error;
-      priorWarnings.push({
-        code: warningCode(error),
-        message: `${name} ${fact} failed: ${errorMessage(error)}`,
-        provider: name.toLowerCase(),
-        sourceType: 'PRICE',
-      });
-    }
-  }
-  if (!last) throw lastError instanceof Error ? lastError : new Error(`All ${fact} providers failed.`);
-  return { ...last, warnings: priorWarnings };
-}
-
-function warningCode(error: unknown): 'AUTH_REQUIRED' | 'RATE_LIMITED' | 'SOURCE_UNAVAILABLE' {
-  const message = errorMessage(error);
-  if (/401|403|auth/i.test(message)) return 'AUTH_REQUIRED';
-  if (/429|rate.?limit/i.test(message)) return 'RATE_LIMITED';
-  return 'SOURCE_UNAVAILABLE';
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-async function fetchUsFilings(
-  filings: FilingPort,
-  instrumentId: string,
-  limit: number,
-  ctx: ConnectorRunContext,
-): Promise<ResearchResult<FilingSummary[]>> {
-  const [company, insider] = await Promise.all([
-    filings.searchFilings({
-      instrumentId,
-      forms: ['10-K', '10-K/A', '10-Q', '10-Q/A', '8-K', '8-K/A', 'DEF 14A'],
-      limit,
-    }, ctx),
-    filings.searchFilings({
-      instrumentId,
-      forms: ['3', '3/A', '4', '4/A', '5', '5/A'],
-      limit,
-    }, ctx),
-  ]);
+function mergeInstrumentSearch(results: readonly SourceResult<InstrumentSearchResult[]>[]): InstrumentSearchResult[] | null {
   const seen = new Set<string>();
-  const data = [...company.data, ...insider.data]
-    .filter((filing) => {
-      const key = filing.sourceDocumentId || filing.id || filing.filingUrl;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .sort((a, b) => b.filingDate.localeCompare(a.filingDate))
-    .slice(0, Math.max(limit, 1) * 2);
+  const merged = results.flatMap((result) => result.status === 'ok' ? result.data : []).filter((item) => {
+    const key = `${item.market}:${item.symbol}:${item.exchange}`.toUpperCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return merged.length > 0 ? merged : null;
+}
+
+function emptyQuote(instrumentId: string): Quote {
+  const parsed = parseInstrumentId(instrumentId);
   return {
-    schemaVersion: company.schemaVersion,
-    data,
-    citations: [...company.citations, ...insider.citations].filter((citation, index, all) =>
-      all.findIndex((item) => item.url === citation.url) === index,
-    ),
-    freshness: [...company.freshness, ...insider.freshness],
-    warnings: [...company.warnings, ...insider.warnings],
+    instrument: { instrumentId: parsed?.raw ?? instrumentId, market: parsed?.market ?? 'US', symbol: parsed?.symbol ?? instrumentId.split(':').at(-1) ?? instrumentId },
+    price: Number.NaN,
+    currency: parsed?.market === 'HK' ? 'HKD' : parsed?.market === 'CN' ? 'CNY' : 'USD',
+    timestamp: new Date(0).toISOString(),
   };
+}
+
+function isSupportedMarket(market: string | undefined): market is SupportedMarket {
+  return market === 'US' || market === 'CN' || market === 'HK';
 }

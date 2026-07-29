@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { StockSearchResult } from '@bourse/shared-types';
-import { MarketDataClient } from '@bourse/market-data';
+import { createResearchMarketDataClient } from '@bourse/market-data';
 import { StockService } from './stock.service';
 
 const AAPL: StockSearchResult = {
@@ -20,7 +20,7 @@ function createService(options?: {
 }) {
   return new StockService(
     {} as never,
-    new MarketDataClient({
+    createResearchMarketDataClient({
       instrumentSearch: [
         { search: options?.eastMoney ?? (async () => []) },
         { search: options?.tencent ?? (async () => []) },
@@ -30,7 +30,7 @@ function createService(options?: {
   );
 }
 
-test('stock search falls back from East Money to Tencent before Yahoo', async () => {
+test('stock search merges Tencent and Yahoo candidates after East Money is empty', async () => {
   let yahooCalls = 0;
   const service = createService({
     tencent: async () => [AAPL],
@@ -41,7 +41,7 @@ test('stock search falls back from East Money to Tencent before Yahoo', async ()
   });
 
   assert.deepEqual(await service.search('AAPL'), [AAPL]);
-  assert.equal(yahooCalls, 0);
+  assert.equal(yahooCalls, 1);
 });
 
 test('stock search does not cache an all-provider empty result', async () => {

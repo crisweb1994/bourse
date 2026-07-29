@@ -3,5 +3,6 @@ export * from './finance';
 export * from './financials';
 export * from './filings';
 export * from './macro';
-export * from './search';
 export * from './instrument-search';
+export * from './market-calendar';
+export * from './request-context';

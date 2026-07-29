@@ -9,7 +9,7 @@ import type {
   Quote,
   ResearchResult,
 } from '@bourse/analysis';
-import { MarketDataClient } from '@bourse/market-data';
+import { createResearchMarketDataClient } from '@bourse/market-data';
 import { SnapshotV2Service } from './snapshot-v2.service';
 
 // ============================================================================
@@ -156,7 +156,7 @@ function buildService(overrides: {
   usFilings?: FilingPort;
 } = {}): SnapshotV2Service {
   // Direct constructor — avoids @nestjs/testing dep
-  return new SnapshotV2Service(new MarketDataClient({
+  return new SnapshotV2Service(createResearchMarketDataClient({
     yahoo: overrides.yahoo ?? mockYahoo(),
     nasdaq: overrides.nasdaq ?? mockNasdaq(),
     sinaUs: overrides.sina ?? mockSina(),
@@ -170,7 +170,6 @@ function buildService(overrides: {
     cnFilings: mockFilings(),
     hkFilings: mockFilings(),
     macro: mockMacro(),
-    search: null,
   }));
 }
 
@@ -210,11 +209,7 @@ describe('SnapshotV2Service', () => {
 
     assert.equal(snap.rawFacts.quote?.price, 201);
     assert.equal(snap.rawFacts.history?.length, 30);
-    assert.ok(
-      snap.dataAvailability.warnings.some((warning) =>
-        warning.includes('Nasdaq fallback was used'),
-      ),
-    );
+    assert.ok(snap.dataAvailability.warnings.some((warning) => warning.includes('FALLBACK_USED')));
   });
 
   it('uses Sina quote and history when Yahoo and Nasdaq are both unusable', async () => {
@@ -239,14 +234,10 @@ describe('SnapshotV2Service', () => {
 
     assert.equal(snap.rawFacts.quote?.price, 202);
     assert.equal(snap.rawFacts.history?.length, 30);
-    assert.ok(
-      snap.dataAvailability.warnings.some((warning) =>
-        warning.includes('Sina Finance fallback was used'),
-      ),
-    );
+    assert.ok(snap.dataAvailability.warnings.some((warning) => warning.includes('FALLBACK_USED')));
   });
 
-  it('collects periodic and issuer-side insider filings as separate SEC queries', async () => {
+  it('uses one canonical filing-list request for the research snapshot', async () => {
     const forms: string[][] = [];
     const usFilings: FilingPort = {
       async searchFilings(input) {
@@ -257,10 +248,8 @@ describe('SnapshotV2Service', () => {
     const svc = buildService({ usFilings });
     await svc.fetch('AAPL', 'US');
 
-    assert.equal(forms.length, 2);
-    assert.ok(forms[0]?.includes('10-K'));
-    assert.ok(forms[0]?.includes('DEF 14A'));
-    assert.deepEqual(forms[1], ['3', '3/A', '4', '4/A', '5', '5/A']);
+    assert.equal(forms.length, 1);
+    assert.deepEqual(forms[0], []);
   });
 
   it('CN wiring: CN signals and macro are registered; only optional webSearch stays not configured', async () => {

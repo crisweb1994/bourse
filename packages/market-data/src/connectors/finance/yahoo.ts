@@ -334,7 +334,7 @@ export function createYahooFinanceConnector(): FinancePort {
         });
       }
 
-      const yahooSymbol = toYahooSymbol(parsed.market, parsed.symbol);
+      const yahooSymbol = toYahooSymbol(parsed.market, parsed.symbol, ctx);
       const fetchLike = resolveFetch(ctx);
       const timeoutMs = ctx.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
@@ -493,7 +493,7 @@ export function createYahooFinanceConnector(): FinancePort {
         });
       }
 
-      const yahooSymbol = toYahooSymbol(parsed.market, parsed.symbol);
+      const yahooSymbol = toYahooSymbol(parsed.market, parsed.symbol, ctx);
       const fetchLike = resolveFetch(ctx);
       const timeoutMs = ctx.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
@@ -603,7 +603,7 @@ export function createYahooFinanceConnector(): FinancePort {
         });
       }
 
-      const yahooSymbol = toYahooSymbol(parsed.market, parsed.symbol);
+      const yahooSymbol = toYahooSymbol(parsed.market, parsed.symbol, ctx);
       const fetchLike = resolveFetch(ctx);
       const timeoutMs = ctx.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
@@ -666,7 +666,7 @@ export function createYahooFinanceConnector(): FinancePort {
             : `Invalid instrumentId: ${input.instrumentId}`,
         });
       }
-      const yahooSymbol = toYahooSymbol(parsed.market, parsed.symbol);
+      const yahooSymbol = toYahooSymbol(parsed.market, parsed.symbol, ctx);
       const fetchLike = resolveFetch(ctx);
       const timeoutMs = ctx.timeoutMs ?? DEFAULT_TIMEOUT_MS;
       try {
@@ -740,7 +740,10 @@ async function fetchYahooEarningsTrend(
   return body.quoteSummary?.result?.[0]?.earningsTrend?.trend ?? null;
 }
 
-function toYahooSymbol(market: MarketCode, symbol: string): string {
+function toYahooSymbol(market: MarketCode, symbol: string, ctx?: ConnectorRunContext): string {
+  if (ctx?.resolvedInstrument?.market === market && ctx.resolvedInstrument.providerSymbol) {
+    return ctx.resolvedInstrument.providerSymbol;
+  }
   switch (market) {
     case 'US':
       return symbol;

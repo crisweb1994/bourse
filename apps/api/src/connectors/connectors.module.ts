@@ -1,15 +1,13 @@
 import { Logger, Module } from '@nestjs/common';
 import {
   createMarketDataProviders,
-  MarketDataClient,
+  createResearchMarketDataClient,
+  ResearchMarketDataClient,
   type MarketDataProviders,
 } from '@bourse/market-data';
 
+export const MARKET_DATA_CLIENT = Symbol('MARKET_DATA_CLIENT');
 export const YAHOO_FINANCE_PORT = Symbol('YAHOO_FINANCE_PORT');
-export const NASDAQ_FINANCE_PORT = Symbol('NASDAQ_FINANCE_PORT');
-export const SINA_US_FINANCE_PORT = Symbol('SINA_US_FINANCE_PORT');
-export const TENCENT_HK_FINANCE_PORT = Symbol('TENCENT_HK_FINANCE_PORT');
-export const US_PROFILE_PORT = Symbol('US_PROFILE_PORT');
 export const CN_FINANCE_PORT = Symbol('CN_FINANCE_PORT');
 export const US_FILING_PORT = Symbol('US_FILING_PORT');
 export const CN_FILING_PORT = Symbol('CN_FILING_PORT');
@@ -17,19 +15,12 @@ export const HK_FILING_PORT = Symbol('HK_FILING_PORT');
 export const US_FINANCIALS_PORT = Symbol('US_FINANCIALS_PORT');
 export const CN_FINANCIALS_PORT = Symbol('CN_FINANCIALS_PORT');
 export const HK_FINANCIALS_PORT = Symbol('HK_FINANCIALS_PORT');
-export const OFFICIAL_MACRO_PORT = Symbol('OFFICIAL_MACRO_PORT');
-export const TAVILY_SEARCH_PORT = Symbol('TAVILY_SEARCH_PORT');
-export const MARKET_DATA_CLIENT = Symbol('MARKET_DATA_CLIENT');
 
-const MARKET_DATA_PROVIDERS = Symbol('MARKET_DATA_PROVIDERS');
 const SEC_USER_AGENT_FALLBACK = 'stock-suggest-research contact@example.com';
+const MARKET_DATA_PROVIDERS = Symbol('MARKET_DATA_PROVIDERS');
 
-const compatibilityProviders = [
+const transitionalPorts = [
   [YAHOO_FINANCE_PORT, 'yahoo'],
-  [NASDAQ_FINANCE_PORT, 'nasdaq'],
-  [SINA_US_FINANCE_PORT, 'sinaUs'],
-  [TENCENT_HK_FINANCE_PORT, 'tencentHk'],
-  [US_PROFILE_PORT, 'secProfile'],
   [CN_FINANCE_PORT, 'cnFinance'],
   [US_FILING_PORT, 'usFilings'],
   [CN_FILING_PORT, 'cnFilings'],
@@ -37,10 +28,12 @@ const compatibilityProviders = [
   [US_FINANCIALS_PORT, 'usFinancials'],
   [CN_FINANCIALS_PORT, 'cnFinancials'],
   [HK_FINANCIALS_PORT, 'hkFinancials'],
-  [OFFICIAL_MACRO_PORT, 'macro'],
-  [TAVILY_SEARCH_PORT, 'search'],
 ] as const;
 
+/**
+ * The application owns environment parsing. @bourse/market-data receives
+ * constructed source configuration and never reads process.env itself.
+ */
 @Module({
   providers: [
     {
@@ -52,7 +45,6 @@ const compatibilityProviders = [
             'RESEARCH_CORE_USER_AGENT not set; SEC EDGAR may reject stricter requests.',
           );
         }
-        const tavilyEnabled = process.env.WEB_SEARCH_PROVIDER?.trim().toLowerCase() === 'tavily';
         return createMarketDataProviders({
           secUserAgent: userAgent || SEC_USER_AGENT_FALLBACK,
           ...(process.env.TWELVE_DATA_API_KEY?.trim()
@@ -64,31 +56,25 @@ const compatibilityProviders = [
           ...(process.env.EODHD_API_KEY?.trim()
             ? { eodhdApiKey: process.env.EODHD_API_KEY.trim() }
             : {}),
-          ...(tavilyEnabled && process.env.TAVILY_API_KEY?.trim()
-            ? { tavilyApiKey: process.env.TAVILY_API_KEY.trim() }
-            : {}),
         });
       },
     },
-    ...compatibilityProviders.map(([provide, key]) => ({
+    // Consensus and filing-document workflows have no v2 capability yet.
+    // These tokens are temporary adapters, not a source-selection path.
+    ...transitionalPorts.map(([provide, key]) => ({
       provide,
       inject: [MARKET_DATA_PROVIDERS],
-      useFactory: (providers: MarketDataProviders): MarketDataProviders[typeof key] =>
-        providers[key],
+      useFactory: (providers: MarketDataProviders): MarketDataProviders[typeof key] => providers[key],
     })),
     {
       provide: MARKET_DATA_CLIENT,
       inject: [MARKET_DATA_PROVIDERS],
-      useFactory: (providers: MarketDataProviders): MarketDataClient =>
-        new MarketDataClient(providers),
+      useFactory: (providers: MarketDataProviders): ResearchMarketDataClient => createResearchMarketDataClient(providers),
     },
   ],
   exports: [
+    MARKET_DATA_CLIENT,
     YAHOO_FINANCE_PORT,
-    NASDAQ_FINANCE_PORT,
-    SINA_US_FINANCE_PORT,
-    TENCENT_HK_FINANCE_PORT,
-    US_PROFILE_PORT,
     CN_FINANCE_PORT,
     US_FILING_PORT,
     CN_FILING_PORT,
@@ -96,9 +82,6 @@ const compatibilityProviders = [
     US_FINANCIALS_PORT,
     CN_FINANCIALS_PORT,
     HK_FINANCIALS_PORT,
-    OFFICIAL_MACRO_PORT,
-    TAVILY_SEARCH_PORT,
-    MARKET_DATA_CLIENT,
   ],
 })
 export class ConnectorsModule {}

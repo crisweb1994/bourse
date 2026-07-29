@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { ResearchCitation } from './research-citation';
 import { DataFreshness } from './freshness';
 import { ResearchWarning } from './warning';
+import type { SourceAttempt } from './source-result';
+import type { SourceError } from './errors';
 
 // plan-v2 Wave 3 D14: renamed from SCHEMA_VERSION / SchemaVersion to avoid
 // barrel collision with agent's analysis-result.ts (which exports the
@@ -40,6 +42,50 @@ export interface ResearchResult<T> {
   warnings: ResearchWarning[];
   trace?: ResearchTrace;
 }
+
+/**
+ * The v2 public result contract. The legacy ResearchResult remains exported
+ * while old connectors are adapted into SourceResult by the router.
+ */
+export type ResearchResultV2<T> =
+  | {
+      schemaVersion: '2.0';
+      status: 'ok';
+      data: T;
+      citations: ResearchCitation[];
+      freshness: DataFreshness[];
+      warnings: ResearchWarning[];
+      trace: { selectedSource?: string; attempts: SourceAttempt[] };
+    }
+  | {
+      schemaVersion: '2.0';
+      status: 'partial';
+      data: T;
+      citations: ResearchCitation[];
+      freshness: DataFreshness[];
+      warnings: ResearchWarning[];
+      trace: { selectedSource?: string; attempts: SourceAttempt[] };
+    }
+  | {
+      schemaVersion: '2.0';
+      status: 'empty';
+      data: null;
+      citations: ResearchCitation[];
+      freshness: DataFreshness[];
+      warnings: ResearchWarning[];
+      trace: { attempts: SourceAttempt[] };
+      error?: SourceError;
+    }
+  | {
+      schemaVersion: '2.0';
+      status: 'failed';
+      data: null;
+      citations: ResearchCitation[];
+      freshness: DataFreshness[];
+      warnings: ResearchWarning[];
+      trace: { attempts: SourceAttempt[] };
+      error?: SourceError;
+    };
 
 export interface OrchestratorOptions {
   strict?: boolean;

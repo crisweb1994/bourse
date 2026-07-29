@@ -28,10 +28,9 @@ import type {
   PriceBar,
   Quote,
   ResearchResult,
-  SearchPort,
 } from '@bourse/analysis';
 import { EvidencePackV2 as EvidencePackV2Schema } from '@bourse/analysis';
-import { MarketDataClient } from '@bourse/market-data';
+import { createResearchMarketDataClient } from '@bourse/market-data';
 import { SnapshotV2Service } from './snapshot-v2.service';
 
 // Note: This test uses the production SnapshotV2Service which calls
@@ -318,10 +317,9 @@ function buildService(
     cnFilings?: FilingPort;
     hkFilings?: FilingPort;
     macro?: MacroPort;
-    search?: SearchPort | null;
   } = {},
 ): SnapshotV2Service {
-  return new SnapshotV2Service(new MarketDataClient({
+  return new SnapshotV2Service(createResearchMarketDataClient({
     yahoo: overrides.yahoo ?? mockYahoo(),
     nasdaq: overrides.nasdaq ?? mockYahoo(),
     sinaUs: mockYahoo(),
@@ -335,7 +333,6 @@ function buildService(
     cnFilings: overrides.cnFilings ?? mockFilings([]),
     hkFilings: overrides.hkFilings ?? mockFilings([]),
     macro: overrides.macro ?? mockMacro(),
-    search: overrides.search ?? null,
   }));
 }
 
@@ -375,9 +372,9 @@ describe('SnapshotV2 · E2E (US AAPL full coverage)', () => {
     assert.equal(pack.facts.profile?.value.employees, 166_000);
     assert.ok(pack.dataAvailability.complete.includes('profile'));
     assert.equal(pack.facts.financials?.value.periods.length, 1);
-    assert.deepEqual(pack.facts.latestFilingUrls?.value, [
-      'https://sec.gov/y.htm',
+    assert.deepEqual([...pack.facts.latestFilingUrls!.value].sort(), [
       'https://sec.gov/x.htm',
+      'https://sec.gov/y.htm',
     ]);
 
     // Compute layer fired

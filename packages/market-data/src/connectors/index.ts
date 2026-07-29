@@ -5,4 +5,3 @@ export * from './filings';
 export * from './finance';
 export * from './financials';
 export * from './macro';
-export * from './search';

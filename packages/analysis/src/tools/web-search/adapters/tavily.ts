@@ -1,4 +1,3 @@
-import { createTavilySearchConnector } from '@bourse/market-data';
 import type {
   AdapterContext,
   SearchQuery,
@@ -6,13 +5,12 @@ import type {
   WebSearchAdapter,
 } from '../types';
 
+const TAVILY_ENDPOINT = 'https://api.tavily.com/search';
+
 /**
- * Tavily web-search adapter. Delegates to research-core's Tavily
- * connector so the HTTP/parse logic lives in one place (A3 终态:
- * agent → research-core). This file is a thin idiom translator:
- *
- *   agent SearchQuery ↔ research-core WebSearchInput
- *   research-core WebSearchResultItem[] ↔ agent SearchResultItem[]
+ * Tavily web-search adapter. Web evidence is owned by analysis rather than
+ * market-data: queries can contain user intent and results are evidence, not
+ * normalized market facts.
  *
  * `apiKey` is required (Tavily auth model). Operator supplies it via
  * the user's WebSearchSetting row (apps/api WebSearchService) or env
@@ -30,60 +28,56 @@ export function createTavilyAdapter(config: TavilyAdapterConfig): WebSearchAdapt
   if (!config.apiKey?.trim()) {
     throw new Error('tavily adapter requires apiKey');
   }
-  const connector = createTavilySearchConnector({
-    apiKey: config.apiKey,
-    ...(config.searchDepth ? { searchDepth: config.searchDepth } : {}),
-    ...(config._internalFetch
-      ? {
-          fetchLike: async (url, init) => {
-            const r = await config._internalFetch!(url, init as RequestInit | undefined);
-            return {
-              ok: r.ok,
-              status: r.status,
-              json: async () => r.json(),
-              text: async () => r.text(),
-            };
-          },
-        }
-      : {}),
-  });
+  const doFetch = config._internalFetch ?? fetch;
 
   return {
     name: 'tavily',
     async search(query: SearchQuery, ctx: AdapterContext): Promise<SearchResults> {
       const startedAt = Date.now();
-      const result = await connector.searchWeb(
-        {
-          query: query.query,
-          limit: query.count,
-          ...(query.freshnessDays ? { freshness: `${query.freshnessDays}d` } : {}),
-        },
-        ctx.signal ? { signal: ctx.signal, timeoutMs: ctx.timeoutMs } : { timeoutMs: ctx.timeoutMs },
-      );
-
-      // research-core surfaces failures as warnings; agent's executor
-      // expects a thrown error on hard failure so the gateway can record
-      // it. Translate the most common failure codes.
-      const fatal = result.warnings.find(
-        (w) =>
-          w.code === 'AUTH_REQUIRED' ||
-          w.code === 'SOURCE_UNAVAILABLE' ||
-          w.code === 'RATE_LIMITED',
-      );
-      if (fatal && result.data.length === 0) {
-        const msg = fatal.code === 'RATE_LIMITED' ? `tavily 429 retry-after: 30` : `tavily: ${fatal.message}`;
-        throw new Error(msg);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), ctx.timeoutMs);
+      const abort = () => controller.abort(ctx.signal?.reason);
+      if (ctx.signal?.aborted) abort();
+      else ctx.signal?.addEventListener('abort', abort, { once: true });
+      let payload: TavilyResponse;
+      try {
+        const response = await doFetch(TAVILY_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            api_key: config.apiKey,
+            query: query.query,
+            search_depth: config.searchDepth ?? 'basic',
+            max_results: query.count,
+            ...(query.freshnessDays ? { days: query.freshnessDays } : {}),
+          }),
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          const suffix = response.status === 429 || response.status === 432
+            ? ' retry-after: 30'
+            : '';
+          throw new Error(`tavily HTTP ${response.status}${suffix}`);
+        }
+        payload = await response.json() as TavilyResponse;
+      } catch (error) {
+        throw new Error(`tavily: ${error instanceof Error ? error.message : String(error)}`);
+      } finally {
+        clearTimeout(timer);
+        ctx.signal?.removeEventListener('abort', abort);
       }
 
       return {
         query: query.query,
-        items: result.data.map((d) => ({
-          title: d.title ?? d.url ?? '(untitled)',
-          url: d.url ?? '',
-          snippet: d.snippet ?? '',
-          ...(d.publishedAt ? { publishedAt: d.publishedAt } : {}),
-          source: 'tavily',
-        })),
+        items: (payload.results ?? [])
+          .filter((item): item is TavilyResult & { url: string } => typeof item.url === 'string')
+          .map((item) => ({
+            title: item.title ?? item.url,
+            url: item.url,
+            snippet: item.content ?? '',
+            ...(item.published_date ? { publishedAt: item.published_date } : {}),
+            source: 'tavily',
+          })),
         provider: 'tavily',
         costUsd: 0, // Tavily's per-request pricing is op-rated; left at 0 for now
         durationMs: Date.now() - startedAt,
@@ -91,4 +85,15 @@ export function createTavilyAdapter(config: TavilyAdapterConfig): WebSearchAdapt
       };
     },
   };
+}
+
+interface TavilyResult {
+  title?: string;
+  url?: string;
+  content?: string;
+  published_date?: string;
+}
+
+interface TavilyResponse {
+  results?: TavilyResult[];
 }
