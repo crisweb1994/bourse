@@ -128,7 +128,7 @@ export class SnapshotV2Service {
         await this.marketData.getFinancials(instrumentId(market, symbol), ctx),
       ),
       filings: async (symbol: string, limit: number, ctx?: ConnectorRunContext) => snapshotEnvelope(
-        await this.marketData.getFilings(instrumentId(market, symbol), limit, ctx),
+        await this.marketData.listFilings({ instrumentId: instrumentId(market, symbol), limit }, ctx),
       ),
       macro: async (_: string, ctx?: ConnectorRunContext) => snapshotEnvelope(await this.marketData.getMacro(market, ctx)),
     });

@@ -5,7 +5,7 @@ import type {
   CompanyProfile,
   EarningsConsensusBundle,
   EarningsConsensusEstimate,
-  FinancePort,
+  ProviderFinancePort as FinancePort,
   HistoryInput,
   PriceBar,
   ProfileInput,

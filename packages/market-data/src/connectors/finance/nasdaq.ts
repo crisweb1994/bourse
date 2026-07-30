@@ -10,7 +10,7 @@ import type { InstrumentRef } from '../../contracts/instrument';
 import { RESEARCH_SCHEMA_VERSION, type ResearchResult } from '../../contracts/result';
 import type { ResearchWarning } from '../../contracts/warning';
 import type {
-  FinancePort,
+  ProviderFinancePort as FinancePort,
   HistoryInput,
   PriceBar,
   Quote,
@@ -85,12 +85,15 @@ export function createNasdaqFinanceConnector(
       const retrievedAt = new Date().toISOString();
       const parsed = parseUsInstrument(input.instrumentId);
       if (!parsed.ok) return quoteFailure(retrievedAt, parsed.code, parsed.message);
+      const providerSymbol = ctx.resolvedInstrument?.instrumentId === parsed.instrumentId
+        ? ctx.resolvedInstrument.providerSymbol
+        : parsed.symbol;
 
       const fetchLike = resolveFetch(ctx, options);
       try {
         return await withTimeout(ctx, ctx.timeoutMs ?? timeoutMs, async (signal) => {
           const res = await fetchLike(
-            `${API_BASE}/${encodeURIComponent(parsed.symbol)}/info?assetclass=stocks`,
+            `${API_BASE}/${encodeURIComponent(providerSymbol)}/info?assetclass=stocks`,
             { headers: REQUEST_HEADERS, signal },
           );
           if (!res.ok) {
@@ -132,7 +135,7 @@ export function createNasdaqFinanceConnector(
             symbol: parsed.symbol,
             ...(data.exchange ? { exchange: data.exchange } : {}),
             currency: primary?.currency ?? 'USD',
-            providerSymbols: { nasdaq: parsed.symbol },
+            providerSymbols: { nasdaq: providerSymbol },
           };
           const quote: Quote = {
             instrument,
@@ -154,7 +157,7 @@ export function createNasdaqFinanceConnector(
           return {
             schemaVersion: RESEARCH_SCHEMA_VERSION,
             data: quote,
-            citations: [quoteCitation(parsed.symbol, retrievedAt)],
+            citations: [quoteCitation(providerSymbol, retrievedAt)],
             freshness: [{ provider: PROVIDER, asOf, retrievedAt, stale }],
             warnings,
           };
@@ -175,6 +178,9 @@ export function createNasdaqFinanceConnector(
       const retrievedAt = new Date().toISOString();
       const parsed = parseUsInstrument(input.instrumentId);
       if (!parsed.ok) return historyFailure(retrievedAt, parsed.code, parsed.message);
+      const providerSymbol = ctx.resolvedInstrument?.instrumentId === parsed.instrumentId
+        ? ctx.resolvedInstrument.providerSymbol
+        : parsed.symbol;
       if (input.interval && input.interval !== '1d') {
         return historyFailure(
           retrievedAt,
@@ -197,7 +203,7 @@ export function createNasdaqFinanceConnector(
       try {
         return await withTimeout(ctx, ctx.timeoutMs ?? timeoutMs, async (signal) => {
           const url =
-            `${API_BASE}/${encodeURIComponent(parsed.symbol)}/historical` +
+            `${API_BASE}/${encodeURIComponent(providerSymbol)}/historical` +
             `?assetclass=stocks&fromdate=${encodeURIComponent(from)}` +
             `&todate=${encodeURIComponent(to)}&limit=5000`;
           const res = await fetchLike(url, { headers: REQUEST_HEADERS, signal });
@@ -254,8 +260,8 @@ export function createNasdaqFinanceConnector(
             schemaVersion: RESEARCH_SCHEMA_VERSION,
             data: bars,
             citations: [{
-              title: `Nasdaq historical prices: ${parsed.symbol}`,
-              url: `${SITE_BASE}/${encodeURIComponent(parsed.symbol)}/historical`,
+              title: `Nasdaq historical prices: ${providerSymbol}`,
+              url: `${SITE_BASE}/${encodeURIComponent(providerSymbol)}/historical`,
               sourceType: 'PRICE',
               provider: PROVIDER,
               retrievedAt,

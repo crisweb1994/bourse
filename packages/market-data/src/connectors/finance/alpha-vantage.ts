@@ -2,7 +2,7 @@ import { RESEARCH_SCHEMA_VERSION, type ResearchResult } from '../../contracts/re
 import type { ResearchWarning } from '../../contracts/warning';
 import type {
   CompanyProfile,
-  FinancePort,
+  ProviderFinancePort as FinancePort,
   HistoryInput,
   PriceBar,
   ProfileInput,
@@ -55,8 +55,9 @@ export function createAlphaVantageFinanceConnector(
       const parsedResult = parseFinanceInstrument(input.instrumentId, SUPPORTED);
       if (!parsedResult.parsed) return quoteFailure(PROVIDER, input.instrumentId, retrievedAt, parsedResult.code!, parsedResult.message!);
       const parsed = parsedResult.parsed;
+      const providerSymbol = ctx.resolvedInstrument?.instrumentId === parsed.instrumentId ? ctx.resolvedInstrument.providerSymbol : parsed.symbol;
       try {
-        const payload = await request({ function: 'GLOBAL_QUOTE', symbol: parsed.symbol }, ctx, options, timeoutMs);
+        const payload = await request({ function: 'GLOBAL_QUOTE', symbol: providerSymbol }, ctx, options, timeoutMs);
         const error = apiError(payload);
         if (error) return quoteFailure(PROVIDER, input.instrumentId, retrievedAt, error.code, error.message);
         const row = payload['Global Quote'];
@@ -66,7 +67,7 @@ export function createAlphaVantageFinanceConnector(
         if (price === undefined || price <= 0) return quoteFailure(PROVIDER, input.instrumentId, retrievedAt, 'PARTIAL_DATA', `Alpha Vantage returned no usable price for ${parsed.symbol}.`);
         const timestamp = isoDate(quoteRow['07. latest trading day']) ?? retrievedAt;
         const quote: Quote = {
-          instrument: instrumentRef(parsed, PROVIDER, parsed.symbol.toUpperCase()),
+          instrument: instrumentRef(parsed, PROVIDER, providerSymbol),
           price,
           ...(finite(quoteRow['09. change']) !== undefined ? { change: finite(quoteRow['09. change'])! } : {}),
           ...(finite(quoteRow['10. change percent']) !== undefined ? { changePct: finite(quoteRow['10. change percent'])! } : {}),
@@ -78,7 +79,7 @@ export function createAlphaVantageFinanceConnector(
           ...(finite(quoteRow['04. low']) !== undefined ? { dayLow: finite(quoteRow['04. low'])! } : {}),
           ...(finite(quoteRow['08. previous close']) !== undefined ? { previousClose: finite(quoteRow['08. previous close'])! } : {}),
         };
-        return success(quote, parsed.symbol, 'quote', timestamp, retrievedAt);
+        return success(quote, providerSymbol, 'quote', timestamp, retrievedAt);
       } catch (error) {
         return quoteFailure(PROVIDER, input.instrumentId, retrievedAt, 'SOURCE_UNAVAILABLE', `Alpha Vantage quote failed: ${messageOf(error)}`);
       }
@@ -90,11 +91,12 @@ export function createAlphaVantageFinanceConnector(
       if (!parsedResult.parsed) return historyFailure(PROVIDER, retrievedAt, parsedResult.code!, parsedResult.message!);
       if (input.interval && input.interval !== '1d') return historyFailure(PROVIDER, retrievedAt, 'PARTIAL_DATA', 'Alpha Vantage fallback currently supports daily bars only.');
       const parsed = parsedResult.parsed;
+      const providerSymbol = ctx.resolvedInstrument?.instrumentId === parsed.instrumentId ? ctx.resolvedInstrument.providerSymbol : parsed.symbol;
       const days = Math.max(0, (Date.parse(input.to) - Date.parse(input.from)) / 86_400_000);
       try {
         const payload = await request({
           function: 'TIME_SERIES_DAILY',
-          symbol: parsed.symbol,
+          symbol: providerSymbol,
           outputsize: days > 100 ? 'full' : 'compact',
         }, ctx, options, timeoutMs);
         const error = apiError(payload);
@@ -112,7 +114,7 @@ export function createAlphaVantageFinanceConnector(
           return [{ timestamp: date, open, high, low, close, ...(finite(row['5. volume']) !== undefined ? { volume: finite(row['5. volume'])! } : {}) }];
         }).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
         if (bars.length === 0) return historyFailure(PROVIDER, retrievedAt, 'PARTIAL_DATA', `Alpha Vantage returned no history for ${parsed.symbol} in the requested range.`);
-        return success(bars, parsed.symbol, 'history', bars.at(-1)!.timestamp, retrievedAt);
+        return success(bars, providerSymbol, 'history', bars.at(-1)!.timestamp, retrievedAt);
       } catch (error) {
         return historyFailure(PROVIDER, retrievedAt, 'SOURCE_UNAVAILABLE', `Alpha Vantage history failed: ${messageOf(error)}`);
       }
@@ -123,8 +125,9 @@ export function createAlphaVantageFinanceConnector(
       const parsedResult = parseFinanceInstrument(input.instrumentId, SUPPORTED);
       if (!parsedResult.parsed) return profileFailure(PROVIDER, input.instrumentId, retrievedAt, parsedResult.code!, parsedResult.message!);
       const parsed = parsedResult.parsed;
+      const providerSymbol = ctx.resolvedInstrument?.instrumentId === parsed.instrumentId ? ctx.resolvedInstrument.providerSymbol : parsed.symbol;
       try {
-        const payload = await request({ function: 'OVERVIEW', symbol: parsed.symbol }, ctx, options, timeoutMs);
+        const payload = await request({ function: 'OVERVIEW', symbol: providerSymbol }, ctx, options, timeoutMs);
         const error = apiError(payload);
         if (error) return profileFailure(PROVIDER, input.instrumentId, retrievedAt, error.code, error.message);
         const description = stringValue(payload.Description);
@@ -136,14 +139,14 @@ export function createAlphaVantageFinanceConnector(
           return profileFailure(PROVIDER, input.instrumentId, retrievedAt, 'PARTIAL_DATA', `Alpha Vantage returned no usable overview for ${parsed.symbol}.`);
         }
         const profile: CompanyProfile = {
-          instrument: instrumentRef(parsed, PROVIDER, parsed.symbol.toUpperCase(), stringValue(payload.Exchange)),
+          instrument: instrumentRef(parsed, PROVIDER, providerSymbol, stringValue(payload.Exchange)),
           ...(description ? { description } : {}),
           ...(sector ? { sector } : {}),
           ...(industry ? { industry } : {}),
           ...(website ? { website } : {}),
           ...(marketCap !== undefined ? { marketCap } : {}),
         };
-        return success(profile, parsed.symbol, 'profile', retrievedAt, retrievedAt);
+        return success(profile, providerSymbol, 'profile', retrievedAt, retrievedAt);
       } catch (error) {
         return profileFailure(PROVIDER, input.instrumentId, retrievedAt, 'SOURCE_UNAVAILABLE', `Alpha Vantage profile failed: ${messageOf(error)}`);
       }

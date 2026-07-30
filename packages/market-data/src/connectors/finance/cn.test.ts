@@ -93,7 +93,7 @@ describe('cn finance connector — getQuote', () => {
     expect(out.data.instrument.exchange).toBe('SSE');
     expect(out.data.price).toBeCloseTo(1820.5);
     expect(out.data.currency).toBe('CNY');
-    expect(out.data.marketCap).toBeCloseTo(22000);
+    expect(out.data.marketCap).toBeCloseTo(2.2e12);
     expect(out.data.peRatio).toBeCloseTo(28.5);
     expect(out.warnings).toHaveLength(0);
     expect(out.citations[0]?.provider).toBe('tencent');
@@ -138,18 +138,18 @@ describe('cn finance connector — getQuote', () => {
     expect(out.data.dayLow).toBeCloseTo(1790);
     expect(out.data.previousClose).toBeCloseTo(1795);
     expect(out.data.change).toBeCloseTo(25.5);
-    expect(out.data.changePct).toBeCloseTo(0.0142, 4); // 1.42% → 0.0142 decimal
-    expect(out.data.volume).toBeCloseTo(50_000);
+    expect(out.data.changePct).toBeCloseTo(1.42, 4);
+    expect(out.data.volume).toBeCloseTo(5_000_000);
     expect(out.data.turnover).toBeCloseTo(910_000_000); // 91,000 万元 → 9.1 亿元
     expect(out.data.turnoverRate).toBeCloseTo(0.004); // 0.4% → 0.004
     expect(out.data.amplitude).toBeCloseTo(0.0223);
     expect(out.data.week52High).toBeCloseTo(2100);
     expect(out.data.week52Low).toBeCloseTo(1500);
-    expect(out.data.floatMarketCap).toBeCloseTo(21_500);
+    expect(out.data.floatMarketCap).toBeCloseTo(2.15e12);
     expect(out.data.bidAskRatio).toBeCloseTo(0.125);
     expect(out.data.volumeRatio).toBeCloseTo(0.85);
-    expect(out.data.sharesTotal).toBeCloseTo(12.56);
-    expect(out.data.sharesFloat).toBeCloseTo(12.50);
+    expect(out.data.sharesTotal).toBeCloseTo(1_256_000_000);
+    expect(out.data.sharesFloat).toBeCloseTo(1_250_000_000);
   });
 
   it('extended tencent fields gracefully missing → undefined, no crash', async () => {
@@ -193,7 +193,7 @@ describe('cn finance connector — getQuote', () => {
     const c = createCnFinanceConnector();
     const out = await c.getQuote({ instrumentId: 'CN:600519' }, { fetchLike });
     expect(out.data.price).toBeCloseTo(1820.5);
-    expect(out.data.marketCap).toBeCloseTo(22000); // 2.2e12 元 / 1e8 = 22000 亿元
+    expect(out.data.marketCap).toBeCloseTo(2.2e12);
     expect(out.warnings[0]?.code).toBe('SOURCE_UNAVAILABLE');
     expect(out.warnings[0]?.provider).toBe('tencent');
     expect(out.citations[0]?.provider).toBe('eastmoney');

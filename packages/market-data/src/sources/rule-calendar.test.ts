@@ -26,4 +26,25 @@ describe('rule-based market calendar', () => {
     if (result.status !== 'ok') throw new Error('expected market session');
     expect(result.data.state).toBe('OPEN');
   });
+
+  it('marks a configured exchange holiday as closed on a weekday', async () => {
+    const result = await port.getMarketSession({ market: 'HK', at: '2026-02-17T02:00:00.000Z' }, context);
+
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') throw new Error('expected market session');
+    expect(result.data.state).toBe('HOLIDAY');
+    expect(result.warnings).toContainEqual(expect.objectContaining({
+      code: 'MARKET_CLOSED',
+      message: expect.stringContaining('exchange holiday'),
+    }));
+  });
+
+  it('accepts deployment-specific additional closure dates', async () => {
+    const custom = createRuleBasedMarketCalendarPort({ additionalHolidays: { HK: ['2026-07-24'] } });
+    const result = await custom.getMarketSession({ market: 'HK', at: '2026-07-24T02:00:00.000Z' }, context);
+
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') throw new Error('expected market session');
+    expect(result.data.state).toBe('HOLIDAY');
+  });
 });

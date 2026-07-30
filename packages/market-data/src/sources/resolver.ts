@@ -35,15 +35,26 @@ export class DefaultInstrumentResolver implements InstrumentResolver {
 }
 
 function providerSymbol(market: MarketCode, symbol: string, sourceId: string): string {
+  if (sourceId === 'eodhd') {
+    if (market === 'US') return `${symbol.toUpperCase()}.US`;
+    if (market === 'HK') return `${symbol.replace(/\.HK$/i, '').padStart(4, '0').slice(-4)}.HK`;
+    if (market === 'CN') return `${symbol}.${/^(5|6|9)/.test(symbol) ? 'SHG' : 'SHE'}`;
+  }
+  if (sourceId === 'twelve-data') {
+    if (market === 'US') return symbol.toUpperCase();
+    if (market === 'HK') return `${symbol.replace(/\.HK$/i, '').padStart(4, '0').slice(-4)}:HKEX`;
+    if (market === 'CN') return `${symbol}:${/^(5|6|9)/.test(symbol) ? 'SSE' : 'SZSE'}`;
+  }
   if (market === 'HK') {
     const padded = symbol.padStart(5, '0');
     if (sourceId === 'tencent-hk') return `hk${padded}`;
     // Yahoo, EODHD and Twelve Data use the familiar four-digit HK ticker
     // form (`0700.HK`), while HKEX/Eastmoney consume five digits (`00700`).
-    if (sourceId === 'yahoo' || sourceId === 'eodhd' || sourceId === 'twelve-data') {
+    if (sourceId === 'yahoo') {
       const vendorCode = /^0\d{4}$/.test(padded) ? padded.slice(1) : padded;
       return `${vendorCode}.HK`;
     }
+    if (sourceId === 'eastmoney-hk-profile' || sourceId === 'eastmoney-hk-financials') return `${padded}.HK`;
     return padded;
   }
   if (market === 'CN') {

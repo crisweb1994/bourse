@@ -39,8 +39,7 @@ import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as dotenv from 'dotenv';
 import {
-  createMarketDataProviders,
-  createResearchMarketDataClient,
+  createMarketData,
 } from '@bourse/market-data';
 import { DigestGeneratorService } from '../src/digest/brief.generator';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -226,14 +225,12 @@ async function main(): Promise<void> {
   await prisma.$connect();
 
   try {
-    const snapshotV2 = new SnapshotV2Service(createResearchMarketDataClient(
-      createMarketDataProviders({
+    const snapshotV2 = new SnapshotV2Service(createMarketData({
         secUserAgent: SEC_UA,
         ...(process.env.TWELVE_DATA_API_KEY ? { twelveDataApiKey: process.env.TWELVE_DATA_API_KEY } : {}),
         ...(process.env.ALPHA_VANTAGE_API_KEY ? { alphaVantageApiKey: process.env.ALPHA_VANTAGE_API_KEY } : {}),
         ...(process.env.EODHD_API_KEY ? { eodhdApiKey: process.env.EODHD_API_KEY } : {}),
-      }),
-    ));
+      }));
     const providerFactory = new ProviderFactoryService(config);
     const aiSettings = new AiSettingsService(prisma, config);
     const generator = new DigestGeneratorService(

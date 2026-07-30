@@ -15,6 +15,8 @@ export interface RouteRequest {
   signal?: AbortSignal;
   timeoutMs?: number;
   traceId?: string;
+  /** Rate-limit weight for a provider batch call. Defaults to one. */
+  rateLimitCost?: number;
   /** Canonical id. Only instrument-scoped capabilities populate this field. */
   instrumentId?: string;
 }
@@ -43,7 +45,7 @@ export class CapabilityPlanner {
             : health.status === 'cooldown'
               ? 'CIRCUIT_OPEN'
               : !qualitySatisfies(candidate.spec.qualityTier, policy.minQualityTier) ||
-                  (policy.acceptedDelays !== undefined && candidate.spec.delay !== undefined && !policy.acceptedDelays.includes(candidate.spec.delay))
+                  (policy.acceptedDelays !== undefined && (!candidate.spec.delay || !policy.acceptedDelays.includes(candidate.spec.delay)))
                 ? 'POLICY_DISABLED'
               : undefined;
       return { ...candidate, skipReason };
@@ -52,12 +54,16 @@ export class CapabilityPlanner {
       const rightPriority = priority.get(right.instance.manifest.id) ?? Number.MAX_SAFE_INTEGER;
       if (policy.strategy === 'official-first') {
         const authorityRank = (value: PlannedCandidate) =>
-          value.spec.authority === 'regulator' || value.spec.authority === 'exchange' ? 0 : 1;
+          value.spec.authority === 'regulator' || value.spec.authority === 'exchange' || value.spec.authority === 'official-derived' ? 0 : 1;
         const difference = authorityRank(left) - authorityRank(right);
         if (difference !== 0) return difference;
       }
       return leftPriority - rightPriority;
     });
+  }
+
+  diagnoseUnsupported(request: RouteRequest): ReturnType<SourceRegistry['diagnoseUnsupported']> {
+    return this.registry.diagnoseUnsupported(request);
   }
 }
 

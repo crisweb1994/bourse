@@ -9,6 +9,7 @@ export * from './contracts';
 export * from './ports';
 export * from './routing';
 export * from './sources';
+export * from './observability';
 export * from './util';
 
 export { QualityTier } from './contracts/research-citation';

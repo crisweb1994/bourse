@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import type { ResearchResult } from '../contracts/result';
+import type { SourceResult } from '../contracts/source-result';
 import type { ConnectorRunContext } from '../connectors/types';
 
 export interface FilingSearchInput {
@@ -9,23 +11,24 @@ export interface FilingSearchInput {
   limit?: number;
 }
 
-export interface FilingSummary {
-  id: string;
+export const FilingSummarySchema = z.object({
+  id: z.string().min(1),
   /** Stable identifier inside the provider namespace. */
-  sourceDocumentId: string;
+  sourceDocumentId: z.string().min(1),
   /** Groups attachments belonging to one regulatory submission/announcement. */
-  sourceGroupId?: string;
-  instrumentId: string;
-  formType: string;
-  filingDate: string;
+  sourceGroupId: z.string().optional(),
+  instrumentId: z.string().min(1),
+  formType: z.string().min(1),
+  filingDate: z.string().min(1),
   /** Regulatory period-of-report date when the provider exposes it. */
-  periodEndOn?: string;
-  filingUrl: string;
-  title?: string;
-  provider: string;
-  language?: 'zh-CN' | 'zh-HK' | 'en-HK' | 'en-US' | 'unknown';
-  documentKind?: 'PRIMARY' | 'EARNINGS_RELEASE' | 'PDF' | 'OTHER';
-}
+  periodEndOn: z.string().optional(),
+  filingUrl: z.string().min(1),
+  title: z.string().optional(),
+  provider: z.string().min(1),
+  language: z.enum(['zh-CN', 'zh-HK', 'en-HK', 'en-US', 'unknown']).optional(),
+  documentKind: z.enum(['PRIMARY', 'EARNINGS_RELEASE', 'PDF', 'OTHER']).optional(),
+});
+export type FilingSummary = z.infer<typeof FilingSummarySchema>;
 
 export interface FilingGetInput {
   id: string;
@@ -41,24 +44,26 @@ export interface FilingGetInput {
   language?: 'zh-CN' | 'zh-HK' | 'en-HK' | 'en-US' | 'unknown';
 }
 
-export interface FilingPage {
-  page: number;
-  text: string;
-  startOffset: number;
-  endOffset: number;
-}
+export const FilingPageSchema = z.object({
+  page: z.number().int().nonnegative(),
+  text: z.string(),
+  startOffset: z.number().int().nonnegative(),
+  endOffset: z.number().int().nonnegative(),
+});
+export type FilingPage = z.infer<typeof FilingPageSchema>;
 
-export interface FilingDocument extends FilingSummary {
-  text?: string;
-  markdown?: string;
-  mimeType?: string;
-  rawContent?: Uint8Array;
-  contentHash?: string;
-  retrievedAt?: string;
-  pages?: FilingPage[];
-}
+export const FilingDocumentSchema = FilingSummarySchema.extend({
+  text: z.string().optional(),
+  markdown: z.string().optional(),
+  mimeType: z.string().optional(),
+  rawContent: z.instanceof(Uint8Array).optional(),
+  contentHash: z.string().optional(),
+  retrievedAt: z.string().optional(),
+  pages: z.array(FilingPageSchema).optional(),
+});
+export type FilingDocument = z.infer<typeof FilingDocumentSchema>;
 
-export interface FilingPort {
+export interface ProviderFilingPort {
   searchFilings(
     input: FilingSearchInput,
     ctx?: ConnectorRunContext,
@@ -67,4 +72,15 @@ export interface FilingPort {
     input: FilingGetInput,
     ctx?: ConnectorRunContext,
   ): Promise<ResearchResult<FilingDocument>>;
+}
+
+export interface FilingPort {
+  searchFilings(
+    input: FilingSearchInput,
+    ctx?: ConnectorRunContext,
+  ): Promise<SourceResult<FilingSummary[]>>;
+  getFiling?(
+    input: FilingGetInput,
+    ctx?: ConnectorRunContext,
+  ): Promise<SourceResult<FilingDocument>>;
 }

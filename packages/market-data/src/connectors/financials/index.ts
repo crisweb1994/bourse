@@ -17,3 +17,7 @@ export {
   createEastmoneyHkFinancialsConnector,
   type EastmoneyHkFinancialsOptions,
 } from './eastmoney-hk';
+export {
+  createHkexDerivedFinancialsConnector,
+  type HkexDerivedFinancialsOptions,
+} from './hkex-derived';

@@ -1,53 +1,79 @@
 import type { MarketCode } from '../contracts/instrument';
 import type { Capability, CapabilitySpec, SourceAuthority, RedistributionPolicy } from '../contracts/source';
 import type { QualityTier } from '../contracts/research-citation';
-import type { FinancePort, CompanyProfilePort } from '../ports/finance';
-import type { FinancialsPort } from '../ports/financials';
-import type { FilingPort } from '../ports/filings';
-import type { MacroPort } from '../ports/macro';
-import type { InstrumentSearchPort } from '../ports/instrument-search';
-import type { SourceInstance } from './plugin';
+import type { ProviderFinancePort, ProviderCompanyProfilePort } from '../ports/finance';
+import type { ProviderFinancialsPort } from '../ports/financials';
+import type { ProviderFilingPort } from '../ports/filings';
+import type { ProviderMacroPort } from '../ports/macro';
+import type { ProviderInstrumentSearchPort } from '../ports/instrument-search';
+import type { SourceInstance, SourcePlugin } from './plugin';
 import { createRuleBasedMarketCalendarPort } from './rule-calendar';
+import {
+  sourceFilingPort,
+  sourceFinancePort,
+  sourceFinancialsPort,
+  sourceInstrumentSearchPort,
+  sourceMacroPort,
+  sourceProfilePort,
+} from './provider-port';
 
-export interface BuiltInProviderPorts {
-  twelveData?: FinancePort;
-  alphaVantage?: FinancePort;
-  eodhd?: FinancePort;
-  yahoo: FinancePort;
-  nasdaq: FinancePort;
-  sinaUs: FinancePort;
-  tencentHk: FinancePort;
-  tencentCn?: FinancePort;
-  cnFinance: FinancePort;
-  secProfile: CompanyProfilePort;
-  hkProfile?: CompanyProfilePort;
-  usFinancials: FinancialsPort;
-  cnFinancials: FinancialsPort;
-  hkFinancials: FinancialsPort;
-  usFilings: FilingPort;
-  cnFilings: FilingPort;
-  hkFilings: FilingPort;
-  macro: MacroPort;
-  instrumentSearch?: readonly InstrumentSearchPort[];
+interface BuiltInProviderPorts {
+  twelveData?: ProviderFinancePort;
+  alphaVantage?: ProviderFinancePort;
+  eodhd?: ProviderFinancePort;
+  yahoo?: ProviderFinancePort;
+  nasdaq?: ProviderFinancePort;
+  sinaUs?: ProviderFinancePort;
+  tencentHk?: ProviderFinancePort;
+  tencentCn?: ProviderFinancePort;
+  cnFinance?: ProviderFinancePort;
+  secProfile?: ProviderCompanyProfilePort;
+  hkProfile?: ProviderCompanyProfilePort;
+  usFinancials?: ProviderFinancialsPort;
+  cnFinancials?: ProviderFinancialsPort;
+  hkFinancials?: ProviderFinancialsPort;
+  hkexFinancials?: ProviderFinancialsPort;
+  usFilings?: ProviderFilingPort;
+  cnFilings?: ProviderFilingPort;
+  hkFilings?: ProviderFilingPort;
+  macro?: ProviderMacroPort;
+  instrumentSearch?: readonly ProviderInstrumentSearchPort[];
 }
 
+export function createBuiltInSourcePlugins(providers: BuiltInProviderPorts): SourcePlugin[] {
+  return builtInInstances(providers).map((instance) => ({
+    manifest: instance.manifest,
+    create(config) {
+      return {
+        ...instance,
+        enabled: config.enabled ?? instance.enabled,
+        credentialScope: config.credentialScope ?? instance.credentialScope,
+      };
+    },
+  }));
+}
+
+/** @internal Test/embedding helper. Production composition registers plugins. */
 export function createBuiltInSources(providers: BuiltInProviderPorts): SourceInstance[] {
-  const sources: SourceInstance[] = [
-    financeSource('yahoo', 'Yahoo Finance', providers.yahoo, ['US', 'HK'], 'public-api', false, ['quote', 'history', 'profile']),
-    financeSource('nasdaq', 'Nasdaq', providers.nasdaq, ['US'], 'public-api', false, ['quote', 'history']),
-    financeSource('sina', 'Sina Finance', providers.sinaUs, ['US'], 'public-api', false, ['quote', 'history']),
-    financeSource('tencent-hk', 'Tencent Finance', providers.tencentHk, ['HK'], 'public-api', false, ['quote', 'history']),
-    financeSource('cn-finance', 'Eastmoney Finance', providers.cnFinance, ['CN'], 'aggregated', false, ['quote', 'history', 'profile']),
-    profileSource('sec-edgar-profile', 'SEC EDGAR issuer profile', providers.secProfile, ['US'], 'regulator'),
-    financialsSource('sec-edgar-xbrl', 'SEC EDGAR XBRL', providers.usFinancials, ['US'], 'regulator', 'A'),
-    financialsSource('eastmoney-financials', 'Eastmoney Financials', providers.cnFinancials, ['CN'], 'aggregated', 'B'),
-    financialsSource('eastmoney-hk-financials', 'Eastmoney HK Financials', providers.hkFinancials, ['HK'], 'aggregated', 'B'),
-    filingsSource('sec-edgar', 'SEC EDGAR', providers.usFilings, ['US'], 'regulator', 'A'),
-    filingsSource('cn-filings', 'CN regulatory filings', providers.cnFilings, ['CN'], 'exchange', 'A'),
-    filingsSource('hkex', 'HKEX', providers.hkFilings, ['HK'], 'exchange', 'A'),
-    macroSource(providers.macro),
-    calendarSource(),
-  ];
+  return createBuiltInSourcePlugins(providers).map((plugin) => plugin.create({}, {}));
+}
+
+function builtInInstances(providers: BuiltInProviderPorts): SourceInstance[] {
+  const sources: SourceInstance[] = [calendarSource()];
+  if (providers.yahoo) sources.push(financeSource('yahoo', 'Yahoo Finance', providers.yahoo, ['US', 'HK'], 'public-api', false, ['quote', 'history', 'profile']));
+  if (providers.nasdaq) sources.push(financeSource('nasdaq', 'Nasdaq', providers.nasdaq, ['US'], 'public-api', false, ['quote', 'history']));
+  if (providers.sinaUs) sources.push(financeSource('sina', 'Sina Finance', providers.sinaUs, ['US'], 'public-api', false, ['quote', 'history']));
+  if (providers.tencentHk) sources.push(financeSource('tencent-hk', 'Tencent Finance', providers.tencentHk, ['HK'], 'public-api', false, ['quote', 'history']));
+  if (providers.cnFinance) sources.push(financeSource('cn-finance', 'Eastmoney Finance', providers.cnFinance, ['CN'], 'aggregated', false, ['quote', 'history', 'profile']));
+  if (providers.secProfile) sources.push(profileSource('sec-edgar-profile', 'SEC EDGAR issuer profile', providers.secProfile, ['US'], 'regulator'));
+  if (providers.usFinancials) sources.push(financialsSource('sec-edgar-xbrl', 'SEC EDGAR XBRL', providers.usFinancials, ['US'], 'regulator', 'A'));
+  if (providers.cnFinancials) sources.push(financialsSource('eastmoney-financials', 'Eastmoney Financials', providers.cnFinancials, ['CN'], 'aggregated', 'B'));
+  if (providers.hkFinancials) sources.push(financialsSource('eastmoney-hk-financials', 'Eastmoney HK Financials', providers.hkFinancials, ['HK'], 'aggregated', 'B'));
+  if (providers.hkexFinancials) sources.push(financialsSource('hkex-derived-financials', 'HKEX derived financials', providers.hkexFinancials, ['HK'], 'official-derived', 'A'));
+  if (providers.usFilings) sources.push(filingsSource('sec-edgar', 'SEC EDGAR', providers.usFilings, ['US'], 'regulator', 'A'));
+  if (providers.cnFilings) sources.push(filingsSource('cn-filings', 'CN regulatory filings', providers.cnFilings, ['CN'], 'exchange', 'A'));
+  if (providers.hkFilings) sources.push(filingsSource('hkex', 'HKEX', providers.hkFilings, ['HK'], 'exchange', 'A'));
+  if (providers.macro) sources.push(macroSource(providers.macro));
   if (providers.twelveData) sources.push(financeSource('twelve-data', 'Twelve Data', providers.twelveData, ['US', 'HK', 'CN'], 'licensed', true, ['quote', 'history', 'profile']));
   if (providers.alphaVantage) sources.push(financeSource('alpha-vantage', 'Alpha Vantage', providers.alphaVantage, ['US'], 'licensed', true, ['quote', 'history', 'profile']));
   if (providers.eodhd) sources.push(financeSource('eodhd', 'EODHD', providers.eodhd, ['US', 'HK', 'CN'], 'licensed', true, ['quote', 'history', 'profile']));
@@ -63,38 +89,57 @@ export function createBuiltInSources(providers: BuiltInProviderPorts): SourceIns
 function financeSource(
   id: string,
   name: string,
-  finance: FinancePort,
+  finance: ProviderFinancePort,
   markets: MarketCode[],
   authority: SourceAuthority,
   requiresAuth: boolean,
   capabilities: Array<'quote' | 'history' | 'profile'>,
 ): SourceInstance {
-  return source(id, name, 'public-api', requiresAuth, capabilities.map((capability) => spec(capability, markets, authority, authority === 'licensed' ? 'B' : 'C', requiresAuth ? 'credential-cache-only' : 'public-cache-allowed')),
-    { finance });
+  const declared: Capability[] = [
+    ...capabilities,
+    ...(finance.fetchEarningsConsensus ? ['earnings-consensus' as const] : []),
+  ];
+  return source(id, name, requiresAuth ? 'licensed-vendor' : 'public-api', requiresAuth, declared.map((capability) => ({
+    ...spec(capability, markets, authority, authority === 'licensed' ? 'B' : 'C', requiresAuth ? 'credential-cache-only' : 'public-cache-allowed'),
+    ...(capability === 'history' ? { intervals: historyIntervals(id) } : {}),
+  })),
+    { finance: sourceFinancePort(id, finance) });
 }
 
-function profileSource(id: string, name: string, profile: CompanyProfilePort, markets: MarketCode[], authority: SourceAuthority): SourceInstance {
-  return source(id, name, authority === 'regulator' ? 'official' : 'public-api', false, [spec('profile', markets, authority, authority === 'regulator' ? 'A' : 'B', 'public-cache-allowed')], { profile });
+function historyIntervals(sourceId: string): CapabilitySpec['intervals'] {
+  return sourceId === 'twelve-data' ? ['1d', '1h', '5m', '1m'] : ['1d'];
 }
 
-function financialsSource(id: string, name: string, financials: FinancialsPort, markets: MarketCode[], authority: SourceAuthority, qualityTier: QualityTier): SourceInstance {
-  return source(id, name, authority === 'regulator' ? 'official' : 'public-api', false, [spec('financials', markets, authority, qualityTier, 'public-cache-allowed', 6 * 60 * 60 * 1_000)], { financials });
+function profileSource(id: string, name: string, profile: ProviderCompanyProfilePort, markets: MarketCode[], authority: SourceAuthority): SourceInstance {
+  return source(id, name, authority === 'regulator' ? 'official' : 'public-api', false, [spec('profile', markets, authority, authority === 'regulator' ? 'A' : 'B', 'public-cache-allowed')], { profile: sourceProfilePort(id, profile) });
 }
 
-function filingsSource(id: string, name: string, filings: FilingPort, markets: MarketCode[], authority: SourceAuthority, qualityTier: QualityTier): SourceInstance {
-  return source(id, name, authority === 'regulator' || authority === 'exchange' ? 'official' : 'public-api', false, [spec('filings', markets, authority, qualityTier, 'public-cache-allowed', 10 * 60 * 1_000)], { filings });
+function financialsSource(id: string, name: string, financials: ProviderFinancialsPort, markets: MarketCode[], authority: SourceAuthority, qualityTier: QualityTier): SourceInstance {
+  return source(id, name, authority === 'regulator' ? 'official' : authority === 'official-derived' ? 'derived' : 'public-api', false, [spec('financials', markets, authority, qualityTier, 'public-cache-allowed', 6 * 60 * 60 * 1_000)], { financials: sourceFinancialsPort(id, financials) });
 }
 
-function macroSource(macro: MacroPort): SourceInstance {
-  return source('official-macro', 'Official macro sources', 'official', false, [spec('macro', ['US', 'CN', 'HK'], 'regulator', 'A', 'public-cache-allowed', 60 * 60 * 1_000)], { macro });
+function filingsSource(id: string, name: string, filings: ProviderFilingPort, markets: MarketCode[], authority: SourceAuthority, qualityTier: QualityTier): SourceInstance {
+  const capabilities = [
+    spec('filings', markets, authority, qualityTier, 'public-cache-allowed', 10 * 60 * 1_000),
+    ...(filings.getFiling
+      ? [spec('filing-document', markets, authority, qualityTier, 'public-cache-allowed', 24 * 60 * 60 * 1_000)]
+      : []),
+  ];
+  return source(id, name, authority === 'regulator' || authority === 'exchange' ? 'official' : 'public-api', false, capabilities, { filings: sourceFilingPort(id, filings) });
+}
+
+function macroSource(macro: ProviderMacroPort): SourceInstance {
+  return source('official-macro', 'Official macro sources', 'official', false, [spec('macro', ['US', 'CN', 'HK'], 'regulator', 'A', 'public-cache-allowed', 60 * 60 * 1_000)], { macro: sourceMacroPort('official-macro', macro) });
 }
 
 function calendarSource(): SourceInstance {
   return source('market-calendar-rules', 'Market calendar rules', 'derived', false, [spec('market-calendar', ['US', 'CN', 'HK', 'JP', 'UK'], 'derived', 'C', 'public-cache-allowed', 60 * 60 * 1_000)], { marketCalendar: createRuleBasedMarketCalendarPort() });
 }
 
-function instrumentSearchSource(id: string, instrumentSearch: InstrumentSearchPort): SourceInstance {
-  return source(id, id, 'public-api', false, [spec('instrument-search', ['US', 'CN', 'HK', 'JP', 'UK'], 'public-api', 'C', 'public-cache-allowed', 60 * 60 * 1_000)], { instrumentSearch });
+function instrumentSearchSource(id: string, instrumentSearch: ProviderInstrumentSearchPort): SourceInstance {
+  return source(id, id, 'public-api', false, [spec('instrument-search', ['US', 'CN', 'HK', 'JP', 'UK'], 'public-api', 'C', 'public-cache-allowed', 60 * 60 * 1_000)], {
+    instrumentSearch: sourceInstrumentSearchPort(id, instrumentSearch),
+  });
 }
 
 function source(
@@ -106,7 +151,17 @@ function source(
   ports: SourceInstance['ports'],
 ): SourceInstance {
   return {
-    manifest: { id, name, sourceType, requiresAuth, allowRedistribution: capabilities.every((capability) => capability.redistribution === 'public-cache-allowed'), capabilities },
+    manifest: {
+      id,
+      name,
+      sourceType,
+      requiresAuth,
+      allowRedistribution: capabilities.every((capability) => capability.redistribution === 'public-cache-allowed'),
+      capabilities,
+      // This is a process-local concurrency guard, not a claim about a
+      // provider plan's request quota. Plan-specific RPS can be configured by plugins.
+      rateLimit: { concurrent: id === 'market-calendar-rules' ? 64 : sourceType === 'licensed-vendor' ? 8 : 4 },
+    },
     enabled: true,
     credentialScope: requiresAuth ? `credential:${id}-system` : 'public',
     ports,

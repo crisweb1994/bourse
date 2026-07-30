@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type { FilingPort } from '@bourse/analysis';
+import type { ProviderFilingPort as FilingPort } from '@bourse/analysis';
 import { buildParserDerivationKey, EarningsSourceService } from './earnings-source.service';
 import { EarningsSourceError } from './earnings-source.service';
 import { FilingStoreService } from '../filings/filing-store.service';
@@ -54,7 +54,7 @@ test('EarningsSourceService skips a non-earnings 8-K and persists EX-99.1 once',
       upsert: async ({ create }: any) => ({ id: 'derivation-db', ...create }),
     },
   };
-  const service = new EarningsSourceService(prisma as any, port, port, port, new FilingStoreService(prisma as any));
+  const service = new EarningsSourceService(prisma as any, clientFromPort(port), new FilingStoreService(prisma as any));
   const prepared = await service.discoverAndIngest(stock);
   assert.equal(prepared.sourceDocumentId, 'accession-earnings:earnings.htm');
   assert.equal(creates.length, 1);
@@ -81,7 +81,7 @@ test('EarningsSourceService preserves filing metadata for structured fallback', 
   const prisma = {
     filing: { findFirst: async () => null },
   } as any;
-  const service = new EarningsSourceService(prisma, port, port, port, new FilingStoreService(prisma));
+  const service = new EarningsSourceService(prisma, clientFromPort(port), new FilingStoreService(prisma));
 
   await assert.rejects(
     () => service.discoverAndIngest(stock),
@@ -132,7 +132,7 @@ test('EarningsSourceService advances from an already-linked filing to the next s
     },
     filingDerivation: { upsert: async ({ create }: any) => ({ id: 'derivation-new', ...create }) },
   };
-  const prepared = await new EarningsSourceService(prisma as any, port, port, port, new FilingStoreService(prisma as any)).discoverAndIngest(stock);
+  const prepared = await new EarningsSourceService(prisma as any, clientFromPort(port), new FilingStoreService(prisma as any)).discoverAndIngest(stock);
   assert.equal(prepared.sourceGroupId, 'release-new');
   assert.deepEqual(fetched, ['release-new']);
 });
@@ -166,5 +166,29 @@ function envelope<T>(data: T) {
     citations: [],
     freshness: [],
     warnings: [],
+  };
+}
+
+function clientFromPort(port: FilingPort): any {
+  return {
+    listFilings: async (input: any, ctx?: any) => v2(await port.searchFilings(input, ctx)),
+    getFilingDocument: async (input: any, ctx?: any) => {
+      if (!port.getFiling) throw new Error('missing getFiling');
+      return v2(await port.getFiling(input, ctx));
+    },
+  };
+}
+
+function v2<T>(result: {
+  data: T;
+  citations: any[];
+  freshness: any[];
+  warnings: any[];
+}) {
+  return {
+    ...result,
+    schemaVersion: '2.0' as const,
+    status: 'ok' as const,
+    trace: { attempts: [] },
   };
 }

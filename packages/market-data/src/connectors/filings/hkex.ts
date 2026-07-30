@@ -9,7 +9,7 @@ import type {
   FilingDocument,
   FilingGetInput,
   FilingPage,
-  FilingPort,
+  ProviderFilingPort as FilingPort,
   FilingSearchInput,
   FilingSummary,
 } from '../../ports/filings';
@@ -50,7 +50,9 @@ export function createHkexFilingsConnector(options: HkexFilingsOptions = {}): Fi
       if (!parsed || parsed.market !== 'HK') {
         return failure(input, retrievedAt, 'UNSUPPORTED_MARKET', 'HKEX connector only handles HK instruments');
       }
-      const symbol = normalizeHkSymbol(parsed.symbol);
+      const symbol = ctx.resolvedInstrument?.instrumentId === parsed.raw
+        ? ctx.resolvedInstrument.providerSymbol.replace(/\.HK$/i, '').replace(/^hk/i, '')
+        : normalizeHkSymbol(parsed.symbol);
       if (!symbol) return failure(input, retrievedAt, 'INVALID_INSTRUMENT', `Invalid HK symbol: ${parsed.symbol}`);
       const fetchLike = resolveFetch(ctx, options);
       try {

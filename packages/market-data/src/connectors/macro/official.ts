@@ -8,7 +8,7 @@ import type {
   MacroIndicator,
   MacroMarket,
   MacroObservation,
-  MacroPort,
+  ProviderMacroPort as MacroPort,
   MacroSnapshot,
 } from '../../ports/macro';
 

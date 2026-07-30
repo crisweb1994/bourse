@@ -23,7 +23,7 @@ import type {
   ConsensusEpsInput,
   ConsensusEpsRow,
   EarningsConsensusBundle,
-  FinancePort,
+  ProviderFinancePort as FinancePort,
   HistoryInput,
   PriceBar,
   ProfileInput,
@@ -178,7 +178,15 @@ export function createCnFinanceConnector(options: CnFinanceOptions = {}): Financ
       const warnings: ResearchWarning[] = [];
 
       for (const source of sources) {
-        const out = await fetchQuote(source, parsed.symbol, exchange, fetchLike, ctx, retrievedAt);
+        const out = await fetchQuote(
+          source,
+          parsed.symbol,
+          exchange,
+          fetchLike,
+          ctx,
+          retrievedAt,
+          ctx.resolvedInstrument?.instrumentId === parsed.raw ? ctx.resolvedInstrument.providerSymbol : undefined,
+        );
         if (!out.ok && out.code === 'RATE_LIMITED') {
           // 429 is a backoff hint, not a "try the next source". Short-circuit
           // so the caller can apply retry-after without fanning out and
@@ -289,7 +297,9 @@ export function createCnFinanceConnector(options: CnFinanceOptions = {}): Financ
         return historyFailure(retrievedAt, 'INVALID_INSTRUMENT', `Cannot infer CN exchange for symbol ${parsed.symbol}`);
       }
       const mktNum = exchange === 'SS' ? '1' : exchange === 'SZ' ? '0' : '0'; // BJ also uses 0 in this API
-      const secid = `${mktNum}.${parsed.symbol}`;
+      const secid = ctx.resolvedInstrument?.instrumentId === parsed.raw
+        ? ctx.resolvedInstrument.providerSymbol
+        : `${mktNum}.${parsed.symbol}`;
       const beg = input.from.replace(/-/g, '');
       const end = input.to.replace(/-/g, '');
       // Eastmoney 历史 K 线官方端点。push2.eastmoney.com 是实时行情，不带
@@ -541,12 +551,13 @@ async function fetchQuote(
   fetchLike: FetchLike,
   ctx: ConnectorRunContext,
   retrievedAt: string,
+  resolvedProviderSymbol?: string,
 ): Promise<QuoteFetchResult> {
   const timeoutMs = ctx.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   try {
     return await withTimeout(ctx, timeoutMs, (signal) => {
       if (source === 'tencent') return fetchTencent(symbol, exchange, fetchLike, signal, retrievedAt);
-      return fetchEastmoney(symbol, exchange, fetchLike, signal, retrievedAt);
+      return fetchEastmoney(symbol, exchange, fetchLike, signal, retrievedAt, resolvedProviderSymbol);
     });
   } catch (err) {
     const message = (err as Error)?.message ?? String(err);
@@ -594,8 +605,8 @@ async function fetchTencent(
   }
 
   // Extended fields — each silently downgrades to undefined when malformed.
-  // Tencent expresses percentages as raw % (e.g. "1.23" = 1.23%); the Quote
-  // contract uses decimal fractions so we divide by 100 where applicable.
+  // Normalize provider-specific units at the connector boundary so every
+  // consumer sees the canonical Quote contract.
   const peRatio = pickNumberSafe(fields[TENCENT_PE_FIELD]);
   const pbRatio = pickNumberSafe(fields[TENCENT_PB_FIELD]);
   const dayOpen = pickNumberSafe(fields[TENCENT_DAY_OPEN_FIELD]);
@@ -603,9 +614,9 @@ async function fetchTencent(
   const dayLow = pickNumberSafe(fields[TENCENT_DAY_LOW_FIELD]);
   const previousClose = pickNumberSafe(fields[TENCENT_PREV_CLOSE_FIELD]);
   const change = pickNumberSafe(fields[TENCENT_CHANGE_FIELD]);
-  const changePctRaw = pickNumberSafe(fields[TENCENT_CHANGE_PCT_FIELD]);
-  const changePct = changePctRaw !== undefined ? changePctRaw / 100 : undefined;
-  const volume = pickNumberSafe(fields[TENCENT_VOLUME_FIELD]); // 手 (1 手=100 股)
+  const changePct = pickNumberSafe(fields[TENCENT_CHANGE_PCT_FIELD]);
+  const volumeLots = pickNumberSafe(fields[TENCENT_VOLUME_FIELD]);
+  const volume = volumeLots !== undefined ? volumeLots * 100 : undefined;
   // 成交额 in 万元 → convert to 元 for consistency with Quote.turnover unit doc
   const turnoverWan = pickNumberSafe(fields[TENCENT_TURNOVER_FIELD]);
   const turnover = turnoverWan !== undefined ? turnoverWan * 10_000 : undefined;
@@ -615,19 +626,22 @@ async function fetchTencent(
   const amplitude = amplitudeRaw !== undefined ? amplitudeRaw / 100 : undefined;
   const week52High = pickNumberSafe(fields[TENCENT_WEEK52_HIGH_FIELD]);
   const week52Low = pickNumberSafe(fields[TENCENT_WEEK52_LOW_FIELD]);
-  const floatMarketCap = pickNumberSafe(fields[TENCENT_FLOAT_MCAP_FIELD]);
+  const floatMarketCapYi = pickNumberSafe(fields[TENCENT_FLOAT_MCAP_FIELD]);
+  const floatMarketCap = floatMarketCapYi !== undefined ? floatMarketCapYi * 1e8 : undefined;
   const bidAskRaw = pickNumberSafe(fields[TENCENT_BID_ASK_FIELD]);
   const bidAskRatio = bidAskRaw !== undefined ? bidAskRaw / 100 : undefined;
   const volumeRatio = pickNumberSafe(fields[TENCENT_VOLUME_RATIO_FIELD]);
-  const sharesTotal = pickNumberSafe(fields[TENCENT_SHARES_TOTAL_FIELD]);
-  const sharesFloat = pickNumberSafe(fields[TENCENT_SHARES_FLOAT_FIELD]);
+  const sharesTotalYi = pickNumberSafe(fields[TENCENT_SHARES_TOTAL_FIELD]);
+  const sharesFloatYi = pickNumberSafe(fields[TENCENT_SHARES_FLOAT_FIELD]);
+  const sharesTotal = sharesTotalYi !== undefined ? sharesTotalYi * 1e8 : undefined;
+  const sharesFloat = sharesFloatYi !== undefined ? sharesFloatYi * 1e8 : undefined;
   const tradeTime = parseTencentTime(fields[TENCENT_TIME_FIELD]);
 
   return {
     ok: true,
     data: {
       price,
-      marketCap,
+      marketCap: marketCap * 1e8,
       peRatio,
       pbRatio,
       dayOpen,
@@ -687,9 +701,10 @@ async function fetchEastmoney(
   fetchLike: FetchLike,
   signal: AbortSignal,
   retrievedAt: string,
+  resolvedProviderSymbol?: string,
 ): Promise<QuoteFetchResult> {
   const prefix = exchange === 'SS' ? '1' : '0';
-  const secid = `${prefix}.${symbol}`;
+  const secid = resolvedProviderSymbol ?? `${prefix}.${symbol}`;
   const fields = 'f43,f116,f9';
   const url = `https://push2.eastmoney.com/api/qt/stock/get?secid=${secid}&fields=${fields}`;
   const res = await fetchLike(url, { headers: CN_BROWSER_HEADERS, signal });
@@ -716,7 +731,7 @@ async function fetchEastmoney(
   }
   return {
     ok: true,
-    data: { price, marketCap: marketCapYuan / 1e8, peRatio },
+    data: { price, marketCap: marketCapYuan, peRatio },
     citation: {
       title: `东方财富行情 ${symbol}`,
       url,

@@ -2,7 +2,7 @@ import { RESEARCH_SCHEMA_VERSION, type ResearchResult } from '../../contracts/re
 import type { ResearchWarning } from '../../contracts/warning';
 import type {
   CompanyProfile,
-  FinancePort,
+  ProviderFinancePort as FinancePort,
   HistoryInput,
   PriceBar,
   ProfileInput,
@@ -47,7 +47,7 @@ export function createEodhdFinanceConnector(options: EodhdFinanceOptions): Finan
   return {
     async getQuote(input: QuoteInput, ctx: ConnectorRunContext = {}): Promise<ResearchResult<Quote>> {
       const retrievedAt = now().toISOString();
-      const mapped = mapInstrument(input.instrumentId);
+      const mapped = mapInstrument(input.instrumentId, ctx);
       if (!mapped.parsed || !mapped.providerSymbol) return quoteFailure(PROVIDER, input.instrumentId, retrievedAt, mapped.code!, mapped.message!);
       try {
         const result = await request(`real-time/${encodeURIComponent(mapped.providerSymbol)}`, {}, ctx, options, timeoutMs);
@@ -77,7 +77,7 @@ export function createEodhdFinanceConnector(options: EodhdFinanceOptions): Finan
 
     async getHistory(input: HistoryInput, ctx: ConnectorRunContext = {}): Promise<ResearchResult<PriceBar[]>> {
       const retrievedAt = now().toISOString();
-      const mapped = mapInstrument(input.instrumentId);
+      const mapped = mapInstrument(input.instrumentId, ctx);
       if (!mapped.parsed || !mapped.providerSymbol) return historyFailure(PROVIDER, retrievedAt, mapped.code!, mapped.message!);
       if (input.interval && input.interval !== '1d') return historyFailure(PROVIDER, retrievedAt, 'PARTIAL_DATA', 'EODHD fallback currently supports daily bars only.');
       try {
@@ -116,7 +116,7 @@ export function createEodhdFinanceConnector(options: EodhdFinanceOptions): Finan
 
     async getProfile(input: ProfileInput, ctx: ConnectorRunContext = {}): Promise<ResearchResult<CompanyProfile>> {
       const retrievedAt = now().toISOString();
-      const mapped = mapInstrument(input.instrumentId);
+      const mapped = mapInstrument(input.instrumentId, ctx);
       if (!mapped.parsed || !mapped.providerSymbol) return profileFailure(PROVIDER, input.instrumentId, retrievedAt, mapped.code!, mapped.message!);
       try {
         const result = await request(`fundamentals/${encodeURIComponent(mapped.providerSymbol)}`, { filter: 'General' }, ctx, options, timeoutMs);
@@ -169,7 +169,7 @@ async function request(
   });
 }
 
-function mapInstrument(instrumentId: string): {
+function mapInstrument(instrumentId: string, ctx?: ConnectorRunContext): {
   parsed?: ParsedFinanceInstrument;
   providerSymbol?: string;
   code?: 'INVALID_INSTRUMENT' | 'UNSUPPORTED_MARKET';
@@ -178,6 +178,9 @@ function mapInstrument(instrumentId: string): {
   const result = parseFinanceInstrument(instrumentId, SUPPORTED);
   if (!result.parsed) return { code: result.code as 'INVALID_INSTRUMENT' | 'UNSUPPORTED_MARKET', message: result.message };
   const parsed = result.parsed;
+  if (ctx?.resolvedInstrument?.instrumentId === parsed.instrumentId) {
+    return { parsed, providerSymbol: ctx.resolvedInstrument.providerSymbol };
+  }
   if (parsed.market === 'US') return { parsed, providerSymbol: `${parsed.symbol.toUpperCase()}.US` };
   if (parsed.market === 'HK') {
     const digits = parsed.symbol.replace(/\.HK$/i, '');

@@ -1,11 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  MarketDataClient,
-  createMarketData,
-  type MarketDataProviders,
+  ResearchMarketDataClient,
+  createResearchMarketDataClient,
 } from './client';
+import { createBuiltInSources } from './sources/built-in';
+import { SourceRegistry } from './sources/registry';
 import { createYahooFinanceConnector } from './connectors/finance/yahoo';
-import type { CompanyProfile, FinancePort, PriceBar, Quote } from './ports/finance';
+import type {
+  CompanyProfile,
+  PriceBar,
+  ProviderFinancePort as FinancePort,
+  Quote,
+} from './ports/finance';
 import type { ResearchResult } from './contracts/result';
 
 function result<T>(data: T, provider = 'test'): ResearchResult<T> {
@@ -65,7 +71,9 @@ function finance(overrides: Partial<FinancePort> = {}): FinancePort {
   };
 }
 
-function providers(overrides: Partial<MarketDataProviders> = {}): MarketDataProviders {
+type BuiltInProviderPorts = Parameters<typeof createBuiltInSources>[0];
+
+function providers(overrides: Partial<BuiltInProviderPorts> = {}): BuiltInProviderPorts {
   const defaultFinance = finance();
   return {
     yahoo: defaultFinance,
@@ -90,24 +98,116 @@ function providers(overrides: Partial<MarketDataProviders> = {}): MarketDataProv
   };
 }
 
-describe('MarketDataClient', () => {
+class TestResearchMarketDataClient extends ResearchMarketDataClient {
+  constructor(providerPorts: BuiltInProviderPorts) {
+    super(new SourceRegistry(createBuiltInSources(providerPorts)));
+  }
+}
+
+describe('ResearchMarketDataClient', () => {
+  it('returns batch quotes in exactly the input order', async () => {
+    const client = createResearchMarketDataClient(createBuiltInSources(providers({
+      yahoo: finance({
+        getQuote: async ({ instrumentId }) => result(quote(instrumentId, instrumentId === 'US:MSFT' ? 420 : 200), 'yahoo'),
+      }),
+    })));
+
+    const responses = await client.getQuotes([
+      { instrumentId: 'US:MSFT' },
+      { instrumentId: 'US:AAPL' },
+    ]);
+
+    expect(responses.map((response) => response.data?.instrument.instrumentId)).toEqual(['US:MSFT', 'US:AAPL']);
+    expect(responses.map((response) => response.data?.price)).toEqual([420, 200]);
+  });
+
+  it('routes market-calendar requests with the default policy', async () => {
+    const client = createResearchMarketDataClient(createBuiltInSources(providers()));
+
+    const response = await client.getMarketSession('HK', '2026-02-17T02:00:00.000Z');
+
+    expect(response.status).toBe('ok');
+    expect(response.data?.state).toBe('HOLIDAY');
+    if (response.status !== 'ok') throw new Error('expected market session');
+    expect(response.trace.selectedSource).toBe('market-calendar-rules');
+  });
+
+  it('routes calendar-only markets outside the phase-one research set', async () => {
+    const client = createResearchMarketDataClient(createBuiltInSources(providers()));
+
+    const response = await client.getMarketSession('JP', '2026-02-11T03:00:00.000Z');
+
+    expect(response.status).toBe('ok');
+    expect(response.data?.state).toBe('HOLIDAY');
+  });
+
+  it('routes HK earnings consensus through the declared capability', async () => {
+    const client = createResearchMarketDataClient(createBuiltInSources(providers({
+      yahoo: finance({
+        fetchEarningsConsensus: async () => result({
+          asOf: '2026-07-28T00:00:00.000Z',
+          estimates: [{
+            metricCode: 'epsBasic',
+            periodEndOn: '2026-12-31',
+            periodType: 'FY',
+            value: '25.5',
+            unit: 'per_share',
+            currency: 'HKD',
+            analystCount: 20,
+          }],
+        }, 'yahoo'),
+      }),
+    })));
+
+    const response = await client.getEarningsConsensus('HK:0700');
+
+    expect(response.status).toBe('ok');
+    expect(response.data?.estimates[0]?.value).toBe('25.5');
+  });
+
+  it('routes filing list and document requests through the same source policy', async () => {
+    const summary = {
+      id: 'accession-1',
+      sourceDocumentId: 'accession-1:primary.htm',
+      instrumentId: 'US:AAPL',
+      formType: '10-Q',
+      filingDate: '2026-07-01',
+      filingUrl: 'https://www.sec.gov/example',
+      provider: 'sec-edgar',
+    };
+    const client = createResearchMarketDataClient(createBuiltInSources(providers({
+      usFilings: {
+        searchFilings: async () => result([summary], 'sec-edgar'),
+        getFiling: async () => result({ ...summary, text: 'quarterly report' }, 'sec-edgar'),
+      },
+    })));
+
+    const listed = await client.listFilings({ instrumentId: 'US:AAPL', forms: ['10-Q'], limit: 1 });
+    const document = await client.getFilingDocument({ ...summary });
+
+    expect(listed.data).toEqual([summary]);
+    expect(document.data?.text).toBe('quarterly report');
+    if (document.status !== 'ok' && document.status !== 'partial') throw new Error('expected filing document');
+    expect(document.trace.selectedSource).toBe('sec-edgar');
+  });
+
   it('uses configured commercial sources before key-free quote providers', async () => {
     const yahooQuote = vi.fn(async () => result(quote('US:AAPL', 100), 'yahoo'));
     const twelveQuote = vi.fn(async () => result(quote('US:AAPL', 250), 'twelve-data'));
-    const client = new MarketDataClient(providers({
+    const client = new TestResearchMarketDataClient(providers({
       twelveData: finance({ getQuote: twelveQuote }),
       yahoo: finance({ getQuote: yahooQuote }),
     }));
 
     const response = await client.getQuote('US:AAPL');
 
-    expect(response.data.price).toBe(250);
+    expect(response.data?.price).toBe(250);
     expect(twelveQuote).toHaveBeenCalledOnce();
     expect(yahooQuote).not.toHaveBeenCalled();
   });
 
   it('falls through unavailable commercial sources to the existing free chain', async () => {
-    const client = new MarketDataClient(providers({
+    const client = new TestResearchMarketDataClient(providers({
       twelveData: finance({ getQuote: async () => result(quote('US:AAPL', Number.NaN), 'twelve-data') }),
       alphaVantage: finance({ getQuote: async () => result(quote('US:AAPL', Number.NaN), 'alpha-vantage') }),
       eodhd: finance({ getQuote: async () => result(quote('US:AAPL', Number.NaN), 'eodhd') }),
@@ -116,7 +216,7 @@ describe('MarketDataClient', () => {
 
     const response = await client.getQuote('US:AAPL');
 
-    expect(response.data.price).toBe(205);
+    expect(response.data?.price).toBe(205);
     expect(response.warnings.some((warning) => warning.code === 'FALLBACK_USED')).toBe(true);
   });
 
@@ -125,7 +225,7 @@ describe('MarketDataClient', () => {
       instrument: { instrumentId, market: 'US' as const, symbol: 'AAPL' },
       industry: 'Yahoo industry',
     }, 'yahoo'));
-    const client = new MarketDataClient(providers({
+    const client = new TestResearchMarketDataClient(providers({
       twelveData: finance({
         getProfile: async ({ instrumentId }) => result({
           instrument: { instrumentId, market: 'US', symbol: 'AAPL' },
@@ -142,7 +242,7 @@ describe('MarketDataClient', () => {
   });
 
   it('falls back from empty Yahoo data to Nasdaq for US quote and history', async () => {
-    const client = new MarketDataClient(providers({
+    const client = new TestResearchMarketDataClient(providers({
       yahoo: finance({
         getQuote: async () => result(quote('US:AAPL', Number.NaN), 'yahoo'),
         getHistory: async () => result([], 'yahoo'),
@@ -161,25 +261,25 @@ describe('MarketDataClient', () => {
       interval: '1d',
     });
 
-    expect(quoteResult.data.price).toBe(201);
+    expect(quoteResult.data?.price).toBe(201);
     expect(historyResult.data).toHaveLength(30);
     expect(quoteResult.warnings.some((warning) => warning.code === 'FALLBACK_USED')).toBe(true);
   });
 
   it('falls back from Yahoo to Tencent for HK quote', async () => {
-    const client = new MarketDataClient(providers({
+    const client = new TestResearchMarketDataClient(providers({
       yahoo: finance({ getQuote: async () => result(quote('HK:0700', Number.NaN), 'yahoo') }),
       tencentHk: finance({ getQuote: async () => result(quote('HK:0700', 550), 'tencent-finance') }),
     }));
 
     const response = await client.getQuote('HK:0700');
-    expect(response.data.price).toBe(550);
+    expect(response.data?.price).toBe(550);
     expect(response.warnings.some((warning) => warning.code === 'FALLBACK_USED')).toBe(true);
   });
 
   it('resolves a source-specific HK symbol before invoking a connector', async () => {
     let providerSymbol: string | undefined;
-    const client = new MarketDataClient(providers({
+    const client = new TestResearchMarketDataClient(providers({
       yahoo: finance({
         getQuote: async ({ instrumentId }, ctx) => {
           providerSymbol = ctx?.resolvedInstrument?.providerSymbol;
@@ -194,7 +294,7 @@ describe('MarketDataClient', () => {
   });
 
   it('falls back from Eastmoney to Tencent for CN history', async () => {
-    const client = new MarketDataClient(providers({
+    const client = new TestResearchMarketDataClient(providers({
       cnFinance: finance({ getHistory: async () => result([], 'eastmoney') }),
       tencentCn: finance({ getHistory: async () => result(bars(), 'tencent-cn-history') }),
     }));
@@ -215,7 +315,7 @@ describe('MarketDataClient', () => {
       instrument: { instrumentId: 'US:AAPL', market: 'US', symbol: 'AAPL' },
       industry: 'Electronic Computers',
     };
-    const client = new MarketDataClient(providers({
+    const client = new TestResearchMarketDataClient(providers({
       yahoo: finance({
         getProfile: async () => result({
           instrument: { instrumentId: 'US:AAPL', market: 'US', symbol: 'AAPL' },
@@ -234,7 +334,7 @@ describe('MarketDataClient', () => {
       instrument: { instrumentId: 'US:AAPL', market: 'US' as const, symbol: 'AAPL' },
       industry: 'SEC industry',
     }));
-    const client = new MarketDataClient(providers({ secProfile: { getProfile: sec } }));
+    const client = new TestResearchMarketDataClient(providers({ secProfile: { getProfile: sec } }));
 
     const response = await client.getProfile('HK:0700');
     expect(response.data?.industry).toBe('Software');
@@ -246,7 +346,7 @@ describe('MarketDataClient', () => {
       instrument: { instrumentId: 'HK:0700', market: 'HK' as const, symbol: '0700' },
       industry: 'Software Services',
     }, 'eastmoney-hk-profile'));
-    const client = new MarketDataClient(providers({
+    const client = new TestResearchMarketDataClient(providers({
       yahoo: finance({
         getProfile: async () => result({
           instrument: { instrumentId: 'HK:0700', market: 'HK', symbol: '0700' },
@@ -262,13 +362,13 @@ describe('MarketDataClient', () => {
   });
 
   it.each(['401', '403', '429', '500'])('continues fallback after provider error %s', async (status) => {
-    const client = new MarketDataClient(providers({
+    const client = new TestResearchMarketDataClient(providers({
       yahoo: finance({ getQuote: async () => { throw new Error(`HTTP ${status}`); } }),
       nasdaq: finance({ getQuote: async () => result(quote('US:AAPL', 202), 'nasdaq') }),
     }));
 
     const response = await client.getQuote('US:AAPL');
-    expect(response.data.price).toBe(202);
+    expect(response.data?.price).toBe(202);
     expect(response.warnings.length).toBeGreaterThan(0);
   });
 
@@ -283,7 +383,7 @@ describe('MarketDataClient', () => {
       yahooSymbol: 'AAPL',
     }]);
     const third = vi.fn(async () => []);
-    const client = new MarketDataClient(providers({
+    const client = new TestResearchMarketDataClient(providers({
       instrumentSearch: [
         { search: first },
         { search: second },
@@ -293,10 +393,12 @@ describe('MarketDataClient', () => {
 
     const response = await client.searchInstruments(' AAPL ');
 
-    expect(response[0]?.symbol).toBe('AAPL');
-    expect(first).toHaveBeenCalledWith('AAPL', undefined);
-    expect(second).toHaveBeenCalledWith('AAPL', undefined);
-    expect(third).toHaveBeenCalledWith('AAPL', undefined);
+    expect(response.data?.[0]?.symbol).toBe('AAPL');
+    if (response.status !== 'ok' && response.status !== 'partial') throw new Error('expected search results');
+    expect(response.trace.mergedSources).toEqual(['tencent-search']);
+    expect(first).toHaveBeenCalledWith('AAPL', expect.any(AbortSignal));
+    expect(second).toHaveBeenCalledWith('AAPL', expect.any(AbortSignal));
+    expect(third).toHaveBeenCalledWith('AAPL', expect.any(AbortSignal));
   });
 
 });

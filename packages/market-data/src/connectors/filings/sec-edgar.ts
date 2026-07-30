@@ -5,7 +5,7 @@ import type { ResearchWarning } from '../../contracts/warning';
 import type {
   FilingDocument,
   FilingGetInput,
-  FilingPort,
+  ProviderFilingPort as FilingPort,
   FilingSearchInput,
   FilingSummary,
 } from '../../ports/filings';
@@ -75,12 +75,15 @@ export function createSecEdgarFilingsConnector(options: SecEdgarOptions): Filing
           `SEC EDGAR only handles US issuers; got ${parsed.market}`,
         );
       }
+      const providerSymbol = ctx.resolvedInstrument?.instrumentId === parsed.raw
+        ? ctx.resolvedInstrument.providerSymbol
+        : parsed.symbol;
 
       const fetchLike = resolveFetch(ctx, options);
 
       let cik: { cik: string; name: string } | null;
       try {
-        cik = await cikLookup.resolve(parsed.symbol, ctx);
+        cik = await cikLookup.resolve(providerSymbol, ctx);
       } catch (err) {
         const message = (err as Error)?.message ?? String(err);
         return failure(retrievedAt, 'SOURCE_UNAVAILABLE', `CIK lookup failed: ${message}`, message);

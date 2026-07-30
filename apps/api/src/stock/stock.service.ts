@@ -176,13 +176,9 @@ export class StockService {
       };
     }
 
-    // Quote.changePct is unit-inconsistent across connectors (Yahoo returns a
-    // percent, CN a decimal fraction — see ports/finance.ts + cn.ts). Derive
-    // it ourselves from change + previous close so the web header always gets
-    // a percent. previousClose falls back to (price − change).
     const change = q.change ?? 0;
     const prevClose = q.previousClose ?? q.price - change;
-    const changePct = prevClose ? (change / prevClose) * 100 : 0;
+    const changePct = q.changePct ?? (prevClose ? (change / prevClose) * 100 : 0);
     const quote: QuoteDto = {
       degraded: false,
       price: q.price,
@@ -200,15 +196,7 @@ export class StockService {
       asOf: q.timestamp,
     };
 
-    // Quote.marketCap units differ by source (see ports/finance.ts): CN
-    // sources report 亿元, Yahoo reports raw currency units. The web
-    // formatter assumes raw units, so normalize CN back to raw (× 1e8).
-    const marketCap =
-      typeof q.marketCap === 'number'
-        ? market === 'CN'
-          ? q.marketCap * 1e8
-          : q.marketCap
-        : undefined;
+    const marketCap = typeof q.marketCap === 'number' ? q.marketCap : undefined;
     const profile: ProfileDto =
       marketCap !== undefined
         ? { degraded: false, marketCap }

@@ -8,7 +8,7 @@
 import { RESEARCH_SCHEMA_VERSION, type ResearchResult } from '../../contracts/result';
 import type { ResearchWarning } from '../../contracts/warning';
 import type {
-  FinancePort,
+  ProviderFinancePort as FinancePort,
   HistoryInput,
   PriceBar,
   Quote,
@@ -78,9 +78,12 @@ export function createSinaUsFinanceConnector(
       const retrievedAt = new Date().toISOString();
       const parsed = parseUsInstrument(input.instrumentId);
       if (!parsed.ok) return quoteFailure(retrievedAt, parsed.code, parsed.message);
+      const providerSymbol = ctx.resolvedInstrument?.instrumentId === parsed.instrumentId
+        ? ctx.resolvedInstrument.providerSymbol
+        : parsed.symbol;
 
       try {
-        const bars = await load(parsed.symbol, ctx);
+        const bars = await load(providerSymbol, ctx);
         const latest = bars.at(-1);
         if (!latest) {
           return quoteFailure(
@@ -104,7 +107,7 @@ export function createSinaUsFinanceConnector(
               market: 'US',
               symbol: parsed.symbol,
               currency: 'USD',
-              providerSymbols: { sina: parsed.symbol },
+              providerSymbols: { sina: providerSymbol },
             },
             price: latest.close,
             ...(change !== undefined ? { change } : {}),
@@ -118,7 +121,7 @@ export function createSinaUsFinanceConnector(
             marketStatus: 'UNKNOWN',
             timestamp: asOf,
           },
-          citations: [citation(parsed.symbol, retrievedAt, 'quote')],
+          citations: [citation(providerSymbol, retrievedAt, 'quote')],
           freshness: [{ provider: PROVIDER, asOf, retrievedAt, stale }],
           warnings: [
             {
@@ -153,6 +156,9 @@ export function createSinaUsFinanceConnector(
       const retrievedAt = new Date().toISOString();
       const parsed = parseUsInstrument(input.instrumentId);
       if (!parsed.ok) return historyFailure(retrievedAt, parsed.code, parsed.message);
+      const providerSymbol = ctx.resolvedInstrument?.instrumentId === parsed.instrumentId
+        ? ctx.resolvedInstrument.providerSymbol
+        : parsed.symbol;
       if (input.interval && input.interval !== '1d') {
         return historyFailure(
           retrievedAt,
@@ -169,7 +175,7 @@ export function createSinaUsFinanceConnector(
       }
 
       try {
-        const allBars = await load(parsed.symbol, ctx);
+        const allBars = await load(providerSymbol, ctx);
         const bars = allBars.filter(
           (bar) => bar.timestamp >= input.from && bar.timestamp <= input.to,
         );
@@ -185,7 +191,7 @@ export function createSinaUsFinanceConnector(
         return {
           schemaVersion: RESEARCH_SCHEMA_VERSION,
           data: bars,
-          citations: [citation(parsed.symbol, retrievedAt, 'historical prices')],
+          citations: [citation(providerSymbol, retrievedAt, 'historical prices')],
           freshness: [{ provider: PROVIDER, asOf, retrievedAt, stale }],
           warnings: stale
             ? [{

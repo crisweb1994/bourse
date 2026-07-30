@@ -12,6 +12,8 @@ export function decideCache(input: {
   capability: CapabilitySpec;
   credentialScope: CacheScope;
   resultStatus?: 'ok' | 'partial' | 'empty' | 'failed';
+  allowStaleIfError?: boolean;
+  maxStaleMs?: number;
 }): CacheDecision {
   const redistribution: RedistributionPolicy = input.capability.redistribution;
   if (redistribution === 'no-store' || input.resultStatus === 'partial' || input.resultStatus === 'failed') {
@@ -20,11 +22,12 @@ export function decideCache(input: {
   const scope = redistribution === 'public-cache-allowed' && input.credentialScope === 'public'
     ? 'public'
     : input.credentialScope;
+  const allowStaleIfError = input.allowStaleIfError ?? input.capability.allowStaleIfError ?? false;
   return {
     readScope: scope,
     writeScope: scope,
     ttlMs: input.capability.ttlMs,
-    staleTtlMs: input.capability.allowStaleIfError ? input.capability.maxStaleMs ?? 0 : 0,
+    staleTtlMs: allowStaleIfError ? input.maxStaleMs ?? input.capability.maxStaleMs ?? 0 : 0,
     reason: redistribution,
   };
 }

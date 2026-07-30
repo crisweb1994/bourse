@@ -8,7 +8,7 @@ export class InMemoryRateLimiter {
   private readonly windows = new Map<string, { startedAt: number; count: number }>();
   private readonly inFlight = new Map<string, number>();
 
-  tryAcquire(sourceId: string, limits?: SourceRateLimit): boolean {
+  tryAcquire(sourceId: string, limits?: SourceRateLimit, cost = 1): boolean {
     const requestsPerSecond = limits?.requestsPerSecond;
     const concurrent = limits?.concurrent;
     const currentInFlight = this.inFlight.get(sourceId) ?? 0;
@@ -18,10 +18,10 @@ export class InMemoryRateLimiter {
     if (requestsPerSecond && requestsPerSecond > 0) {
       const current = this.windows.get(sourceId);
       if (!current || now - current.startedAt >= 1_000) {
-        this.windows.set(sourceId, { startedAt: now, count: 1 });
+        this.windows.set(sourceId, { startedAt: now, count: cost });
       } else {
-        if (current.count >= requestsPerSecond) return false;
-        current.count += 1;
+        if (current.count + cost > requestsPerSecond) return false;
+        current.count += cost;
       }
     }
 

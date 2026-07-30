@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { ResearchResult } from '../contracts/result';
+import type { SourceResult } from '../contracts/source-result';
 import type { ConnectorRunContext } from '../connectors/types';
 
 export const MacroMarketSchema = z.enum(['US', 'CN', 'HK']);
@@ -43,9 +44,16 @@ export interface MacroInput {
   lookback?: number;
 }
 
-export interface MacroPort {
+export interface ProviderMacroPort {
   fetchMacro(
     input: MacroInput,
     ctx?: ConnectorRunContext,
   ): Promise<ResearchResult<MacroSnapshot>>;
+}
+
+export interface MacroPort {
+  fetchMacro(
+    input: MacroInput,
+    ctx?: ConnectorRunContext,
+  ): Promise<SourceResult<MacroSnapshot>>;
 }

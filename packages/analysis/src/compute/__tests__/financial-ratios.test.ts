@@ -266,7 +266,7 @@ describe('computeFinancialRatios · US — TTM-anchored ratios', () => {
 });
 
 describe('computeFinancialRatios · CN — unit normalization (the bug data.md flagged)', () => {
-  it('normalizes 万元 financials and 亿元 marketCap together', () => {
+  it('normalizes 万元 financials against canonical marketCap', () => {
     // 茅台-shaped fixture: rev=1741亿元(=174.1 万 万元), NI=857亿元
     const ttm = cnPeriod('TTM-as-of-Q1-2025', 'TTM', {
       revenueWan: 17_414_000, // 万元 → 174,140,000,000 元
@@ -275,14 +275,13 @@ describe('computeFinancialRatios · CN — unit normalization (the bug data.md f
       totalLiabilitiesWan: 5_000_000,
       totalEquityWan: 23_000_000,
     });
-    // CN quote: tencent reports marketCap in 亿元.
-    // 茅台 ~ 21,000 亿元 → 2,100,000,000,000 元
+    // Quote values are already normalized to base currency units by market-data.
     const cnQuote: Quote = {
       instrument: { instrumentId: 'CN:600519', market: 'CN', symbol: '600519' },
       price: 1685,
       currency: 'CNY',
       timestamp: '2025-05-25T15:00:00.000Z',
-      marketCap: 21_000, // 亿元
+      marketCap: 2_100_000_000_000,
     };
 
     const { ratios, warnings } = computeFinancialRatios({

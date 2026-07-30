@@ -1,5 +1,5 @@
 import { RESEARCH_SCHEMA_VERSION, type ResearchResult } from '../../contracts/result';
-import type { FinancePort, HistoryInput, PriceBar, Quote, QuoteInput } from '../../ports/finance';
+import type { ProviderFinancePort as FinancePort, HistoryInput, PriceBar, Quote, QuoteInput } from '../../ports/finance';
 import { parseInstrumentId } from '../../util/instrument-id';
 import { failure as httpFailure, resolveFetch, withTimeout } from '../http';
 import type { ConnectorRunContext, FetchLike } from '../types';
@@ -31,10 +31,12 @@ export function createTencentCnFinanceConnector(
         return historyFailure(retrievedAt, 'INVALID_INSTRUMENT', `Expected CN instrumentId, got ${input.instrumentId}.`);
       }
       const prefix = exchangePrefix(parsed.symbol);
-      if (!prefix) {
+      if (!prefix && !ctx.resolvedInstrument) {
         return historyFailure(retrievedAt, 'INVALID_INSTRUMENT', `Cannot infer CN exchange for ${parsed.symbol}.`);
       }
-      const providerSymbol = `${prefix}${parsed.symbol}`;
+      const providerSymbol = ctx.resolvedInstrument?.instrumentId === parsed.raw
+        ? ctx.resolvedInstrument.providerSymbol
+        : `${prefix}${parsed.symbol}`;
       const url = `${API_URL}?param=${providerSymbol},day,,,500,qfq`;
       const fetchLike = resolveFetch(ctx, options);
       try {

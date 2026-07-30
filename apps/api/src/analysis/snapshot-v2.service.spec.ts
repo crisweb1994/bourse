@@ -1,15 +1,15 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type {
-  FilingPort,
-  CompanyProfilePort,
-  FinancePort,
-  FinancialsPort,
-  MacroPort,
+  ProviderFilingPort as FilingPort,
+  ProviderCompanyProfilePort as CompanyProfilePort,
+  ProviderFinancePort as FinancePort,
+  ProviderFinancialsPort as FinancialsPort,
+  ProviderMacroPort as MacroPort,
   Quote,
   ResearchResult,
 } from '@bourse/analysis';
-import { createResearchMarketDataClient } from '@bourse/market-data';
+import { createBuiltInSources, createResearchMarketDataClient } from '@bourse/market-data';
 import { SnapshotV2Service } from './snapshot-v2.service';
 
 // ============================================================================
@@ -156,7 +156,7 @@ function buildService(overrides: {
   usFilings?: FilingPort;
 } = {}): SnapshotV2Service {
   // Direct constructor — avoids @nestjs/testing dep
-  return new SnapshotV2Service(createResearchMarketDataClient({
+  return new SnapshotV2Service(createResearchMarketDataClient(createBuiltInSources({
     yahoo: overrides.yahoo ?? mockYahoo(),
     nasdaq: overrides.nasdaq ?? mockNasdaq(),
     sinaUs: overrides.sina ?? mockSina(),
@@ -170,7 +170,7 @@ function buildService(overrides: {
     cnFilings: mockFilings(),
     hkFilings: mockFilings(),
     macro: mockMacro(),
-  }));
+  })));
 }
 
 // ============================================================================

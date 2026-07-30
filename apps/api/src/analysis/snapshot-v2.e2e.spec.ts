@@ -18,19 +18,19 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type {
-  FilingPort,
-  CompanyProfilePort,
+  ProviderFilingPort as FilingPort,
+  ProviderCompanyProfilePort as CompanyProfilePort,
   FilingSummary,
-  FinancePort,
+  ProviderFinancePort as FinancePort,
   FinancialsBundle,
-  FinancialsPort,
-  MacroPort,
+  ProviderFinancialsPort as FinancialsPort,
+  ProviderMacroPort as MacroPort,
   PriceBar,
   Quote,
   ResearchResult,
 } from '@bourse/analysis';
 import { EvidencePackV2 as EvidencePackV2Schema } from '@bourse/analysis';
-import { createResearchMarketDataClient } from '@bourse/market-data';
+import { createBuiltInSources, createResearchMarketDataClient } from '@bourse/market-data';
 import { SnapshotV2Service } from './snapshot-v2.service';
 
 // Note: This test uses the production SnapshotV2Service which calls
@@ -82,7 +82,7 @@ function maotaiQuote(): Quote {
     price: 1685,
     currency: 'CNY',
     timestamp: '2025-05-25T00:00:00.000Z',
-    marketCap: 21_000, // 亿元
+    marketCap: 2_100_000_000_000,
   };
 }
 
@@ -319,7 +319,7 @@ function buildService(
     macro?: MacroPort;
   } = {},
 ): SnapshotV2Service {
-  return new SnapshotV2Service(createResearchMarketDataClient({
+  return new SnapshotV2Service(createResearchMarketDataClient(createBuiltInSources({
     yahoo: overrides.yahoo ?? mockYahoo(),
     nasdaq: overrides.nasdaq ?? mockYahoo(),
     sinaUs: mockYahoo(),
@@ -333,7 +333,7 @@ function buildService(
     cnFilings: overrides.cnFilings ?? mockFilings([]),
     hkFilings: overrides.hkFilings ?? mockFilings([]),
     macro: overrides.macro ?? mockMacro(),
-  }));
+  })));
 }
 
 // ============================================================================

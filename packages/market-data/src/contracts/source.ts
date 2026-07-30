@@ -7,6 +7,8 @@ export type Capability =
   | 'profile'
   | 'financials'
   | 'filings'
+  | 'filing-document'
+  | 'earnings-consensus'
   | 'macro'
   | 'instrument-search'
   | 'market-calendar';
@@ -17,6 +19,7 @@ export type CacheScope = 'public' | `credential:${string}`;
 export type SourceAuthority =
   | 'regulator'
   | 'exchange'
+  | 'official-derived'
   | 'licensed'
   | 'aggregated'
   | 'public-api'
@@ -49,8 +52,8 @@ export interface SourceManifest {
   /** Default only. Capability-level redistribution is authoritative. */
   allowRedistribution: boolean;
   capabilities: readonly CapabilitySpec[];
-  rateLimit?: {
+  rateLimit: {
     requestsPerSecond?: number;
-    concurrent?: number;
+    concurrent: number;
   };
 }

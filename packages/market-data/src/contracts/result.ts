@@ -44,8 +44,8 @@ export interface ResearchResult<T> {
 }
 
 /**
- * The v2 public result contract. The legacy ResearchResult remains exported
- * while old connectors are adapted into SourceResult by the router.
+ * The v2 public result contract. Provider envelopes are converted to
+ * SourceResult at the source-plugin boundary before they reach the router.
  */
 export type ResearchResultV2<T> =
   | {
@@ -55,7 +55,7 @@ export type ResearchResultV2<T> =
       citations: ResearchCitation[];
       freshness: DataFreshness[];
       warnings: ResearchWarning[];
-      trace: { selectedSource?: string; attempts: SourceAttempt[] };
+      trace: { selectedSource?: string; mergedSources?: string[]; attempts: SourceAttempt[] };
     }
   | {
       schemaVersion: '2.0';
@@ -64,7 +64,7 @@ export type ResearchResultV2<T> =
       citations: ResearchCitation[];
       freshness: DataFreshness[];
       warnings: ResearchWarning[];
-      trace: { selectedSource?: string; attempts: SourceAttempt[] };
+      trace: { selectedSource?: string; mergedSources?: string[]; attempts: SourceAttempt[] };
     }
   | {
       schemaVersion: '2.0';

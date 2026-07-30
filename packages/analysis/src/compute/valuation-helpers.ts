@@ -114,7 +114,7 @@ export function computeValuation(
   };
 
   // Market cap is the bedrock; without it almost nothing computes.
-  const marketCap = normalizeQuoteMarketCap(input.quote, input.market, warnings);
+  const marketCap = normalizeQuoteMarketCap(input.quote);
 
   // ---- Enterprise value -----------------------------------------------------
   // Resolve the same anchor period (TTM ?? latest FY) and read normalized

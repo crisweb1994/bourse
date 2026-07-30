@@ -14,7 +14,11 @@ export interface SourceHealth {
 export class InMemorySourceHealth {
   private readonly records = new Map<string, SourceHealth>();
 
-  constructor(private readonly failureThreshold = 3, private readonly cooldownMs = 30_000) {}
+  constructor(
+    private readonly failureThreshold = 3,
+    private readonly cooldownMs = 30_000,
+    private readonly now: () => Date = () => new Date(),
+  ) {}
 
   get(sourceId: string): SourceHealth {
     const current = this.records.get(sourceId) ?? {
@@ -23,7 +27,7 @@ export class InMemorySourceHealth {
       recentSuccess: 0,
       recentFailure: 0,
     };
-    if (current.status === 'cooldown' && current.cooldownUntil && Date.parse(current.cooldownUntil) <= Date.now()) {
+    if (current.status === 'cooldown' && current.cooldownUntil && Date.parse(current.cooldownUntil) <= this.now().getTime()) {
       const next = { ...current, status: 'degraded' as const, recentFailure: 0, cooldownUntil: undefined };
       this.records.set(sourceId, next);
       return next;
@@ -32,7 +36,7 @@ export class InMemorySourceHealth {
   }
 
   recordSuccess(sourceId: string): void {
-    const now = new Date().toISOString();
+    const now = this.now().toISOString();
     const current = this.get(sourceId);
     this.records.set(sourceId, {
       ...current,
@@ -46,15 +50,28 @@ export class InMemorySourceHealth {
 
   recordFailure(sourceId: string, code: SourceFailureCode): void {
     const current = this.get(sourceId);
-    const failures = current.recentFailure + 1;
-    const cooldown = failures >= this.failureThreshold && code !== 'AUTH_REQUIRED' && code !== 'UNSUPPORTED_MARKET';
+    const transient = isTransientSourceFailure(code);
+    const failures = transient ? current.recentFailure + 1 : current.recentFailure;
+    const cooldown = transient && failures >= this.failureThreshold;
     this.records.set(sourceId, {
       ...current,
-      status: cooldown ? 'cooldown' : 'degraded',
+      status: cooldown ? 'cooldown' : transient ? 'degraded' : current.status,
       recentFailure: failures,
-      lastFailureAt: new Date().toISOString(),
+      lastFailureAt: this.now().toISOString(),
       lastFailureCode: code,
-      ...(cooldown ? { cooldownUntil: new Date(Date.now() + this.cooldownMs).toISOString() } : {}),
+      ...(cooldown ? { cooldownUntil: new Date(this.now().getTime() + this.cooldownMs).toISOString() } : {}),
     });
   }
+}
+
+export function isTransientSourceFailure(code: SourceFailureCode): boolean {
+  return [
+    'RATE_LIMITED',
+    'TIMEOUT',
+    'NETWORK_ERROR',
+    'SOURCE_UNAVAILABLE',
+    'INVALID_PAYLOAD',
+    'NORMALIZATION_FAILED',
+    'VALIDATION_FAILED',
+  ].includes(code);
 }

@@ -5,7 +5,7 @@
  * valuation-helpers.ts and red-flags.ts previously each re-implemented
  * (divergently). Consolidating here keeps one definition of:
  *
- * - `normalizeQuoteMarketCap` — CN '亿元' marketCap neutralization
+ * - `normalizeQuoteMarketCap` — nullable canonical marketCap access
  * - `pickAnchor` — TTM ?? latest-FY period selection
  * - `readLine` — warning-aware line-item → base-unit reader
  * - `computeEnterpriseValue` — pure marketCap + debt − cash
@@ -29,27 +29,15 @@ import type { ComputeWarning } from './types';
 import { normalize } from './units';
 
 // ----------------------------------------------------------------------------
-// Quote normalization — handles CN's "marketCap reported in 亿元" quirk
+// Quote normalization
 // ----------------------------------------------------------------------------
 
 /**
- * CN connectors (tencent / eastmoney) historically report marketCap in 亿元.
- * US/HK Yahoo reports in base currency unit. This is the single place to
- * neutralize that asymmetry — once fetcher contracts are fixed this branch
- * can collapse.
+ * Connectors normalize marketCap to instrument-currency base units. Compute
+ * code therefore remains provider- and market-agnostic.
  */
-export function normalizeQuoteMarketCap(
-  quote: Quote | null,
-  market: string,
-  warnings: ComputeWarning[],
-): number | null {
-  if (!quote || quote.marketCap === undefined) return null;
-  if (market.toUpperCase() === 'CN') {
-    const { value, warning } = normalize(quote.marketCap, '亿元', 'quote.marketCap');
-    if (warning) warnings.push(warning);
-    return value;
-  }
-  return quote.marketCap;
+export function normalizeQuoteMarketCap(quote: Quote | null): number | null {
+  return quote?.marketCap ?? null;
 }
 
 // ----------------------------------------------------------------------------

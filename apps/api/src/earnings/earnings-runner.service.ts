@@ -27,13 +27,9 @@ import {
   type MetricFact,
 } from '@bourse/analysis';
 import { Prisma, type EarningsEvent, type Filing, type Stock } from '@prisma/client';
-import type { FinancialsPort } from '@bourse/analysis';
+import type { ResearchMarketDataClient } from '@bourse/market-data';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  CN_FINANCIALS_PORT,
-  HK_FINANCIALS_PORT,
-  US_FINANCIALS_PORT,
-} from '../connectors/connectors.module';
+import { MARKET_DATA_CLIENT } from '../connectors/connectors.module';
 import { ProviderFactoryService } from '../analysis/provider-factory.service';
 import {
   type EarningsRunSource,
@@ -58,9 +54,7 @@ export class EarningsRunnerService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly providerFactory: ProviderFactoryService,
-    @Inject(US_FINANCIALS_PORT) private readonly usFinancials: FinancialsPort,
-    @Inject(CN_FINANCIALS_PORT) private readonly cnFinancials: FinancialsPort,
-    @Inject(HK_FINANCIALS_PORT) private readonly hkFinancials: FinancialsPort,
+    @Inject(MARKET_DATA_CLIENT) private readonly marketData: ResearchMarketDataClient,
     private readonly consensus: EarningsConsensusService,
     private readonly notices: EarningsNoticeService,
   ) {}
@@ -366,17 +360,12 @@ export class EarningsRunnerService implements OnModuleInit {
     source: StructuredFallbackSource,
   ): Promise<void> {
     await this.updateStage(runId, 'RECONCILE', { provider: source.provider, model: 'structured-only' });
-    const port = stock.market === 'US'
-      ? this.usFinancials
-      : stock.market === 'CN'
-        ? this.cnFinancials
-        : stock.market === 'HK'
-          ? this.hkFinancials
-          : null;
-    if (!port) throw new RunError(source.reason, true, 'No structured financials source is available');
+    if (stock.market !== 'US' && stock.market !== 'CN' && stock.market !== 'HK') {
+      throw new RunError(source.reason, true, 'No structured financials source is available');
+    }
     let projection: ReturnType<typeof latestFinancialsToStructuredProjection>;
     try {
-      const result = await port.fetchFinancials({
+      const result = await this.marketData.getFinancials({
         instrumentId: `${stock.market}:${stock.symbol}`,
         deriveTTM: false,
       });
@@ -555,16 +544,9 @@ export class EarningsRunnerService implements OnModuleInit {
   }
 
   private async reconcile(stock: Stock, facts: MetricFact[]): Promise<MetricFact[]> {
-    const port = stock.market === 'US'
-      ? this.usFinancials
-      : stock.market === 'CN'
-        ? this.cnFinancials
-        : stock.market === 'HK'
-          ? this.hkFinancials
-          : null;
-    if (!port) return facts;
+    if (stock.market !== 'US' && stock.market !== 'CN' && stock.market !== 'HK') return facts;
     try {
-      const result = await port.fetchFinancials({
+      const result = await this.marketData.getFinancials({
         instrumentId: `${stock.market}:${stock.symbol}`,
         deriveTTM: false,
       });

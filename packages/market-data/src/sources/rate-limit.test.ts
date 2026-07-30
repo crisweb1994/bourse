@@ -19,4 +19,13 @@ describe('InMemoryRateLimiter', () => {
     limiter.release('vendor');
     expect(limiter.tryAcquire('vendor', { requestsPerSecond: 1, concurrent: 2 })).toBe(false);
   });
+
+  it('charges weighted batch requests against the rate window', () => {
+    const limiter = new InMemoryRateLimiter();
+
+    expect(limiter.tryAcquire('vendor', { requestsPerSecond: 5 }, 4)).toBe(true);
+    limiter.release('vendor');
+    expect(limiter.tryAcquire('vendor', { requestsPerSecond: 5 }, 2)).toBe(false);
+    expect(limiter.tryAcquire('vendor', { requestsPerSecond: 5 }, 1)).toBe(true);
+  });
 });

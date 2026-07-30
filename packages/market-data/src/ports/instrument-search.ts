@@ -1,14 +1,24 @@
+import { z } from 'zod';
+import type { SourceResult } from '../contracts/source-result';
+
 export type InstrumentSearchMarket = 'US' | 'HK' | 'CN' | 'JP' | 'UK' | string;
 
-export interface InstrumentSearchResult {
-  symbol: string;
-  name: string;
-  market: InstrumentSearchMarket;
-  exchange: string;
-  currency: string;
-  yahooSymbol: string;
+export const InstrumentSearchResultSchema = z.object({
+  symbol: z.string().min(1),
+  name: z.string(),
+  market: z.string().min(1),
+  exchange: z.string(),
+  currency: z.string(),
+  yahooSymbol: z.string().min(1),
+});
+export type InstrumentSearchResult = z.infer<typeof InstrumentSearchResultSchema>;
+export const InstrumentSearchResultsSchema = z.array(InstrumentSearchResultSchema);
+
+export interface ProviderInstrumentSearchPort {
+  search(query: string, signal?: AbortSignal): Promise<InstrumentSearchResult[]>;
 }
 
+/** Canonical source-plugin port consumed by the capability router. */
 export interface InstrumentSearchPort {
-  search(query: string, signal?: AbortSignal): Promise<InstrumentSearchResult[]>;
+  search(query: string, signal?: AbortSignal): Promise<SourceResult<InstrumentSearchResult[]>>;
 }

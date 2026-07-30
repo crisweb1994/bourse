@@ -1,7 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { FilingDocument, FilingPort } from '@bourse/analysis';
+import type { FilingDocument } from '@bourse/analysis';
+import type { ResearchMarketDataClient } from '@bourse/market-data';
 import type { Stock } from '@prisma/client';
-import { CN_FILING_PORT } from '../connectors/connectors.module';
+import { MARKET_DATA_CLIENT } from '../connectors/connectors.module';
 import { FilingStoreError, FilingStoreService } from '../filings/filing-store.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -31,20 +32,20 @@ export class InvestorRelationsSourceService {
 
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(CN_FILING_PORT) private readonly cnFilings: FilingPort,
+    @Inject(MARKET_DATA_CLIENT) private readonly marketData: ResearchMarketDataClient,
     private readonly filingStore: FilingStoreService,
   ) {}
 
   async discoverAndIngest(stock: Stock): Promise<PreparedInvestorRelationsSource> {
-    if (stock.market !== 'CN' || !this.cnFilings.getFiling) {
+    if (stock.market !== 'CN') {
       throw new InvestorRelationsSourceError('UNSUPPORTED_MARKET', false);
     }
-    const listed = await this.cnFilings.searchFilings({
+    const listed = await this.marketData.listFilings({
       instrumentId: `CN:${stock.symbol}`,
       forms: ['investor_relations'],
       limit: 20,
     });
-    if (listed.data.length === 0) {
+    if (!listed.data?.length) {
       throw new InvestorRelationsSourceError('NO_ELIGIBLE_IR_RECORD', true, listed.warnings[0]?.message);
     }
     const failures: string[] = [];
@@ -55,8 +56,8 @@ export class InvestorRelationsSourceService {
       });
       if (linked?.investorRelationsEventLinks.length) continue;
       try {
-        const result = await this.cnFilings.getFiling({ ...summary });
-        if (!result.data.text || !result.data.rawContent || !result.data.contentHash) {
+        const result = await this.marketData.getFilingDocument({ ...summary });
+        if (!result.data?.text || !result.data.rawContent || !result.data.contentHash) {
           failures.push(result.warnings[0]?.message ?? `${summary.sourceDocumentId}: unreadable body`);
           continue;
         }

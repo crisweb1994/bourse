@@ -159,7 +159,7 @@ function cnSnapshot(): StockSnapshot {
         price: 1685,
         currency: 'CNY',
         timestamp: '2025-05-25T00:00:00.000Z',
-        marketCap: 21_000, // 亿元
+        marketCap: 2_100_000_000_000,
       },
       history: null,
       profile: null,

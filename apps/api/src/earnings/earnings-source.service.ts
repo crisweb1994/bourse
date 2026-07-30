@@ -1,16 +1,12 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   type FilingDocument,
-  type FilingPort,
   type FilingSummary,
 } from '@bourse/analysis';
+import type { ResearchMarketDataClient } from '@bourse/market-data';
 import { type Stock } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  CN_FILING_PORT,
-  HK_FILING_PORT,
-  US_FILING_PORT,
-} from '../connectors/connectors.module';
+import { MARKET_DATA_CLIENT } from '../connectors/connectors.module';
 import { FilingStoreError, FilingStoreService } from '../filings/filing-store.service';
 export { buildParserDerivationKey } from '../filings/filing-store.service';
 
@@ -56,30 +52,23 @@ export class EarningsSourceService {
 
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(US_FILING_PORT) private readonly usFilings: FilingPort,
-    @Inject(CN_FILING_PORT) private readonly cnFilings: FilingPort,
-    @Inject(HK_FILING_PORT) private readonly hkFilings: FilingPort,
+    @Inject(MARKET_DATA_CLIENT) private readonly marketData: ResearchMarketDataClient,
     private readonly filingStore: FilingStoreService,
   ) {}
 
   async discoverAndIngest(stock: Stock): Promise<PreparedEarningsSource> {
     const instrumentId = `${stock.market}:${stock.symbol}`;
-    const port = stock.market === 'US'
-      ? this.usFilings
-      : stock.market === 'CN'
-        ? this.cnFilings
-        : stock.market === 'HK'
-          ? this.hkFilings
-          : null;
-    if (!port?.getFiling) throw new EarningsSourceError('UNSUPPORTED_MARKET', false);
+    if (stock.market !== 'US' && stock.market !== 'CN' && stock.market !== 'HK') {
+      throw new EarningsSourceError('UNSUPPORTED_MARKET', false);
+    }
 
     const forms = stock.market === 'US'
       ? ['8-K', '10-Q', '10-K']
       : stock.market === 'HK'
         ? ['profit_warning', 'preliminary', 'quarterly', 'interim', 'annual']
         : ['preview', 'preliminary', 'quarterly', 'semiannual', 'annual'];
-    const listed = await port.searchFilings({ instrumentId, forms, limit: stock.market === 'HK' ? 20 : stock.market === 'US' ? 12 : 10 });
-    if (listed.data.length === 0) {
+    const listed = await this.marketData.listFilings({ instrumentId, forms, limit: stock.market === 'HK' ? 20 : stock.market === 'US' ? 12 : 10 });
+    if (!listed.data?.length) {
       throw new EarningsSourceError('NO_ELIGIBLE_FILING', true, listed.warnings[0]?.message);
     }
 
@@ -101,12 +90,16 @@ export class EarningsSourceService {
       fallbackSource ??= fallbackFromSummary(summary);
       let result;
       try {
-        result = await port.getFiling({ ...summary });
+        result = await this.marketData.getFilingDocument({ ...summary });
       } catch (error) {
         failures.push(`${summary.id}: ${error instanceof Error ? error.message : String(error)}`);
         continue;
       }
       const document = result.data;
+      if (!document) {
+        failures.push(result.warnings[0]?.message ?? `${summary.id}: no document`);
+        continue;
+      }
       fallbackSource = {
         kind: 'structuredFallback',
         provider: document.provider || summary.provider,
@@ -134,7 +127,7 @@ export class EarningsSourceService {
       try {
         const stored = await this.filingStore.persist(stock, summary, document);
         if (stock.market === 'HK' && summary.sourceGroupId) {
-          await this.persistGroupVariants(stock, port, listed.data, summary.sourceGroupId, summary.sourceDocumentId);
+          await this.persistGroupVariants(stock, listed.data, summary.sourceGroupId, summary.sourceDocumentId);
         }
         this.logger.log(`prepared ${stored.filing.provider}:${stored.filing.sourceDocumentId} for ${stock.market}:${stock.symbol}`);
         return {
@@ -172,12 +165,10 @@ export class EarningsSourceService {
 
   private async persistGroupVariants(
     stock: Stock,
-    port: FilingPort,
     listed: FilingSummary[],
     sourceGroupId: string,
     primarySourceDocumentId: string,
   ): Promise<void> {
-    if (!port.getFiling) return;
     const variants = listed.filter((candidate) =>
       candidate.sourceGroupId === sourceGroupId && candidate.sourceDocumentId !== primarySourceDocumentId,
     );
@@ -187,8 +178,8 @@ export class EarningsSourceService {
         select: { id: true },
       });
       if (existing) return;
-      const result = await port.getFiling!({ ...variant });
-      if (!result.data.text || !result.data.rawContent || !result.data.contentHash) return;
+      const result = await this.marketData.getFilingDocument({ ...variant });
+      if (!result.data?.text || !result.data.rawContent || !result.data.contentHash) return;
       await this.filingStore.persist(stock, variant, result.data);
     }));
   }

@@ -1,6 +1,6 @@
 import type {
-  InstrumentSearchPort,
   InstrumentSearchResult,
+  ProviderInstrumentSearchPort as InstrumentSearchPort,
 } from '../../ports/instrument-search';
 
 const SEARCH_TIMEOUT_MS = 5_000;

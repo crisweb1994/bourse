@@ -3,6 +3,11 @@ import type { SourceResult } from '../contracts/source-result';
 import type { MarketCode } from '../contracts/instrument';
 import type { MarketCalendarPort } from '../ports/market-calendar';
 import type { SourceRequestContext } from '../ports/request-context';
+import {
+  STATIC_MARKET_HOLIDAYS_2026,
+  holidaySet,
+  type StaticMarketHolidays,
+} from './market-holidays';
 
 const RULES: Record<MarketCode, { timezone: string; open: number; close: number; pre?: number; after?: number }> = {
   US: { timezone: 'America/New_York', open: 9.5, close: 16, pre: 4, after: 20 },
@@ -12,8 +17,15 @@ const RULES: Record<MarketCode, { timezone: string; open: number; close: number;
   UK: { timezone: 'Europe/London', open: 8, close: 16.5 },
 };
 
-/** Weekend-aware fallback. Exchange holiday calendars can replace this port later. */
-export function createRuleBasedMarketCalendarPort(): MarketCalendarPort {
+export interface RuleBasedMarketCalendarOptions {
+  additionalHolidays?: StaticMarketHolidays;
+}
+
+/** Weekend and static-holiday fallback. An official calendar plugin can replace it. */
+export function createRuleBasedMarketCalendarPort(
+  options: RuleBasedMarketCalendarOptions = {},
+): MarketCalendarPort {
+  const holidays = holidaySet(STATIC_MARKET_HOLIDAYS_2026, options.additionalHolidays);
   return {
     async getMarketSession(input, ctx): Promise<SourceResult<MarketSession>> {
       const date = input.at ? new Date(input.at) : ctx.now();
@@ -23,14 +35,17 @@ export function createRuleBasedMarketCalendarPort(): MarketCalendarPort {
       const rule = RULES[input.market];
       const local = formatInTimezone(date, rule.timezone);
       const isWeekend = local.weekday === 'Sat' || local.weekday === 'Sun';
-      const state = isWeekend ? 'HOLIDAY' : stateFor(local.hour + local.minute / 60, rule);
+      const isStaticHoliday = holidays.get(input.market)?.has(local.day) ?? false;
+      const isHoliday = isWeekend || isStaticHoliday;
+      const state = isHoliday ? 'HOLIDAY' : stateFor(local.hour + local.minute / 60, rule);
+      const closure = isWeekend ? 'weekend' : isStaticHoliday ? 'exchange holiday' : undefined;
       return {
         status: 'ok',
         data: { market: input.market, asOf: date.toISOString(), state, timezone: rule.timezone, tradingDay: local.day },
         sourceId: 'market-calendar-rules',
         citations: [],
         freshness: [{ provider: 'market-calendar-rules', asOf: date.toISOString(), retrievedAt: ctx.now().toISOString(), stale: false }],
-        warnings: isWeekend ? [{ code: 'MARKET_CLOSED', message: `${input.market} is closed for the weekend.`, provider: 'market-calendar-rules' }] : [],
+        warnings: closure ? [{ code: 'MARKET_CLOSED', message: `${input.market} is closed for the ${closure}.`, provider: 'market-calendar-rules' }] : [],
       };
     },
   };
