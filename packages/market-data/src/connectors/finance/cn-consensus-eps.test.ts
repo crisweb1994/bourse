@@ -1,5 +1,5 @@
 /**
- * v0.8 C1 — CN finance connector `fetchConsensusEps` unit tests.
+ * CN finance connector canonical `fetchEarningsConsensus` unit tests.
  *
  * Covers:
  *  - Eastmoney happy path: parsed forecasts + citation + freshness.
@@ -34,7 +34,7 @@ function rateLimitedFetch(): FetchLike {
   });
 }
 
-describe('cn finance connector — fetchConsensusEps', () => {
+describe('cn finance connector — fetchEarningsConsensus', () => {
   it('parses eastmoney RPT_RES_PROFITPREDICT happy path', async () => {
     const c = createCnFinanceConnector();
     // Hotfix 2026-05-25: Eastmoney removed RPT_RES_CONFORECASTPREDATA endpoint
@@ -49,19 +49,21 @@ describe('cn finance connector — fetchConsensusEps', () => {
         ],
       },
     };
-    const out = await c.fetchConsensusEps!(
+    const out = await c.fetchEarningsConsensus!(
       { instrumentId: 'CN:600519' },
       { fetchLike: eastmoneyConsensusFetch(payload) },
     );
     expect(out.warnings).toHaveLength(0);
     expect(out.data).not.toBeNull();
-    expect(out.data!.forecasts).toHaveLength(3);
-    expect(out.data!.forecasts[0]).toEqual({ year: 2025, value: 70.12 });
-    expect(out.data!.forecasts[2]).toEqual({ year: 2027, value: 85.4 });
-    // headline (nearest forward year) == first row after asc sort
-    expect(out.data!.avgEps).toBeCloseTo(70.12);
-    // analystCount is no longer exposed by the new endpoint — defaults to 0.
-    expect(out.data!.analystCount).toBe(0);
+    expect(out.data!.estimates).toHaveLength(3);
+    expect(out.data!.estimates[0]).toMatchObject({
+      metricCode: 'epsBasic',
+      periodEndOn: '2025-12-31',
+      value: '70.12',
+      unit: 'per_share',
+      currency: 'CNY',
+    });
+    expect(out.data!.estimates[2]).toMatchObject({ periodEndOn: '2027-12-31', value: '85.4' });
     expect(out.citations).toHaveLength(1);
     expect(out.citations[0].provider).toBe('eastmoney');
     expect(out.citations[0].url).toContain('RPT_RES_PROFITPREDICT');
@@ -70,19 +72,19 @@ describe('cn finance connector — fetchConsensusEps', () => {
 
   it('returns data:null without warning when result.data is empty (no analyst coverage)', async () => {
     const c = createCnFinanceConnector();
-    const out = await c.fetchConsensusEps!(
+    const out = await c.fetchEarningsConsensus!(
       { instrumentId: 'CN:300999' },
       { fetchLike: eastmoneyConsensusFetch({ result: { data: [] } }) },
     );
     expect(out.data).toBeNull();
     expect(out.warnings).toHaveLength(0);
     expect(out.freshness[0].stale).toBe(true);
-    expect(out.freshness[0].reason).toMatch(/no forecast rows/);
+    expect(out.freshness[0].reason).toBe('no parseable forecast rows');
   });
 
   it('surfaces RATE_LIMITED with retryAfterMs on 429', async () => {
     const c = createCnFinanceConnector();
-    const out = await c.fetchConsensusEps!(
+    const out = await c.fetchEarningsConsensus!(
       { instrumentId: 'CN:600519' },
       { fetchLike: rateLimitedFetch() },
     );
@@ -94,7 +96,7 @@ describe('cn finance connector — fetchConsensusEps', () => {
 
   it('rejects invalid instrumentId', async () => {
     const c = createCnFinanceConnector();
-    const out = await c.fetchConsensusEps!(
+    const out = await c.fetchEarningsConsensus!(
       { instrumentId: 'not-a-valid-id' },
       { fetchLike: eastmoneyConsensusFetch({ result: { data: [] } }) },
     );
@@ -104,7 +106,7 @@ describe('cn finance connector — fetchConsensusEps', () => {
 
   it('rejects non-CN market', async () => {
     const c = createCnFinanceConnector();
-    const out = await c.fetchConsensusEps!(
+    const out = await c.fetchEarningsConsensus!(
       { instrumentId: 'US:AAPL' },
       { fetchLike: eastmoneyConsensusFetch({ result: { data: [] } }) },
     );
@@ -114,7 +116,7 @@ describe('cn finance connector — fetchConsensusEps', () => {
 
   it('returns PARTIAL_DATA when payload is malformed', async () => {
     const c = createCnFinanceConnector();
-    const out = await c.fetchConsensusEps!(
+    const out = await c.fetchEarningsConsensus!(
       { instrumentId: 'CN:600519' },
       // No `result.data` array — connector should report PARTIAL_DATA.
       { fetchLike: eastmoneyConsensusFetch({ noResult: true }) },

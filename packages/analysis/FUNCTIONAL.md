@@ -249,10 +249,9 @@ flowchart TB
 - `markets/`:US / CN / HK 的 MarketProfile —— `domainTiers`(web_search 白名单 +
   质量分级)、`sourcePriorities`。仅 CN 配了 domainTiers。
 - CN 信号的 provider connector 位于 `packages/market-data`，通过
-  `ownership`、`market-events` 与 `earnings-consensus` canonical port 暴露；
-  `packages/analysis/src/tools/cn` 仅保留一版兼容导出。公开端点字段会随报表改版腐化，
+  `ownership`、`market-events` 与 `earnings-consensus` canonical port 暴露。
+  公开端点字段会随报表改版腐化，
   需用 fixture 定期校准:
-  - `consensusEpsCN` — 一致预期 EPS(`RPT_WEB_RESPREDICT`)
   - `shareholdersCN` — 股东户数/人均(`RPT_F10_EH_HOLDERNUM`)
   - `unlockCalendarCN` — 限售解禁(`RPT_LIFT_STAGE`)
   - `lhbScanCN` — 龙虎榜

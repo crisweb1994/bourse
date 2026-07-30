@@ -19,9 +19,7 @@ import type { ResearchCitation } from '../../contracts/research-citation';
 import type { ResearchWarning } from '../../contracts/warning';
 import type {
   CompanyProfile,
-  ConsensusEpsBundle,
   ConsensusEpsInput,
-  ConsensusEpsRow,
   EarningsConsensusBundle,
   ProviderFinancePort as FinancePort,
   HistoryInput,
@@ -376,67 +374,6 @@ export function createCnFinanceConnector(options: CnFinanceOptions = {}): Financ
       }
     },
 
-    async fetchConsensusEps(
-      input: ConsensusEpsInput,
-      ctx: ConnectorRunContext = {},
-    ): Promise<ResearchResult<ConsensusEpsBundle | null>> {
-      const retrievedAt = new Date().toISOString();
-      const parsed = parseInstrumentId(input.instrumentId);
-      if (!parsed) {
-        return consensusEpsFailure(
-          retrievedAt,
-          'INVALID_INSTRUMENT',
-          `Invalid instrumentId: ${input.instrumentId}`,
-        );
-      }
-      if (parsed.market !== 'CN') {
-        return consensusEpsFailure(
-          retrievedAt,
-          'UNSUPPORTED_MARKET',
-          `consensusEps connector only handles CN; got ${parsed.market}`,
-        );
-      }
-      const fetchLike = resolveFetch(ctx, options);
-      const out = await fetchEastmoneyConsensusEps(parsed.symbol, fetchLike, ctx, retrievedAt);
-      if (out.ok) {
-        return {
-          schemaVersion: RESEARCH_SCHEMA_VERSION,
-          data: out.bundle,
-          citations: [out.citation],
-          freshness: [{ provider: PROVIDER, asOf: retrievedAt, retrievedAt, stale: false }],
-          warnings: [],
-        };
-      }
-      // Connector treats "no forecast rows" as data=null + stale freshness
-      // marker rather than a warning. Builder propagates this as missing
-      // silently per RFC §1 (consensusEps is augmenter-fallback eligible).
-      if (out.code === 'NO_DATA') {
-        return {
-          schemaVersion: RESEARCH_SCHEMA_VERSION,
-          data: null,
-          citations: [],
-          freshness: [
-            { provider: PROVIDER, asOf: retrievedAt, retrievedAt, stale: true, reason: 'no forecast rows' },
-          ],
-          warnings: [],
-        };
-      }
-      return {
-        schemaVersion: RESEARCH_SCHEMA_VERSION,
-        data: null,
-        citations: [],
-        freshness: [{ provider: PROVIDER, asOf: retrievedAt, retrievedAt, stale: true, reason: out.message }],
-        warnings: [
-          {
-            code: out.code,
-            message: out.message,
-            provider: PROVIDER,
-            ...(out.retryAfterMs ? { retryAfterMs: out.retryAfterMs } : {}),
-          },
-        ],
-      };
-    },
-
     async fetchEarningsConsensus(
       input: ConsensusEpsInput,
       ctx: ConnectorRunContext = {},
@@ -464,7 +401,17 @@ export function createCnFinanceConnector(options: CnFinanceOptions = {}): Financ
           data: null,
           citations: [],
           freshness: [{ provider: PROVIDER, asOf: retrievedAt, retrievedAt, stale: true, reason: out.message }],
-          warnings: out.code === 'NO_DATA' ? [] : [{ code: out.code, message: out.message, provider: PROVIDER }],
+          warnings:
+            out.code === 'NO_DATA'
+              ? []
+              : [
+                  {
+                    code: out.code,
+                    message: out.message,
+                    provider: PROVIDER,
+                    ...(out.retryAfterMs ? { retryAfterMs: out.retryAfterMs } : {}),
+                  },
+                ],
         };
       }
       return {
@@ -747,7 +694,12 @@ async function fetchEastmoney(
 
 interface ConsensusEpsFetchOk {
   ok: true;
-  bundle: ConsensusEpsBundle;
+  bundle: {
+    avgEps: number;
+    analystCount: number;
+    asOf: string;
+    forecasts: Array<{ year: number; value: number }>;
+  };
   citation: ResearchCitation;
 }
 interface ConsensusEpsFetchErr {
@@ -806,7 +758,7 @@ async function fetchEastmoneyConsensusEps(
     if (!Array.isArray(rows)) {
       return { ok: false, code: 'PARTIAL_DATA', message: 'eastmoney: missing result.data array' };
     }
-    const forecasts: ConsensusEpsRow[] = [];
+    const forecasts: Array<{ year: number; value: number }> = [];
     for (const r of rows) {
       if (!r || typeof r !== 'object') continue;
       const o = r as Record<string, unknown>;
@@ -985,14 +937,6 @@ function pickFloatField(v: unknown): number | null {
     if (Number.isFinite(n)) return n;
   }
   return null;
-}
-
-function consensusEpsFailure(
-  retrievedAt: string,
-  code: ResearchWarning['code'],
-  message: string,
-): ResearchResult<ConsensusEpsBundle | null> {
-  return httpFailure<ConsensusEpsBundle | null>(PROVIDER, null, { retrievedAt, code, message });
 }
 
 function historyFailure(

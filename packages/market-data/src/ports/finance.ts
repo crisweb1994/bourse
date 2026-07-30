@@ -8,42 +8,6 @@ export interface QuoteInput {
   instrumentId: string;
 }
 
-/**
- * v0.8 C1 — Consensus EPS bundle. Sell-side analyst forecast EPS for
- * forward years; primary source for CN is Eastmoney's
- * `RPT_RES_CONFORECASTPREDATA` row family. Optional `perAnalyst` allows
- * future connectors to surface broker-level breakdown when available.
- *
- * Schema-first (zod) per packages/agent CLAUDE.md §2.11; this is a public
- * cross-package contract consumed by EvidencePackV2.
- */
-export const ConsensusEpsRowSchema = z.object({
-  year: z.number().int(),
-  value: z.number(),
-});
-export type ConsensusEpsRow = z.infer<typeof ConsensusEpsRowSchema>;
-
-export const ConsensusEpsPerAnalystSchema = z.object({
-  analyst: z.string(),
-  eps: z.number(),
-  asOf: z.string().datetime(),
-});
-export type ConsensusEpsPerAnalyst = z.infer<typeof ConsensusEpsPerAnalystSchema>;
-
-export const ConsensusEpsBundleSchema = z.object({
-  /** Mean EPS across analysts for the nearest forward year. */
-  avgEps: z.number(),
-  /** Number of contributing analysts (0 when source doesn't publish). */
-  analystCount: z.number().int().nonnegative(),
-  /** ISO timestamp of the most recent forecast revision. */
-  asOf: z.string().datetime(),
-  /** Forward-year forecasts when source publishes multiple years. */
-  forecasts: z.array(ConsensusEpsRowSchema),
-  /** Optional broker-level breakdown. */
-  perAnalyst: z.array(ConsensusEpsPerAnalystSchema).optional(),
-});
-export type ConsensusEpsBundle = z.infer<typeof ConsensusEpsBundleSchema>;
-
 export interface ConsensusEpsInput {
   instrumentId: string;
 }
@@ -160,18 +124,6 @@ export interface ProviderFinancePort {
   getQuote(input: QuoteInput, ctx?: ConnectorRunContext): Promise<ResearchResult<Quote>>;
   getHistory(input: HistoryInput, ctx?: ConnectorRunContext): Promise<ResearchResult<PriceBar[]>>;
   getProfile?(input: ProfileInput, ctx?: ConnectorRunContext): Promise<ResearchResult<CompanyProfile>>;
-  /**
-   * v0.8 C1 — optional consensus EPS fetch. Optional so non-CN ports
-   * (Yahoo / future US/HK) don't need to implement it. Returns `null`
-   * when source publishes no forecast rows (e.g. micro-caps); returns a
-   * `ResearchResult` wrapper when callers need warning provenance. The
-   * snapshot builder treats `null` as "not available" silently (no
-   * warning unless connector emits one explicitly).
-   */
-  fetchConsensusEps?(
-    input: ConsensusEpsInput,
-    ctx?: ConnectorRunContext,
-  ): Promise<ResearchResult<ConsensusEpsBundle | null>>;
   /** Earnings-card benchmark snapshots. Callers must persist the result
    * before the filing publication time; fetching after publication cannot be
    * used to reconstruct a pre-publication consensus. */

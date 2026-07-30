@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ToolContext } from '../../../tools/types';
-import { makeShareholdersCN } from '../../../tools/cn/shareholders';
-import type { CnToolFetchLike } from '../../../tools/cn/_fetch-headers';
+import { makeShareholdersCN, type CnToolFetchLike } from '@bourse/market-data';
 
 const ctx: ToolContext = {
   // The shareholders tool only reads `marketProfile` + `signal` off ctx.
