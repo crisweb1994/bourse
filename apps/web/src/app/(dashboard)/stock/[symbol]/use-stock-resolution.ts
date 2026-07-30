@@ -46,8 +46,8 @@ export function useStockResolution({
         if (!cancelled) {
           setDetail({
             stock: null,
-            quote: null,
-            profile: null,
+            quote: { degraded: true, reason: 'UPSTREAM_FAILED' },
+            profile: { degraded: true, reason: 'UPSTREAM_FAILED' },
             candidates: [],
           });
         }
@@ -125,8 +125,10 @@ export function useStockResolution({
     try {
       const item = await addToWatchlist(seed);
       setWatchlistItemId(item.id);
-      if (!stockId && !detail?.stock) {
-        setDetail((prev) => ({
+      try {
+        setDetail(await getStockDetail(symbol ?? item.stock.symbol, market));
+      } catch {
+        setDetail({
           stock: {
             id: item.stockId,
             symbol: item.stock.symbol,
@@ -136,10 +138,10 @@ export function useStockResolution({
             currency: item.stock.currency,
             yahooSymbol: item.stock.yahooSymbol,
           },
-          quote: prev?.quote ?? null,
-          profile: prev?.profile ?? null,
+          quote: { degraded: true, reason: 'UPSTREAM_FAILED' },
+          profile: { degraded: true, reason: 'UPSTREAM_FAILED' },
           candidates: [],
-        }));
+        });
       }
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : '加入自选失败');

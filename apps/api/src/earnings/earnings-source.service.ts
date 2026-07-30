@@ -46,6 +46,10 @@ export interface StructuredFallbackSource {
 
 export type EarningsRunSource = PreparedEarningsSource | StructuredFallbackSource;
 
+export interface EarningsSourceOptions {
+  excludedSourceGroupIds?: readonly string[];
+}
+
 @Injectable()
 export class EarningsSourceService {
   private readonly logger = new Logger(EarningsSourceService.name);
@@ -56,7 +60,10 @@ export class EarningsSourceService {
     private readonly filingStore: FilingStoreService,
   ) {}
 
-  async discoverAndIngest(stock: Stock): Promise<PreparedEarningsSource> {
+  async discoverAndIngest(
+    stock: Stock,
+    options: EarningsSourceOptions = {},
+  ): Promise<PreparedEarningsSource> {
     const instrumentId = `${stock.market}:${stock.symbol}`;
     if (stock.market !== 'US' && stock.market !== 'CN' && stock.market !== 'HK') {
       throw new EarningsSourceError('UNSUPPORTED_MARKET', false);
@@ -72,9 +79,17 @@ export class EarningsSourceService {
       throw new EarningsSourceError('NO_ELIGIBLE_FILING', true, listed.warnings[0]?.message);
     }
 
+    const excludedGroups = new Set(options.excludedSourceGroupIds ?? []);
+    const candidates = prioritizeEarningsSources(listed.data, stock.market).filter(
+      (summary) => !excludedGroups.has(summary.sourceGroupId ?? summary.sourceDocumentId),
+    );
+    if (candidates.length === 0) {
+      throw new EarningsSourceError('NO_NEW_ELIGIBLE_FILING', true);
+    }
+
     const failures: string[] = [];
     let fallbackSource: StructuredFallbackSource | undefined;
-    for (const summary of listed.data) {
+    for (const summary of candidates) {
       const alreadyLinked = await this.prisma.filing.findFirst({
         where: {
           provider: summary.provider,
@@ -184,6 +199,74 @@ export class EarningsSourceService {
     }));
   }
 
+}
+
+/**
+ * HKEX often publishes a concise results announcement before the full annual
+ * report. The announcement preserves financial tables much better after PDF
+ * text extraction, so prefer it within the same reporting year. Keep provider
+ * ordering unchanged for every other market and comparison.
+ */
+export function prioritizeEarningsSources(
+  summaries: readonly FilingSummary[],
+  market: string,
+): FilingSummary[] {
+  if (market !== 'HK') return [...summaries];
+  const ordered = [...summaries];
+
+  reorderMatchingSlots(
+    ordered,
+    (summary) => summary.sourceGroupId ?? summary.sourceDocumentId,
+    (a, b) => hkLanguageRank(a.language) - hkLanguageRank(b.language),
+  );
+  reorderMatchingSlots(
+    ordered,
+    (summary) => {
+      const formType = summary.formType.toLowerCase();
+      if (formType !== 'preliminary' && formType !== 'annual') return undefined;
+      return reportYear(summary);
+    },
+    (a, b) => hkFormRank(a.formType) - hkFormRank(b.formType),
+  );
+
+  return ordered;
+}
+
+function reorderMatchingSlots(
+  summaries: FilingSummary[],
+  keyOf: (summary: FilingSummary) => string | undefined,
+  compare: (a: FilingSummary, b: FilingSummary) => number,
+): void {
+  const positionsByKey = new Map<string, number[]>();
+  summaries.forEach((summary, index) => {
+    const key = keyOf(summary);
+    if (!key) return;
+    const positions = positionsByKey.get(key) ?? [];
+    positions.push(index);
+    positionsByKey.set(key, positions);
+  });
+  for (const positions of positionsByKey.values()) {
+    const reordered = positions.map((index) => summaries[index]).sort(compare);
+    positions.forEach((position, index) => {
+      summaries[position] = reordered[index];
+    });
+  }
+}
+
+function hkLanguageRank(language: FilingSummary['language']): number {
+  if (language === 'en-HK') return 0;
+  if (language === 'zh-HK') return 1;
+  return 2;
+}
+
+function hkFormRank(formType: string): number {
+  return formType.toLowerCase() === 'preliminary' ? 0 : 1;
+}
+
+function reportYear(summary: FilingSummary): string | undefined {
+  const periodYear = summary.periodEndOn?.match(/^(20\d{2})/)?.[1];
+  if (periodYear) return periodYear;
+  return summary.title?.match(/\b(20\d{2})\b/)?.[1];
 }
 
 export class EarningsSourceError extends Error {

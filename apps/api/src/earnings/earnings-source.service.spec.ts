@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { ProviderFilingPort as FilingPort } from '@bourse/analysis';
-import { buildParserDerivationKey, EarningsSourceService } from './earnings-source.service';
+import {
+  buildParserDerivationKey,
+  EarningsSourceService,
+  prioritizeEarningsSources,
+} from './earnings-source.service';
 import { EarningsSourceError } from './earnings-source.service';
 import { FilingStoreService } from '../filings/filing-store.service';
 
@@ -144,6 +148,73 @@ test('parser derivations stay owned by one filing even when content hashes match
   );
 });
 
+test('HK earnings sources prefer preliminary results and English variants', () => {
+  const annualGroup = '0700:2026-04-09:annual';
+  const preliminaryGroup = '0700:2026-03-18:preliminary';
+  const sources = [
+    hkSummary('annual-zh', annualGroup, 'annual', 'zh-HK'),
+    hkSummary('annual-en', annualGroup, 'annual', 'en-HK'),
+    hkSummary('preliminary-zh', preliminaryGroup, 'preliminary', 'zh-HK'),
+    hkSummary('preliminary-en', preliminaryGroup, 'preliminary', 'en-HK'),
+  ];
+
+  assert.deepEqual(
+    prioritizeEarningsSources(sources, 'HK').map((item) => item.sourceDocumentId),
+    ['preliminary-en', 'preliminary-zh', 'annual-en', 'annual-zh'],
+  );
+  assert.deepEqual(prioritizeEarningsSources(sources, 'US'), sources);
+});
+
+test('HK earnings source priority preserves unrelated filing slots', () => {
+  const sources = [
+    hkSummary('annual-en', 'annual-group', 'annual', 'en-HK'),
+    {
+      ...hkSummary('quarterly-en', 'quarterly-group', 'preliminary', 'en-HK'),
+      formType: 'quarterly',
+      periodEndOn: '2026-03-31',
+    },
+    hkSummary('preliminary-en', 'preliminary-group', 'preliminary', 'en-HK'),
+  ];
+
+  assert.deepEqual(
+    prioritizeEarningsSources(sources, 'HK').map((item) => item.sourceDocumentId),
+    ['preliminary-en', 'quarterly-en', 'annual-en'],
+  );
+});
+
+test('EarningsSourceService does not fetch an excluded source group', async () => {
+  const excludedGroup = '0700:2026-04-09:annual';
+  const allowedGroup = '0700:2026-03-18:preliminary';
+  const summaries = [
+    hkSummary('annual-en', excludedGroup, 'annual', 'en-HK'),
+    hkSummary('preliminary-en', allowedGroup, 'preliminary', 'en-HK'),
+  ];
+  const fetched: string[] = [];
+  const port: FilingPort = {
+    async searchFilings() { return envelope(summaries); },
+    async getFiling(input) {
+      fetched.push(input.sourceDocumentId ?? input.id);
+      return envelope({
+        ...summaries.find((item) => item.sourceDocumentId === input.sourceDocumentId)!,
+        text: undefined,
+        rawContent: new Uint8Array([1]),
+        contentHash: 'e'.repeat(64),
+      });
+    },
+  };
+  const prisma = { filing: { findFirst: async () => null } } as any;
+  const service = new EarningsSourceService(prisma, clientFromPort(port), new FilingStoreService(prisma));
+
+  await assert.rejects(
+    () => service.discoverAndIngest(
+      { ...stock, symbol: '0700', market: 'HK', exchange: 'HKEX', currency: 'HKD' },
+      { excludedSourceGroupIds: [excludedGroup] },
+    ),
+    (error: unknown) => error instanceof EarningsSourceError && error.code === 'BODY_UNREADABLE',
+  );
+  assert.deepEqual(fetched, ['preliminary-en']);
+});
+
 function summary(id: string, filingUrl: string) {
   return {
     id,
@@ -156,6 +227,30 @@ function summary(id: string, filingUrl: string) {
     title: 'Current report',
     provider: 'sec-edgar',
     documentKind: 'PRIMARY' as const,
+  };
+}
+
+function hkSummary(
+  sourceDocumentId: string,
+  sourceGroupId: string,
+  formType: 'annual' | 'preliminary',
+  language: 'zh-HK' | 'en-HK',
+) {
+  return {
+    id: sourceDocumentId,
+    sourceDocumentId,
+    sourceGroupId,
+    instrumentId: 'HK:0700',
+    formType,
+    filingDate: formType === 'annual' ? '2026-04-09' : '2026-03-18',
+    periodEndOn: '2025-12-31',
+    filingUrl: `https://www1.hkexnews.hk/${sourceDocumentId}.pdf`,
+    title: formType === 'annual'
+      ? 'ANNUAL REPORT 2025'
+      : 'ANNOUNCEMENT OF THE ANNUAL RESULTS FOR THE YEAR ENDED 31 DECEMBER 2025',
+    provider: 'hkex',
+    language,
+    documentKind: 'PDF' as const,
   };
 }
 
