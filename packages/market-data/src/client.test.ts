@@ -165,6 +165,78 @@ describe('ResearchMarketDataClient', () => {
     expect(response.data?.estimates[0]?.value).toBe('25.5');
   });
 
+  it('routes CN ownership and market events through canonical source plugins', async () => {
+    const client = createResearchMarketDataClient(createBuiltInSources(providers({
+      cnOwnership: {
+        listOwnership: async ({ instrumentId }) => result([{
+          id: 'connect-1',
+          instrumentId,
+          kind: 'STOCK_CONNECT' as const,
+          asOf: '2026-07-28',
+          shanghaiNetFlow: '1.2',
+          shenzhenNetFlow: '0.4',
+          flowUnit: 'CNY_100M' as const,
+        }], 'cn-public-ownership'),
+      },
+      cnEvents: {
+        listEvents: async ({ instrumentId }) => result([{
+          id: 'unlock-1',
+          instrumentId,
+          type: 'UNLOCK' as const,
+          occurredAt: '2026-08-01',
+          title: 'Unlock',
+          shares: '5000000',
+          unlockType: '定增',
+        }], 'cn-public-events'),
+      },
+    })));
+
+    const ownership = await client.getOwnership({ instrumentId: 'CN:600519', dataSet: 'stock-connect' });
+    const events = await client.getMarketEvents({ instrumentId: 'CN:600519', dataSet: 'unlock' });
+
+    expect(ownership.status).toBe('ok');
+    expect(ownership.data?.[0]?.kind).toBe('STOCK_CONNECT');
+    expect(events.status).toBe('ok');
+    expect(events.data?.[0]?.type).toBe('UNLOCK');
+  });
+
+  it('splits explicit macro series so each series is routed independently', async () => {
+    const calls: string[][] = [];
+    const client = createResearchMarketDataClient(createBuiltInSources(providers({
+      macro: {
+        fetchMacro: async (input) => {
+          calls.push(input.seriesCodes ?? []);
+          const seriesCode = input.seriesCodes?.[0] ?? 'US.CPI.YOY';
+          return result({
+            market: input.market,
+            observations: [{
+              market: input.market,
+              seriesCode,
+              category: seriesCode.includes('GDP') ? 'growth' as const : 'inflation' as const,
+              name: seriesCode,
+              value: '2.5',
+              unit: 'percent',
+              frequency: 'ANNUAL' as const,
+              periodStart: '2025-01-01',
+              periodEnd: '2025-12-31',
+              provider: 'official-macro',
+              providerSeriesId: seriesCode,
+            }],
+          }, 'official-macro');
+        },
+      },
+    })));
+
+    const response = await client.getMacro({
+      market: 'US',
+      seriesCodes: ['US.CPI.YOY', 'US.GDP.GROWTH.YOY'],
+    });
+
+    expect(calls).toEqual([['US.CPI.YOY'], ['US.GDP.GROWTH.YOY']]);
+    expect(response.data?.observations.map((item) => item.seriesCode))
+      .toEqual(['US.CPI.YOY', 'US.GDP.GROWTH.YOY']);
+  });
+
   it('routes filing list and document requests through the same source policy', async () => {
     const summary = {
       id: 'accession-1',

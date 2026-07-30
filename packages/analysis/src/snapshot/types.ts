@@ -14,6 +14,12 @@ import { z } from 'zod';
 import type {
   FilingSummary,
   FinancialsBundle,
+  CompanyProfile,
+  CorporateAction,
+  EarningsConsensusBundle,
+  MacroSnapshot,
+  MarketEvent,
+  OwnershipObservation,
   PriceBar,
   Quote,
 } from '@bourse/market-data';
@@ -107,16 +113,19 @@ export interface SnapshotSourceMetadata {
 export interface RawFacts {
   quote: Quote | null;
   history: PriceBar[] | null;
-  profile: Record<string, unknown> | null;
+  profile: CompanyProfile | null;
   financials: FinancialsBundle | null;
   filings: FilingSummary[] | null;
-  consensusEps: unknown | null;
-  northboundFlow: unknown | null;
-  lhb: unknown | null;
-  unlockCalendar: unknown | null;
-  shareholders: unknown | null;
+  consensusEps: EarningsConsensusBundle | null;
+  northboundFlow: OwnershipObservation[] | null;
+  lhb: MarketEvent[] | null;
+  unlockCalendar: MarketEvent[] | null;
+  shareholders: OwnershipObservation[] | null;
+  corporateActions?: CorporateAction[] | null;
+  ownership?: OwnershipObservation[] | null;
+  marketEvents?: MarketEvent[] | null;
   webSearch: unknown | null;
-  macro: unknown | null;
+  macro: MacroSnapshot | null;
 }
 
 export interface ComputedFacts {

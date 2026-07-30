@@ -3,6 +3,8 @@ import { z } from 'zod';
 /** Stable failure codes used by routing decisions and source health tracking. */
 export const SourceFailureCodeSchema = z.enum([
   'UNSUPPORTED_CAPABILITY',
+  'UNSUPPORTED_DATASET',
+  'UNSUPPORTED_SERIES',
   'UNSUPPORTED_MARKET',
   'UNSUPPORTED_SECURITY_TYPE',
   'UNSUPPORTED_INTERVAL',

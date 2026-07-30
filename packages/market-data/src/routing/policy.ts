@@ -1,4 +1,4 @@
-import type { Capability, QuoteDelay } from '../contracts/source';
+import type { Capability, DataSet, QuoteDelay } from '../contracts/source';
 import type { MarketCode } from '../contracts/instrument';
 import type { QualityTier } from '../contracts/research-citation';
 
@@ -7,6 +7,7 @@ export type RoutingStrategy = 'fallback' | 'merge' | 'official-first' | 'cross-c
 export interface RoutingPolicy {
   capability: Capability;
   market: MarketCode;
+  dataSet?: DataSet;
   strategy: RoutingStrategy;
   preferredSources: readonly string[];
   disabledSources?: readonly string[];
@@ -27,8 +28,15 @@ export interface RoutingPolicy {
 export class RoutingPolicies {
   constructor(private readonly policies: readonly RoutingPolicy[]) {}
 
-  find(capability: Capability, market: MarketCode): RoutingPolicy | undefined {
-    return this.policies.find((policy) => policy.capability === capability && policy.market === market);
+  find(capability: Capability, market: MarketCode, dataSet?: DataSet): RoutingPolicy | undefined {
+    const matching = this.policies.filter((policy) =>
+      policy.capability === capability && policy.market === market,
+    );
+    if (dataSet) {
+      return matching.find((policy) => policy.dataSet === dataSet) ??
+        matching.find((policy) => policy.dataSet === undefined);
+    }
+    return matching.find((policy) => policy.dataSet === undefined);
   }
 
   hasCapability(capability: Capability): boolean {
@@ -41,9 +49,9 @@ export class RoutingPolicies {
 }
 
 export const DEFAULT_ROUTING_POLICIES: readonly RoutingPolicy[] = [
-  { capability: 'quote', market: 'US', strategy: 'fallback', preferredSources: ['twelve-data', 'alpha-vantage', 'eodhd', 'yahoo', 'nasdaq', 'sina'] },
-  { capability: 'history', market: 'US', strategy: 'fallback', preferredSources: ['twelve-data', 'alpha-vantage', 'eodhd', 'yahoo', 'nasdaq', 'sina'] },
-  { capability: 'profile', market: 'US', strategy: 'fallback', preferredSources: ['twelve-data', 'alpha-vantage', 'eodhd', 'yahoo', 'sec-edgar-profile'] },
+  { capability: 'quote', market: 'US', strategy: 'fallback', preferredSources: ['massive', 'twelve-data', 'alpha-vantage', 'eodhd', 'yahoo', 'nasdaq', 'sina'] },
+  { capability: 'history', market: 'US', strategy: 'fallback', preferredSources: ['massive', 'twelve-data', 'alpha-vantage', 'eodhd', 'yahoo', 'nasdaq', 'sina'] },
+  { capability: 'profile', market: 'US', strategy: 'fallback', preferredSources: ['massive', 'twelve-data', 'alpha-vantage', 'eodhd', 'yahoo', 'sec-edgar-profile'] },
   { capability: 'financials', market: 'US', strategy: 'official-first', preferredSources: ['sec-edgar-xbrl'] },
   { capability: 'filings', market: 'US', strategy: 'official-first', preferredSources: ['sec-edgar'] },
   { capability: 'filing-document', market: 'US', strategy: 'official-first', preferredSources: ['sec-edgar'] },
@@ -68,9 +76,31 @@ export const DEFAULT_ROUTING_POLICIES: readonly RoutingPolicy[] = [
   { capability: 'filings', market: 'CN', strategy: 'official-first', preferredSources: ['cn-filings'] },
   { capability: 'filing-document', market: 'CN', strategy: 'official-first', preferredSources: ['cn-filings'] },
   { capability: 'earnings-consensus', market: 'CN', strategy: 'fallback', preferredSources: ['cn-finance'] },
-  { capability: 'macro', market: 'CN', strategy: 'official-first', preferredSources: ['official-macro'] },
+  { capability: 'macro', market: 'CN', strategy: 'official-first', preferredSources: ['official-macro', 'nbs-cn-macro'] },
   { capability: 'instrument-search', market: 'CN', strategy: 'merge', preferredSources: ['eastmoney-search', 'tencent-search', 'yahoo-search'] },
-  { capability: 'market-calendar', market: 'CN', strategy: 'fallback', preferredSources: ['market-calendar-rules'] },
+  { capability: 'market-calendar', market: 'CN', strategy: 'fallback', preferredSources: ['tushare-pro', 'market-calendar-rules'] },
+  { capability: 'corporate-actions', dataSet: 'adjustment-factor', market: 'CN', strategy: 'fallback', preferredSources: ['tushare-pro'] },
+  { capability: 'corporate-actions', dataSet: 'dividend', market: 'CN', strategy: 'fallback', preferredSources: ['tushare-pro'] },
+  { capability: 'corporate-actions', dataSet: 'buyback', market: 'CN', strategy: 'fallback', preferredSources: ['tushare-pro'] },
+  { capability: 'ownership', dataSet: 'stock-connect', market: 'CN', strategy: 'fallback', preferredSources: ['tushare-pro', 'cn-public-ownership'] },
+  { capability: 'ownership', dataSet: 'shareholder-count', market: 'CN', strategy: 'fallback', preferredSources: ['tushare-pro', 'cn-public-ownership'] },
+  { capability: 'ownership', dataSet: 'margin', market: 'CN', strategy: 'fallback', preferredSources: ['tushare-pro'] },
+  { capability: 'market-events', dataSet: 'lhb', market: 'CN', strategy: 'fallback', preferredSources: ['tushare-pro', 'cn-public-events'] },
+  { capability: 'market-events', dataSet: 'unlock', market: 'CN', strategy: 'fallback', preferredSources: ['tushare-pro', 'cn-public-events'] },
+  { capability: 'market-events', dataSet: 'earnings-guidance', market: 'CN', strategy: 'fallback', preferredSources: ['tushare-pro'] },
+  { capability: 'market-events', dataSet: 'suspension', market: 'CN', strategy: 'fallback', preferredSources: ['tushare-pro'] },
+  { capability: 'market-events', dataSet: 'price-limit', market: 'CN', strategy: 'fallback', preferredSources: ['tushare-pro'] },
+  { capability: 'corporate-actions', market: 'US', strategy: 'official-first', preferredSources: ['sec-filings-derived'] },
+  { capability: 'corporate-actions', market: 'HK', strategy: 'official-first', preferredSources: ['hkex-filings-derived-events'] },
+  { capability: 'corporate-actions', market: 'CN', strategy: 'official-first', preferredSources: ['cn-filings-derived'] },
+  { capability: 'ownership', market: 'US', strategy: 'official-first', preferredSources: ['sec-filings-derived'] },
+  { capability: 'ownership', market: 'HK', strategy: 'official-first', preferredSources: ['sfc-short-position'] },
+  { capability: 'ownership', dataSet: 'short-position', market: 'HK', strategy: 'official-first', preferredSources: ['sfc-short-position'] },
+  { capability: 'market-events', dataSet: 'earnings-guidance', market: 'HK', strategy: 'official-first', preferredSources: ['hkex-filings-derived-events'] },
+  { capability: 'market-events', dataSet: 'suspension', market: 'HK', strategy: 'official-first', preferredSources: ['hkex-filings-derived-events'] },
+  { capability: 'market-events', dataSet: 'regulatory-event', market: 'HK', strategy: 'official-first', preferredSources: ['hkex-filings-derived-events'] },
+  { capability: 'market-events', market: 'US', strategy: 'official-first', preferredSources: ['sec-filings-derived'] },
+  { capability: 'market-events', market: 'HK', strategy: 'official-first', preferredSources: ['hkex-filings-derived-events'] },
   { capability: 'market-calendar', market: 'JP', strategy: 'fallback', preferredSources: ['market-calendar-rules'] },
   { capability: 'market-calendar', market: 'UK', strategy: 'fallback', preferredSources: ['market-calendar-rules'] },
 ];

@@ -31,6 +31,7 @@ const request: RouteRequest = {
   input: {},
   credentialScope: 'public',
   securityType: 'stock',
+  constraints: { minQualityTier: 'B', acceptedDelays: ['realtime'] },
 };
 
 const policy: RoutingPolicy = {
@@ -38,12 +39,12 @@ const policy: RoutingPolicy = {
   market: 'US',
   strategy: 'fallback',
   preferredSources: ['realtime', 'unknown-delay', 'low-quality'],
-  minQualityTier: 'B',
-  acceptedDelays: ['realtime'],
+  minQualityTier: 'C',
+  acceptedDelays: ['realtime', 'delayed'],
 };
 
 describe('CapabilityPlanner', () => {
-  it('filters by declared quality and rejects an unknown quote delay', () => {
+  it('applies request constraints when they are stricter than policy defaults', () => {
     const base: CapabilitySpec = {
       capability: 'quote',
       markets: ['US'],

@@ -61,7 +61,8 @@ export class CapabilityRouter {
     options: RouterFetchOptions<T> = {},
   ): Promise<RoutedResult<T>> {
     const traceId = request.traceId ?? `${request.capability}:${this.now().getTime()}`;
-    const policy = this.policies.find(request.capability, request.market);
+    const configuredPolicy = this.policies.find(request.capability, request.market, request.dataSet);
+    const policy = configuredPolicy ? withRequestConstraints(configuredPolicy, request) : undefined;
     if (!policy) {
       this.eventSink.emit({ type: 'route.planned', traceId, capability: request.capability, market: request.market, candidates: [] });
       const code = !this.policies.hasMarket(request.market)
@@ -71,7 +72,7 @@ export class CapabilityRouter {
           : 'UNSUPPORTED_REQUEST';
       return this.complete(request, traceId, failed([], {
         code,
-        message: `No routing policy for ${request.capability} in ${request.market}.`,
+        message: `No routing policy for ${request.capability}${request.dataSet ? `/${request.dataSet}` : ''} in ${request.market}.`,
       }));
     }
 
@@ -142,6 +143,8 @@ export class CapabilityRouter {
       const key = decision.readScope === 'none' ? undefined : cacheKey({
         sourceId,
         capability: request.capability,
+        dataSet: request.dataSet,
+        seriesCode: request.seriesCode,
         scope: decision.readScope,
         input: request.input,
       });
@@ -164,7 +167,11 @@ export class CapabilityRouter {
         }
       }
 
-      if (!this.rateLimiter.tryAcquire(sourceId, candidate.instance.manifest.rateLimit, request.rateLimitCost)) {
+      const rateLimit = candidate.spec.rateLimit ?? candidate.instance.manifest.rateLimit;
+      const rateLimitKey = candidate.spec.rateLimit
+        ? `${sourceId}:${request.capability}:${request.dataSet ?? request.seriesCode ?? '-'}`
+        : sourceId;
+      if (!this.rateLimiter.tryAcquire(rateLimitKey, rateLimit, request.rateLimitCost)) {
         recordAttempt({ sourceId, capability: request.capability, outcome: 'skipped', cache: 'bypass', reasonCode: 'RATE_LIMITED' });
         lastError = { code: 'RATE_LIMITED', message: `${sourceId} rate limit is exhausted.` };
         sourceWarnings.push(warning('RATE_LIMITED', lastError.message, sourceId));
@@ -243,7 +250,7 @@ export class CapabilityRouter {
           return this.complete(request, traceId, failed(attempts, failure, sourceWarnings));
         }
       } finally {
-        this.rateLimiter.release(sourceId);
+        this.rateLimiter.release(rateLimitKey);
       }
     }
 
@@ -326,6 +333,16 @@ export class CapabilityRouter {
     });
     return result;
   }
+}
+
+function withRequestConstraints(policy: RoutingPolicy, request: RouteRequest): RoutingPolicy {
+  const requestedMaxAge = request.constraints?.maxAgeMs;
+  return {
+    ...policy,
+    ...(requestedMaxAge === undefined
+      ? {}
+      : { maxAgeMs: policy.maxAgeMs === undefined ? requestedMaxAge : Math.min(policy.maxAgeMs, requestedMaxAge) }),
+  };
 }
 
 class RouteInterruption extends Error {

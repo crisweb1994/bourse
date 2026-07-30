@@ -123,9 +123,8 @@ describe('fetchSnapshot · orchestration', () => {
       configs: buildConfigs(),
     });
     const totalKeys = snap.dataAvailability.available.length + snap.dataAvailability.missing.length;
-    // 12 fact keys: quote/history/profile/financials/filings/consensusEps/
-    // northboundFlow/lhb/unlockCalendar/shareholders/webSearch/macro
-    expect(totalKeys).toBe(12);
+    // 15 fact keys, including canonical corporate-actions/ownership/events.
+    expect(totalKeys).toBe(15);
   });
 
   it('marks not-configured fetchers as `not_configured` (vs no_data)', async () => {
@@ -359,7 +358,7 @@ describe('fetchSnapshot · orchestration', () => {
       configs,
     });
     expect(snap.dataAvailability.available).toEqual([]);
-    expect(snap.dataAvailability.missing.length).toBe(12);
+    expect(snap.dataAvailability.missing.length).toBe(15);
     expect(snap.computedFacts.financialRatios).toBeNull();
   });
 
@@ -392,9 +391,10 @@ describe('fetchSnapshot · compute integration', () => {
   it('derives consensusEpsGrowth into valuation forward DCF when consensus payload shaped right', async () => {
     const configs = buildConfigs({
       consensusEps: async () => ({
-        forecasts: [
-          { year: 2025, value: 10 },
-          { year: 2026, value: 12 }, // +20% YoY → 8% haircut applied
+        asOf: '2025-05-25T00:00:00.000Z',
+        estimates: [
+          { metricCode: 'epsBasic', periodEndOn: '2025-12-31', periodType: 'FY', value: '10', unit: 'per_share', currency: 'USD' },
+          { metricCode: 'epsBasic', periodEndOn: '2026-12-31', periodType: 'FY', value: '12', unit: 'per_share', currency: 'USD' },
         ],
       }),
     });

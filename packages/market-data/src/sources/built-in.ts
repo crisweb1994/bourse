@@ -6,14 +6,20 @@ import type { ProviderFinancialsPort } from '../ports/financials';
 import type { ProviderFilingPort } from '../ports/filings';
 import type { ProviderMacroPort } from '../ports/macro';
 import type { ProviderInstrumentSearchPort } from '../ports/instrument-search';
+import type { ProviderOwnershipPort } from '../ports/ownership';
+import type { ProviderMarketEventsPort } from '../ports/market-events';
+import type { ProviderCorporateActionsPort } from '../ports/corporate-actions';
 import type { SourceInstance, SourcePlugin } from './plugin';
 import { createRuleBasedMarketCalendarPort } from './rule-calendar';
 import {
   sourceFilingPort,
+  sourceCorporateActionsPort,
   sourceFinancePort,
   sourceFinancialsPort,
   sourceInstrumentSearchPort,
   sourceMacroPort,
+  sourceMarketEventsPort,
+  sourceOwnershipPort,
   sourceProfilePort,
 } from './provider-port';
 
@@ -38,6 +44,11 @@ interface BuiltInProviderPorts {
   hkFilings?: ProviderFilingPort;
   macro?: ProviderMacroPort;
   instrumentSearch?: readonly ProviderInstrumentSearchPort[];
+  cnOwnership?: ProviderOwnershipPort;
+  cnEvents?: ProviderMarketEventsPort;
+  hkCorporateActions?: ProviderCorporateActionsPort;
+  hkEvents?: ProviderMarketEventsPort;
+  hkOwnership?: ProviderOwnershipPort;
 }
 
 export function createBuiltInSourcePlugins(providers: BuiltInProviderPorts): SourcePlugin[] {
@@ -74,6 +85,10 @@ function builtInInstances(providers: BuiltInProviderPorts): SourceInstance[] {
   if (providers.cnFilings) sources.push(filingsSource('cn-filings', 'CN regulatory filings', providers.cnFilings, ['CN'], 'exchange', 'A'));
   if (providers.hkFilings) sources.push(filingsSource('hkex', 'HKEX', providers.hkFilings, ['HK'], 'exchange', 'A'));
   if (providers.macro) sources.push(macroSource(providers.macro));
+  if (providers.cnOwnership) sources.push(cnOwnershipSource(providers.cnOwnership));
+  if (providers.cnEvents) sources.push(cnEventsSource(providers.cnEvents));
+  if (providers.hkCorporateActions || providers.hkEvents) sources.push(hkDerivedEventsSource(providers.hkCorporateActions, providers.hkEvents));
+  if (providers.hkOwnership) sources.push(hkOwnershipSource(providers.hkOwnership));
   if (providers.twelveData) sources.push(financeSource('twelve-data', 'Twelve Data', providers.twelveData, ['US', 'HK', 'CN'], 'licensed', true, ['quote', 'history', 'profile']));
   if (providers.alphaVantage) sources.push(financeSource('alpha-vantage', 'Alpha Vantage', providers.alphaVantage, ['US'], 'licensed', true, ['quote', 'history', 'profile']));
   if (providers.eodhd) sources.push(financeSource('eodhd', 'EODHD', providers.eodhd, ['US', 'HK', 'CN'], 'licensed', true, ['quote', 'history', 'profile']));
@@ -84,6 +99,56 @@ function builtInInstances(providers: BuiltInProviderPorts): SourceInstance[] {
     sources.push(instrumentSearchSource(id, port));
   }
   return sources;
+}
+
+function hkDerivedEventsSource(
+  corporateActions?: ProviderCorporateActionsPort,
+  events?: ProviderMarketEventsPort,
+): SourceInstance {
+  const capabilities: CapabilitySpec[] = [];
+  if (corporateActions) capabilities.push({
+    ...spec('corporate-actions', ['HK'], 'official-derived', 'A', 'public-cache-allowed', 60 * 60 * 1_000),
+    dataSets: ['dividend', 'split', 'rights-issue', 'placement', 'buyback'],
+    securityTypes: ['stock'],
+    transport: 'derived',
+  });
+  if (events) capabilities.push({
+    ...spec('market-events', ['HK'], 'official-derived', 'A', 'public-cache-allowed', 30 * 60 * 1_000),
+    dataSets: ['earnings-guidance', 'suspension', 'regulatory-event'],
+    securityTypes: ['stock'],
+    transport: 'derived',
+  });
+  return source('hkex-filings-derived-events', 'HKEX filings derived events', 'derived', false, capabilities, {
+    ...(corporateActions ? { corporateActions: sourceCorporateActionsPort('hkex-filings-derived-events', corporateActions) } : {}),
+    ...(events ? { marketEvents: sourceMarketEventsPort('hkex-filings-derived-events', events) } : {}),
+  });
+}
+
+function hkOwnershipSource(ownership: ProviderOwnershipPort): SourceInstance {
+  return source('sfc-short-position', 'SFC aggregated short positions', 'official', false, [{
+    ...spec('ownership', ['HK'], 'regulator', 'A', 'public-cache-allowed', 6 * 60 * 60 * 1_000),
+    dataSets: ['short-position'],
+    securityTypes: ['stock'],
+    transport: 'official-file',
+  }], { ownership: sourceOwnershipPort('sfc-short-position', ownership) });
+}
+
+function cnOwnershipSource(ownership: ProviderOwnershipPort): SourceInstance {
+  return source('cn-public-ownership', 'CN public ownership data', 'public-api', false, [{
+    ...spec('ownership', ['CN'], 'aggregated', 'C', 'no-store', 60 * 60 * 1_000),
+    dataSets: ['stock-connect', 'shareholder-count'],
+    securityTypes: ['stock'],
+    transport: 'scrape',
+  }], { ownership: sourceOwnershipPort('cn-public-ownership', ownership) });
+}
+
+function cnEventsSource(events: ProviderMarketEventsPort): SourceInstance {
+  return source('cn-public-events', 'CN public market events', 'public-api', false, [{
+    ...spec('market-events', ['CN'], 'aggregated', 'C', 'no-store', 60 * 60 * 1_000),
+    dataSets: ['lhb', 'unlock'],
+    securityTypes: ['stock'],
+    transport: 'scrape',
+  }], { marketEvents: sourceMarketEventsPort('cn-public-events', events) });
 }
 
 function financeSource(
@@ -129,7 +194,18 @@ function filingsSource(id: string, name: string, filings: ProviderFilingPort, ma
 }
 
 function macroSource(macro: ProviderMacroPort): SourceInstance {
-  return source('official-macro', 'Official macro sources', 'official', false, [spec('macro', ['US', 'CN', 'HK'], 'regulator', 'A', 'public-cache-allowed', 60 * 60 * 1_000)], { macro: sourceMacroPort('official-macro', macro) });
+  return source('official-macro', 'Official macro sources', 'official', false, [{
+    ...spec('macro', ['US', 'CN', 'HK'], 'regulator', 'A', 'public-cache-allowed', 60 * 60 * 1_000),
+    dataSets: ['macro-series'],
+    seriesCodes: [
+      'US.GDP.GROWTH.YOY', 'US.CPI.YOY', 'US.UNEMPLOYMENT.RATE',
+      'US.POLICY_RATE', 'US.GOVERNMENT_BOND_10Y', 'US.FEDERAL_DEBT',
+      'CN.GDP.GROWTH.YOY', 'CN.CPI.YOY', 'CN.UNEMPLOYMENT.RATE',
+      'HK.GDP.GROWTH.YOY', 'HK.CPI.YOY', 'HK.UNEMPLOYMENT.RATE',
+      'HK.USD_EXCHANGE_RATE', 'HK.INTERBANK_RATE_3M',
+    ],
+    transport: 'official-api',
+  }], { macro: sourceMacroPort('official-macro', macro) });
 }
 
 function calendarSource(): SourceInstance {

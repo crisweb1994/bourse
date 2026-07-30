@@ -95,4 +95,63 @@ describe('SourceRegistry', () => {
     expect(() => new SourceRegistry().registerPlugin(plugin, {}))
       .toThrow('created mismatched source different');
   });
+
+  it('matches only explicitly declared data sets and macro series', () => {
+    const notCalled = async (): Promise<never> => { throw new Error('not called'); };
+    const registry = new SourceRegistry([
+      {
+        manifest: {
+          id: 'cn-ownership',
+          name: 'CN ownership',
+          sourceType: 'public-api',
+          requiresAuth: false,
+          allowRedistribution: false,
+          rateLimit: { concurrent: 1 },
+          capabilities: [{
+            capability: 'ownership',
+            dataSets: ['stock-connect'],
+            markets: ['CN'],
+            qualityTier: 'C',
+            authority: 'aggregated',
+            redistribution: 'no-store',
+            ttlMs: 1_000,
+          }],
+        },
+        enabled: true,
+        credentialScope: 'public',
+        ports: { ownership: { listOwnership: notCalled } },
+      },
+      {
+        manifest: {
+          id: 'cn-macro',
+          name: 'CN macro',
+          sourceType: 'official',
+          requiresAuth: false,
+          allowRedistribution: true,
+          rateLimit: { concurrent: 1 },
+          capabilities: [{
+            capability: 'macro',
+            dataSets: ['macro-series'],
+            seriesCodes: ['CN.CPI.YOY'],
+            markets: ['CN'],
+            qualityTier: 'A',
+            authority: 'regulator',
+            redistribution: 'public-cache-allowed',
+            ttlMs: 1_000,
+          }],
+        },
+        enabled: true,
+        credentialScope: 'public',
+        ports: { macro: { fetchMacro: notCalled } },
+      },
+    ]);
+
+    expect(registry.find({ capability: 'ownership', market: 'CN', dataSet: 'stock-connect' })).toHaveLength(1);
+    expect(registry.find({ capability: 'ownership', market: 'CN', dataSet: 'shareholder-count' })).toHaveLength(0);
+    expect(registry.diagnoseUnsupported({ capability: 'ownership', market: 'CN', dataSet: 'shareholder-count' }))
+      .toBe('UNSUPPORTED_DATASET');
+    expect(registry.find({ capability: 'macro', market: 'CN', dataSet: 'macro-series', seriesCode: 'CN.CPI.YOY' })).toHaveLength(1);
+    expect(registry.diagnoseUnsupported({ capability: 'macro', market: 'CN', dataSet: 'macro-series', seriesCode: 'CN.PPI.YOY' }))
+      .toBe('UNSUPPORTED_SERIES');
+  });
 });

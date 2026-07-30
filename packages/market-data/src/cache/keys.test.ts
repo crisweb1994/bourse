@@ -19,4 +19,15 @@ describe('cache keys', () => {
 
     expect(publicKey).not.toBe(credentialKey);
   });
+
+  it('separates data sets and macro series even when provider input matches', () => {
+    const base = { sourceId: 'vendor', capability: 'ownership', scope: 'public', input: { instrumentId: 'CN:600519' } };
+    const holders = cacheKey({ ...base, dataSet: 'shareholder-count' });
+    const connect = cacheKey({ ...base, dataSet: 'stock-connect' });
+    const cpi = cacheKey({ ...base, capability: 'macro', dataSet: 'macro-series', seriesCode: 'CN.CPI.YOY' });
+    const ppi = cacheKey({ ...base, capability: 'macro', dataSet: 'macro-series', seriesCode: 'CN.PPI.YOY' });
+
+    expect(holders).not.toBe(connect);
+    expect(cpi).not.toBe(ppi);
+  });
 });

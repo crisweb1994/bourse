@@ -5,4 +5,7 @@ export * from './filings';
 export * from './macro';
 export * from './instrument-search';
 export * from './market-calendar';
+export * from './corporate-actions';
+export * from './ownership';
+export * from './market-events';
 export * from './request-context';

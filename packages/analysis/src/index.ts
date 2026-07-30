@@ -53,6 +53,8 @@ export {
 export {
   defineMarketConfig,
   portToFetcher,
+  STANDARD_RESEARCH_REQUIREMENTS,
+  type DataRequirement,
   type ExtraFetcher,
   type FilingsFetcher,
   type FinancialsFetcher,

@@ -28,6 +28,21 @@ import {
   type InstrumentSearchPort,
   type ProviderInstrumentSearchPort,
 } from '../ports/instrument-search';
+import {
+  CorporateActionSchema,
+  type CorporateActionsPort,
+  type ProviderCorporateActionsPort,
+} from '../ports/corporate-actions';
+import {
+  OwnershipObservationSchema,
+  type OwnershipPort,
+  type ProviderOwnershipPort,
+} from '../ports/ownership';
+import {
+  MarketEventSchema,
+  type MarketEventsPort,
+  type ProviderMarketEventsPort,
+} from '../ports/market-events';
 
 /**
  * A source plugin owns this boundary. Provider transports may retain their
@@ -72,6 +87,48 @@ export function sourceFilingPort(sourceId: string, port: ProviderFilingPort): Fi
 export function sourceMacroPort(sourceId: string, port: ProviderMacroPort): MacroPort {
   return {
     fetchMacro: async (input, ctx) => toSourceResult(sourceId, await port.fetchMacro(input, ctx), (data) => data.observations.length > 0, validates(MacroSnapshotSchema)),
+  };
+}
+
+export function sourceCorporateActionsPort(
+  sourceId: string,
+  port: ProviderCorporateActionsPort,
+): CorporateActionsPort {
+  return {
+    listActions: async (input, ctx) => toSourceResult(
+      sourceId,
+      await port.listActions(input, ctx),
+      (data) => data.length > 0,
+      validates(CorporateActionSchema.array()),
+    ),
+  };
+}
+
+export function sourceOwnershipPort(
+  sourceId: string,
+  port: ProviderOwnershipPort,
+): OwnershipPort {
+  return {
+    listOwnership: async (input, ctx) => toSourceResult(
+      sourceId,
+      await port.listOwnership(input, ctx),
+      (data) => data.length > 0,
+      validates(OwnershipObservationSchema.array()),
+    ),
+  };
+}
+
+export function sourceMarketEventsPort(
+  sourceId: string,
+  port: ProviderMarketEventsPort,
+): MarketEventsPort {
+  return {
+    listEvents: async (input, ctx) => toSourceResult(
+      sourceId,
+      await port.listEvents(input, ctx),
+      (data) => data.length > 0,
+      validates(MarketEventSchema.array()),
+    ),
   };
 }
 
@@ -199,7 +256,10 @@ function sourceError(warnings: ResearchWarning[]): SourceError | undefined {
   if (!warning) return undefined;
   switch (warning.code) {
     case 'AUTH_REQUIRED': return { code: 'AUTH_REQUIRED', message: warning.message, retryAfterMs: warning.retryAfterMs };
+    case 'CONFIG_MISSING': return { code: 'CONFIG_MISSING', message: warning.message };
+    case 'PERMISSION_DENIED': return { code: 'PERMISSION_DENIED', message: warning.message };
     case 'RATE_LIMITED': return { code: 'RATE_LIMITED', message: warning.message, retryAfterMs: warning.retryAfterMs };
+    case 'INVALID_PAYLOAD': return { code: 'INVALID_PAYLOAD', message: warning.message };
     case 'UNSUPPORTED_MARKET': return { code: 'UNSUPPORTED_MARKET', message: warning.message };
     case 'INVALID_INSTRUMENT': return { code: 'UNSUPPORTED_REQUEST', message: warning.message };
     case 'PARTIAL_DATA': return undefined;

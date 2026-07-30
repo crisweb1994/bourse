@@ -1,6 +1,10 @@
 import { Logger, Module } from '@nestjs/common';
 import {
   createMarketData,
+  parseTushareDataSets,
+  parseMassiveCapabilities,
+  parseMassiveDelay,
+  parseMassiveIntervals,
   ResearchMarketDataClient,
 } from '@bourse/market-data';
 
@@ -32,6 +36,35 @@ const SEC_USER_AGENT_FALLBACK = 'stock-suggest-research contact@example.com';
             : {}),
           ...(process.env.EODHD_API_KEY?.trim()
             ? { eodhdApiKey: process.env.EODHD_API_KEY.trim() }
+            : {}),
+          ...(process.env.TUSHARE_TOKEN?.trim() && parseTushareDataSets(process.env.TUSHARE_ENABLED_DATASETS).length > 0
+            ? {
+                tushare: {
+                  token: process.env.TUSHARE_TOKEN.trim(),
+                  enabledDataSets: parseTushareDataSets(process.env.TUSHARE_ENABLED_DATASETS),
+                  ...(Number(process.env.TUSHARE_REQUESTS_PER_MINUTE) > 0
+                    ? { requestsPerMinute: Number(process.env.TUSHARE_REQUESTS_PER_MINUTE) }
+                    : {}),
+                },
+              }
+            : {}),
+          ...(process.env.MASSIVE_API_KEY?.trim() &&
+          parseMassiveCapabilities(process.env.MASSIVE_ENABLED_CAPABILITIES).length > 0 &&
+          parseMassiveDelay(process.env.MASSIVE_QUOTE_DELAY)
+            ? {
+                massive: {
+                  apiKey: process.env.MASSIVE_API_KEY.trim(),
+                  enabledCapabilities: parseMassiveCapabilities(process.env.MASSIVE_ENABLED_CAPABILITIES),
+                  delay: parseMassiveDelay(process.env.MASSIVE_QUOTE_DELAY)!,
+                  historyIntervals: parseMassiveIntervals(process.env.MASSIVE_HISTORY_INTERVALS),
+                  ...(Number(process.env.MASSIVE_REQUESTS_PER_MINUTE) > 0
+                    ? { requestsPerMinute: Number(process.env.MASSIVE_REQUESTS_PER_MINUTE) }
+                    : {}),
+                },
+              }
+            : {}),
+          ...(process.env.SFC_SHORT_POSITION_CSV_URL?.trim()
+            ? { sfcShortPositionCsvUrl: process.env.SFC_SHORT_POSITION_CSV_URL.trim() }
             : {}),
         });
       },

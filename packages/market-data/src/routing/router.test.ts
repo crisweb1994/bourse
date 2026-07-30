@@ -48,6 +48,9 @@ function portsFor(capability: CapabilitySpec['capability']): SourcePorts {
     case 'macro': return { macro: { fetchMacro: notCalled } };
     case 'instrument-search': return { instrumentSearch: { search: notCalled } };
     case 'market-calendar': return { marketCalendar: { getMarketSession: notCalled } };
+    case 'corporate-actions': return { corporateActions: { listActions: notCalled } };
+    case 'ownership': return { ownership: { listOwnership: notCalled } };
+    case 'market-events': return { marketEvents: { listEvents: notCalled } };
   }
 }
 

@@ -28,4 +28,15 @@ describe('InMemoryRateLimiter', () => {
     expect(limiter.tryAcquire('vendor', { requestsPerSecond: 5 }, 2)).toBe(false);
     expect(limiter.tryAcquire('vendor', { requestsPerSecond: 5 }, 1)).toBe(true);
   });
+
+  it('supports provider quotas expressed with a generic minute window', () => {
+    const limiter = new InMemoryRateLimiter();
+    const limit = { maxRequests: 2, windowMs: 60_000, concurrent: 1 };
+
+    expect(limiter.tryAcquire('tushare:dividend', limit)).toBe(true);
+    limiter.release('tushare:dividend');
+    expect(limiter.tryAcquire('tushare:dividend', limit)).toBe(true);
+    limiter.release('tushare:dividend');
+    expect(limiter.tryAcquire('tushare:dividend', limit)).toBe(false);
+  });
 });

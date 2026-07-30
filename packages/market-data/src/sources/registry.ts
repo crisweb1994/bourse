@@ -1,4 +1,4 @@
-import type { Capability, CapabilitySpec, SecurityType } from '../contracts/source';
+import type { Capability, CapabilitySpec, DataSet, SecurityType } from '../contracts/source';
 import type { SourceFailureCode } from '../contracts/errors';
 import type { MarketCode } from '../contracts/instrument';
 import type { SourceConfig, SourceInstance, SourcePlugin, SourceRuntime } from './plugin';
@@ -6,6 +6,8 @@ import type { SourceConfig, SourceInstance, SourcePlugin, SourceRuntime } from '
 export interface SourceLookup {
   capability: Capability;
   market: MarketCode;
+  dataSet?: DataSet;
+  seriesCode?: string;
   interval?: '1d' | '1h' | '5m' | '1m';
   securityType?: SecurityType;
 }
@@ -56,6 +58,8 @@ export class SourceRegistry {
       const spec = instance.manifest.capabilities.find((candidate) =>
         candidate.capability === lookup.capability &&
         candidate.markets.includes(lookup.market) &&
+        (!lookup.dataSet || candidate.dataSets?.includes(lookup.dataSet)) &&
+        (!lookup.seriesCode || candidate.seriesCodes?.includes(lookup.seriesCode)) &&
         (!lookup.interval || !candidate.intervals || candidate.intervals.includes(lookup.interval)) &&
         (!lookup.securityType || !candidate.securityTypes || candidate.securityTypes.includes(lookup.securityType)),
       );
@@ -74,9 +78,19 @@ export class SourceRegistry {
     const marketMatches = capabilityMatches.filter(({ spec }) => spec.markets.includes(lookup.market));
     if (marketMatches.length === 0) return 'UNSUPPORTED_MARKET';
 
-    const securityMatches = lookup.securityType
-      ? marketMatches.filter(({ spec }) => !spec.securityTypes || spec.securityTypes.includes(lookup.securityType!))
+    const dataSetMatches = lookup.dataSet
+      ? marketMatches.filter(({ spec }) => spec.dataSets?.includes(lookup.dataSet!))
       : marketMatches;
+    if (lookup.dataSet && dataSetMatches.length === 0) return 'UNSUPPORTED_DATASET';
+
+    const seriesMatches = lookup.seriesCode
+      ? dataSetMatches.filter(({ spec }) => spec.seriesCodes?.includes(lookup.seriesCode!))
+      : dataSetMatches;
+    if (lookup.seriesCode && seriesMatches.length === 0) return 'UNSUPPORTED_SERIES';
+
+    const securityMatches = lookup.securityType
+      ? seriesMatches.filter(({ spec }) => !spec.securityTypes || spec.securityTypes.includes(lookup.securityType!))
+      : seriesMatches;
     if (lookup.securityType && securityMatches.length === 0) return 'UNSUPPORTED_SECURITY_TYPE';
 
     const intervalMatches = lookup.interval
@@ -111,5 +125,8 @@ function implementsCapability(instance: SourceInstance, capability: Capability):
     case 'macro': return typeof instance.ports.macro?.fetchMacro === 'function';
     case 'instrument-search': return typeof instance.ports.instrumentSearch?.search === 'function';
     case 'market-calendar': return typeof instance.ports.marketCalendar?.getMarketSession === 'function';
+    case 'corporate-actions': return typeof instance.ports.corporateActions?.listActions === 'function';
+    case 'ownership': return typeof instance.ports.ownership?.listOwnership === 'function';
+    case 'market-events': return typeof instance.ports.marketEvents?.listEvents === 'function';
   }
 }

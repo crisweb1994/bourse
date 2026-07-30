@@ -5,7 +5,9 @@ import type { ResearchWarning } from '../../contracts/warning';
 import { resolveFetch, withTimeout } from '../http';
 import type { ConnectorRunContext, FetchLike } from '../types';
 import type {
-  MacroIndicator,
+  MacroCategory,
+  MacroFrequency,
+  MacroInput,
   MacroMarket,
   MacroObservation,
   ProviderMacroPort as MacroPort,
@@ -21,15 +23,35 @@ const HKMA_BASE =
 const DEFAULT_TIMEOUT_MS = 8_000;
 
 interface SeriesOutcome {
-  observations: MacroObservation[];
+  observations: LegacyMacroObservation[];
   citations: ResearchCitation[];
   warnings: ResearchWarning[];
 }
 
 interface WorldBankSpec {
-  indicator: Extract<MacroIndicator, 'gdp_growth' | 'inflation' | 'unemployment'>;
+  indicator: Extract<LegacyMacroIndicator, 'gdp_growth' | 'inflation' | 'unemployment'>;
   id: string;
   title: string;
+}
+
+type LegacyMacroIndicator =
+  | 'gdp_growth'
+  | 'inflation'
+  | 'unemployment'
+  | 'policy_rate'
+  | 'interbank_rate_3m'
+  | 'government_bond_10y'
+  | 'federal_debt'
+  | 'exchange_rate';
+
+interface LegacyMacroObservation {
+  indicator: LegacyMacroIndicator;
+  value: number;
+  unit: 'percent' | 'local_currency_per_usd' | 'usd';
+  period: string;
+  frequency: 'DAILY' | 'MONTHLY' | 'ANNUAL';
+  provider: string;
+  seriesId: string;
 }
 
 const WORLD_BANK_SERIES: readonly WorldBankSpec[] = [
@@ -52,30 +74,38 @@ export function createOfficialMacroConnector(
   return {
     async fetchMacro(input, ctx: ConnectorRunContext = {}): Promise<ResearchResult<MacroSnapshot>> {
       const retrievedAt = now().toISOString();
-      const lookback = Math.max(1, Math.min(3, Math.trunc(input.lookback ?? 1)));
+      const lookback = Math.max(1, Math.min(100, Math.trunc(input.limitPerSeries ?? input.lookback ?? 1)));
       const fetchLike = resolveFetch(ctx, options);
-      const tasks: Promise<SeriesOutcome>[] = WORLD_BANK_SERIES.map((series) =>
-        fetchWorldBank(input.market, series, lookback, retrievedAt, fetchLike, timeoutMs, ctx),
-      );
+      const tasks: Promise<SeriesOutcome>[] = WORLD_BANK_SERIES
+        .filter((series) => requested(input, input.market, series.indicator))
+        .map((series) => fetchWorldBank(input.market, series, lookback, retrievedAt, fetchLike, timeoutMs, ctx));
 
       if (input.market === 'US') {
-        tasks.push(
-          fetchFred('policy_rate', 'FEDFUNDS', 'Effective Federal Funds Rate', 'MONTHLY', lookback, retrievedAt, fetchLike, timeoutMs, ctx),
-          fetchFred('government_bond_10y', 'DGS10', '10-Year Treasury Constant Maturity Rate', 'DAILY', lookback, retrievedAt, fetchLike, timeoutMs, ctx),
-          fetchUsTreasuryDebt(lookback, retrievedAt, fetchLike, timeoutMs, ctx),
-        );
+        if (requested(input, 'US', 'policy_rate')) {
+          tasks.push(fetchFred('policy_rate', 'FEDFUNDS', 'Effective Federal Funds Rate', 'MONTHLY', lookback, retrievedAt, fetchLike, timeoutMs, ctx));
+        }
+        if (requested(input, 'US', 'government_bond_10y')) {
+          tasks.push(fetchFred('government_bond_10y', 'DGS10', '10-Year Treasury Constant Maturity Rate', 'DAILY', lookback, retrievedAt, fetchLike, timeoutMs, ctx));
+        }
+        if (requested(input, 'US', 'federal_debt')) {
+          tasks.push(fetchUsTreasuryDebt(lookback, retrievedAt, fetchLike, timeoutMs, ctx));
+        }
       }
       if (input.market === 'HK') {
-        tasks.push(
-          fetchHkma('exchange_rate', 'er-eeri-daily', 'usd', 'HKD per USD', 'local_currency_per_usd', lookback, retrievedAt, fetchLike, timeoutMs, ctx),
-          fetchHkma('interbank_rate_3m', 'hk-interbank-ir-daily', 'ir_3m', '3-month HIBOR', 'percent', lookback, retrievedAt, fetchLike, timeoutMs, ctx),
-        );
+        if (requested(input, 'HK', 'exchange_rate')) {
+          tasks.push(fetchHkma('exchange_rate', 'er-eeri-daily', 'usd', 'HKD per USD', 'local_currency_per_usd', lookback, retrievedAt, fetchLike, timeoutMs, ctx));
+        }
+        if (requested(input, 'HK', 'interbank_rate_3m')) {
+          tasks.push(fetchHkma('interbank_rate_3m', 'hk-interbank-ir-daily', 'ir_3m', '3-month HIBOR', 'percent', lookback, retrievedAt, fetchLike, timeoutMs, ctx));
+        }
       }
 
       const outcomes = await Promise.all(tasks);
       const observations = outcomes
         .flatMap((outcome) => outcome.observations)
-        .sort((a, b) => a.indicator.localeCompare(b.indicator) || b.period.localeCompare(a.period));
+        .map((observation) => canonicalObservation(input.market, observation))
+        .filter((observation) => (!input.from || observation.periodEnd >= input.from) && (!input.to || observation.periodStart <= input.to))
+        .sort((a, b) => a.seriesCode.localeCompare(b.seriesCode) || b.periodEnd.localeCompare(a.periodEnd));
       const warnings = outcomes.flatMap((outcome) => outcome.warnings);
       const citations = dedupeCitations(outcomes.flatMap((outcome) => outcome.citations));
       const freshness = buildFreshness(observations, retrievedAt);
@@ -123,7 +153,7 @@ async function fetchUsTreasuryDebt(
       if (!response.ok) return failed('us-treasury', seriesId, `HTTP ${response.status}`);
       const payload = await response.json() as { data?: unknown };
       const rows = Array.isArray(payload.data) ? payload.data : [];
-      const observations = rows.flatMap((row): MacroObservation[] => {
+      const observations = rows.flatMap((row): LegacyMacroObservation[] => {
         if (!row || typeof row !== 'object') return [];
         const record = row as Record<string, unknown>;
         const period = record.record_date;
@@ -183,7 +213,7 @@ async function fetchWorldBank(
       const payload = await response.json();
       const rows = Array.isArray(payload) && Array.isArray(payload[1]) ? payload[1] : [];
       const observations = rows
-        .flatMap((row): MacroObservation[] => {
+        .flatMap((row): LegacyMacroObservation[] => {
           if (!row || typeof row !== 'object') return [];
           const value = finite((row as { value?: unknown }).value);
           const period = (row as { date?: unknown }).date;
@@ -220,7 +250,7 @@ async function fetchWorldBank(
 }
 
 async function fetchFred(
-  indicator: Extract<MacroIndicator, 'policy_rate' | 'government_bond_10y'>,
+  indicator: Extract<LegacyMacroIndicator, 'policy_rate' | 'government_bond_10y'>,
   id: string,
   title: string,
   frequency: 'DAILY' | 'MONTHLY',
@@ -237,7 +267,7 @@ async function fetchFred(
       });
       if (!response.ok || !response.text) return failed('fred', id, `HTTP ${response.status}`);
       const csv = await response.text();
-      const observations = csv.split(/\r?\n/).slice(1).flatMap((line): MacroObservation[] => {
+      const observations = csv.split(/\r?\n/).slice(1).flatMap((line): LegacyMacroObservation[] => {
         const comma = line.indexOf(',');
         if (comma < 0) return [];
         const period = line.slice(0, comma).replaceAll('"', '').trim();
@@ -262,7 +292,7 @@ async function fetchFred(
 }
 
 async function fetchHkma(
-  indicator: Extract<MacroIndicator, 'exchange_rate' | 'interbank_rate_3m'>,
+  indicator: Extract<LegacyMacroIndicator, 'exchange_rate' | 'interbank_rate_3m'>,
   endpoint: 'er-eeri-daily' | 'hk-interbank-ir-daily',
   field: 'usd' | 'ir_3m',
   title: string,
@@ -286,7 +316,7 @@ async function fetchHkma(
       const records = payload.header?.success === true && Array.isArray(payload.result?.records)
         ? payload.result.records
         : [];
-      const observations = records.flatMap((record): MacroObservation[] => {
+      const observations = records.flatMap((record): LegacyMacroObservation[] => {
         if (!record || typeof record !== 'object') return [];
         const row = record as Record<string, unknown>;
         const period = row.end_of_day;
@@ -311,7 +341,7 @@ async function fetchHkma(
 }
 
 function failed(
-  provider: MacroObservation['provider'],
+  provider: string,
   seriesId: string,
   detail: string,
   code: ResearchWarning['code'] = 'SOURCE_UNAVAILABLE',
@@ -332,16 +362,18 @@ function buildFreshness(observations: MacroObservation[], retrievedAt: string): 
   const latestByProvider = new Map<string, MacroObservation>();
   for (const observation of observations) {
     const current = latestByProvider.get(observation.provider);
-    if (!current || observation.period > current.period) latestByProvider.set(observation.provider, observation);
+    if (!current || observation.periodEnd > current.periodEnd) latestByProvider.set(observation.provider, observation);
   }
   return [...latestByProvider.entries()].map(([provider, latest]) => {
-    const asOf = latest.frequency === 'ANNUAL'
-      ? `${latest.period}-12-31T23:59:59.999Z`
-      : `${latest.period}T00:00:00.000Z`;
+    const asOf = `${latest.periodEnd}T23:59:59.999Z`;
     const ttlMs = latest.frequency === 'DAILY'
       ? 45 * 24 * 60 * 60_000
+      : latest.frequency === 'WEEKLY'
+        ? 60 * 24 * 60 * 60_000
       : latest.frequency === 'MONTHLY'
         ? 90 * 24 * 60 * 60_000
+        : latest.frequency === 'QUARTERLY'
+          ? 180 * 24 * 60 * 60_000
         : 730 * 24 * 60 * 60_000;
     const stale = Date.parse(retrievedAt) - Date.parse(asOf) > ttlMs;
     return {
@@ -350,9 +382,74 @@ function buildFreshness(observations: MacroObservation[], retrievedAt: string): 
       retrievedAt,
       stale,
       ttlMs,
-      ...(stale ? { reason: `latest observation ${latest.period} exceeds freshness window` } : {}),
+      ...(stale ? { reason: `latest observation ${latest.periodEnd} exceeds freshness window` } : {}),
     };
   });
+}
+
+const SERIES_METADATA: Record<LegacyMacroIndicator, {
+  suffix: string;
+  category: MacroCategory;
+  name: string;
+}> = {
+  gdp_growth: { suffix: 'GDP.GROWTH.YOY', category: 'growth', name: 'GDP growth, year over year' },
+  inflation: { suffix: 'CPI.YOY', category: 'inflation', name: 'Consumer price inflation, year over year' },
+  unemployment: { suffix: 'UNEMPLOYMENT.RATE', category: 'employment', name: 'Unemployment rate' },
+  policy_rate: { suffix: 'POLICY_RATE', category: 'rates', name: 'Policy rate' },
+  interbank_rate_3m: { suffix: 'INTERBANK_RATE_3M', category: 'rates', name: 'Three-month interbank rate' },
+  government_bond_10y: { suffix: 'GOVERNMENT_BOND_10Y', category: 'rates', name: 'Ten-year government bond yield' },
+  federal_debt: { suffix: 'FEDERAL_DEBT', category: 'fiscal', name: 'Federal debt outstanding' },
+  exchange_rate: { suffix: 'USD_EXCHANGE_RATE', category: 'fx', name: 'Local currency per US dollar' },
+};
+
+function requested(input: MacroInput, market: MacroMarket, indicator: LegacyMacroIndicator): boolean {
+  const metadata = SERIES_METADATA[indicator];
+  const code = `${market}.${metadata.suffix}`;
+  return (!input.seriesCodes || input.seriesCodes.includes(code)) &&
+    (!input.categories || input.categories.includes(metadata.category));
+}
+
+function canonicalObservation(
+  market: MacroMarket,
+  observation: LegacyMacroObservation,
+): MacroObservation {
+  const metadata = SERIES_METADATA[observation.indicator];
+  const [periodStart, periodEnd] = periodRange(observation.period, observation.frequency);
+  return {
+    market,
+    seriesCode: `${market}.${metadata.suffix}`,
+    category: metadata.category,
+    name: metadata.name,
+    value: String(observation.value),
+    unit: canonicalUnit(observation.unit),
+    frequency: observation.frequency satisfies MacroFrequency,
+    periodStart,
+    periodEnd,
+    seasonalAdjustment: 'UNKNOWN',
+    provider: observation.provider,
+    providerSeriesId: observation.seriesId,
+  };
+}
+
+function periodRange(period: string, frequency: LegacyMacroObservation['frequency']): [string, string] {
+  if (frequency === 'ANNUAL') return [`${period}-01-01`, `${period}-12-31`];
+  if (frequency === 'MONTHLY') {
+    const start = period.slice(0, 7);
+    const [year, month] = start.split('-').map(Number);
+    if (Number.isInteger(year) && Number.isInteger(month)) {
+      const end = new Date(Date.UTC(year!, month!, 0)).toISOString().slice(0, 10);
+      return [`${start}-01`, end];
+    }
+  }
+  return [period, period];
+}
+
+function canonicalUnit(unit: LegacyMacroObservation['unit']): string {
+  switch (unit) {
+    case 'percent': return 'percent';
+    case 'local_currency_per_usd': return 'local_currency_per_usd';
+    case 'usd': return 'USD';
+  }
 }
 
 function finite(value: unknown): number | null {

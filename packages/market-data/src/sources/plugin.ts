@@ -5,6 +5,9 @@ import type { FinancialsPort } from '../ports/financials';
 import type { FilingPort } from '../ports/filings';
 import type { MacroPort } from '../ports/macro';
 import type { InstrumentSearchPort } from '../ports/instrument-search';
+import type { CorporateActionsPort } from '../ports/corporate-actions';
+import type { OwnershipPort } from '../ports/ownership';
+import type { MarketEventsPort } from '../ports/market-events';
 
 export interface SourcePorts {
   finance?: FinancePort;
@@ -14,6 +17,9 @@ export interface SourcePorts {
   macro?: MacroPort;
   instrumentSearch?: InstrumentSearchPort;
   marketCalendar?: MarketCalendarPort;
+  corporateActions?: CorporateActionsPort;
+  ownership?: OwnershipPort;
+  marketEvents?: MarketEventsPort;
 }
 
 export interface SourceConfig {

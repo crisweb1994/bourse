@@ -15,3 +15,4 @@ export * from './financial-statement';
 export * from './lhb-scan';
 export * from './shareholders';
 export * from './unlock-calendar';
+export * from './canonical';

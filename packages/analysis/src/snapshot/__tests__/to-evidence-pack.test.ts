@@ -128,6 +128,30 @@ function baseSnapshot(overrides: Partial<StockSnapshot> = {}): StockSnapshot {
 // Tests
 // ============================================================================
 
+describe('snapshotToEvidencePack · canonical market-data extensions', () => {
+  it('preserves canonical actions, ownership, and events with provenance', () => {
+    const snapshot = baseSnapshot({
+      market: 'HK',
+      symbol: '0700',
+      rawFacts: {
+        ...baseSnapshot().rawFacts,
+        corporateActions: [{ id: 'action-1', instrumentId: 'HK:0700', type: 'DIVIDEND', status: 'ANNOUNCED', announcedAt: RETRIEVED_AT, sourceDocumentId: 'hkex-1' }],
+        ownership: [{ id: 'ownership-1', instrumentId: 'HK:0700', kind: 'SHORT_POSITION', asOf: RETRIEVED_AT, direction: 'SHORT', value: '12345', unit: 'shares' }],
+        marketEvents: [{ id: 'event-1', instrumentId: 'HK:0700', type: 'EARNINGS_GUIDANCE', occurredAt: RETRIEVED_AT, title: 'Profit warning', sourceDocumentId: 'hkex-2' }],
+      },
+      citations: [
+        { factKey: 'corporateActions', title: 'HKEX action', url: 'https://example.com/action', retrievedAt: RETRIEVED_AT, provider: 'hkex' },
+        { factKey: 'ownership', title: 'SFC short position', url: 'https://example.com/short', retrievedAt: RETRIEVED_AT, provider: 'sfc' },
+        { factKey: 'marketEvents', title: 'HKEX event', url: 'https://example.com/event', retrievedAt: RETRIEVED_AT, provider: 'hkex' },
+      ],
+    });
+    const pack = snapshotToEvidencePack(snapshot);
+    expect(pack.facts.corporateActions?.value[0]?.type).toBe('DIVIDEND');
+    expect(pack.facts.ownershipObservations?.value[0]?.kind).toBe('SHORT_POSITION');
+    expect(pack.facts.marketEvents?.value[0]?.type).toBe('EARNINGS_GUIDANCE');
+  });
+});
+
 describe('snapshotToEvidencePack · core fact projection', () => {
   it('emits schemaVersion + symbol + market + capturedAt', () => {
     const pack = snapshotToEvidencePack(baseSnapshot());
@@ -178,14 +202,15 @@ describe('snapshotToEvidencePack · core fact projection', () => {
 });
 
 describe('snapshotToEvidencePack · CN-only facts', () => {
-  it('projects consensusEps from Eastmoney-shape payload', () => {
+  it('projects consensusEps from canonical estimates', () => {
     const snap = baseSnapshot({
       rawFacts: {
         ...baseSnapshot().rawFacts,
         consensusEps: {
-          forecasts: [
-            { year: 2025, value: 10 },
-            { year: 2026, value: 12 },
+          asOf: '2025-05-25T00:00:00.000Z',
+          estimates: [
+            { metricCode: 'epsBasic', periodEndOn: '2025-12-31', periodType: 'FY', value: '10', unit: 'per_share', currency: 'CNY' },
+            { metricCode: 'epsBasic', periodEndOn: '2026-12-31', periodType: 'FY', value: '12', unit: 'per_share', currency: 'CNY' },
           ],
         },
       },
@@ -195,46 +220,42 @@ describe('snapshotToEvidencePack · CN-only facts', () => {
     expect(pack.facts.consensusEps?.value?.[0]).toEqual({ year: 2025, value: 10 });
   });
 
-  it('projects northboundFlow rows tolerating both .rows wrapper and bare array', () => {
-    const wrapped = baseSnapshot({
+  it('projects canonical Stock Connect observations', () => {
+    const snapshot = baseSnapshot({
       rawFacts: {
         ...baseSnapshot().rawFacts,
-        northboundFlow: {
-          rows: [{ date: '2026-05-22', hgt: 5.5, sgt: 0 }],
-        },
+        northboundFlow: [{
+          id: 'stock-connect-1',
+          instrumentId: 'CN:600519',
+          kind: 'STOCK_CONNECT',
+          asOf: '2026-05-22',
+          shanghaiNetFlow: '5.5',
+          shenzhenNetFlow: '0',
+          flowUnit: 'CNY_100M',
+        }],
       },
     });
-    expect(snapshotToEvidencePack(wrapped).facts.northboundFlow?.value).toHaveLength(1);
-
-    const bare = baseSnapshot({
-      rawFacts: {
-        ...baseSnapshot().rawFacts,
-        northboundFlow: [{ date: '2026-05-22', hgt: 5.5, sgt: 0 }],
-      },
-    });
-    expect(snapshotToEvidencePack(bare).facts.northboundFlow?.value).toHaveLength(1);
+    expect(snapshotToEvidencePack(snapshot).facts.northboundFlow?.value).toEqual([
+      { date: '2026-05-22', hgt: 5.5, sgt: 0 },
+    ]);
   });
 
   it('projects LHB appearances using legacy topBuySeatNames (Wave 1.9)', () => {
     const snap = baseSnapshot({
       rawFacts: {
         ...baseSnapshot().rawFacts,
-        lhb: {
-          appearances: [
+        lhb: [
             {
-              date: '2026-05-10',
+              id: 'lhb-1',
+              instrumentId: 'CN:600519',
+              type: 'LHB',
+              occurredAt: '2026-05-10',
+              title: '龙虎榜：换手率达20%',
               reason: '换手率达20%',
-              // Rich seat objects (Wave 1.5 shape)
-              topBuySeats: [
-                { name: '国泰君安上海江苏路', buyAmount: 1e7, sellAmount: 0, netAmount: 1e7 },
-              ],
-              topSellSeats: [],
-              // Legacy view (Wave 1.9)
               topBuySeatNames: ['国泰君安上海江苏路'],
               topSellSeatNames: [],
             },
-          ],
-        },
+        ],
       },
     });
     const pack = snapshotToEvidencePack(snap);
@@ -244,15 +265,21 @@ describe('snapshotToEvidencePack · CN-only facts', () => {
     expect(row?.topSellSeats).toEqual([]);
   });
 
-  it('projects unlockCalendar events from .events wrapper', () => {
+  it('projects canonical unlock events', () => {
     const snap = baseSnapshot({
       rawFacts: {
         ...baseSnapshot().rawFacts,
-        unlockCalendar: {
-          events: [
-            { date: '2026-06-15', shares: 5_000_000, marketValue: 1.2, type: '首发原股东限售股' },
-          ],
-        },
+        unlockCalendar: [{
+          id: 'unlock-1',
+          instrumentId: 'CN:600519',
+          type: 'UNLOCK',
+          occurredAt: '2026-06-15',
+          title: '限售解禁：首发原股东限售股',
+          shares: '5000000',
+          marketValue: '120000000',
+          currency: 'CNY',
+          unlockType: '首发原股东限售股',
+        }],
       },
     });
     const pack = snapshotToEvidencePack(snap);
@@ -322,13 +349,17 @@ describe('snapshotToEvidencePack · macro and web research', () => {
           market: 'US',
           observations: [
             {
-              indicator: 'policy_rate',
-              value: 4.5,
+              market: 'US',
+              seriesCode: 'US.POLICY_RATE',
+              category: 'rates',
+              name: 'Effective Federal Funds Rate',
+              value: '4.5',
               unit: 'percent',
-              period: '2025-05-01',
               frequency: 'MONTHLY',
+              periodStart: '2025-05-01',
+              periodEnd: '2025-05-31',
               provider: 'fred',
-              seriesId: 'FEDFUNDS',
+              providerSeriesId: 'FEDFUNDS',
             },
           ],
         },
@@ -367,7 +398,7 @@ describe('snapshotToEvidencePack · macro and web research', () => {
       },
     ]);
     expect(pack.facts.recentNews?.value).toHaveLength(1);
-    expect(pack.facts.macro?.value.observations[0]?.seriesId).toBe('FEDFUNDS');
+    expect(pack.facts.macro?.value.observations[0]?.providerSeriesId).toBe('FEDFUNDS');
     expect(pack.facts.macro?.sourceTier).toBe('A');
   });
 });

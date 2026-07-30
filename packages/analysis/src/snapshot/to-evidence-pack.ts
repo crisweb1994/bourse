@@ -40,7 +40,7 @@ import type {
   FactOf,
   SourceTier,
 } from '../contracts/evidence-pack-v2';
-import type { FinancialsBundle } from '@bourse/market-data';
+import type { FinancialsBundle, MarketEvent, OwnershipObservation } from '@bourse/market-data';
 import type { StockSnapshot } from './types';
 import { buildResearchCoverage } from './research-coverage';
 
@@ -104,15 +104,14 @@ export function snapshotToEvidencePack(
   // drop here); project the descriptive scalars. Tier B (vendor F10 / Yahoo
   // profile, not a primary regulatory filing).
   const prof = snap.rawFacts.profile;
-  if (prof && typeof prof === 'object') {
-    const p = prof as Record<string, unknown>;
+  if (prof) {
     const value: Record<string, unknown> = {};
-    if (typeof p.description === 'string' && p.description) value.description = p.description;
-    if (typeof p.sector === 'string' && p.sector) value.sector = p.sector;
-    if (typeof p.industry === 'string' && p.industry) value.industry = p.industry;
-    if (typeof p.employees === 'number' && Number.isFinite(p.employees)) value.employees = p.employees;
-    if (typeof p.website === 'string' && p.website) value.website = p.website;
-    if (typeof p.marketCap === 'number' && Number.isFinite(p.marketCap)) value.marketCap = p.marketCap;
+    if (prof.description) value.description = prof.description;
+    if (prof.sector) value.sector = prof.sector;
+    if (prof.industry) value.industry = prof.industry;
+    if (typeof prof.employees === 'number' && Number.isFinite(prof.employees)) value.employees = prof.employees;
+    if (prof.website) value.website = prof.website;
+    if (typeof prof.marketCap === 'number' && Number.isFinite(prof.marketCap)) value.marketCap = prof.marketCap;
     if (Object.keys(value).length > 0) {
       putFact('profile', mkFact('profile', value));
     }
@@ -155,110 +154,80 @@ export function snapshotToEvidencePack(
   }
 
   const macro = snap.rawFacts.macro;
-  if (
-    macro &&
-    typeof macro === 'object' &&
-    Array.isArray((macro as { observations?: unknown }).observations)
-  ) {
-    putFact('macro', mkFact('macro', macro as { market: string; observations: unknown[] }));
+  if (macro && macro.observations.length > 0) {
+    putFact('macro', mkFact('macro', macro));
   }
 
-  // consensusEps — recognize Eastmoney-shape {forecasts:[{year,value}]}
+  if (snap.rawFacts.corporateActions?.length) {
+    putFact('corporateActions', mkFact('corporateActions', snap.rawFacts.corporateActions));
+  }
+  if (snap.rawFacts.ownership?.length) {
+    putFact('ownershipObservations', mkFact('ownership', snap.rawFacts.ownership));
+  }
+  if (snap.rawFacts.marketEvents?.length) {
+    putFact('marketEvents', mkFact('marketEvents', snap.rawFacts.marketEvents));
+  }
+
+  // Consensus is canonical at the snapshot boundary; EvidencePack keeps its
+  // compact year/value projection for prompt compatibility.
   const ce = snap.rawFacts.consensusEps;
-  if (ce && typeof ce === 'object' && Array.isArray((ce as { forecasts?: unknown }).forecasts)) {
-    const forecasts = (ce as { forecasts: Array<{ year: unknown; value: unknown }> }).forecasts
-      .filter(
-        (f) => typeof f.year === 'number' && typeof f.value === 'number',
-      )
-      .map((f) => ({ year: f.year as number, value: f.value as number }));
+  if (ce) {
+    const forecasts = ce.estimates
+      .filter((estimate) => estimate.metricCode === 'epsBasic')
+      .map((estimate) => ({
+        year: Number(estimate.periodEndOn.slice(0, 4)),
+        value: Number(estimate.value),
+      }))
+      .filter((estimate) => Number.isInteger(estimate.year) && Number.isFinite(estimate.value));
     if (forecasts.length > 0) {
       putFact('consensusEps', mkFact('consensusEps', forecasts));
     }
   }
 
-  // northboundFlow — expect Array<{date, hgt, sgt}>
+  // Stock Connect ownership observations -> legacy northbound flow rows.
   const nbf = snap.rawFacts.northboundFlow;
-  if (nbf && Array.isArray((nbf as { rows?: unknown }).rows)) {
-    const rows = (nbf as { rows: Array<{ date: unknown; hgt: unknown; sgt: unknown }> }).rows
-      .filter(
-        (r) =>
-          typeof r.date === 'string' &&
-          typeof r.hgt === 'number' &&
-          typeof r.sgt === 'number',
-      )
-      .map((r) => ({
-        date: r.date as string,
-        hgt: r.hgt as number,
-        sgt: r.sgt as number,
-      }));
-    if (rows.length > 0) {
-      putFact('northboundFlow', mkFact('northboundFlow', rows));
-    }
-  } else if (Array.isArray(nbf)) {
-    // Bare array shape (legacy callers)
-    const rows = (nbf as Array<{ date: unknown; hgt: unknown; sgt: unknown }>)
-      .filter(
-        (r) =>
-          r && typeof r === 'object' &&
-          typeof r.date === 'string' &&
-          typeof r.hgt === 'number' &&
-          typeof r.sgt === 'number',
-      )
-      .map((r) => ({
-        date: r.date as string,
-        hgt: r.hgt as number,
-        sgt: r.sgt as number,
-      }));
+  if (nbf) {
+    const rows = nbf
+      .filter(isStockConnectObservation)
+      .map((row) => ({
+        date: row.asOf,
+        hgt: Number(row.shanghaiNetFlow),
+        sgt: Number(row.shenzhenNetFlow),
+      }))
+      .filter((row) => Number.isFinite(row.hgt) && Number.isFinite(row.sgt));
     if (rows.length > 0) {
       putFact('northboundFlow', mkFact('northboundFlow', rows));
     }
   }
 
-  // LHB — Wave 1.5 emits rich seats; project to legacy name list (Wave 1.9)
+  // Canonical LHB events -> legacy name lists used by prompts.
   const lhb = snap.rawFacts.lhb;
-  if (lhb && typeof lhb === 'object' && Array.isArray((lhb as { appearances?: unknown }).appearances)) {
-    const apps = (lhb as {
-      appearances: Array<{
-        date?: unknown;
-        reason?: unknown;
-        topBuySeatNames?: unknown;
-        topSellSeatNames?: unknown;
-      }>;
-    }).appearances
-      .filter((a) => typeof a.date === 'string' && typeof a.reason === 'string')
-      .map((a) => ({
-        date: a.date as string,
-        reason: a.reason as string,
-        topBuySeats: Array.isArray(a.topBuySeatNames)
-          ? (a.topBuySeatNames as unknown[]).filter((s): s is string => typeof s === 'string')
-          : [],
-        topSellSeats: Array.isArray(a.topSellSeatNames)
-          ? (a.topSellSeatNames as unknown[]).filter((s): s is string => typeof s === 'string')
-          : [],
+  if (lhb) {
+    const apps = lhb
+      .filter(isLhbEvent)
+      .map((event) => ({
+        date: event.occurredAt,
+        reason: event.reason,
+        topBuySeats: event.topBuySeatNames,
+        topSellSeats: event.topSellSeatNames,
       }));
     if (apps.length > 0) {
       putFact('lhbAppearances', mkFact('lhb', apps));
     }
   }
 
-  // unlockCalendar — expect Array<{date, shares, marketValue?, type}>
+  // Canonical unlock events -> legacy EvidencePack projection.
   const uc = snap.rawFacts.unlockCalendar;
-  if (uc && typeof uc === 'object' && Array.isArray((uc as { events?: unknown }).events)) {
-    const events = (uc as {
-      events: Array<{ date: unknown; shares: unknown; marketValue?: unknown; type?: unknown }>;
-    }).events
-      .filter(
-        (e) =>
-          typeof e.date === 'string' &&
-          typeof e.shares === 'number' &&
-          e.shares > 0,
-      )
-      .map((e) => ({
-        date: e.date as string,
-        shares: e.shares as number,
-        ...(typeof e.marketValue === 'number' ? { marketValue: e.marketValue as number } : {}),
-        type: typeof e.type === 'string' ? (e.type as string) : 'unknown',
-      }));
+  if (uc) {
+    const events = uc
+      .filter(isUnlockEvent)
+      .map((event) => ({
+        date: event.effectiveAt ?? event.occurredAt,
+        shares: Number(event.shares),
+        ...(event.marketValue === undefined ? {} : { marketValue: Number(event.marketValue) / 100_000_000 }),
+        type: event.unlockType,
+      }))
+      .filter((event) => Number.isFinite(event.shares) && event.shares > 0);
     if (events.length > 0) {
       putFact('unlockCalendar', mkFact('unlockCalendar', events));
     }
@@ -272,9 +241,9 @@ export function snapshotToEvidencePack(
   // for now until shareholders connector grows the top10 stats. Surface
   // a structural placeholder so dim prompts know data was collected.
   const sh = snap.rawFacts.shareholders;
-  if (sh && typeof sh === 'object' && Array.isArray((sh as { rows?: unknown }).rows)) {
-    const rows = (sh as { rows: Array<Record<string, unknown>> }).rows;
-    if (rows.length > 0) {
+  if (sh) {
+    const observations = sh.filter((item) => item.kind === 'SHAREHOLDER_COUNT');
+    if (observations.length > 0) {
       // The legacy ShareholderConcentration schema requires top10Ratio
       // (number 0-1). We can't fabricate it from holder-count data, so
       // we skip the fact rather than emit a wrong value. Surface in
@@ -282,7 +251,7 @@ export function snapshotToEvidencePack(
       // raw form on the snapshot.
       // (Future: shareholders connector should expose top10 ratio when
       // RPT_F10_EH_FREEHOLDERS or similar is wired.)
-      void rows;
+      void observations;
     }
   }
 
@@ -375,6 +344,20 @@ export function snapshotToEvidencePack(
   };
 
   return pack;
+}
+
+function isStockConnectObservation(
+  value: OwnershipObservation,
+): value is Extract<OwnershipObservation, { kind: 'STOCK_CONNECT' }> {
+  return value.kind === 'STOCK_CONNECT';
+}
+
+function isLhbEvent(value: MarketEvent): value is Extract<MarketEvent, { type: 'LHB' }> {
+  return value.type === 'LHB';
+}
+
+function isUnlockEvent(value: MarketEvent): value is Extract<MarketEvent, { type: 'UNLOCK' }> {
+  return value.type === 'UNLOCK';
 }
 
 // ============================================================================

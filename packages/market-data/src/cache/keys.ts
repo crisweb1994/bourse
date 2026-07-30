@@ -9,6 +9,8 @@ export function stableJson(value: unknown): string {
 export function cacheKey(parts: {
   sourceId: string;
   capability: string;
+  dataSet?: string;
+  seriesCode?: string;
   scope: string;
   input: unknown;
   normalizationVersion?: string;
@@ -19,6 +21,8 @@ export function cacheKey(parts: {
     parts.scope,
     parts.sourceId,
     parts.capability,
+    parts.dataSet ?? '-',
+    parts.seriesCode ?? '-',
     stableJson(parts.input),
   ].join(':');
 }

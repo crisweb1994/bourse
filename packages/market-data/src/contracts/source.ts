@@ -11,7 +11,34 @@ export type Capability =
   | 'earnings-consensus'
   | 'macro'
   | 'instrument-search'
-  | 'market-calendar';
+  | 'market-calendar'
+  | 'corporate-actions'
+  | 'ownership'
+  | 'market-events';
+
+export type DataSet =
+  | 'dividend'
+  | 'split'
+  | 'rights-issue'
+  | 'placement'
+  | 'buyback'
+  | 'adjustment-factor'
+  | 'shareholder-count'
+  | 'stock-connect'
+  | 'short-position'
+  | 'institutional-position'
+  | 'insider-transaction'
+  | 'margin'
+  | 'earnings-calendar'
+  | 'earnings-guidance'
+  | 'unlock'
+  | 'lhb'
+  | 'suspension'
+  | 'price-limit'
+  | 'index-rebalance'
+  | 'regulatory-event'
+  | 'macro-series'
+  | 'session';
 
 export type SecurityType = 'stock' | 'etf' | 'index' | 'fund' | 'option';
 export type QuoteDelay = 'realtime' | 'delayed' | 'eod';
@@ -30,8 +57,29 @@ export type RedistributionPolicy =
   | 'credential-cache-only'
   | 'no-store';
 
+export type SourceTransport =
+  | 'official-api'
+  | 'vendor-api'
+  | 'official-html'
+  | 'official-file'
+  | 'scrape'
+  | 'derived';
+
+export interface SourceRateLimit {
+  /** Backward-compatible shorthand for a one-second fixed window. */
+  requestsPerSecond?: number;
+  /** Generic fixed-window quota, used by providers with minute/day limits. */
+  maxRequests?: number;
+  windowMs?: number;
+  concurrent?: number;
+}
+
 export interface CapabilitySpec {
   capability: Capability;
+  /** Optional domain sub-capabilities, for example ownership/stock-connect. */
+  dataSets?: readonly DataSet[];
+  /** Canonical macro series implemented by this source. */
+  seriesCodes?: readonly string[];
   markets: readonly MarketCode[];
   qualityTier: QualityTier;
   authority: SourceAuthority;
@@ -42,6 +90,9 @@ export interface CapabilitySpec {
   delay?: QuoteDelay;
   allowStaleIfError?: boolean;
   maxStaleMs?: number;
+  transport?: SourceTransport;
+  /** Overrides the source-wide quota for this capability/data-set route. */
+  rateLimit?: SourceRateLimit;
 }
 
 export interface SourceManifest {
@@ -52,8 +103,5 @@ export interface SourceManifest {
   /** Default only. Capability-level redistribution is authoritative. */
   allowRedistribution: boolean;
   capabilities: readonly CapabilitySpec[];
-  rateLimit: {
-    requestsPerSecond?: number;
-    concurrent: number;
-  };
+  rateLimit: SourceRateLimit & { concurrent: number };
 }

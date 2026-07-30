@@ -17,6 +17,15 @@ import { createEastmoneyHkFinancialsConnector } from './connectors/financials/ea
 import { createHkexDerivedFinancialsConnector } from './connectors/financials/hkex-derived';
 import { createSecEdgarXbrlFinancialsConnector } from './connectors/financials/sec-edgar-xbrl';
 import { createOfficialMacroConnector } from './connectors/macro/official';
+import { createNbsMacroSourcePlugin } from './connectors/macro/nbs';
+import { createOfficialMacroFileSourcePlugin, type OfficialMacroFileSourceConfig } from './connectors/macro/official-file';
+import { createTushareSourcePlugin, type TushareSourceConfig } from './connectors/tushare';
+import { createHkexDerivedCorporateActionsConnector, createHkexDerivedMarketEventsConnector, createSfcShortPositionConnector } from './connectors/hk';
+import { createMassiveSourcePlugin, type MassiveSourceConfig } from './connectors/massive';
+import {
+  createCnPublicMarketEventsConnector,
+  createCnPublicOwnershipConnector,
+} from './connectors/cn-tools/canonical';
 import { EastMoneyInstrumentSearchProvider } from './connectors/instrument-search/eastmoney';
 import { TencentInstrumentSearchProvider } from './connectors/instrument-search/tencent';
 import { YahooInstrumentSearchProvider } from './connectors/instrument-search/yahoo';
@@ -38,7 +47,7 @@ import type {
   QuoteInput,
 } from './ports/finance';
 import type { FinancialsBundle, FinancialsInput } from './ports/financials';
-import type { MacroSnapshot } from './ports/macro';
+import type { MacroInput, MacroSnapshot } from './ports/macro';
 import type { InstrumentSearchResult } from './ports/instrument-search';
 import type { MarketSession } from './contracts/calendar';
 import type { MarketCode } from './contracts/instrument';
@@ -51,12 +60,15 @@ import { InMemorySourceHealth } from './sources/health';
 import { InMemoryRateLimiter } from './sources/rate-limit';
 import type { SourceInstance } from './sources/plugin';
 import { SourceRegistry } from './sources/registry';
-import { CapabilityPlanner, type RouteRequest } from './routing/planner';
+import { CapabilityPlanner, type RouteConstraints, type RouteRequest } from './routing/planner';
 import { CapabilityRouter } from './routing/router';
 import { DEFAULT_ROUTING_POLICIES, RoutingPolicies, type RoutingPolicy } from './routing/policy';
 import { parseInstrumentId } from './util/instrument-id';
 import type { MarketDataEventSink } from './observability/events';
 import type { InstrumentResolver } from './sources/resolver';
+import type { CorporateAction, CorporateActionsInput } from './ports/corporate-actions';
+import type { OwnershipInput, OwnershipObservation } from './ports/ownership';
+import type { MarketEvent, MarketEventsInput } from './ports/market-events';
 
 const DEFAULT_SEC_USER_AGENT = 'stock-suggest-research contact@example.com';
 type SupportedMarket = 'US' | 'CN' | 'HK';
@@ -66,6 +78,10 @@ export interface CreateMarketDataOptions {
   twelveDataApiKey?: string;
   alphaVantageApiKey?: string;
   eodhdApiKey?: string;
+  tushare?: TushareSourceConfig;
+  massive?: MassiveSourceConfig;
+  officialMacroFiles?: readonly OfficialMacroFileSourceConfig[];
+  sfcShortPositionCsvUrl?: string;
   cache?: CachePort;
   policies?: readonly RoutingPolicy[];
 }
@@ -101,13 +117,13 @@ export class ResearchMarketDataClient {
     );
   }
 
-  getQuote(instrumentId: string, ctx: ConnectorRunContext = {}): Promise<ResearchResultV2<Quote>> {
+  getQuote(instrumentId: string, ctx: ConnectorRunContext = {}, constraints?: RouteConstraints): Promise<ResearchResultV2<Quote>> {
     return this.routeInstrument('quote', instrumentId, ctx, { instrumentId }, async (source, requestContext) => {
       const port = source.ports.finance;
       return port
         ? port.getQuote({ instrumentId }, connectorContext(requestContext, ctx))
         : unavailable(source.manifest.id, 'Source does not implement QuotePort.');
-    });
+    }, undefined, undefined, constraints);
   }
 
   /** Results always have the same length and order as the input. */
@@ -115,16 +131,16 @@ export class ResearchMarketDataClient {
     return Promise.all(inputs.map((input) => this.getQuote(input.instrumentId, ctx)));
   }
 
-  getHistory(input: HistoryInput, ctx: ConnectorRunContext = {}): Promise<ResearchResultV2<PriceBar[]>> {
+  getHistory(input: HistoryInput, ctx: ConnectorRunContext = {}, constraints?: RouteConstraints): Promise<ResearchResultV2<PriceBar[]>> {
     return this.routeInstrument('history', input.instrumentId, ctx, input, async (source, requestContext) => {
       const port = source.ports.finance;
       return port
         ? port.getHistory(input, connectorContext(requestContext, ctx))
         : unavailable(source.manifest.id, 'Source does not implement HistoryPort.');
-    }, input.interval);
+    }, input.interval, undefined, constraints);
   }
 
-  getProfile(instrumentId: string, ctx: ConnectorRunContext = {}): Promise<ResearchResultV2<CompanyProfile>> {
+  getProfile(instrumentId: string, ctx: ConnectorRunContext = {}, constraints?: RouteConstraints): Promise<ResearchResultV2<CompanyProfile>> {
     return this.routeInstrument('profile', instrumentId, ctx, { instrumentId }, async (source, requestContext) => {
       const port = source.ports.profile ?? (source.ports.finance?.getProfile
         ? { getProfile: source.ports.finance.getProfile.bind(source.ports.finance) }
@@ -132,28 +148,28 @@ export class ResearchMarketDataClient {
       return port
         ? port.getProfile({ instrumentId }, connectorContext(requestContext, ctx))
         : unavailable(source.manifest.id, 'Source does not implement ProfilePort.');
-    });
+    }, undefined, undefined, constraints);
   }
 
-  getFinancials(input: string | FinancialsInput, ctx: ConnectorRunContext = {}): Promise<ResearchResultV2<FinancialsBundle>> {
+  getFinancials(input: string | FinancialsInput, ctx: ConnectorRunContext = {}, constraints?: RouteConstraints): Promise<ResearchResultV2<FinancialsBundle>> {
     const request = typeof input === 'string' ? { instrumentId: input } : input;
     return this.routeInstrument('financials', request.instrumentId, ctx, request, async (source, requestContext) => {
       const port = source.ports.financials;
       return port
         ? port.fetchFinancials(request, connectorContext(requestContext, ctx))
         : unavailable(source.manifest.id, 'Source does not implement FinancialsPort.');
-    });
+    }, undefined, undefined, constraints);
   }
 
-  listFilings(input: FilingSearchInput, ctx: ConnectorRunContext = {}): Promise<ResearchResultV2<FilingSummary[]>> {
+  listFilings(input: FilingSearchInput, ctx: ConnectorRunContext = {}, constraints?: RouteConstraints): Promise<ResearchResultV2<FilingSummary[]>> {
     return this.routeInstrument('filings', input.instrumentId, ctx, input, async (source, requestContext) => {
       const port = source.ports.filings;
       if (!port) return unavailable(source.manifest.id, 'Source does not implement FilingsPort.');
       return port.searchFilings(input, connectorContext(requestContext, ctx));
-    });
+    }, undefined, undefined, constraints);
   }
 
-  getFilingDocument(input: FilingGetInput, ctx: ConnectorRunContext = {}): Promise<ResearchResultV2<FilingDocument>> {
+  getFilingDocument(input: FilingGetInput, ctx: ConnectorRunContext = {}, constraints?: RouteConstraints): Promise<ResearchResultV2<FilingDocument>> {
     if (!input.instrumentId) {
       return this.toV2({
         status: 'failed',
@@ -169,25 +185,88 @@ export class ResearchMarketDataClient {
       const getFiling = source.ports.filings?.getFiling;
       if (!getFiling) return unavailable(source.manifest.id, 'Source does not implement FilingDocumentPort.');
       return getFiling(input, connectorContext(requestContext, ctx));
-    });
+    }, undefined, undefined, constraints);
   }
 
-  getEarningsConsensus(instrumentId: string, ctx: ConnectorRunContext = {}): Promise<ResearchResultV2<EarningsConsensusBundle>> {
+  getEarningsConsensus(instrumentId: string, ctx: ConnectorRunContext = {}, constraints?: RouteConstraints): Promise<ResearchResultV2<EarningsConsensusBundle>> {
     return this.routeInstrument('earnings-consensus', instrumentId, ctx, { instrumentId }, async (source, requestContext) => {
       const operation = source.ports.finance?.fetchEarningsConsensus;
       if (!operation) return unavailable(source.manifest.id, 'Source does not implement earnings consensus.');
       return operation({ instrumentId }, connectorContext(requestContext, ctx));
-    });
+    }, undefined, undefined, constraints);
   }
 
-  getMacro(market: SupportedMarket, ctx: ConnectorRunContext = {}): Promise<ResearchResultV2<MacroSnapshot>> {
-    const request = routeRequest('macro', market, { market }, ctx);
+  async getMacro(input: SupportedMarket | MacroInput, ctx: ConnectorRunContext = {}, constraints?: RouteConstraints): Promise<ResearchResultV2<MacroSnapshot>> {
+    const requestInput: MacroInput = typeof input === 'string' ? { market: input } : input;
+    const seriesCodes = [...new Set(requestInput.seriesCodes ?? [])];
+    if (seriesCodes.length === 0) {
+      return this.routeMacro(requestInput, ctx, constraints);
+    }
+    const results = await Promise.all(seriesCodes.map((seriesCode) => this.routeMacro(
+      { ...requestInput, seriesCodes: [seriesCode] },
+      ctx,
+      constraints,
+      seriesCode,
+    )));
+    return mergeMacroResults(requestInput.market, results);
+  }
+
+  private routeMacro(
+    input: MacroInput,
+    ctx: ConnectorRunContext,
+    constraints?: RouteConstraints,
+    seriesCode?: string,
+  ): Promise<ResearchResultV2<MacroSnapshot>> {
+    const request = routeRequest('macro', input.market, input, ctx, {
+      dataSet: 'macro-series',
+      ...(seriesCode ? { seriesCode } : {}),
+      ...(constraints ? { constraints } : {}),
+    });
     return this.toV2(this.router.fetch(request, async (source, requestContext) => {
       const port = source.ports.macro;
       return port
-        ? port.fetchMacro({ market }, connectorContext(requestContext, ctx))
+        ? port.fetchMacro(input, connectorContext(requestContext, ctx))
         : unavailable(source.manifest.id, 'Source does not implement MacroPort.');
     }));
+  }
+
+  getCorporateActions(
+    input: CorporateActionsInput,
+    ctx: ConnectorRunContext = {},
+    constraints?: RouteConstraints,
+  ): Promise<ResearchResultV2<CorporateAction[]>> {
+    return this.routeInstrument('corporate-actions', input.instrumentId, ctx, input, async (source, requestContext) => {
+      const port = source.ports.corporateActions;
+      return port
+        ? port.listActions(input, connectorContext(requestContext, ctx))
+        : unavailable(source.manifest.id, 'Source does not implement CorporateActionsPort.');
+    }, undefined, input.dataSet, constraints);
+  }
+
+  getOwnership(
+    input: OwnershipInput,
+    ctx: ConnectorRunContext = {},
+    constraints?: RouteConstraints,
+  ): Promise<ResearchResultV2<OwnershipObservation[]>> {
+    return this.routeInstrument('ownership', input.instrumentId, ctx, input, async (source, requestContext) => {
+      const port = source.ports.ownership;
+      return port
+        ? port.listOwnership(input, connectorContext(requestContext, ctx))
+        : unavailable(source.manifest.id, 'Source does not implement OwnershipPort.');
+    }, undefined, input.dataSet, constraints);
+  }
+
+  getMarketEvents(
+    input: MarketEventsInput,
+    ctx: ConnectorRunContext = {},
+    constraints?: RouteConstraints,
+  ): Promise<ResearchResultV2<MarketEvent[]>> {
+    return this.routeInstrument('market-events', input.instrumentId, ctx, input, async (source, requestContext) => {
+      const port = source.ports.marketEvents;
+      return port
+        ? port.listEvents(input, connectorContext(requestContext, ctx))
+        : unavailable(source.manifest.id, 'Source does not implement MarketEventsPort.');
+    }, undefined, input.dataSet, constraints);
   }
 
   getMarketSession(market: MarketCode, at?: string): Promise<ResearchResultV2<MarketSession>> {
@@ -218,6 +297,8 @@ export class ResearchMarketDataClient {
     input: unknown,
     operation: (source: SourceInstance, context: SourceRequestContext) => Promise<SourceResult<T>>,
     interval?: RouteRequest['interval'],
+    dataSet?: RouteRequest['dataSet'],
+    constraints?: RouteConstraints,
   ): Promise<ResearchResultV2<T>> {
     const parsed = parseInstrumentId(instrumentId);
     if (!parsed || !isSupportedMarket(parsed.market)) {
@@ -231,7 +312,12 @@ export class ResearchMarketDataClient {
         error: { code: 'UNSUPPORTED_REQUEST', message: `Unsupported instrumentId: ${instrumentId}` },
       });
     }
-    const request = routeRequest(capability, parsed.market, input, ctx, interval, parsed.raw);
+    const request = routeRequest(capability, parsed.market, input, ctx, {
+      ...(interval ? { interval } : {}),
+      ...(dataSet ? { dataSet } : {}),
+      ...(constraints ? { constraints } : {}),
+      instrumentId: parsed.raw,
+    });
     request.securityType = parsed.symbol.startsWith('^') ? 'index' : 'stock';
     return this.toV2(this.router.fetch(request, operation));
   }
@@ -259,6 +345,16 @@ export function createMarketData(options: CreateMarketDataOptions = {}): Researc
   const registry = new SourceRegistry();
   for (const plugin of createBuiltInSourcePlugins(createDefaultProviderPorts(options))) {
     registry.registerPlugin(plugin, {});
+  }
+  registry.registerPlugin(createNbsMacroSourcePlugin(), {});
+  for (const source of options.officialMacroFiles ?? []) {
+    registry.registerPlugin(createOfficialMacroFileSourcePlugin(source), { enabled: source.enabled });
+  }
+  if (options.tushare?.token.trim() && options.tushare.enabledDataSets.length > 0) {
+    registry.registerPlugin(createTushareSourcePlugin(), options.tushare);
+  }
+  if (options.massive?.apiKey.trim() && options.massive.enabledCapabilities.length > 0) {
+    registry.registerPlugin(createMassiveSourcePlugin(), options.massive);
   }
   return createResearchMarketDataClient(registry, options);
 }
@@ -292,7 +388,14 @@ function createDefaultProviderPorts(options: CreateMarketDataOptions = {}) {
     usFilings: createSecEdgarFilingsConnector({ userAgent: secUserAgent }),
     cnFilings: createCnFilingsConnector(),
     hkFilings,
+    hkCorporateActions: createHkexDerivedCorporateActionsConnector(hkFilings),
+    hkEvents: createHkexDerivedMarketEventsConnector(hkFilings),
+    ...(options.sfcShortPositionCsvUrl?.trim()
+      ? { hkOwnership: createSfcShortPositionConnector({ csvUrl: options.sfcShortPositionCsvUrl.trim() }) }
+      : {}),
     macro: createOfficialMacroConnector(),
+    cnOwnership: createCnPublicOwnershipConnector(),
+    cnEvents: createCnPublicMarketEventsConnector(),
     instrumentSearch: [new EastMoneyInstrumentSearchProvider(), new TencentInstrumentSearchProvider(), new YahooInstrumentSearchProvider()],
   };
 }
@@ -302,10 +405,17 @@ function routeRequest(
   market: SupportedMarket,
   input: unknown,
   ctx: ConnectorRunContext,
-  interval?: RouteRequest['interval'],
-  instrumentId?: string,
+  options: Pick<RouteRequest, 'interval' | 'instrumentId' | 'dataSet' | 'seriesCode' | 'constraints'> = {},
 ): RouteRequest {
-  return { capability, market, input, credentialScope: 'public', ...(ctx.signal ? { signal: ctx.signal } : {}), ...(ctx.timeoutMs ? { timeoutMs: ctx.timeoutMs } : {}), ...(interval ? { interval } : {}), ...(instrumentId ? { instrumentId } : {}) };
+  return {
+    capability,
+    market,
+    input,
+    credentialScope: 'public',
+    ...(ctx.signal ? { signal: ctx.signal } : {}),
+    ...(ctx.timeoutMs ? { timeoutMs: ctx.timeoutMs } : {}),
+    ...options,
+  };
 }
 
 function connectorContext(context: SourceRequestContext, original: ConnectorRunContext): ConnectorRunContext {
@@ -330,4 +440,55 @@ function mergeInstrumentSearch(results: readonly SourceResult<InstrumentSearchRe
 
 function isSupportedMarket(market: string | undefined): market is SupportedMarket {
   return market === 'US' || market === 'CN' || market === 'HK';
+}
+
+function mergeMacroResults(
+  market: MacroInput['market'],
+  results: readonly ResearchResultV2<MacroSnapshot>[],
+): ResearchResultV2<MacroSnapshot> {
+  const usable = results.filter((result) => result.status === 'ok' || result.status === 'partial');
+  const attempts = results.flatMap((result) => result.trace.attempts);
+  if (usable.length === 0) {
+    const failed = results.find((result) => result.status === 'failed') ?? results[0];
+    return failed ?? {
+      schemaVersion: '2.0',
+      status: 'empty',
+      data: null,
+      citations: [],
+      freshness: [],
+      warnings: [],
+      trace: { attempts },
+    };
+  }
+  const observations = usable
+    .flatMap((result) => result.data.observations)
+    .filter((observation, index, all) => all.findIndex((candidate) =>
+      candidate.seriesCode === observation.seriesCode &&
+      candidate.periodEnd === observation.periodEnd &&
+      candidate.seasonalAdjustment === observation.seasonalAdjustment,
+    ) === index)
+    .sort((left, right) => left.seriesCode.localeCompare(right.seriesCode) || right.periodEnd.localeCompare(left.periodEnd));
+  const incomplete = usable.length !== results.length || usable.some((result) => result.status === 'partial');
+  return {
+    schemaVersion: '2.0',
+    status: incomplete ? 'partial' : 'ok',
+    data: { market, observations },
+    citations: dedupeBy(usable.flatMap((result) => result.citations), (item) => `${item.provider}:${item.url ?? ''}`),
+    freshness: dedupeBy(usable.flatMap((result) => result.freshness), (item) => `${item.provider}:${item.asOf}`),
+    warnings: dedupeBy(results.flatMap((result) => result.warnings), (item) => `${item.provider ?? ''}:${item.code}:${item.message}`),
+    trace: {
+      attempts,
+      mergedSources: [...new Set(usable.flatMap((result) => result.trace.mergedSources ?? (result.trace.selectedSource ? [result.trace.selectedSource] : [])))],
+    },
+  };
+}
+
+function dedupeBy<T>(values: readonly T[], key: (value: T) => string): T[] {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const candidate = key(value);
+    if (seen.has(candidate)) return false;
+    seen.add(candidate);
+    return true;
+  });
 }

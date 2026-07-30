@@ -1,7 +1,4 @@
-export interface SourceRateLimit {
-  requestsPerSecond?: number;
-  concurrent?: number;
-}
+import type { SourceRateLimit } from '../contracts/source';
 
 /** A deliberately small process-local limiter; deployments can replace it later. */
 export class InMemoryRateLimiter {
@@ -9,18 +6,23 @@ export class InMemoryRateLimiter {
   private readonly inFlight = new Map<string, number>();
 
   tryAcquire(sourceId: string, limits?: SourceRateLimit, cost = 1): boolean {
-    const requestsPerSecond = limits?.requestsPerSecond;
+    const maxRequests = limits?.maxRequests ?? limits?.requestsPerSecond;
+    const windowMs = limits?.maxRequests !== undefined
+      ? limits.windowMs
+      : limits?.requestsPerSecond !== undefined
+        ? 1_000
+        : undefined;
     const concurrent = limits?.concurrent;
     const currentInFlight = this.inFlight.get(sourceId) ?? 0;
     if (concurrent && concurrent > 0 && currentInFlight >= concurrent) return false;
 
     const now = Date.now();
-    if (requestsPerSecond && requestsPerSecond > 0) {
+    if (maxRequests && maxRequests > 0 && windowMs && windowMs > 0) {
       const current = this.windows.get(sourceId);
-      if (!current || now - current.startedAt >= 1_000) {
+      if (!current || now - current.startedAt >= windowMs) {
         this.windows.set(sourceId, { startedAt: now, count: cost });
       } else {
-        if (current.count + cost > requestsPerSecond) return false;
+        if (current.count + cost > maxRequests) return false;
         current.count += cost;
       }
     }

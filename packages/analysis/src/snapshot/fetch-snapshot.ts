@@ -112,6 +112,9 @@ export async function fetchSnapshot(
     task('lhb', config.lhb ? (ctx) => config.lhb!(options.symbol, ctx) : null),
     task('unlockCalendar', config.unlockCalendar ? (ctx) => config.unlockCalendar!(options.symbol, ctx) : null),
     task('shareholders', config.shareholders ? (ctx) => config.shareholders!(options.symbol, ctx) : null),
+    task('corporateActions', config.corporateActions ? (ctx) => config.corporateActions!(options.symbol, ctx) : null),
+    task('ownership', config.ownership ? (ctx) => config.ownership!(options.symbol, ctx) : null),
+    task('marketEvents', config.marketEvents ? (ctx) => config.marketEvents!(options.symbol, ctx) : null),
     task('webSearch', config.webSearch ? (ctx) => config.webSearch!(options.symbol, ctx) : null),
     task('macro', config.macro ? (ctx) => config.macro!(options.symbol, ctx) : null),
   ];
@@ -467,6 +470,9 @@ function assembleRawFacts(results: FetcherResult[]): RawFacts {
     lhb: r.lhb ?? null,
     unlockCalendar: r.unlockCalendar ?? null,
     shareholders: r.shareholders ?? null,
+    corporateActions: r.corporateActions ?? null,
+    ownership: r.ownership ?? null,
+    marketEvents: r.marketEvents ?? null,
     webSearch: r.webSearch ?? null,
     macro: r.macro ?? null,
   };
@@ -551,23 +557,18 @@ function runComputeLayer(
 
 /**
  * Derive forward EPS YoY growth from a consensusEps payload.
- * The payload shape is connector-specific; we shape-detect the
- * Eastmoney-style {forecasts: [{year, value}, ...]} structure used by
- * the existing CN consensus connector. Returns null when shape unknown
- * or insufficient data.
+ * The payload uses the canonical earnings-consensus estimate model supplied
+ * through market-data. Returns null when there is insufficient data.
  */
-function deriveConsensusEpsGrowth(raw: unknown): number | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const forecasts = (raw as { forecasts?: unknown }).forecasts;
-  if (!Array.isArray(forecasts) || forecasts.length < 2) return null;
-  const sorted = [...forecasts]
-    .filter(
-      (f): f is { year: number; value: number } =>
-        f !== null &&
-        typeof f === 'object' &&
-        typeof (f as { year?: unknown }).year === 'number' &&
-        typeof (f as { value?: unknown }).value === 'number',
-    )
+function deriveConsensusEpsGrowth(raw: RawFacts['consensusEps']): number | null {
+  if (!raw) return null;
+  const sorted = raw.estimates
+    .filter((estimate) => estimate.metricCode === 'epsBasic')
+    .map((estimate) => ({
+      year: Number(estimate.periodEndOn.slice(0, 4)),
+      value: Number(estimate.value),
+    }))
+    .filter((estimate) => Number.isInteger(estimate.year) && Number.isFinite(estimate.value))
     .sort((a, b) => a.year - b.year);
   if (sorted.length < 2) return null;
   const y0 = sorted[0]!;

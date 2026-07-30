@@ -1,5 +1,6 @@
-import type { Capability, CacheScope, SecurityType } from '../contracts/source';
+import type { Capability, CacheScope, DataSet, QuoteDelay, SecurityType } from '../contracts/source';
 import type { MarketCode } from '../contracts/instrument';
+import type { QualityTier } from '../contracts/research-citation';
 import type { SourceCandidate } from '../sources/registry';
 import { SourceRegistry } from '../sources/registry';
 import { InMemorySourceHealth } from '../sources/health';
@@ -8,6 +9,8 @@ import type { RoutingPolicy } from './policy';
 export interface RouteRequest {
   capability: Capability;
   market: MarketCode;
+  dataSet?: DataSet;
+  seriesCode?: string;
   input: unknown;
   credentialScope: CacheScope;
   interval?: '1d' | '1h' | '5m' | '1m';
@@ -19,6 +22,13 @@ export interface RouteRequest {
   rateLimitCost?: number;
   /** Canonical id. Only instrument-scoped capabilities populate this field. */
   instrumentId?: string;
+  constraints?: RouteConstraints;
+}
+
+export interface RouteConstraints {
+  minQualityTier?: QualityTier;
+  acceptedDelays?: readonly QuoteDelay[];
+  maxAgeMs?: number;
 }
 
 export interface PlannedCandidate extends SourceCandidate {
@@ -32,6 +42,8 @@ export class CapabilityPlanner {
   ) {}
 
   plan(request: RouteRequest, policy: RoutingPolicy): PlannedCandidate[] {
+    const minQualityTier = stricterQuality(policy.minQualityTier, request.constraints?.minQualityTier);
+    const acceptedDelays = intersectDelays(policy.acceptedDelays, request.constraints?.acceptedDelays);
     const priority = new Map(policy.preferredSources.map((sourceId, index) => [sourceId, index]));
     return this.registry.find(request).map((candidate): PlannedCandidate => {
       const sourceId = candidate.instance.manifest.id;
@@ -44,8 +56,8 @@ export class CapabilityPlanner {
             ? 'POLICY_DISABLED'
             : health.status === 'cooldown'
               ? 'CIRCUIT_OPEN'
-              : !qualitySatisfies(candidate.spec.qualityTier, policy.minQualityTier) ||
-                  (policy.acceptedDelays !== undefined && (!candidate.spec.delay || !policy.acceptedDelays.includes(candidate.spec.delay)))
+              : !qualitySatisfies(candidate.spec.qualityTier, minQualityTier) ||
+                  (acceptedDelays !== undefined && (!candidate.spec.delay || !acceptedDelays.includes(candidate.spec.delay)))
                 ? 'POLICY_DISABLED'
               : undefined;
       return { ...candidate, skipReason };
@@ -70,4 +82,20 @@ export class CapabilityPlanner {
 function qualitySatisfies(actual: 'A' | 'B' | 'C' | 'D' | 'E', minimum: 'A' | 'B' | 'C' | 'D' | 'E' | undefined): boolean {
   if (!minimum) return true;
   return ['A', 'B', 'C', 'D', 'E'].indexOf(actual) <= ['A', 'B', 'C', 'D', 'E'].indexOf(minimum);
+}
+
+function stricterQuality(left: QualityTier | undefined, right: QualityTier | undefined): QualityTier | undefined {
+  if (!left) return right;
+  if (!right) return left;
+  const tiers: readonly QualityTier[] = ['A', 'B', 'C', 'D', 'E'];
+  return tiers.indexOf(left) <= tiers.indexOf(right) ? left : right;
+}
+
+function intersectDelays(
+  left: readonly QuoteDelay[] | undefined,
+  right: readonly QuoteDelay[] | undefined,
+): readonly QuoteDelay[] | undefined {
+  if (!left) return right;
+  if (!right) return left;
+  return left.filter((delay) => right.includes(delay));
 }
