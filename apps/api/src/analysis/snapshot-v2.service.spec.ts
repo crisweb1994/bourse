@@ -278,6 +278,29 @@ describe('SnapshotV2Service', () => {
     }
   });
 
+  it('wires Yahoo earnings consensus into HK snapshots', async () => {
+    const yahoo = mockYahoo() as FinancePort & {
+      fetchEarningsConsensus: NonNullable<FinancePort['fetchEarningsConsensus']>;
+    };
+    yahoo.fetchEarningsConsensus = async () => envelope({
+      asOf: '2026-07-30T00:00:00.000Z',
+      estimates: [{
+        metricCode: 'epsBasic',
+        periodEndOn: '2026-12-31',
+        periodType: 'FY',
+        value: '29.73',
+        unit: 'per_share',
+        currency: 'HKD',
+      }],
+    });
+    const svc = buildService({ yahoo });
+
+    const snap = await svc.fetch('0700', 'HK', { perConnectorTimeoutMs: 100 });
+
+    assert.equal((snap.rawFacts.consensusEps as any)?.estimates?.[0]?.value, '29.73');
+    assert.ok(snap.dataAvailability.available.includes('consensusEps'));
+  });
+
   it('honors per-connector timeout when the port hangs', async () => {
     const hanging = mockYahoo(() => new Promise(() => undefined));
     const svc = buildService({ yahoo: hanging });

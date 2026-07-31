@@ -179,7 +179,10 @@ export class CapabilityRouter {
       }
 
       const startedAt = this.now().getTime();
-      const timeoutMs = request.timeoutMs ?? this.defaultTimeoutMs;
+      const routeTimeoutMs = request.timeoutMs ?? this.defaultTimeoutMs;
+      const timeoutMs = policy.attemptTimeoutMs === undefined
+        ? routeTimeoutMs
+        : Math.min(routeTimeoutMs, policy.attemptTimeoutMs);
       const context: Omit<SourceRequestContext, 'signal'> = {
         timeoutMs,
         credentialScope: candidate.instance.credentialScope,

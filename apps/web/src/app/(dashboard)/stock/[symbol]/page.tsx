@@ -62,6 +62,7 @@ export default function StockAnalysisPage({
     canAddToWatchlist,
     handleAddToWatchlist,
   } = useStockResolution({ symbol, market, name, stockId });
+  const resolvedName = detail?.stock?.name ?? name;
 
   const earnings = useEarningsCard({
     stockId: effectiveStockId,
@@ -81,6 +82,8 @@ export default function StockAnalysisPage({
     effectiveStockId,
     analysisId,
     symbol,
+    market,
+    name: resolvedName,
     router,
     setFormType: setSelectedType,
     closeForm: () => setShowAnalysisForm(false),
@@ -189,7 +192,7 @@ export default function StockAnalysisPage({
           symbol={symbol}
           market={market}
           exchange={exchange}
-          name={name}
+          name={resolvedName}
           stockId={effectiveStockId}
           inWatchlist={!!watchlistItemId}
           watchlistBusy={watchlistBusy}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { getRequestedAnalysisId } from './stock-page-ui';
+import { getRequestedAnalysisId, inferMarketFromSymbol } from './stock-page-ui';
 
 export function useStockPageParams(params: Promise<{ symbol: string }>) {
   const [resolvedParams, setResolvedParams] = useState<{
@@ -18,7 +18,7 @@ export function useStockPageParams(params: Promise<{ symbol: string }>) {
     ? decodeURIComponent(resolvedParams.symbol)
     : null;
   const stockId = searchParams.get('stockId');
-  const market = searchParams.get('market') || '';
+  const market = searchParams.get('market') || inferMarketFromSymbol(symbol);
   const name = searchParams.get('name') || symbol || '';
   const analysisId = getRequestedAnalysisId(searchParams);
 

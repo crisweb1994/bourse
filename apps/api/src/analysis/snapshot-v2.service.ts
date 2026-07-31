@@ -74,11 +74,16 @@ export class SnapshotV2Service {
   ): Promise<StockSnapshot> {
     const startedAt = Date.now();
     try {
+      // HKEX list queries fan out by language and can legitimately take just
+      // over the generic 8s snapshot deadline. Source-level route budgets
+      // still keep slow candidates from consuming this entire window.
+      const perConnectorTimeoutMs = options?.perConnectorTimeoutMs ??
+        (market === 'HK' ? 10_000 : undefined);
       const snap = await fetchSnapshot({
         symbol,
         market,
         configs: this.configs,
-        perConnectorTimeoutMs: options?.perConnectorTimeoutMs,
+        perConnectorTimeoutMs,
         historyDays: options?.historyDays,
         filingsLimit: options?.filingsLimit,
         signal: options?.signal,
@@ -121,6 +126,9 @@ export class SnapshotV2Service {
       },
       financials: async (symbol: string, ctx?: ConnectorRunContext) => snapshotEnvelope(
         await this.marketData.getFinancials(instrumentId(market, symbol), ctx),
+      ),
+      consensusEps: async (symbol: string, ctx?: ConnectorRunContext) => snapshotEnvelope(
+        await this.marketData.getEarningsConsensus(instrumentId(market, symbol), ctx),
       ),
       filings: async (symbol: string, limit: number, ctx?: ConnectorRunContext) => snapshotEnvelope(
         await this.marketData.listFilings({ instrumentId: instrumentId(market, symbol), limit }, ctx),
@@ -183,9 +191,6 @@ export class SnapshotV2Service {
       }),
       CN: defineMarketConfig('CN', 'CNY', {
         ...standard('CN'),
-        consensusEps: async (symbol: string, ctx?: ConnectorRunContext) => snapshotEnvelope(
-          await this.marketData.getEarningsConsensus(instrumentId('CN', symbol), ctx),
-        ),
         northboundFlow: async (symbol: string, ctx?: ConnectorRunContext) => snapshotEnvelope(
           await this.marketData.getOwnership({
             instrumentId: instrumentId('CN', symbol),

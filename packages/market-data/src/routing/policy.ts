@@ -16,6 +16,8 @@ export interface RoutingPolicy {
   maxAgeMs?: number;
   allowStaleIfError?: boolean;
   maxStaleMs?: number;
+  /** Maximum time one candidate may consume before the router tries the next. */
+  attemptTimeoutMs?: number;
   crossCheck?: {
     /** Dot-separated numeric fields on the canonical result, for example `price`. */
     fields: readonly string[];
@@ -62,7 +64,7 @@ export const DEFAULT_ROUTING_POLICIES: readonly RoutingPolicy[] = [
   { capability: 'quote', market: 'HK', strategy: 'fallback', preferredSources: ['twelve-data', 'eodhd', 'yahoo', 'tencent-hk'] },
   { capability: 'history', market: 'HK', strategy: 'fallback', preferredSources: ['twelve-data', 'eodhd', 'yahoo', 'tencent-hk'] },
   { capability: 'profile', market: 'HK', strategy: 'fallback', preferredSources: ['twelve-data', 'eodhd', 'yahoo', 'eastmoney-hk-profile'] },
-  { capability: 'financials', market: 'HK', strategy: 'official-first', preferredSources: ['hkex-derived-financials', 'eastmoney-hk-financials'] },
+  { capability: 'financials', market: 'HK', strategy: 'official-first', preferredSources: ['hkex-derived-financials', 'eastmoney-hk-financials'], attemptTimeoutMs: 2_500 },
   { capability: 'filings', market: 'HK', strategy: 'official-first', preferredSources: ['hkex'] },
   { capability: 'filing-document', market: 'HK', strategy: 'official-first', preferredSources: ['hkex'] },
   { capability: 'earnings-consensus', market: 'HK', strategy: 'fallback', preferredSources: ['yahoo'] },

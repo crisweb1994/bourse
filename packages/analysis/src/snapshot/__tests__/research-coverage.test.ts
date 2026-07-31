@@ -56,11 +56,29 @@ describe('research coverage', () => {
 
   it('caps confidence, carries missing facts, and removes blocked target prices', () => {
     const coverage = buildResearchCoverage(new Set(['quote', 'history', 'profile']));
-    const gated = applyResearchCoverage(result(), coverage.dimensions.VALUATION);
+    const modelResult = result();
+    modelResult.dataAvailability.missingFields = [
+      'optional peer metric',
+      'personalized portfolio input',
+    ];
+    const gated = applyResearchCoverage(modelResult, coverage.dimensions.VALUATION);
     expect(gated.conclusion.confidence).toBe('LOW');
     expect(gated.priceTarget).toBeUndefined();
     expect(gated.dataAvailability.missingFields).toEqual(['financials']);
     expect(gated.dataAvailability.reason).toContain('INSUFFICIENT_EVIDENCE');
+  });
+
+  it('clears model-invented optional gaps when required coverage passes', () => {
+    const coverage = buildResearchCoverage(new Set(['filings']));
+    const modelResult = result();
+    modelResult.dataAvailability.missingFields = [
+      'five-year ROIC series',
+      'institutional ownership split',
+    ];
+
+    const gated = applyResearchCoverage(modelResult, coverage.dimensions.GOVERNANCE);
+
+    expect(gated.dataAvailability.missingFields).toEqual([]);
   });
 
   it('downgrades a complete but stale core fact set instead of treating it as fresh', () => {

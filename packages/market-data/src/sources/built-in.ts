@@ -111,12 +111,14 @@ function hkDerivedEventsSource(
     dataSets: ['dividend', 'split', 'rights-issue', 'placement', 'buyback'],
     securityTypes: ['stock'],
     transport: 'derived',
+    rateLimit: { concurrent: 8 },
   });
   if (events) capabilities.push({
     ...spec('market-events', ['HK'], 'official-derived', 'A', 'public-cache-allowed', 30 * 60 * 1_000),
     dataSets: ['earnings-guidance', 'suspension', 'regulatory-event'],
     securityTypes: ['stock'],
     transport: 'derived',
+    rateLimit: { concurrent: 8 },
   });
   return source('hkex-filings-derived-events', 'HKEX filings derived events', 'derived', false, capabilities, {
     ...(corporateActions ? { corporateActions: sourceCorporateActionsPort('hkex-filings-derived-events', corporateActions) } : {}),

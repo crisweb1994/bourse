@@ -434,6 +434,38 @@ describe('CapabilityRouter', () => {
     }));
   });
 
+  it('caps each candidate with the policy attempt budget', async () => {
+    const seenTimeouts: number[] = [];
+    const result = await router(
+      [source('primary'), source('fallback')],
+      { ...policy, attemptTimeoutMs: 10 },
+    ).fetch(
+      {
+        capability: 'quote',
+        market: 'HK',
+        input: {},
+        credentialScope: 'public',
+        timeoutMs: 100,
+      },
+      async (instance, context) => {
+        seenTimeouts.push(context.timeoutMs ?? 0);
+        if (instance.manifest.id === 'fallback') return ok('fallback');
+        return new Promise<SourceResult<{ price: number }>>(() => undefined);
+      },
+    );
+
+    expect(result.status).toBe('ok');
+    expect(seenTimeouts).toEqual([10, 10]);
+    expect(result.attempts[0]).toEqual(expect.objectContaining({
+      sourceId: 'primary',
+      reasonCode: 'TIMEOUT',
+    }));
+    expect(result.attempts[1]).toEqual(expect.objectContaining({
+      sourceId: 'fallback',
+      outcome: 'hit',
+    }));
+  });
+
   it('stops routing immediately when the caller aborts', async () => {
     const controller = new AbortController();
     controller.abort('cancelled');
