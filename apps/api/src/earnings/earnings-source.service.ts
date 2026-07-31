@@ -70,11 +70,13 @@ export class EarningsSourceService {
     }
 
     const forms = stock.market === 'US'
-      ? ['8-K', '10-Q', '10-K']
+      // Foreign private issuers (for example BABA) report through 20-F/6-K,
+      // while domestic issuers use 10-K/10-Q/8-K.
+      ? ['8-K', '10-Q', '10-K', '6-K', '20-F']
       : stock.market === 'HK'
         ? ['profit_warning', 'preliminary', 'quarterly', 'interim', 'annual']
         : ['preview', 'preliminary', 'quarterly', 'semiannual', 'annual'];
-    const listed = await this.marketData.listFilings({ instrumentId, forms, limit: stock.market === 'HK' ? 20 : stock.market === 'US' ? 12 : 10 });
+    const listed = await this.marketData.listFilings({ instrumentId, forms, limit: stock.market === 'HK' ? 20 : stock.market === 'US' ? 100 : 10 });
     if (!listed.data?.length) {
       throw new EarningsSourceError('NO_ELIGIBLE_FILING', true, listed.warnings[0]?.message);
     }
@@ -133,10 +135,10 @@ export class EarningsSourceService {
       }
       if (
         stock.market === 'US'
-        && summary.formType.toUpperCase() === '8-K'
+        && ['8-K', '6-K'].includes(summary.formType.toUpperCase())
         && document.documentKind !== 'EARNINGS_RELEASE'
       ) {
-        failures.push(`${summary.id}: no EX-99.1 earnings exhibit`);
+        failures.push(`${summary.id}: ${summary.formType} is not an earnings release`);
         continue;
       }
       try {
@@ -211,6 +213,16 @@ export function prioritizeEarningsSources(
   summaries: readonly FilingSummary[],
   market: string,
 ): FilingSummary[] {
+  if (market === 'US') {
+    // SEC returns foreign issuers' frequent 6-K notices before their annual
+    // 20-F. Prefer the complete annual filing so discovery does not download
+    // dozens of unrelated 6-K notices before finding a usable source.
+    const annual = summaries.filter((summary) => summary.formType.toUpperCase() === '20-F');
+    if (annual.length > 0) {
+      return [...annual, ...summaries.filter((summary) => summary.formType.toUpperCase() !== '20-F')];
+    }
+    return [...summaries];
+  }
   if (market !== 'HK') return [...summaries];
   const ordered = [...summaries];
 

@@ -65,6 +65,60 @@ test('EarningsSourceService skips a non-earnings 8-K and persists EX-99.1 once',
   assert.equal(creates[0].documentKind, 'EARNINGS_RELEASE');
 });
 
+test('EarningsSourceService requests foreign issuer filing forms for US stocks', async () => {
+  let request: any;
+  const port: FilingPort = {
+    async searchFilings(input) {
+      request = input;
+      return envelope([]);
+    },
+  };
+  const prisma = { filing: { findFirst: async () => null } } as any;
+  const service = new EarningsSourceService(prisma, clientFromPort(port), new FilingStoreService(prisma));
+
+  await assert.rejects(
+    () => service.discoverAndIngest({ ...stock, symbol: 'BABA', name: 'Alibaba' }),
+    (error: unknown) => error instanceof EarningsSourceError && error.code === 'NO_ELIGIBLE_FILING',
+  );
+  assert.deepEqual(request.forms, ['8-K', '10-Q', '10-K', '6-K', '20-F']);
+  assert.equal(request.limit, 100);
+});
+
+test('EarningsSourceService skips a non-earnings 6-K and accepts an earnings 6-K', async () => {
+  const summaries = [
+    { ...summary('ordinary-6k', 'https://www.sec.gov/Archives/ordinary/main.htm'), formType: '6-K', title: 'Corporate update' },
+    { ...summary('results-6k', 'https://www.sec.gov/Archives/results/main.htm'), formType: '6-K', title: 'Financial results' },
+  ];
+  const fetched: string[] = [];
+  const port: FilingPort = {
+    async searchFilings() { return envelope(summaries); },
+    async getFiling(input) {
+      fetched.push(input.id);
+      const earnings = input.id === 'results-6k';
+      return envelope({
+        ...summaries.find((item) => item.id === input.id)!,
+        sourceDocumentId: `${input.id}:main.htm`,
+        documentKind: earnings ? 'EARNINGS_RELEASE' as const : 'OTHER' as const,
+        text: earnings ? 'Financial results. Revenue was $10 billion. Net income was $2 billion.' : 'Corporate update.',
+        rawContent: new TextEncoder().encode('raw'),
+        contentHash: earnings ? 'f'.repeat(64) : 'e'.repeat(64),
+      });
+    },
+  };
+  const prisma = {
+    filing: {
+      findFirst: async () => null,
+      findUnique: async () => null,
+      create: async ({ data }: any) => ({ id: 'filing-6k', ...data }),
+    },
+    filingDerivation: { upsert: async ({ create }: any) => ({ id: 'derivation-6k', ...create }) },
+  };
+  const prepared = await new EarningsSourceService(prisma as any, clientFromPort(port), new FilingStoreService(prisma as any)).discoverAndIngest({ ...stock, symbol: 'BABA', name: 'Alibaba' });
+  assert.equal(prepared.formType, '6-K');
+  assert.equal(prepared.sourceDocumentId, 'results-6k:main.htm');
+  assert.deepEqual(fetched, ['ordinary-6k', 'results-6k']);
+});
+
 test('EarningsSourceService preserves filing metadata for structured fallback', async () => {
   const port: FilingPort = {
     async searchFilings() {
@@ -163,6 +217,18 @@ test('HK earnings sources prefer preliminary results and English variants', () =
     ['preliminary-en', 'preliminary-zh', 'annual-en', 'annual-zh'],
   );
   assert.deepEqual(prioritizeEarningsSources(sources, 'US'), sources);
+});
+
+test('US foreign issuer sources prefer 20-F before frequent 6-K notices', () => {
+  const sources = [
+    { ...summary('latest-6k', 'https://www.sec.gov/Archives/latest-6k.htm'), formType: '6-K' },
+    { ...summary('annual-20f', 'https://www.sec.gov/Archives/annual-20f.htm'), formType: '20-F' },
+    { ...summary('prior-6k', 'https://www.sec.gov/Archives/prior-6k.htm'), formType: '6-K' },
+  ];
+  assert.deepEqual(
+    prioritizeEarningsSources(sources, 'US').map((item) => item.sourceDocumentId),
+    ['annual-20f', 'latest-6k', 'prior-6k'],
+  );
 });
 
 test('HK earnings source priority preserves unrelated filing slots', () => {
