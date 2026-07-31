@@ -159,7 +159,7 @@ function parseAnnualFacts(text: string): ParsedAnnualFacts | null {
 
 function parseUnit(text: string): { currency: string; scale: number } | null {
   const header = text.slice(0, 20_000);
-  const currency = /(?:RMB|CNY|人民幣)/i.test(header)
+  const currency = /(?:RMB|CNY|人民幣|人民币)/i.test(header)
     ? 'CNY'
     : /(?:US\$|USD)/i.test(header)
       ? 'USD'
@@ -167,15 +167,20 @@ function parseUnit(text: string): { currency: string; scale: number } | null {
         ? 'HKD'
         : null;
   if (!currency) return null;
-  if (/million|百萬/i.test(header)) return { currency, scale: 1_000_000 };
+  if (/(?:billion|十亿)/i.test(header)) return { currency, scale: 1_000_000_000 };
+  if (/(?:million|百萬|百万)/i.test(header)) return { currency, scale: 1_000_000 };
+  if (/(?:亿元|億)/i.test(header)) return { currency, scale: 100_000_000 };
   if (/(?:['’]000|thousand|千元)/i.test(header)) return { currency, scale: 1_000 };
   return null;
 }
 
 function labelledValue(text: string, labels: readonly RegExp[]): number | undefined {
   for (const line of text.split(/\r?\n/)) {
-    if (!labels.some((label) => label.test(line))) continue;
-    const tokens = line.match(/\(?-?\d[\d,]*(?:\.\d+)?\)?/g) ?? [];
+    // HKEX tables commonly prefix rows with `1`, `2.` or `(3)`. Strip that
+    // presentation-only index before applying the anchored metric labels.
+    const content = line.replace(/^\s*\(?\d{1,3}\)?(?:[.):])?\s+/, '');
+    if (!labels.some((label) => label.test(content))) continue;
+    const tokens = content.match(/\(?-?\d[\d,]*(?:\.\d+)?\)?/g) ?? [];
     const values = tokens.map(parseNumber).filter((value): value is number => value !== undefined);
     if (values.length === 0) continue;
     const candidate = values.length > 1 && Number.isInteger(values[0]) && Math.abs(values[0]!) <= 100

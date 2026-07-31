@@ -163,6 +163,13 @@ const NorthboundFlowRow = z.object({
   sgt: z.number(),
 });
 
+const NorthboundHoldingRow = z.object({
+  date: z.string(),
+  exchange: z.string().optional(),
+  holdingShares: z.number(),
+  holdingPercentOfFloat: z.number().optional(),
+});
+
 const LhbAppearanceRow = z.object({
   date: z.string(),
   // Reason as classified by 东财 (涨幅偏离 / 跌幅偏离 / 振幅偏大 / 换手率异常 etc).
@@ -193,6 +200,7 @@ export const AShareSpecificFacts = z.object({
   consensusEps: Fact(z.array(ConsensusEpsRow)).optional(),
   peHistoricalPercentile: Fact(PeHistoricalPercentile).optional(),
   northboundFlow: Fact(z.array(NorthboundFlowRow)).optional(),
+  northboundHoldings: Fact(z.array(NorthboundHoldingRow)).optional(),
   lhbAppearances: Fact(z.array(LhbAppearanceRow)).optional(),
   unlockCalendar: Fact(z.array(UnlockCalendarRow)).optional(),
   shareholderConcentration: Fact(ShareholderConcentration).optional(),
@@ -436,6 +444,7 @@ export const EVIDENCE_PACK_V2_FACT_KEYS = [
   'consensusEps',
   'peHistoricalPercentile',
   'northboundFlow',
+  'northboundHoldings',
   'lhbAppearances',
   'unlockCalendar',
   'shareholderConcentration',

@@ -276,8 +276,8 @@ describe('EvidencePackAny discriminated union', () => {
 });
 
 describe('EVIDENCE_PACK_V2_FACT_KEYS', () => {
-  it('lists all 19 fact field names', () => {
-    expect(EVIDENCE_PACK_V2_FACT_KEYS).toHaveLength(19);
+  it('lists all 20 fact field names', () => {
+    expect(EVIDENCE_PACK_V2_FACT_KEYS).toHaveLength(20);
     // Sanity check a few representative keys
     expect(EVIDENCE_PACK_V2_FACT_KEYS).toContain('quote');
     expect(EVIDENCE_PACK_V2_FACT_KEYS).toContain('profile');

@@ -240,6 +240,35 @@ describe('snapshotToEvidencePack · CN-only facts', () => {
     ]);
   });
 
+  it('preserves Stock Connect holdings without mislabelling them as net flow', () => {
+    const snapshot = baseSnapshot({
+      rawFacts: {
+        ...baseSnapshot().rawFacts,
+        northboundFlow: [{
+          id: 'stock-connect-holding-1',
+          instrumentId: 'CN:600519',
+          kind: 'STOCK_CONNECT_HOLDING',
+          asOf: '2026-05-22',
+          holdingShares: '123456',
+          holdingPercentOfFloat: '0.12',
+          exchange: 'HKEX',
+        }],
+      },
+      dataAvailability: { available: ['northboundFlow'], missing: [], warnings: [] },
+    });
+    const pack = snapshotToEvidencePack(snapshot);
+    expect(pack.facts.northboundFlow).toBeUndefined();
+    expect(pack.facts.northboundHoldings?.value).toEqual([{
+      date: '2026-05-22',
+      exchange: 'HKEX',
+      holdingShares: 123456,
+      holdingPercentOfFloat: 0.12,
+    }]);
+    expect(pack.dataAvailability.complete).toContain('northboundHoldings');
+    expect(pack.dataAvailability.complete).not.toContain('northboundFlow');
+    expect(pack.dataAvailability.missing).toContainEqual(expect.objectContaining({ field: 'northboundFlow' }));
+  });
+
   it('projects LHB appearances using legacy topBuySeatNames (Wave 1.9)', () => {
     const snap = baseSnapshot({
       rawFacts: {

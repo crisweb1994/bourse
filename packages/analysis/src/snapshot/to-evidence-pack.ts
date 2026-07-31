@@ -13,6 +13,7 @@
  *  - rawFacts.filings → facts.latestFilingUrls
  *  - rawFacts.consensusEps → facts.consensusEps (Eastmoney-shape detected)
  *  - rawFacts.northboundFlow → facts.northboundFlow
+ *  - Stock Connect holding observations → facts.northboundHoldings
  *  - rawFacts.lhb → facts.lhbAppearances (project rich seat objects to
  *    legacy name list per Wave 1.9)
  *  - rawFacts.unlockCalendar → facts.unlockCalendar
@@ -186,17 +187,37 @@ export function snapshotToEvidencePack(
 
   // Stock Connect ownership observations -> legacy northbound flow rows.
   const nbf = snap.rawFacts.northboundFlow;
+  const northboundFlowRows = nbf
+    ?.filter(isStockConnectObservation)
+    .map((row) => ({
+      date: row.asOf,
+      hgt: Number(row.shanghaiNetFlow),
+      sgt: Number(row.shenzhenNetFlow),
+    }))
+    .filter((row) => Number.isFinite(row.hgt) && Number.isFinite(row.sgt)) ?? [];
+  const northboundHoldingRows = nbf
+    ?.filter(isStockConnectHoldingObservation)
+    .map((row) => ({
+      date: row.asOf,
+      ...(row.exchange ? { exchange: row.exchange } : {}),
+      holdingShares: Number(row.holdingShares),
+      ...(row.holdingPercentOfFloat !== null && row.holdingPercentOfFloat !== undefined
+        ? { holdingPercentOfFloat: Number(row.holdingPercentOfFloat) }
+        : {}),
+    }))
+    .filter((row) => Number.isFinite(row.holdingShares) && (
+      row.holdingPercentOfFloat === undefined || Number.isFinite(row.holdingPercentOfFloat)
+    )) ?? [];
   if (nbf) {
-    const rows = nbf
-      .filter(isStockConnectObservation)
-      .map((row) => ({
-        date: row.asOf,
-        hgt: Number(row.shanghaiNetFlow),
-        sgt: Number(row.shenzhenNetFlow),
-      }))
-      .filter((row) => Number.isFinite(row.hgt) && Number.isFinite(row.sgt));
-    if (rows.length > 0) {
-      putFact('northboundFlow', mkFact('northboundFlow', rows));
+    if (northboundFlowRows.length > 0) {
+      putFact('northboundFlow', mkFact('northboundFlow', northboundFlowRows));
+    }
+
+    // Tushare's hk_hold endpoint reports holdings, not net capital flow.
+    // Preserve those observations separately instead of coercing them into
+    // hgt/sgt flow rows with a different unit and meaning.
+    if (northboundHoldingRows.length > 0) {
+      putFact('northboundHoldings', mkFact('northboundFlow', northboundHoldingRows));
     }
   }
 
@@ -256,12 +277,20 @@ export function snapshotToEvidencePack(
   }
 
   // ── dataAvailability ────────────────────────────────────────────────────
+  const available = new Set(snap.dataAvailability.available);
+  const missing = snap.dataAvailability.missing.map((m) => ({
+    field: m.field,
+    reason: m.detail ? `${m.reason}: ${m.detail}` : m.reason,
+  }));
+  if (northboundHoldingRows.length > 0) {
+    available.add('northboundHoldings');
+    if (northboundFlowRows.length === 0 && available.delete('northboundFlow')) {
+      missing.push({ field: 'northboundFlow', reason: 'no_data: source returned holdings, not net flow' });
+    }
+  }
   const availability: EvidencePackDataAvailability = {
-    complete: snap.dataAvailability.available,
-    missing: snap.dataAvailability.missing.map((m) => ({
-      field: m.field,
-      reason: m.detail ? `${m.reason}: ${m.detail}` : m.reason,
-    })),
+    complete: [...available],
+    missing,
     fallbacks: [],
   };
   const researchCoverage = buildResearchCoverage(
@@ -350,6 +379,12 @@ function isStockConnectObservation(
   value: OwnershipObservation,
 ): value is Extract<OwnershipObservation, { kind: 'STOCK_CONNECT' }> {
   return value.kind === 'STOCK_CONNECT';
+}
+
+function isStockConnectHoldingObservation(
+  value: OwnershipObservation,
+): value is Extract<OwnershipObservation, { kind: 'STOCK_CONNECT_HOLDING' }> {
+  return value.kind === 'STOCK_CONNECT_HOLDING';
 }
 
 function isLhbEvent(value: MarketEvent): value is Extract<MarketEvent, { type: 'LHB' }> {

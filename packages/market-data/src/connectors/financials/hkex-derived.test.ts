@@ -52,6 +52,37 @@ describe('HKEX-derived financials', () => {
 
     expect(result.data).toBeNull();
   });
+
+  it('parses English billion units and numbered result rows', async () => {
+    const connector = createHkexDerivedFinancialsConnector({
+      filings: filingPort([
+        'US$ billion',
+        '1 Revenue 1.2 1.0',
+        '2. Net profit 0.3 0.2',
+      ].join('\n')),
+    });
+
+    const result = await connector.fetchFinancials({ instrumentId: 'HK:0700' });
+
+    expect(result.data?.currency).toBe('USD');
+    expect(result.data?.periods[0]?.income.revenue?.value).toBe(1_200_000_000);
+    expect(result.data?.periods[0]?.income.netIncome?.value).toBe(300_000_000);
+  });
+
+  it('parses simplified Chinese currency and million units', async () => {
+    const connector = createHkexDerivedFinancialsConnector({
+      filings: filingPort([
+        '人民币 百万元',
+        'Revenue 660,257',
+        'Net profit 194,073',
+      ].join('\n')),
+    });
+
+    const result = await connector.fetchFinancials({ instrumentId: 'HK:0700' });
+
+    expect(result.data?.currency).toBe('CNY');
+    expect(result.data?.periods[0]?.income.revenue?.value).toBe(660_257_000_000);
+  });
 });
 
 function filingPort(text: string): FilingPort {
