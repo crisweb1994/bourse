@@ -219,7 +219,13 @@ export class EarningsRunnerService implements OnModuleInit {
         },
       });
       if (verified.facts.length === 0) {
-        throw new RunError('CHECK_REJECTED_ALL', true, 'All extracted facts failed consistency checks');
+        const rejectionSummary = summarizeVerificationRejections(verified.rejected);
+        this.logger.warn(`earnings run ${runId} rejected all extracted facts: ${rejectionSummary}`);
+        throw new RunError(
+          'CHECK_REJECTED_ALL',
+          true,
+          `No extracted facts passed schema, source-anchor and value checks (${rejectionSummary})`,
+        );
       }
 
       const event = await this.ensureEvent(run.stock, extraction);
@@ -939,6 +945,19 @@ function summarizeFacts(facts: MetricFact[]) {
     },
     { total: 0, reconciled: 0, pending: 0, conflicted: 0, structuredOnly: 0 },
   );
+}
+
+function summarizeVerificationRejections(
+  rejected: Array<{ reasons: string[] }>,
+): string {
+  const counts = new Map<string, number>();
+  for (const item of rejected) {
+    for (const reason of item.reasons) counts.set(reason, (counts.get(reason) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([reason, count]) => `${reason}=${count}`)
+    .join(', ') || 'no_candidates';
 }
 
 export function decideFilingRelation(

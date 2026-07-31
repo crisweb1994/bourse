@@ -234,7 +234,7 @@ function EarningsCard({
           {card.omittedFactCount > 0 && (
             <div className="mt-3 flex items-start gap-2 text-[11.5px] leading-5 text-[var(--color-fg-2)]">
               <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--color-warn)]" strokeWidth={1.5} />
-              {card.omittedFactCount} 项数字未通过一致性检查，未予展示
+              {card.omittedFactCount} 项数字未通过字段完整性、原文定位或一致性检查，未予展示
             </div>
           )}
         </section>
@@ -572,7 +572,7 @@ function readableError(code?: string, fallback?: string | null): string {
     NO_ELIGIBLE_FILING: '暂未发现支持的财报公告。',
     NO_NEW_ELIGIBLE_FILING: '最新财报公告已经处理。',
     BODY_UNREADABLE: '公告正文暂时无法读取。',
-    CHECK_REJECTED_ALL: '本次抽取的数字均未通过一致性检查。',
+    CHECK_REJECTED_ALL: '未找到同时通过字段完整性、原文定位和数值核对的指标，可重试切换其他公告。',
     PROVIDER_UNAVAILABLE: 'AI 服务暂时不可用。',
     STRUCTURED_PERIOD_UNCONFIRMED: '公告未提供可核对的报告期，已停止结构化降级。',
     STRUCTURED_PERIOD_MISMATCH: '结构化数据尚未更新到本期，已停止展示旧期数字。',

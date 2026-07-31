@@ -83,7 +83,11 @@ export function verifyEarningsCandidates(
     );
     const parsed = MetricFactCandidateSchema.safeParse(sanitized.value);
     if (!parsed.success) {
-      rejected.push({ candidate: null, rawCandidate: raw, reasons: ['schema_invalid'] });
+      rejected.push({
+        candidate: null,
+        rawCandidate: raw,
+        reasons: schemaRejectionReasons(parsed.error.issues),
+      });
       continue;
     }
     const candidate = parsed.data;
@@ -263,6 +267,10 @@ function sanitizeMetricCandidate(
       normalizations.push(`omit_null_${key}`);
     }
   }
+  if (typeof candidate.value === 'string' && /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(candidate.value)) {
+    candidate.value = { kind: 'scalar', value: candidate.value };
+    normalizations.push('decimal_string_to_scalar');
+  }
   if (candidate.value && typeof candidate.value === 'object' && !Array.isArray(candidate.value)) {
     const value = { ...(candidate.value as Record<string, unknown>) };
     if (value.kind === 'scalar' && value.value === undefined && typeof value.amount === 'string') {
@@ -346,6 +354,22 @@ function sanitizeMetricCandidate(
     }
   }
   if (
+    candidate.periodKind === 'duration'
+    && candidate.periodStartOn === undefined
+    && typeof candidate.periodEndOn === 'string'
+    && candidate.periodEndOn === event?.periodEndOn
+  ) {
+    const calendarStart = inferCalendarReportingPeriodStart(
+      candidate.periodEndOn,
+      event.periodType,
+      candidate.accumulation,
+    );
+    if (calendarStart) {
+      candidate.periodStartOn = calendarStart;
+      normalizations.push('calendar_reporting_period_start');
+    }
+  }
+  if (
     candidate.accountingBasis === 'GAAP'
     && candidate.periodKind === 'duration'
     && typeof candidate.metricCode === 'string'
@@ -387,6 +411,32 @@ function sanitizeMetricCandidate(
     }
   }
   return { value: candidate, normalizations };
+}
+
+function inferCalendarReportingPeriodStart(
+  periodEndOn: string,
+  periodType: EarningsEventIdentity['periodType'],
+  accumulation: unknown,
+): string | null {
+  const standardPeriodEnds: Partial<Record<NonNullable<EarningsEventIdentity['periodType']>, string>> = {
+    Q1: '03-31',
+    H1: '06-30',
+    Q3: '09-30',
+    FY: '12-31',
+  };
+  if (!periodType || standardPeriodEnds[periodType] !== periodEndOn.slice(5)) return null;
+  if (periodType === 'FY' ? accumulation !== 'FY' : accumulation !== 'YTD') return null;
+  return `${periodEndOn.slice(0, 4)}-01-01`;
+}
+
+function schemaRejectionReasons(
+  issues: ReadonlyArray<{ path: PropertyKey[] }>,
+): string[] {
+  const reasons = ['schema_invalid'];
+  if (issues.some((issue) => issue.path[0] === 'periodStartOn')) {
+    reasons.push('schema_missing_period_start');
+  }
+  return reasons;
 }
 
 function isRangeForecastDisclosure(sourceText: string, quote: string): boolean {
@@ -592,7 +642,7 @@ const METRIC_QUOTE_PATTERNS: Record<MetricFact['metricCode'], RegExp[]> = {
   netIncomeAttrib: [
     /net income attributable to/i,
     /net income (?:available|attributable) to common/i,
-    /归属于[：:\s]*(?:上市公司|母公司|本行)?\s*股东的?\s*净\s*利\s*润/,
+    /归属于[：:\s]*(?:上市公司|母公司|本行)?\s*股东\s*的?\s*净\s*利\s*润/,
     /归母净利润/,
   ],
   epsBasic: [/basic (?:earnings|income).{0,20}per share/i, /basic eps/i, /^basic\b/i, /基本\s*每股收益/],
@@ -638,7 +688,7 @@ function quoteNamesMetric(
   }
   if (
     metricCode === 'netIncome'
-    && /net income (?:available|attributable) to common|net income attributable to|归属于[：:\s]*(?:上市公司|母公司|本行)?\s*股东的?\s*净\s*利\s*润|归母净\s*利\s*润/i.test(quote)
+    && /net income (?:available|attributable) to common|net income attributable to|归属于[：:\s]*(?:上市公司|母公司|本行)?\s*股东\s*的?\s*净\s*利\s*润|归母净\s*利\s*润/i.test(quote)
   ) {
     return false;
   }

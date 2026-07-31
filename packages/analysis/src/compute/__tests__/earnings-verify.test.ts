@@ -448,6 +448,85 @@ describe('verifyEarningsCandidates', () => {
     });
   });
 
+  it('fills a standard CAS half-year start before schema validation', () => {
+    const source = [
+      '2026年半年度业绩预告',
+      '归属于上市公司股东 的净利润 盈利：500,000万元至550,000万元',
+      '基本每股收益 0.13元/股至0.15元/股',
+    ].join('\n');
+    const facts = [
+      {
+        ...candidate(
+          'netIncomeAttrib',
+          '500000',
+          '归属于上市公司股东 的净利润 盈利：500,000万元至550,000万元',
+        ),
+        scale: 10_000,
+      },
+      {
+        ...candidate('epsBasic', '0.13', '基本每股收益 0.13元/股至0.15元/股'),
+        unit: 'per_share' as const,
+        scale: 1,
+      },
+    ];
+    (facts[0] as unknown as Record<string, unknown>).value = '500000';
+    (facts[1] as unknown as Record<string, unknown>).value = '0.13';
+    for (const fact of facts) delete (fact as Partial<MetricFactCandidate>).periodStartOn;
+
+    const result = verifyEarningsCandidates({
+      candidates: facts,
+      derivation: { ...derivation, text: source },
+      event: {
+        periodEndOn: '2026-06-30',
+        periodType: 'H1',
+        reportingScope: 'consolidated',
+      },
+    });
+
+    expect(result.rejected).toEqual([]);
+    expect(result.facts).toHaveLength(2);
+    expect(result.facts.every((fact) => fact.periodStartOn === '2026-01-01')).toBe(true);
+    expect(result.facts.every((fact) =>
+      fact.checkStatus.checks.includes('calendar_reporting_period_start'),
+    )).toBe(true);
+    expect(result.facts.every((fact) =>
+      fact.checkStatus.checks.includes('decimal_string_to_scalar'),
+    )).toBe(true);
+    expect(result.facts.map((fact) => fact.value)).toEqual([
+      { kind: 'range', min: '500000', max: '550000' },
+      { kind: 'range', min: '0.13', max: '0.15' },
+    ]);
+  });
+
+  it('fills a standard IFRS calendar-year start before schema validation', () => {
+    const source = 'Revenue was HKD 751,766 million for the year ended 31 December 2025.';
+    const fact = {
+      ...candidate('revenue', '751766', source),
+      currency: 'HKD',
+      scale: 1_000_000,
+      periodEndOn: '2025-12-31',
+      accumulation: 'FY' as const,
+      accountingBasis: 'IFRS',
+    };
+    delete (fact as Partial<MetricFactCandidate>).periodStartOn;
+
+    const result = verifyEarningsCandidates({
+      candidates: [fact],
+      derivation: { ...derivation, text: source },
+      event: {
+        periodEndOn: '2025-12-31',
+        periodType: 'FY',
+        reportingScope: 'consolidated',
+      },
+    });
+
+    expect(result.rejected).toEqual([]);
+    expect(result.facts[0]).toMatchObject({
+      periodStartOn: '2025-01-01',
+      checkStatus: { checks: expect.arrayContaining(['calendar_reporting_period_start']) },
+    });
+  });
+
   it('normalizes percent-suffixed YoY claims and omits percentage-point changes', () => {
     const source = [
       'Revenue 100 80',

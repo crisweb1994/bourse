@@ -1,4 +1,4 @@
-export const EARNINGS_EXTRACTION_PROMPT_VERSION = 'earnings-extract-v13';
+export const EARNINGS_EXTRACTION_PROMPT_VERSION = 'earnings-extract-v14';
 export const EARNINGS_SCHEMA_VERSION = 'earnings-card-v2';
 export const EARNINGS_MAX_OUTPUT_TOKENS = 4_000;
 
@@ -38,7 +38,7 @@ export const EARNINGS_EXTRACTION_SYSTEM_PROMPT = `你是财务披露信息抽取
 - metricCode 只能是 revenue, costOfRevenue, grossProfit, operatingIncome, netIncome, netIncomeAttrib, epsBasic, epsDiluted, grossMargin, operatingMargin, netMargin, operatingCashFlow, capitalExpenditures, freeCashFlow, totalAssets, totalLiabilities, totalEquity, cashAndCashEquivalents 之一；不要发明其他指标名。
 - unit 只能是 currency, percent, percentage_point, shares, per_share, ratio 之一，绝不能写进 metricCode。
 - unit=currency 或 per_share 时 currency 必填，使用 ISO 4217 三字码（USD/CNY/HKD）；其他 unit 不要填写 currency。
-- periodKind 只能是 duration 或 instant，绝不能写 discrete、YTD、FY 或其他值。revenue、利润、EPS、利润率、现金流均是 duration；totalAssets、totalLiabilities、totalEquity、cashAndCashEquivalents 才是 instant。duration 指标必须填写 periodStartOn；如果季度起始日未直接写出，只能在同一报表明确给出上一季度期末日时取其下一自然日，否则不要输出该 fact。资产负债表期末值使用 periodKind=instant、accumulation=discrete 且不填 periodStartOn。
+- periodKind 只能是 duration 或 instant，绝不能写 discrete、YTD、FY 或其他值。revenue、利润、EPS、利润率、现金流均是 duration；totalAssets、totalLiabilities、totalEquity、cashAndCashEquivalents 才是 instant。duration 指标通常填写 periodStartOn；标准日历年 Q1/H1/Q3/FY 的 YTD/FY 指标可省略，由系统按报告期补齐为当年 1 月 1 日。其他季度起始日未直接写出时，只能在同一报表明确给出上一季度期末日时取其下一自然日，否则不要输出该 fact。资产负债表期末值使用 periodKind=instant、accumulation=discrete 且不填 periodStartOn。
 - accumulation 只能是 discrete, YTD, FY。季度累计披露使用 YTD；美股单季数使用 discrete；年度值使用 FY。
 - accountingBasis 必填，只能依据原文填写 GAAP、IFRS、CAS 或明确的 non-GAAP 口径，不能留空。
 - consolidationScope 只能是 consolidated, parent, unknown；无法从原文判断时用 unknown，不能猜测。
