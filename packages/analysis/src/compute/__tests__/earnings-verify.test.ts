@@ -487,10 +487,12 @@ describe('verifyEarningsCandidates', () => {
     expect(result.facts).toHaveLength(2);
     expect(result.facts.every((fact) => fact.periodStartOn === '2026-01-01')).toBe(true);
     expect(result.facts.every((fact) =>
-      fact.checkStatus.checks.includes('calendar_reporting_period_start'),
+      fact.checkStatus.status === 'passed'
+      && fact.checkStatus.checks.includes('calendar_reporting_period_start'),
     )).toBe(true);
     expect(result.facts.every((fact) =>
-      fact.checkStatus.checks.includes('decimal_string_to_scalar'),
+      fact.checkStatus.status === 'passed'
+      && fact.checkStatus.checks.includes('decimal_string_to_scalar'),
     )).toBe(true);
     expect(result.facts.map((fact) => fact.value)).toEqual([
       { kind: 'range', min: '500000', max: '550000' },
