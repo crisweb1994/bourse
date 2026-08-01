@@ -408,6 +408,21 @@ export const EarningsCardPayloadSchema = z.object({
   facts: z.array(MetricFactSchema),
   // structured-first 原子切换后必填；旧 LLM 卡片兼容期可缺省。
   dataStatus: EarningsDataStatusSchema.optional(),
+  // 非 GAAP 补充指标独立集合：不映射 canonical metricCode，不混入 GAAP 区域。
+  supplementalNonGaap: z
+    .array(
+      z.object({
+        metricLabel: z.string().min(1),
+        value: MetricValueSchema,
+        unit: EarningsUnitSchema,
+        currency: z.string().length(3).optional(),
+        targetPeriodEndOn: IsoDateSchema,
+        reconciliationContext: z.string().optional(),
+        sourceSpan: FilingSpanSchema,
+      }),
+    )
+    .optional()
+    .default([]),
   managementClaims: z.array(
     z.object({
       id: z.string().min(1),
