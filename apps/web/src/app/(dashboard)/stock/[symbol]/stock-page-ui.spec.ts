@@ -3,12 +3,17 @@ import {
   buildRightInsightsSummary,
   formatAnalysisTime,
   getRequestedAnalysisId,
+  inferMarketFromSymbol,
 } from './stock-page-ui';
 
 assert.equal(
   formatAnalysisTime('2026-05-23T06:08:00.000Z', 'zh-CN', 'UTC'),
   '2026/05/23 06:08',
 );
+
+assert.equal(inferMarketFromSymbol('0700.HK'), 'HK');
+assert.equal(inferMarketFromSymbol('600519.SS'), 'CN');
+assert.equal(inferMarketFromSymbol('AAPL'), 'US');
 
 assert.equal(
   getRequestedAnalysisId(

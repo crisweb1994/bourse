@@ -12,6 +12,7 @@ import { EarningsRunnerService } from './earnings-runner.service';
 import {
   EarningsSourceError,
   EarningsSourceService,
+  type EarningsSourceOptions,
   type EarningsRunSource,
   type PreparedEarningsSource,
 } from './earnings-source.service';
@@ -95,9 +96,14 @@ export class EarningsGenerationService {
     return run;
   }
 
-  private async prepareSource(stock: Stock): Promise<EarningsRunSource> {
+  private async prepareSource(
+    stock: Stock,
+    options?: EarningsSourceOptions,
+  ): Promise<EarningsRunSource> {
     try {
-      return await this.prepareSingleFlight(stock);
+      return options
+        ? await this.sources.discoverAndIngest(stock, options)
+        : await this.prepareSingleFlight(stock);
     } catch (error) {
       if (error instanceof EarningsSourceError && error.fallbackSource) {
         return error.fallbackSource;
@@ -157,11 +163,35 @@ export class EarningsGenerationService {
   }
 
   async retry(userId: string, runId: string) {
-    const run = await this.prisma.earningsGenerationRun.findUnique({ where: { id: runId } });
+    const run = await this.prisma.earningsGenerationRun.findUnique({
+      where: { id: runId },
+      include: { stock: true },
+    });
     if (!run) throw new NotFoundException('Earnings generation not found');
     await this.assertStockScope(userId, run.stockId);
     if (!run.retryable || run.status !== 'FAILED') {
       throw new ConflictException('This earnings generation cannot be retried');
+    }
+    if (run.errorCode === 'CHECK_REJECTED_ALL') {
+      const failedSourceGroupId = sourceGroupIdFromDescriptor(run.sourceDescriptor);
+      if (failedSourceGroupId) {
+        let source: EarningsRunSource;
+        try {
+          source = await this.prepareSource(run.stock, {
+            excludedSourceGroupIds: [failedSourceGroupId],
+          });
+        } catch (error) {
+          if (error instanceof EarningsSourceError) {
+            throw new ConflictException({
+              code: error.code,
+              retryable: error.retryable,
+              message: error.message,
+            });
+          }
+          throw error;
+        }
+        return this.queueRun(run.stock, source, userId);
+      }
     }
     const updated = await this.prisma.earningsGenerationRun.update({
       where: { id: run.id },
@@ -192,6 +222,16 @@ export class EarningsGenerationService {
     return task;
   }
 
+}
+
+function sourceGroupIdFromDescriptor(value: Prisma.JsonValue): string | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const sourceGroupId = value.sourceGroupId;
+  if (typeof sourceGroupId === 'string' && sourceGroupId) return sourceGroupId;
+  const sourceDocumentId = value.sourceDocumentId;
+  return typeof sourceDocumentId === 'string' && sourceDocumentId
+    ? sourceDocumentId
+    : undefined;
 }
 
 const DETECTED_RETRY_BASE_MS = 5 * 60_000;

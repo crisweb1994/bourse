@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import {
   createCnFilingsConnector,
   createSecEdgarFilingsConnector,
-  type FilingPort,
+  type ProviderFilingPort as FilingPort,
 } from '@bourse/market-data';
 
 interface Args {

@@ -10,7 +10,6 @@ const instruments = requested.length > 0
 
 const client = createMarketData({
   secUserAgent: process.env.RESEARCH_CORE_USER_AGENT,
-  tavilyApiKey: process.env.TAVILY_API_KEY,
   twelveDataApiKey: process.env.TWELVE_DATA_API_KEY,
   alphaVantageApiKey: process.env.ALPHA_VANTAGE_API_KEY,
   eodhdApiKey: process.env.EODHD_API_KEY,
@@ -29,23 +28,11 @@ async function main(): Promise<void> {
     await probe('history', () => client.getHistory({ instrumentId, from, to, interval: '1d' }));
     await probe('profile', () => client.getProfile(instrumentId));
     await probe('financials', () => client.getFinancials(instrumentId, { timeoutMs: 20_000 }));
-    await probe('filings', () => client.getFilings(instrumentId, 5));
+    await probe('filings', () => client.listFilings({ instrumentId, limit: 5 }));
     await probe('macro', () => client.getMacro(market));
-    await probeList('instruments', () => client.searchInstruments(instrumentId.split(':')[1] ?? instrumentId));
+    await probe('instruments', () => client.searchInstruments(instrumentId.split(':')[1] ?? instrumentId));
   }
 
-  if (client.hasSearchProvider) {
-    await probe('web-search', () => {
-      const result = client.searchWeb({
-        query: 'Apple AAPL latest investor relations earnings',
-        limit: 3,
-      });
-      if (!result) throw new Error('Web search provider is not configured.');
-      return result;
-    });
-  } else {
-    console.log('\nweb-search SKIP provider=none reason=TAVILY_API_KEY_not_configured');
-  }
 }
 
 void main().catch((error) => {
@@ -69,33 +56,21 @@ async function probe(
     const provider = [...new Set([
       ...result.citations.map((citation) => citation.provider),
       ...result.freshness.map((freshness) => freshness.provider),
+      ...(result.trace.mergedSources ?? []),
+      ...(result.trace.selectedSource ? [result.trace.selectedSource] : []),
     ].filter(Boolean))].join('+') || 'none';
     const asOf = result.freshness[0]?.asOf ?? 'unknown';
     const available = hasData(result.data);
     const warnings = [...new Set(result.warnings.map((warning) => warning.code))];
+    const attempts = result.trace.attempts
+      .filter((attempt) => attempt.outcome !== 'hit')
+      .map((attempt) => `${attempt.sourceId}:${attempt.outcome}${attempt.reasonCode ? `(${attempt.reasonCode})` : ''}`);
     console.log(
-      `${kind.padEnd(10)} ${available ? 'OK  ' : 'MISS'} provider=${provider} asOf=${asOf} durationMs=${Date.now() - startedAt} warnings=${warnings.join(',') || 'none'}`,
+      `${kind.padEnd(10)} ${available ? 'OK  ' : 'MISS'} provider=${provider} asOf=${asOf} durationMs=${Date.now() - startedAt} warnings=${warnings.join(',') || 'none'} attempts=${attempts.join(',') || 'none'}`,
     );
   } catch (error) {
     console.log(
       `${kind.padEnd(10)} FAIL provider=none asOf=unknown durationMs=${Date.now() - startedAt} error=${safeError(error)}`,
-    );
-  }
-}
-
-async function probeList(
-  kind: string,
-  call: () => Promise<unknown[]>,
-): Promise<void> {
-  const startedAt = Date.now();
-  try {
-    const result = await call();
-    console.log(
-      `${kind.padEnd(10)} ${result.length > 0 ? 'OK  ' : 'MISS'} count=${result.length} durationMs=${Date.now() - startedAt}`,
-    );
-  } catch (error) {
-    console.log(
-      `${kind.padEnd(10)} FAIL count=0 durationMs=${Date.now() - startedAt} error=${safeError(error)}`,
     );
   }
 }

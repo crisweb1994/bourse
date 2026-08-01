@@ -79,7 +79,7 @@ export function computeFinancialRatios(
   const anchorCash = readCash(anchor, warnings);
 
   // 2. Quote-anchored metrics (require price + marketCap from a Quote)
-  const quoteMarketCap = normalizeQuoteMarketCap(input.quote, input.market, warnings);
+  const quoteMarketCap = normalizeQuoteMarketCap(input.quote);
   const price = input.quote?.price ?? null;
 
   // ---- Estimation ---------------------------------------------------------

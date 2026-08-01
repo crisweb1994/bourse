@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { ResearchResult } from '../contracts/result';
+import type { SourceResult } from '../contracts/source-result';
 import type { ConnectorRunContext } from '../connectors/types';
 
 /**
@@ -201,9 +202,16 @@ export interface FinancialsInput {
   deriveTTM?: boolean;
 }
 
-export interface FinancialsPort {
+export interface ProviderFinancialsPort {
   fetchFinancials(
     input: FinancialsInput,
     ctx?: ConnectorRunContext,
   ): Promise<ResearchResult<FinancialsBundle | null>>;
+}
+
+export interface FinancialsPort {
+  fetchFinancials(
+    input: FinancialsInput,
+    ctx?: ConnectorRunContext,
+  ): Promise<SourceResult<FinancialsBundle>>;
 }

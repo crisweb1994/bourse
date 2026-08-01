@@ -2,7 +2,7 @@ import { RESEARCH_SCHEMA_VERSION, type ResearchResult } from '../../contracts/re
 import type { ResearchWarning } from '../../contracts/warning';
 import type {
   CompanyProfile,
-  FinancePort,
+  ProviderFinancePort as FinancePort,
   HistoryInput,
   PriceBar,
   ProfileInput,
@@ -60,7 +60,7 @@ export function createTwelveDataFinanceConnector(
         return quoteFailure(PROVIDER, input.instrumentId, retrievedAt, parsedResult.code!, parsedResult.message!);
       }
       const parsed = parsedResult.parsed;
-      const providerSymbol = twelveSymbol(parsed);
+      const providerSymbol = resolvedSymbol(parsed, ctx);
       if (!providerSymbol) {
         return quoteFailure(PROVIDER, input.instrumentId, retrievedAt, 'UNSUPPORTED_MARKET', `Twelve Data has no symbol mapping for ${input.instrumentId}.`);
       }
@@ -97,7 +97,7 @@ export function createTwelveDataFinanceConnector(
       const retrievedAt = now().toISOString();
       const parsedResult = parseFinanceInstrument(input.instrumentId, SUPPORTED);
       if (!parsedResult.parsed) return historyFailure(PROVIDER, retrievedAt, parsedResult.code!, parsedResult.message!);
-      const providerSymbol = twelveSymbol(parsedResult.parsed);
+      const providerSymbol = resolvedSymbol(parsedResult.parsed, ctx);
       if (!providerSymbol) return historyFailure(PROVIDER, retrievedAt, 'UNSUPPORTED_MARKET', `Twelve Data has no symbol mapping for ${input.instrumentId}.`);
       const interval = intervalName(input.interval ?? '1d');
       try {
@@ -126,7 +126,7 @@ export function createTwelveDataFinanceConnector(
       const parsedResult = parseFinanceInstrument(input.instrumentId, SUPPORTED);
       if (!parsedResult.parsed) return profileFailure(PROVIDER, input.instrumentId, retrievedAt, parsedResult.code!, parsedResult.message!);
       const parsed = parsedResult.parsed;
-      const providerSymbol = twelveSymbol(parsed);
+      const providerSymbol = resolvedSymbol(parsed, ctx);
       if (!providerSymbol) return profileFailure(PROVIDER, input.instrumentId, retrievedAt, 'UNSUPPORTED_MARKET', `Twelve Data has no symbol mapping for ${input.instrumentId}.`);
       try {
         const payload = await request('profile', { symbol: providerSymbol }, ctx, options, timeoutMs) as TwelveError & Record<string, unknown>;
@@ -199,6 +199,12 @@ function twelveSymbol(parsed: ParsedFinanceInstrument): string | null {
   if (/^(5|6|9)/.test(parsed.symbol)) return `${parsed.symbol}:SSE`;
   if (/^(0|1|2|3)/.test(parsed.symbol)) return `${parsed.symbol}:SZSE`;
   return null;
+}
+
+function resolvedSymbol(parsed: ParsedFinanceInstrument, ctx: ConnectorRunContext): string | null {
+  return ctx.resolvedInstrument?.instrumentId === parsed.instrumentId
+    ? ctx.resolvedInstrument.providerSymbol
+    : twelveSymbol(parsed);
 }
 
 function intervalName(interval: NonNullable<HistoryInput['interval']>): string {

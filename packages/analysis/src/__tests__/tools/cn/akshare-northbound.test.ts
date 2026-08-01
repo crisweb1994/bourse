@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ToolContext } from '../../../tools/types';
-import { makeAkshareNorthboundCN } from '../../../tools/cn/akshare-northbound';
-import type { CnToolFetchLike } from '../../../tools/cn/_fetch-headers';
+import { makeAkshareNorthboundCN, type CnToolFetchLike } from '@bourse/market-data';
 
 const ctx: ToolContext = {
   marketProfile: undefined,

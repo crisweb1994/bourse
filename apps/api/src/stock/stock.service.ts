@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Market, type StockSearchResult } from '@bourse/shared-types';
-import type { MarketDataClient } from '@bourse/market-data';
+import type { ResearchMarketDataClient } from '@bourse/market-data';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpsertStockDto } from './stock.dto';
 import { MARKET_DATA_CLIENT } from '../connectors/connectors.module';
@@ -43,7 +43,7 @@ export class StockService {
 
   constructor(
     private prisma: PrismaService,
-    @Inject(MARKET_DATA_CLIENT) private readonly marketData: MarketDataClient,
+    @Inject(MARKET_DATA_CLIENT) private readonly marketData: ResearchMarketDataClient,
   ) {}
 
   async search(query: string): Promise<StockSearchResult[]> {
@@ -54,7 +54,7 @@ export class StockService {
     const cached = this.cache.get(cacheKey);
     if (cached) return cached;
 
-    const results = await this.marketData.searchInstruments(q) as StockSearchResult[];
+    const results = (await this.marketData.searchInstruments(q)).data ?? [];
 
     // Do not turn a transient outage across all providers into five minutes
     // of guaranteed empty search results.
@@ -176,13 +176,9 @@ export class StockService {
       };
     }
 
-    // Quote.changePct is unit-inconsistent across connectors (Yahoo returns a
-    // percent, CN a decimal fraction — see ports/finance.ts + cn.ts). Derive
-    // it ourselves from change + previous close so the web header always gets
-    // a percent. previousClose falls back to (price − change).
     const change = q.change ?? 0;
     const prevClose = q.previousClose ?? q.price - change;
-    const changePct = prevClose ? (change / prevClose) * 100 : 0;
+    const changePct = q.changePct ?? (prevClose ? (change / prevClose) * 100 : 0);
     const quote: QuoteDto = {
       degraded: false,
       price: q.price,
@@ -200,15 +196,7 @@ export class StockService {
       asOf: q.timestamp,
     };
 
-    // Quote.marketCap units differ by source (see ports/finance.ts): CN
-    // sources report 亿元, Yahoo reports raw currency units. The web
-    // formatter assumes raw units, so normalize CN back to raw (× 1e8).
-    const marketCap =
-      typeof q.marketCap === 'number'
-        ? market === 'CN'
-          ? q.marketCap * 1e8
-          : q.marketCap
-        : undefined;
+    const marketCap = typeof q.marketCap === 'number' ? q.marketCap : undefined;
     const profile: ProfileDto =
       marketCap !== undefined
         ? { degraded: false, marketCap }

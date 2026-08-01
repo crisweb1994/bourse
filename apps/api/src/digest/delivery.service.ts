@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { BriefPayload, ChannelConfig } from '@bourse/analysis';
+import { delay } from '../common/async';
 import { PrismaService } from '../prisma/prisma.service';
 import { DigestSubscriptionService } from './digest.service';
 import { WebhookAdapter } from './channel/webhook.adapter';
@@ -91,7 +92,7 @@ export class DigestDeliveryService {
         lastError = err instanceof Error ? err.message : String(err);
       }
       // 非终态：退避后重试（最后一次不等）。
-      if (attempt < maxAttempts) await sleep(backoffMs(attempt));
+      if (attempt < maxAttempts) await delay(backoffMs(attempt));
     }
 
     await this.record(userId, market, session, channel, 'FAILED', lastStatus, lastError);
@@ -128,8 +129,4 @@ export class DigestDeliveryService {
 /** 指数退避：100ms / 400ms / 1.6s（base × 4^attempt）。 */
 function backoffMs(attempt: number): number {
   return 100 * 4 ** (attempt - 1);
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

@@ -24,8 +24,8 @@ import {
   createEastmoneyFinancialsConnector,
   createSecEdgarXbrlFinancialsConnector,
   createYahooFinanceConnector,
-  type FinancePort,
-  type FinancialsPort,
+  type ProviderFinancePort as FinancePort,
+  type ProviderFinancialsPort as FinancialsPort,
 } from '@bourse/market-data';
 import {
   fetchSnapshot,

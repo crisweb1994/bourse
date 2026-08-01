@@ -14,6 +14,7 @@ COPY apps/ apps/
 
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @bourse/shared-types build \
+ && pnpm --filter @bourse/market-data build \
  && pnpm --filter @bourse/analysis build
 
 FROM workspace AS app-build

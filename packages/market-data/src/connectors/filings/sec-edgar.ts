@@ -5,7 +5,7 @@ import type { ResearchWarning } from '../../contracts/warning';
 import type {
   FilingDocument,
   FilingGetInput,
-  FilingPort,
+  ProviderFilingPort as FilingPort,
   FilingSearchInput,
   FilingSummary,
 } from '../../ports/filings';
@@ -75,12 +75,15 @@ export function createSecEdgarFilingsConnector(options: SecEdgarOptions): Filing
           `SEC EDGAR only handles US issuers; got ${parsed.market}`,
         );
       }
+      const providerSymbol = ctx.resolvedInstrument?.instrumentId === parsed.raw
+        ? ctx.resolvedInstrument.providerSymbol
+        : parsed.symbol;
 
       const fetchLike = resolveFetch(ctx, options);
 
       let cik: { cik: string; name: string } | null;
       try {
-        cik = await cikLookup.resolve(parsed.symbol, ctx);
+        cik = await cikLookup.resolve(providerSymbol, ctx);
       } catch (err) {
         const message = (err as Error)?.message ?? String(err);
         return failure(retrievedAt, 'SOURCE_UNAVAILABLE', `CIK lookup failed: ${message}`, message);
@@ -214,7 +217,10 @@ export function createSecEdgarFilingsConnector(options: SecEdgarOptions): Filing
         if (!text) {
           return documentFailure(input, retrievedAt, 'PARTIAL_DATA', 'SEC filing contained no readable text');
         }
-        if (documentKind === 'EARNINGS_RELEASE' && !isEarningsReleaseText(text)) {
+        const formType = (input.formType ?? '').toUpperCase();
+        if (formType === '6-K') {
+          documentKind = isEarningsReleaseText(text) ? 'EARNINGS_RELEASE' : 'OTHER';
+        } else if (documentKind === 'EARNINGS_RELEASE' && !isEarningsReleaseText(text)) {
           documentKind = 'OTHER';
         }
         const filename = new URL(documentUrl).pathname.split('/').pop() ?? input.id;
@@ -252,8 +258,8 @@ export function createSecEdgarFilingsConnector(options: SecEdgarOptions): Filing
             qualityTier: 'A',
           }],
           freshness: [{ provider: PROVIDER, asOf: retrievedAt, retrievedAt, stale: false }],
-          warnings: documentKind !== 'EARNINGS_RELEASE' && (input.formType ?? '').toUpperCase() === '8-K'
-            ? [{ code: 'PARTIAL_DATA', message: 'No earnings-qualified EX-99.1 exhibit found', provider: PROVIDER }]
+          warnings: documentKind !== 'EARNINGS_RELEASE' && ['8-K', '6-K'].includes(formType)
+            ? [{ code: 'PARTIAL_DATA', message: `No earnings-qualified ${formType} release found`, provider: PROVIDER }]
             : [],
         };
       } catch (err) {
@@ -322,7 +328,7 @@ export function htmlToFilingText(html: string): string {
 
 export function isEarningsReleaseText(text: string): boolean {
   const head = text.slice(0, 12_000);
-  const hasResultsContext = /(?:financial\s+results|quarter(?:ly)?\s+results|earnings\s+(?:release|results)|results\s+for\s+(?:the\s+)?(?:first|second|third|fourth|fiscal)|reports?\s+(?:first|second|third|fourth|fiscal)\s+quarter)/i.test(head);
+  const hasResultsContext = /(?:financial\s+results|quarter(?:ly)?\s+results|earnings\s+(?:release|results)|(?:annual|full[- ]year|half[- ]year|interim)\s+results|results\s+for\s+(?:the\s+)?(?:first|second|third|fourth|fiscal|full|half)|(?:reports?|announces?|发布)\s+(?:its\s+)?(?:first|second|third|fourth|fiscal|annual|full[- ]year|half[- ]year|interim)?\s*quarter?\s*(?:financial\s+)?results?)/i.test(head);
   const metricFamilies = [
     /\b(?:revenue|net\s+sales)\b/i,
     /\b(?:net\s+income|net\s+earnings|profit)\b/i,

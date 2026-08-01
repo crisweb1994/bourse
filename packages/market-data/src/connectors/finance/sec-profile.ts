@@ -3,7 +3,7 @@ import { RESEARCH_SCHEMA_VERSION, type ResearchResult } from '../../contracts/re
 import type { ResearchWarning } from '../../contracts/warning';
 import type {
   CompanyProfile,
-  CompanyProfilePort,
+  ProviderCompanyProfilePort as CompanyProfilePort,
   ProfileInput,
 } from '../../ports/finance';
 import { parseInstrumentId } from '../../util/instrument-id';
@@ -64,10 +64,13 @@ export function createSecEdgarProfileConnector(
           'SEC profile fallback supports US issuers only.',
         );
       }
+      const providerSymbol = ctx.resolvedInstrument?.instrumentId === parsed.raw
+        ? ctx.resolvedInstrument.providerSymbol
+        : parsed.symbol;
 
       let cik: { cik: string; name: string } | null;
       try {
-        cik = await cikLookup.resolve(parsed.symbol, ctx);
+        cik = await cikLookup.resolve(providerSymbol, ctx);
       } catch (error) {
         return failure(
           emptyProfile(parsed.raw),

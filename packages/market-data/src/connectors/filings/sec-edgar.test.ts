@@ -213,6 +213,30 @@ describe('createSecEdgarFilingsConnector', () => {
     expect(out.data.text).toContain('Revenue was $10 billion.');
     expect(out.data.contentHash).toHaveLength(64);
   });
+
+  it('classifies an earnings 6-K and rejects an ordinary 6-K', async () => {
+    const fetchLike: FetchLike = async (url) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+      text: async () => url.includes('results')
+        ? '<html><body><h1>Financial results</h1><p>Revenue was $10 billion. Net income was $2 billion.</p></body></html>'
+        : '<html><body><h1>Corporate update</h1><p>New director appointed.</p></body></html>',
+    });
+    const c = createSecEdgarFilingsConnector({ userAgent: 'test', fetchLike });
+    const base = 'https://www.sec.gov/Archives/edgar/data/1577552/000157755226000001';
+    const results = await c.getFiling!({
+      id: 'results', sourceDocumentId: 'results', instrumentId: 'US:BABA', formType: '6-K',
+      filingUrl: `${base}/results.htm`, title: 'Financial results',
+    });
+    const ordinary = await c.getFiling!({
+      id: 'ordinary', sourceDocumentId: 'ordinary', instrumentId: 'US:BABA', formType: '6-K',
+      filingUrl: `${base}/ordinary.htm`, title: 'Corporate update',
+    });
+    expect(results.data.documentKind).toBe('EARNINGS_RELEASE');
+    expect(ordinary.data.documentKind).toBe('OTHER');
+    expect(ordinary.warnings[0].message).toContain('6-K');
+  });
 });
 
 describe('SEC filing document helpers', () => {
@@ -236,5 +260,6 @@ describe('SEC filing document helpers', () => {
     expect(isEarningsReleaseText('Alphabet announces an $80 billion equity capital raise.')).toBe(false);
     expect(isEarningsReleaseText('Microsoft announces appointment of a new director to the board.')).toBe(false);
     expect(isEarningsReleaseText('Company reports first quarter financial results. Revenue was $10 billion and diluted earnings per share was $2.')).toBe(true);
+    expect(isEarningsReleaseText('Alibaba announces annual results. Revenue was $10 billion and net income was $2 billion.')).toBe(true);
   });
 });

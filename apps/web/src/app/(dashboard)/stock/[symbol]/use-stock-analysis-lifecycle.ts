@@ -33,6 +33,8 @@ interface Params {
   /** analysisId pinned by the URL (?analysisId=...), or null. */
   analysisId: string | null;
   symbol: string | null;
+  market: string;
+  name: string;
   router: { replace: (href: string) => void };
   /** Sync the form's default analysis-type to a resolved run. */
   setFormType: (type: ActiveAnalysisType) => void;
@@ -214,6 +216,8 @@ export function useStockAnalysisLifecycle(params: Params) {
                 symbol: p.symbol,
                 stockId: p.effectiveStockId,
                 analysisId: ongoing.id,
+                market: p.market,
+                name: p.name,
               }),
             );
             return false;
@@ -263,6 +267,8 @@ export function useStockAnalysisLifecycle(params: Params) {
             symbol: p.symbol,
             stockId,
             analysisId: analysis.id,
+            market: p.market,
+            name: p.name,
           }),
         );
       },
@@ -299,6 +305,8 @@ export function useStockAnalysisLifecycle(params: Params) {
         symbol: p.symbol,
         stockId,
         analysisId: id,
+        market: p.market,
+        name: p.name,
       }),
     );
   };
@@ -331,6 +339,8 @@ export function useStockAnalysisLifecycle(params: Params) {
               symbol: p.symbol,
               stockId,
               analysisId: analysis.id,
+              market: p.market,
+              name: p.name,
             }),
           );
         },
@@ -369,6 +379,8 @@ export function useStockAnalysisLifecycle(params: Params) {
               symbol: p.symbol,
               stockId,
               analysisId: analysis.id,
+              market: p.market,
+              name: p.name,
             }),
           );
         },

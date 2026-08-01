@@ -14,8 +14,7 @@ import {
   getLatestEarnings,
   retryEarningsGeneration,
 } from '@/lib/api';
-
-const POLL_MS = 1_500;
+import { useGenerationPolling } from './use-generation-polling';
 
 export function useEarningsCard({
   stockId,
@@ -127,27 +126,15 @@ export function useEarningsCard({
     };
   }, [canGenerate, refresh, start, stockId]);
 
-  useEffect(() => {
-    if (!generation || !['QUEUED', 'RUNNING'].includes(generation.status)) return;
-    let cancelled = false;
-    const timer = window.setInterval(() => {
-      void getEarningsGeneration(generation.id)
-        .then((next) => {
-          if (cancelled) return;
-          setGeneration(next);
-          if (next.card) {
-            setResponse({ available: true, supported: true, card: next.card });
-          }
-        })
-        .catch((cause) => {
-          if (!cancelled) setError(messageFor(cause));
-        });
-    }, POLL_MS);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [generation]);
+  useGenerationPolling(generation, getEarningsGeneration, {
+    onUpdate: (next) => {
+      setGeneration(next);
+      if (next.card) {
+        setResponse({ available: true, supported: true, card: next.card });
+      }
+    },
+    onError: (cause) => setError(messageFor(cause)),
+  });
 
   return {
     response,

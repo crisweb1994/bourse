@@ -26,9 +26,10 @@ test('consensus capture persists an auditable pre-publication snapshot', async (
       },
     },
   };
-  const yahoo = {
-    fetchEarningsConsensus: async () => ({
-      schemaVersion: '1.0' as const,
+  const marketData = {
+    getEarningsConsensus: async () => ({
+      schemaVersion: '2.0' as const,
+      status: 'ok' as const,
       data: {
         asOf: '2026-01-20T12:00:00.000Z',
         estimates: [{
@@ -51,12 +52,12 @@ test('consensus capture persists an auditable pre-publication snapshot', async (
       }],
       freshness: [],
       warnings: [],
+      trace: { selectedSource: 'yahoo', attempts: [] },
     }),
   };
   const service = new EarningsConsensusService(
     prisma as any,
-    {} as any,
-    yahoo as any,
+    marketData as any,
   );
 
   assert.equal(await service.capture(STOCK as any), 1);
@@ -94,7 +95,6 @@ test('consensus query enforces asOf and capturedAt before publication', async ()
   };
   const service = new EarningsConsensusService(
     prisma as any,
-    {} as any,
     {} as any,
   );
   const publishedAt = '2026-02-01T12:00:00.000Z';

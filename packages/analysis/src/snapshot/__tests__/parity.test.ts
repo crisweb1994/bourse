@@ -93,7 +93,11 @@ function richSnapshot(): StockSnapshot {
     rawFacts: {
       quote: aaplQuote(),
       history: aaplBars(),
-      profile: { sector: 'Technology', industry: 'Consumer Electronics' },
+      profile: {
+        instrument: { instrumentId: 'US:AAPL', market: 'US', symbol: 'AAPL' },
+        sector: 'Technology',
+        industry: 'Consumer Electronics',
+      },
       financials: aaplFinancials(),
       filings: [
         { url: 'https://sec.gov/x.htm', title: '10-Q', type: '10-Q' } as never,
@@ -159,42 +163,45 @@ function cnSnapshot(): StockSnapshot {
         price: 1685,
         currency: 'CNY',
         timestamp: '2025-05-25T00:00:00.000Z',
-        marketCap: 21_000, // 亿元
+        marketCap: 2_100_000_000_000,
       },
       history: null,
       profile: null,
       financials: null,
       filings: null,
       consensusEps: {
-        forecasts: [
-          { year: 2026, value: 68.96 },
-          { year: 2027, value: 72.75 },
+        asOf: '2026-05-25T00:00:00.000Z',
+        estimates: [
+          { metricCode: 'epsBasic', periodEndOn: '2026-12-31', periodType: 'FY', value: '68.96', unit: 'per_share', currency: 'CNY' },
+          { metricCode: 'epsBasic', periodEndOn: '2027-12-31', periodType: 'FY', value: '72.75', unit: 'per_share', currency: 'CNY' },
         ],
       },
-      northboundFlow: {
-        rows: [
-          { date: '2026-05-22', hgt: 5.5, sgt: 0 },
-          { date: '2026-05-21', hgt: -3.2, sgt: 0 },
-        ],
-      },
-      lhb: {
-        appearances: [
+      northboundFlow: [
+        { id: '1', instrumentId: 'CN:600519', kind: 'STOCK_CONNECT', asOf: '2026-05-22', shanghaiNetFlow: '5.5', shenzhenNetFlow: '0', flowUnit: 'CNY_100M' },
+        { id: '2', instrumentId: 'CN:600519', kind: 'STOCK_CONNECT', asOf: '2026-05-21', shanghaiNetFlow: '-3.2', shenzhenNetFlow: '0', flowUnit: 'CNY_100M' },
+      ],
+      lhb: [
           {
-            date: '2026-05-10',
+            id: 'lhb-1',
+            instrumentId: 'CN:600519',
+            type: 'LHB',
+            occurredAt: '2026-05-10',
+            title: '龙虎榜：换手率达20%',
             reason: '换手率达20%',
-            topBuySeats: [
-              { name: '国泰君安上海江苏路', buyAmount: 1e7, sellAmount: 0, netAmount: 1e7 },
-            ],
-            topSellSeats: [],
             topBuySeatNames: ['国泰君安上海江苏路'],
             topSellSeatNames: [],
           },
-        ],
-      },
-      unlockCalendar: {
-        events: [{ date: '2026-06-15', shares: 5_000_000, type: '首发原股东限售股' }],
-      },
-      shareholders: { rows: [] },
+      ],
+      unlockCalendar: [{
+        id: 'unlock-1',
+        instrumentId: 'CN:600519',
+        type: 'UNLOCK',
+        occurredAt: '2026-06-15',
+        title: '限售解禁：首发原股东限售股',
+        shares: '5000000',
+        unlockType: '首发原股东限售股',
+      }],
+      shareholders: [],
       webSearch: null,
       macro: null,
     },

@@ -142,7 +142,14 @@ export function shouldSkipForCoverage(
   return decision?.skip ? decision : undefined;
 }
 
-/** Apply a code-side confidence ceiling after structured output parsing. */
+/**
+ * Apply code-side coverage decisions after structured output parsing.
+ *
+ * The model extracts presentation data from the report, but it is not the
+ * authority on whether a required fact is missing. Without this override it
+ * tends to list every optional metric mentioned by a prompt, which makes a
+ * complete evidence pack look degraded in the UI.
+ */
 export function applyResearchCoverage<T extends StructuredJson>(
   data: T,
   coverage: ResearchDimensionCoverage | undefined,
@@ -154,10 +161,7 @@ export function applyResearchCoverage<T extends StructuredJson>(
     CONFIDENCE_RANK[current] > CONFIDENCE_RANK[coverage.confidenceCap]
       ? coverage.confidenceCap
       : current;
-  const missingFields = [...new Set([
-    ...data.dataAvailability.missingFields,
-    ...coverage.missingCriticalFacts,
-  ])];
+  const missingFields = [...new Set(coverage.missingCriticalFacts)];
   const reasonParts = [data.dataAvailability.reason];
   if (coverage.status !== 'PASS') {
     reasonParts.push(

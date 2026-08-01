@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { FinancialsBundleSchema, MacroSnapshotSchema } from '@bourse/market-data';
+import {
+  CorporateActionSchema,
+  FinancialsBundleSchema,
+  MacroSnapshotSchema,
+  MarketEventSchema,
+  OwnershipObservationSchema,
+} from '@bourse/market-data';
 import {
   ComputedFinancialRatiosSchema,
   ComputedTechnicalIndicatorsSchema,
@@ -123,6 +129,9 @@ export const MinimalFacts = z.object({
   webDocuments: Fact(z.array(WebDocumentItem)).optional(),
   /** Key-free official macro observations for the instrument's market. */
   macro: Fact(MacroSnapshotSchema).optional(),
+  corporateActions: Fact(z.array(CorporateActionSchema)).optional(),
+  ownershipObservations: Fact(z.array(OwnershipObservationSchema)).optional(),
+  marketEvents: Fact(z.array(MarketEventSchema)).optional(),
   /**
    * RFC financials Phase 1 — 三表 + TTM bundle, US-only Phase 1。
    * `value` 是 FinancialsBundle (periods[] + currency + sourceUrl)，
@@ -152,6 +161,13 @@ const NorthboundFlowRow = z.object({
   // Net inflow in 亿元 (100M CNY). Positive = inflow, negative = outflow.
   hgt: z.number(),
   sgt: z.number(),
+});
+
+const NorthboundHoldingRow = z.object({
+  date: z.string(),
+  exchange: z.string().optional(),
+  holdingShares: z.number(),
+  holdingPercentOfFloat: z.number().optional(),
 });
 
 const LhbAppearanceRow = z.object({
@@ -184,6 +200,7 @@ export const AShareSpecificFacts = z.object({
   consensusEps: Fact(z.array(ConsensusEpsRow)).optional(),
   peHistoricalPercentile: Fact(PeHistoricalPercentile).optional(),
   northboundFlow: Fact(z.array(NorthboundFlowRow)).optional(),
+  northboundHoldings: Fact(z.array(NorthboundHoldingRow)).optional(),
   lhbAppearances: Fact(z.array(LhbAppearanceRow)).optional(),
   unlockCalendar: Fact(z.array(UnlockCalendarRow)).optional(),
   shareholderConcentration: Fact(ShareholderConcentration).optional(),
@@ -421,9 +438,13 @@ export const EVIDENCE_PACK_V2_FACT_KEYS = [
   'recentNews',
   'webDocuments',
   'macro',
+  'corporateActions',
+  'ownershipObservations',
+  'marketEvents',
   'consensusEps',
   'peHistoricalPercentile',
   'northboundFlow',
+  'northboundHoldings',
   'lhbAppearances',
   'unlockCalendar',
   'shareholderConcentration',

@@ -73,7 +73,7 @@ export class EarningsController {
   @Post('generations/:runId/retry')
   @UseGuards(CsrfGuard)
   async retry(@CurrentUser() user: any, @Param('runId') runId: string) {
-    await this.generations.retry(user.id, runId);
-    return this.queries.generation(user.id, runId);
+    const run = await this.generations.retry(user.id, runId);
+    return this.queries.generation(user.id, run.id);
   }
 }

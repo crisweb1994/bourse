@@ -1,9 +1,8 @@
 import { z } from 'zod';
 import Decimal from 'decimal.js';
+import { DecimalStringSchema } from '@bourse/market-data';
 
-export const DecimalStringSchema = z
-  .string()
-  .regex(/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/, 'expected a base-10 decimal string');
+export { DecimalStringSchema };
 
 export const EarningsMetricCodeSchema = z.enum([
   'revenue',

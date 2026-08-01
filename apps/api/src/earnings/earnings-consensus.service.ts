@@ -1,11 +1,11 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   EarningsConsensusBundleSchema,
-  type FinancePort,
 } from '@bourse/analysis';
+import type { ResearchMarketDataClient } from '@bourse/market-data';
 import { Prisma, type Stock } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CN_FINANCE_PORT, YAHOO_FINANCE_PORT } from '../connectors/connectors.module';
+import { MARKET_DATA_CLIENT } from '../connectors/connectors.module';
 import type { ConsensusBenchmark } from '@bourse/analysis';
 
 const DEFAULT_MAX_AGE_MS = 30 * 24 * 60 * 60_000;
@@ -16,8 +16,7 @@ export class EarningsConsensusService {
 
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(CN_FINANCE_PORT) private readonly cnFinance: FinancePort,
-    @Inject(YAHOO_FINANCE_PORT) private readonly yahooFinance: FinancePort,
+    @Inject(MARKET_DATA_CLIENT) private readonly marketData: ResearchMarketDataClient,
   ) {}
 
   maxAgeMs(): number {
@@ -25,11 +24,10 @@ export class EarningsConsensusService {
   }
 
   async capture(stock: Stock): Promise<number> {
-    const port = stock.market === 'CN' ? this.cnFinance : stock.market === 'US' ? this.yahooFinance : null;
-    if (!port?.fetchEarningsConsensus) return 0;
+    if (stock.market !== 'CN' && stock.market !== 'US') return 0;
     let result;
     try {
-      result = await port.fetchEarningsConsensus({ instrumentId: `${stock.market}:${stock.symbol}` });
+      result = await this.marketData.getEarningsConsensus(`${stock.market}:${stock.symbol}`);
     } catch (error) {
       this.logger.warn(`consensus fetch failed for ${stock.market}:${stock.symbol}: ${String(error)}`);
       return 0;

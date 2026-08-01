@@ -3,7 +3,7 @@ import { RESEARCH_SCHEMA_VERSION, type ResearchResult } from '../../contracts/re
 import type { ResearchWarning } from '../../contracts/warning';
 import type {
   CompanyProfile,
-  CompanyProfilePort,
+  ProviderCompanyProfilePort as CompanyProfilePort,
   ProfileInput,
 } from '../../ports/finance';
 import { parseInstrumentId } from '../../util/instrument-id';
@@ -64,7 +64,9 @@ export function createEastmoneyHkProfileConnector(
         );
       }
 
-      const secucode = `${normalizeHkSymbol(parsed.symbol)}.HK`;
+      const secucode = ctx.resolvedInstrument?.instrumentId === parsed.raw
+        ? ctx.resolvedInstrument.providerSymbol
+        : `${normalizeHkSymbol(parsed.symbol)}.HK`;
       const url = profileUrl(secucode);
       const fetchLike = resolveFetch(ctx, options);
 

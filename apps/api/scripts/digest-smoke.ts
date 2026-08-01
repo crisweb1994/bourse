@@ -39,21 +39,8 @@ import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as dotenv from 'dotenv';
 import {
-  createCnFilingsConnector,
-  createCnFinanceConnector,
-  createEastmoneyFinancialsConnector,
-  createEastmoneyHkFinancialsConnector,
-  createHkexFilingsConnector,
-  createNasdaqFinanceConnector,
-  createOfficialMacroConnector,
-  createSecEdgarFilingsConnector,
-  createSecEdgarProfileConnector,
-  createSecEdgarXbrlFinancialsConnector,
-  createSinaUsFinanceConnector,
-  createTencentHkFinanceConnector,
-  createTavilySearchConnector,
-  createYahooFinanceConnector,
-} from '@bourse/analysis';
+  createMarketData,
+} from '@bourse/market-data';
 import { DigestGeneratorService } from '../src/digest/brief.generator';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { SnapshotV2Service } from '../src/analysis/snapshot-v2.service';
@@ -238,24 +225,12 @@ async function main(): Promise<void> {
   await prisma.$connect();
 
   try {
-    const snapshotV2 = new SnapshotV2Service(
-      createYahooFinanceConnector() as any,
-      createNasdaqFinanceConnector() as any,
-      createSinaUsFinanceConnector() as any,
-      createTencentHkFinanceConnector() as any,
-      createSecEdgarProfileConnector({ userAgent: SEC_UA }) as any,
-      createCnFinanceConnector() as any,
-      createSecEdgarXbrlFinancialsConnector({ userAgent: SEC_UA }) as any,
-      createEastmoneyFinancialsConnector() as any,
-      createEastmoneyHkFinancialsConnector() as any,
-      createSecEdgarFilingsConnector({ userAgent: SEC_UA }) as any,
-      createCnFilingsConnector() as any,
-      createHkexFilingsConnector() as any,
-      createOfficialMacroConnector() as any,
-      process.env.WEB_SEARCH_PROVIDER === 'tavily' && process.env.TAVILY_API_KEY
-        ? createTavilySearchConnector({ apiKey: process.env.TAVILY_API_KEY }) as any
-        : null,
-    );
+    const snapshotV2 = new SnapshotV2Service(createMarketData({
+        secUserAgent: SEC_UA,
+        ...(process.env.TWELVE_DATA_API_KEY ? { twelveDataApiKey: process.env.TWELVE_DATA_API_KEY } : {}),
+        ...(process.env.ALPHA_VANTAGE_API_KEY ? { alphaVantageApiKey: process.env.ALPHA_VANTAGE_API_KEY } : {}),
+        ...(process.env.EODHD_API_KEY ? { eodhdApiKey: process.env.EODHD_API_KEY } : {}),
+      }));
     const providerFactory = new ProviderFactoryService(config);
     const aiSettings = new AiSettingsService(prisma, config);
     const generator = new DigestGeneratorService(

@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { ConnectorsModule } from '../connectors/connectors.module';
-import { ProviderFactoryService } from '../analysis/provider-factory.service';
+import { AnalysisModule } from '../analysis/analysis.module';
 import { EarningsController } from './earnings.controller';
 import { EarningsGenerationService } from './earnings-generation.service';
 import { EarningsQueryService } from './earnings-query.service';
@@ -16,10 +16,9 @@ import { EarningsTrendService } from './earnings-trend.service';
 import { FilingsModule } from '../filings/filings.module';
 
 @Module({
-  imports: [AuthModule, ConnectorsModule, FilingsModule],
+  imports: [AuthModule, AnalysisModule, ConnectorsModule, FilingsModule],
   controllers: [EarningsController],
   providers: [
-    ProviderFactoryService,
     FilingDetectionScheduler,
     EarningsConsensusService,
     EarningsConsensusScheduler,

@@ -561,6 +561,12 @@ export function buildStructuredOutputPrompts(
   "disclaimer": "标准免责声明文本"
 }
 
+【dataAvailability 填写规则】
+- missingFields 只列出“本维度形成当前结论所必需、且报告明确无法取得”的事实
+- 不要把报告未讨论的可选指标、追求更精确口径的数据、个性化组合数据或系统禁止输出的字段列为缺失
+- 已有足够证据支持当前结论时，missingFields 必须填 []，reason 简述数据已足够
+- EvidencePack 或研究覆盖门禁明确列出的 missingCriticalFacts 必须保留
+
 【evidence 数组要求】
 - 至少包含 1 项 claim
 - 若 allowed URL 列表为空，使用 citations: [] 空数组

@@ -6,7 +6,7 @@ import type {
   FinancialsInput,
   FinancialsLineItem,
   FinancialsPeriodEntry,
-  FinancialsPort,
+  ProviderFinancialsPort as FinancialsPort,
   BalanceSheet,
   CashFlow,
   IncomeStatement,
@@ -104,13 +104,16 @@ export function createEastmoneyFinancialsConnector(
           `eastmoney-financials only handles CN A-share; got ${parsed.market}`,
         );
       }
+      const providerSymbol = ctx.resolvedInstrument?.instrumentId === parsed.raw
+        ? ctx.resolvedInstrument.providerSymbol
+        : parsed.symbol;
 
       const fetchLike = resolveFetch(ctx, options);
 
       const queryFor = (reportName: string) =>
         `${BASE_URL}?reportName=${reportName}` +
         `&columns=ALL` +
-        `&filter=(SECURITY_CODE%3D%22${encodeURIComponent(parsed.symbol)}%22)` +
+        `&filter=(SECURITY_CODE%3D%22${encodeURIComponent(providerSymbol)}%22)` +
         `&pageNumber=1&pageSize=${pageSize}` +
         `&sortColumns=REPORT_DATE&sortTypes=-1`;
 

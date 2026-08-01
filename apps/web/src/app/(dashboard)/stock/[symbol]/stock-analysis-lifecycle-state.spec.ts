@@ -59,8 +59,10 @@ assert.equal(
     symbol: 'BRK B',
     stockId: 'stock-1',
     analysisId: 'analysis-1',
+    market: 'US',
+    name: 'Berkshire Hathaway',
   }),
-  '/stock/BRK%20B?stockId=stock-1&analysisId=analysis-1',
+  '/stock/BRK%20B?stockId=stock-1&analysisId=analysis-1&market=US&name=Berkshire+Hathaway',
 );
 
 const cancelled = lifecycleReducer(

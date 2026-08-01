@@ -95,8 +95,8 @@ flowchart TB
 - connector 数据走 `portToFetcher`(包装 host 注入的端口)。
 - US quote/history 优先 Yahoo；返回无效值时改用 Nasdaq，并在 citation 和 warning 中保留实际来源。
 - US Profile 优先 Yahoo；不可用时改用 SEC issuer submissions 的 SIC/发行人信息，并保留 A 级引用和 fallback warning。
-- CN 5 个信号走 `toolToFetcher`(包装 `ToolDescriptor.run()`);失败带结构化 reason
-  码进 `dataAvailability`,而非静默空。
+- CN 信号由 `ResearchMarketDataClient` 声明 capability/dataSet，经统一 Router
+  选择 canonical source plugin；失败带结构化 reason 码进 `dataAvailability`,而非静默空。
 - **fetch 一次**:9 维不再各自拉数据,全部读这一个 snapshot。
 - **覆盖矩阵**:snapshot 生成 `researchCoverage`。缺 quote/history 的 TECHNICAL 直接
   `section_skipped`；其它维度在缺失或陈旧关键事实时保留报告，但由代码压低
@@ -244,12 +244,14 @@ flowchart TB
 
 ---
 
-## 10. 市场 & CN 信号工具
+## 10. 市场 & CN 信号数据源
 
 - `markets/`:US / CN / HK 的 MarketProfile —— `domainTiers`(web_search 白名单 +
   质量分级)、`sourcePriorities`。仅 CN 配了 domainTiers。
-- CN 5 个信号工具(eastmoney datacenter API,字段会随报表改版腐化,需定期校准):
-  - `consensusEpsCN` — 一致预期 EPS(`RPT_WEB_RESPREDICT`)
+- CN 信号的 provider connector 位于 `packages/market-data`，通过
+  `ownership`、`market-events` 与 `earnings-consensus` canonical port 暴露。
+  公开端点字段会随报表改版腐化，
+  需用 fixture 定期校准:
   - `shareholdersCN` — 股东户数/人均(`RPT_F10_EH_HOLDERNUM`)
   - `unlockCalendarCN` — 限售解禁(`RPT_LIFT_STAGE`)
   - `lhbScanCN` — 龙虎榜

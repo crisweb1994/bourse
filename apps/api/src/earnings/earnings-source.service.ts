@@ -1,16 +1,12 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   type FilingDocument,
-  type FilingPort,
   type FilingSummary,
 } from '@bourse/analysis';
+import type { ResearchMarketDataClient } from '@bourse/market-data';
 import { type Stock } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  CN_FILING_PORT,
-  HK_FILING_PORT,
-  US_FILING_PORT,
-} from '../connectors/connectors.module';
+import { MARKET_DATA_CLIENT } from '../connectors/connectors.module';
 import { FilingStoreError, FilingStoreService } from '../filings/filing-store.service';
 export { buildParserDerivationKey } from '../filings/filing-store.service';
 
@@ -50,42 +46,52 @@ export interface StructuredFallbackSource {
 
 export type EarningsRunSource = PreparedEarningsSource | StructuredFallbackSource;
 
+export interface EarningsSourceOptions {
+  excludedSourceGroupIds?: readonly string[];
+}
+
 @Injectable()
 export class EarningsSourceService {
   private readonly logger = new Logger(EarningsSourceService.name);
 
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(US_FILING_PORT) private readonly usFilings: FilingPort,
-    @Inject(CN_FILING_PORT) private readonly cnFilings: FilingPort,
-    @Inject(HK_FILING_PORT) private readonly hkFilings: FilingPort,
+    @Inject(MARKET_DATA_CLIENT) private readonly marketData: ResearchMarketDataClient,
     private readonly filingStore: FilingStoreService,
   ) {}
 
-  async discoverAndIngest(stock: Stock): Promise<PreparedEarningsSource> {
+  async discoverAndIngest(
+    stock: Stock,
+    options: EarningsSourceOptions = {},
+  ): Promise<PreparedEarningsSource> {
     const instrumentId = `${stock.market}:${stock.symbol}`;
-    const port = stock.market === 'US'
-      ? this.usFilings
-      : stock.market === 'CN'
-        ? this.cnFilings
-        : stock.market === 'HK'
-          ? this.hkFilings
-          : null;
-    if (!port?.getFiling) throw new EarningsSourceError('UNSUPPORTED_MARKET', false);
+    if (stock.market !== 'US' && stock.market !== 'CN' && stock.market !== 'HK') {
+      throw new EarningsSourceError('UNSUPPORTED_MARKET', false);
+    }
 
     const forms = stock.market === 'US'
-      ? ['8-K', '10-Q', '10-K']
+      // Foreign private issuers (for example BABA) report through 20-F/6-K,
+      // while domestic issuers use 10-K/10-Q/8-K.
+      ? ['8-K', '10-Q', '10-K', '6-K', '20-F']
       : stock.market === 'HK'
         ? ['profit_warning', 'preliminary', 'quarterly', 'interim', 'annual']
         : ['preview', 'preliminary', 'quarterly', 'semiannual', 'annual'];
-    const listed = await port.searchFilings({ instrumentId, forms, limit: stock.market === 'HK' ? 20 : stock.market === 'US' ? 12 : 10 });
-    if (listed.data.length === 0) {
+    const listed = await this.marketData.listFilings({ instrumentId, forms, limit: stock.market === 'HK' ? 20 : stock.market === 'US' ? 100 : 10 });
+    if (!listed.data?.length) {
       throw new EarningsSourceError('NO_ELIGIBLE_FILING', true, listed.warnings[0]?.message);
+    }
+
+    const excludedGroups = new Set(options.excludedSourceGroupIds ?? []);
+    const candidates = prioritizeEarningsSources(listed.data, stock.market).filter(
+      (summary) => !excludedGroups.has(summary.sourceGroupId ?? summary.sourceDocumentId),
+    );
+    if (candidates.length === 0) {
+      throw new EarningsSourceError('NO_NEW_ELIGIBLE_FILING', true);
     }
 
     const failures: string[] = [];
     let fallbackSource: StructuredFallbackSource | undefined;
-    for (const summary of listed.data) {
+    for (const summary of candidates) {
       const alreadyLinked = await this.prisma.filing.findFirst({
         where: {
           provider: summary.provider,
@@ -101,12 +107,16 @@ export class EarningsSourceService {
       fallbackSource ??= fallbackFromSummary(summary);
       let result;
       try {
-        result = await port.getFiling({ ...summary });
+        result = await this.marketData.getFilingDocument({ ...summary });
       } catch (error) {
         failures.push(`${summary.id}: ${error instanceof Error ? error.message : String(error)}`);
         continue;
       }
       const document = result.data;
+      if (!document) {
+        failures.push(result.warnings[0]?.message ?? `${summary.id}: no document`);
+        continue;
+      }
       fallbackSource = {
         kind: 'structuredFallback',
         provider: document.provider || summary.provider,
@@ -125,16 +135,16 @@ export class EarningsSourceService {
       }
       if (
         stock.market === 'US'
-        && summary.formType.toUpperCase() === '8-K'
+        && ['8-K', '6-K'].includes(summary.formType.toUpperCase())
         && document.documentKind !== 'EARNINGS_RELEASE'
       ) {
-        failures.push(`${summary.id}: no EX-99.1 earnings exhibit`);
+        failures.push(`${summary.id}: ${summary.formType} is not an earnings release`);
         continue;
       }
       try {
         const stored = await this.filingStore.persist(stock, summary, document);
         if (stock.market === 'HK' && summary.sourceGroupId) {
-          await this.persistGroupVariants(stock, port, listed.data, summary.sourceGroupId, summary.sourceDocumentId);
+          await this.persistGroupVariants(stock, listed.data, summary.sourceGroupId, summary.sourceDocumentId);
         }
         this.logger.log(`prepared ${stored.filing.provider}:${stored.filing.sourceDocumentId} for ${stock.market}:${stock.symbol}`);
         return {
@@ -172,12 +182,10 @@ export class EarningsSourceService {
 
   private async persistGroupVariants(
     stock: Stock,
-    port: FilingPort,
     listed: FilingSummary[],
     sourceGroupId: string,
     primarySourceDocumentId: string,
   ): Promise<void> {
-    if (!port.getFiling) return;
     const variants = listed.filter((candidate) =>
       candidate.sourceGroupId === sourceGroupId && candidate.sourceDocumentId !== primarySourceDocumentId,
     );
@@ -187,12 +195,90 @@ export class EarningsSourceService {
         select: { id: true },
       });
       if (existing) return;
-      const result = await port.getFiling!({ ...variant });
-      if (!result.data.text || !result.data.rawContent || !result.data.contentHash) return;
+      const result = await this.marketData.getFilingDocument({ ...variant });
+      if (!result.data?.text || !result.data.rawContent || !result.data.contentHash) return;
       await this.filingStore.persist(stock, variant, result.data);
     }));
   }
 
+}
+
+/**
+ * HKEX often publishes a concise results announcement before the full annual
+ * report. The announcement preserves financial tables much better after PDF
+ * text extraction, so prefer it within the same reporting year. Keep provider
+ * ordering unchanged for every other market and comparison.
+ */
+export function prioritizeEarningsSources(
+  summaries: readonly FilingSummary[],
+  market: string,
+): FilingSummary[] {
+  if (market === 'US') {
+    // SEC returns foreign issuers' frequent 6-K notices before their annual
+    // 20-F. Prefer the complete annual filing so discovery does not download
+    // dozens of unrelated 6-K notices before finding a usable source.
+    const annual = summaries.filter((summary) => summary.formType.toUpperCase() === '20-F');
+    if (annual.length > 0) {
+      return [...annual, ...summaries.filter((summary) => summary.formType.toUpperCase() !== '20-F')];
+    }
+    return [...summaries];
+  }
+  if (market !== 'HK') return [...summaries];
+  const ordered = [...summaries];
+
+  reorderMatchingSlots(
+    ordered,
+    (summary) => summary.sourceGroupId ?? summary.sourceDocumentId,
+    (a, b) => hkLanguageRank(a.language) - hkLanguageRank(b.language),
+  );
+  reorderMatchingSlots(
+    ordered,
+    (summary) => {
+      const formType = summary.formType.toLowerCase();
+      if (formType !== 'preliminary' && formType !== 'annual') return undefined;
+      return reportYear(summary);
+    },
+    (a, b) => hkFormRank(a.formType) - hkFormRank(b.formType),
+  );
+
+  return ordered;
+}
+
+function reorderMatchingSlots(
+  summaries: FilingSummary[],
+  keyOf: (summary: FilingSummary) => string | undefined,
+  compare: (a: FilingSummary, b: FilingSummary) => number,
+): void {
+  const positionsByKey = new Map<string, number[]>();
+  summaries.forEach((summary, index) => {
+    const key = keyOf(summary);
+    if (!key) return;
+    const positions = positionsByKey.get(key) ?? [];
+    positions.push(index);
+    positionsByKey.set(key, positions);
+  });
+  for (const positions of positionsByKey.values()) {
+    const reordered = positions.map((index) => summaries[index]).sort(compare);
+    positions.forEach((position, index) => {
+      summaries[position] = reordered[index];
+    });
+  }
+}
+
+function hkLanguageRank(language: FilingSummary['language']): number {
+  if (language === 'en-HK') return 0;
+  if (language === 'zh-HK') return 1;
+  return 2;
+}
+
+function hkFormRank(formType: string): number {
+  return formType.toLowerCase() === 'preliminary' ? 0 : 1;
+}
+
+function reportYear(summary: FilingSummary): string | undefined {
+  const periodYear = summary.periodEndOn?.match(/^(20\d{2})/)?.[1];
+  if (periodYear) return periodYear;
+  return summary.title?.match(/\b(20\d{2})\b/)?.[1];
 }
 
 export class EarningsSourceError extends Error {

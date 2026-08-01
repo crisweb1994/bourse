@@ -8,7 +8,7 @@ import type {
   FinancialsInput,
   FinancialsLineItem,
   FinancialsPeriodEntry,
-  FinancialsPort,
+  ProviderFinancialsPort as FinancialsPort,
   IncomeStatement,
 } from '../../ports/financials';
 import { parseInstrumentId } from '../../util/instrument-id';
@@ -124,7 +124,9 @@ export function createEastmoneyHkFinancialsConnector(
         );
       }
 
-      const secucode = toSecucode(parsed.symbol);
+      const secucode = ctx.resolvedInstrument?.instrumentId === parsed.raw
+        ? ctx.resolvedInstrument.providerSymbol
+        : toSecucode(parsed.symbol);
       const fetchLike = resolveFetch(ctx, options);
 
       const mainUrl = queryFor('RPT_HKF10_FN_MAININDICATOR', secucode, pageSize);

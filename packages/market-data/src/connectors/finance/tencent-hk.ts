@@ -1,7 +1,7 @@
 /** Key-free Tencent Finance fallback for Hong Kong end-of-day prices. */
 import { RESEARCH_SCHEMA_VERSION, type ResearchResult } from '../../contracts/result';
 import type { ResearchWarning } from '../../contracts/warning';
-import type { FinancePort, HistoryInput, PriceBar, Quote, QuoteInput } from '../../ports/finance';
+import type { ProviderFinancePort as FinancePort, HistoryInput, PriceBar, Quote, QuoteInput } from '../../ports/finance';
 import { parseInstrumentId } from '../../util/instrument-id';
 import { failure as httpFailure, resolveFetch, withTimeout } from '../http';
 import type { ConnectorRunContext, FetchLike } from '../types';
@@ -43,8 +43,11 @@ export function createTencentHkFinanceConnector(
       const retrievedAt = new Date().toISOString();
       const parsed = parseHkInstrument(input.instrumentId);
       if (!parsed.ok) return quoteFailure(retrievedAt, parsed.code, parsed.message);
+      const providerSymbol = ctx.resolvedInstrument?.instrumentId === parsed.instrumentId
+        ? ctx.resolvedInstrument.providerSymbol
+        : `hk${parsed.symbol}`;
       try {
-        const bars = await load(parsed.symbol, ctx);
+        const bars = await load(providerSymbol, ctx);
         const latest = bars.at(-1);
         if (!latest) return quoteFailure(retrievedAt, 'PARTIAL_DATA', 'Tencent returned no HK quote.');
         const previous = bars.at(-2);
@@ -59,7 +62,7 @@ export function createTencentHkFinanceConnector(
               market: 'HK',
               symbol: parsed.symbol,
               currency: 'HKD',
-              providerSymbols: { tencent: `hk${parsed.symbol}` },
+              providerSymbols: { tencent: providerSymbol },
             },
             price: latest.close,
             ...(change !== undefined ? { change } : {}),
@@ -93,6 +96,9 @@ export function createTencentHkFinanceConnector(
       const retrievedAt = new Date().toISOString();
       const parsed = parseHkInstrument(input.instrumentId);
       if (!parsed.ok) return historyFailure(retrievedAt, parsed.code, parsed.message);
+      const providerSymbol = ctx.resolvedInstrument?.instrumentId === parsed.instrumentId
+        ? ctx.resolvedInstrument.providerSymbol
+        : `hk${parsed.symbol}`;
       if (input.interval && input.interval !== '1d') {
         return historyFailure(retrievedAt, 'PARTIAL_DATA', 'Tencent HK fallback supports daily bars only.');
       }
@@ -100,7 +106,7 @@ export function createTencentHkFinanceConnector(
         return historyFailure(retrievedAt, 'INVALID_INSTRUMENT', 'Tencent HK history requires valid ISO dates.');
       }
       try {
-        const bars = (await load(parsed.symbol, ctx)).filter(
+        const bars = (await load(providerSymbol, ctx)).filter(
           (bar) => bar.timestamp >= input.from && bar.timestamp <= input.to,
         );
         if (bars.length === 0) {
@@ -136,7 +142,7 @@ async function fetchSeries(
 ): Promise<PriceBar[]> {
   const fetchLike = resolveFetch(ctx, options);
   return withTimeout(ctx, ctx.timeoutMs ?? options.timeoutMs ?? DEFAULT_TIMEOUT_MS, async (signal) => {
-    const providerSymbol = `hk${symbol}`;
+    const providerSymbol = symbol;
     const url = `${API_URL}?param=${providerSymbol},day,,,320,qfq`;
     const response = await fetchLike(url, {
       headers: { Accept: 'application/json, text/plain, */*', 'User-Agent': 'Mozilla/5.0' },

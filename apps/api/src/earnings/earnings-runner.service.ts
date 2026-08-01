@@ -27,13 +27,10 @@ import {
   type MetricFact,
 } from '@bourse/analysis';
 import { Prisma, type EarningsEvent, type Filing, type Stock } from '@prisma/client';
-import type { FinancialsPort } from '@bourse/analysis';
+import type { ResearchMarketDataClient } from '@bourse/market-data';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  CN_FINANCIALS_PORT,
-  HK_FINANCIALS_PORT,
-  US_FINANCIALS_PORT,
-} from '../connectors/connectors.module';
+import { MARKET_DATA_CLIENT } from '../connectors/connectors.module';
+import { BoundedTaskQueue } from '../common/bounded-task-queue';
 import { ProviderFactoryService } from '../analysis/provider-factory.service';
 import {
   type EarningsRunSource,
@@ -49,18 +46,16 @@ const EXTRACTION_TIMEOUT_MS = 180_000;
 @Injectable()
 export class EarningsRunnerService implements OnModuleInit {
   private readonly logger = new Logger(EarningsRunnerService.name);
-  private readonly scheduled = new Set<string>();
-  private readonly pending: string[] = [];
-  private activeRuns = 0;
-  private readonly concurrency = 4;
+  private readonly queue = new BoundedTaskQueue<string>({
+    concurrency: 4,
+    execute: (runId) => this.run(runId),
+  });
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly providerFactory: ProviderFactoryService,
-    @Inject(US_FINANCIALS_PORT) private readonly usFinancials: FinancialsPort,
-    @Inject(CN_FINANCIALS_PORT) private readonly cnFinancials: FinancialsPort,
-    @Inject(HK_FINANCIALS_PORT) private readonly hkFinancials: FinancialsPort,
+    @Inject(MARKET_DATA_CLIENT) private readonly marketData: ResearchMarketDataClient,
     private readonly consensus: EarningsConsensusService,
     private readonly notices: EarningsNoticeService,
   ) {}
@@ -88,25 +83,7 @@ export class EarningsRunnerService implements OnModuleInit {
   }
 
   schedule(runId: string): void {
-    if (this.scheduled.has(runId)) return;
-    this.scheduled.add(runId);
-    this.pending.push(runId);
-    this.drain();
-  }
-
-  private drain(): void {
-    while (this.activeRuns < this.concurrency && this.pending.length > 0) {
-      const runId = this.pending.shift();
-      if (!runId) return;
-      this.activeRuns += 1;
-      setImmediate(() => {
-        void this.run(runId).finally(() => {
-          this.activeRuns -= 1;
-          this.scheduled.delete(runId);
-          this.drain();
-        });
-      });
-    }
+    this.queue.schedule(runId);
   }
 
   async run(runId: string): Promise<void> {
@@ -225,7 +202,13 @@ export class EarningsRunnerService implements OnModuleInit {
         },
       });
       if (verified.facts.length === 0) {
-        throw new RunError('CHECK_REJECTED_ALL', true, 'All extracted facts failed consistency checks');
+        const rejectionSummary = summarizeVerificationRejections(verified.rejected);
+        this.logger.warn(`earnings run ${runId} rejected all extracted facts: ${rejectionSummary}`);
+        throw new RunError(
+          'CHECK_REJECTED_ALL',
+          true,
+          `No extracted facts passed schema, source-anchor and value checks (${rejectionSummary})`,
+        );
       }
 
       const event = await this.ensureEvent(run.stock, extraction);
@@ -366,17 +349,12 @@ export class EarningsRunnerService implements OnModuleInit {
     source: StructuredFallbackSource,
   ): Promise<void> {
     await this.updateStage(runId, 'RECONCILE', { provider: source.provider, model: 'structured-only' });
-    const port = stock.market === 'US'
-      ? this.usFinancials
-      : stock.market === 'CN'
-        ? this.cnFinancials
-        : stock.market === 'HK'
-          ? this.hkFinancials
-          : null;
-    if (!port) throw new RunError(source.reason, true, 'No structured financials source is available');
+    if (stock.market !== 'US' && stock.market !== 'CN' && stock.market !== 'HK') {
+      throw new RunError(source.reason, true, 'No structured financials source is available');
+    }
     let projection: ReturnType<typeof latestFinancialsToStructuredProjection>;
     try {
-      const result = await port.fetchFinancials({
+      const result = await this.marketData.getFinancials({
         instrumentId: `${stock.market}:${stock.symbol}`,
         deriveTTM: false,
       });
@@ -555,16 +533,9 @@ export class EarningsRunnerService implements OnModuleInit {
   }
 
   private async reconcile(stock: Stock, facts: MetricFact[]): Promise<MetricFact[]> {
-    const port = stock.market === 'US'
-      ? this.usFinancials
-      : stock.market === 'CN'
-        ? this.cnFinancials
-        : stock.market === 'HK'
-          ? this.hkFinancials
-          : null;
-    if (!port) return facts;
+    if (stock.market !== 'US' && stock.market !== 'CN' && stock.market !== 'HK') return facts;
     try {
-      const result = await port.fetchFinancials({
+      const result = await this.marketData.getFinancials({
         instrumentId: `${stock.market}:${stock.symbol}`,
         deriveTTM: false,
       });
@@ -957,6 +928,19 @@ function summarizeFacts(facts: MetricFact[]) {
     },
     { total: 0, reconciled: 0, pending: 0, conflicted: 0, structuredOnly: 0 },
   );
+}
+
+function summarizeVerificationRejections(
+  rejected: Array<{ reasons: string[] }>,
+): string {
+  const counts = new Map<string, number>();
+  for (const item of rejected) {
+    for (const reason of item.reasons) counts.set(reason, (counts.get(reason) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([reason, count]) => `${reason}=${count}`)
+    .join(', ') || 'no_candidates';
 }
 
 export function decideFilingRelation(

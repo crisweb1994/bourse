@@ -78,7 +78,7 @@ export interface ComputeValuationInput {
   quote: Quote | null;
   history: readonly PriceBar[] | null;
   market: 'US' | 'CN' | 'HK';
-  /** Optional consensus EPS growth (e.g. derived from ConsensusEpsBundle). */
+  /** Optional consensus EPS growth derived from canonical earnings consensus estimates. */
   consensusEpsGrowth?: number | null;
   /** Override default DCF assumptions for testing / future config. */
   dcfAssumptions?: {
@@ -114,7 +114,7 @@ export function computeValuation(
   };
 
   // Market cap is the bedrock; without it almost nothing computes.
-  const marketCap = normalizeQuoteMarketCap(input.quote, input.market, warnings);
+  const marketCap = normalizeQuoteMarketCap(input.quote);
 
   // ---- Enterprise value -----------------------------------------------------
   // Resolve the same anchor period (TTM ?? latest FY) and read normalized

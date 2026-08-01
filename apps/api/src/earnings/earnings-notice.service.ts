@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { EarningsCardPayload, EarningsNoticePayload } from '@bourse/analysis';
 import { Prisma } from '@prisma/client';
+import { delay } from '../common/async';
+import { maskChannelTarget } from '../common/channel-target';
+import { postJson } from '../common/http';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -43,7 +46,7 @@ export class EarningsNoticeService {
     if (!channel || typeof channel !== 'object' || Array.isArray(channel)) return;
     const config = channel as Record<string, unknown>;
     const type = typeof config.type === 'string' ? config.type : '';
-    const target = maskTarget(config);
+    const target = maskChannelTarget(config);
     const dedupeKey = `${userId}:${notice.revisionId}:${notice.kind}:${type}:${target}`;
     if (!await this.claimDelivery(dedupeKey, userId, config, notice)) return;
     let lastStatus: number | null = null;
@@ -59,7 +62,7 @@ export class EarningsNoticeService {
       } catch (error) {
         lastError = String(error);
       }
-      if (attempt < 3) await sleep(100 * 4 ** (attempt - 1));
+      if (attempt < 3) await delay(100 * 4 ** (attempt - 1));
     }
     await this.record(dedupeKey, userId, config, notice, 'FAILED', lastStatus, lastError);
     this.logger.warn(`earnings notice ${notice.symbol} → ${target} failed: ${lastError}`);
@@ -82,7 +85,7 @@ export class EarningsNoticeService {
           previousRevisionId: notice.previousRevisionId,
           kind: notice.kind,
           channelType: channel.type as never,
-          target: maskTarget(channel),
+          target: maskChannelTarget(channel),
           status: 'RETRYING',
           httpStatus: null,
           error: null,
@@ -143,7 +146,7 @@ export class EarningsNoticeService {
         previousRevisionId: notice.previousRevisionId,
         kind: notice.kind,
         channelType: channel.type as never,
-        target: maskTarget(channel),
+        target: maskChannelTarget(channel),
         status,
         httpStatus,
         error,
@@ -183,39 +186,20 @@ function toNotice(
   };
 }
 
-function maskTarget(channel: Record<string, unknown>): string {
-  if (channel.type === 'TELEGRAM') return `tg:${String(channel.chatId ?? '').slice(-4)}`;
-  try { return new URL(String(channel.url)).host; } catch { return 'invalid-url'; }
-}
-
 async function sendChannel(channel: Record<string, unknown>, notice: EarningsNoticePayload): Promise<number> {
   const type = channel.type;
   const text = renderNotice(notice);
   if (type === 'WEBHOOK') {
-    const body = JSON.stringify(notice);
-    const signature = await hmac(String(channel.secret ?? ''), body);
-    const response = await fetch(String(channel.url), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Bourse-Signature': `sha256=${signature}` },
-      body,
-    });
-    return response.status;
+    return postJson(String(channel.url), notice, { hmacSecret: String(channel.secret ?? '') });
   }
   if (type === 'TELEGRAM') {
-    const response = await fetch(`https://api.telegram.org/bot${String(channel.botToken)}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: String(channel.chatId), text }),
+    return postJson(`https://api.telegram.org/bot${String(channel.botToken)}/sendMessage`, {
+      chat_id: String(channel.chatId),
+      text,
     });
-    return response.status;
   }
   if (type === 'FEISHU') {
-    const response = await fetch(String(channel.url), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ msg_type: 'text', content: { text } }),
-    });
-    return response.status;
+    return postJson(String(channel.url), { msg_type: 'text', content: { text } });
   }
   return 501;
 }
@@ -231,14 +215,4 @@ function renderNotice(notice: EarningsNoticePayload): string {
     ...notice.topFacts.map((fact) => `- ${fact.metricCode}: ${fact.value.kind === 'scalar' ? fact.value.value : `${fact.value.min}-${fact.value.max}`}`),
     `公告原文：${notice.sourceUrl}`,
   ].join('\n');
-}
-
-async function hmac(secret: string, message: string): Promise<string> {
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message));
-  return Buffer.from(new Uint8Array(sig)).toString('hex');
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

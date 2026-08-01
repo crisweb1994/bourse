@@ -1,6 +1,6 @@
 import type {
-  InstrumentSearchPort,
   InstrumentSearchResult,
+  ProviderInstrumentSearchPort as InstrumentSearchPort,
 } from '../../ports/instrument-search';
 
 interface YahooQuote {

@@ -286,8 +286,8 @@ describe('computeValuation · reverse DCF + fair value', () => {
 });
 
 describe('computeValuation · CN unit normalization (regression)', () => {
-  it('handles 万元 financials + 亿元 marketCap consistently', () => {
-    // Mock Maotai shape: marketCap=21000亿元, FCF=80,000,000万元 = 800B元
+  it('handles 万元 financials + canonical marketCap consistently', () => {
+    // Mock Maotai shape: marketCap=2.1T yuan, FCF values remain source-scaled.
     const b: FinancialsBundle = {
       periods: [
         {
@@ -319,7 +319,7 @@ describe('computeValuation · CN unit normalization (regression)', () => {
       price: 1685,
       currency: 'CNY',
       timestamp: '2025-05-25T00:00:00.000Z',
-      marketCap: 21_000, // 亿元
+      marketCap: 2_100_000_000_000,
     };
     const { valuation } = computeValuation({
       bundle: b,

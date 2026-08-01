@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CN } from '../../../markets/cn';
-import { makeLhbScanCN } from '../../../tools/cn/lhb-scan';
-import type { CnToolFetchLike } from '../../../tools/cn/_fetch-headers';
+import { makeLhbScanCN, type CnToolFetchLike } from '@bourse/market-data';
 
 function fakeRes(opts: { ok?: boolean; status?: number; body: string }) {
   return {

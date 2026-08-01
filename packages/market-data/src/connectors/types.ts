@@ -1,4 +1,6 @@
 /** Shared by all connector subtrees (instrument / finance / filings / …). */
+import type { ResolvedInstrument } from '../sources/resolver';
+
 export type FetchLike = (
   input: string,
   init?: {
@@ -26,6 +28,8 @@ export interface ConnectorRunContext {
   fetchLike?: FetchLike;
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** Set by the router. Connector migrations use this instead of inventing provider symbols. */
+  resolvedInstrument?: ResolvedInstrument;
   /**
    * plan-v2 Wave 1.8 — opt out of provider-specific unstable supplementary
    * fetches. Yahoo connector reads this to skip the v10 quoteSummary call

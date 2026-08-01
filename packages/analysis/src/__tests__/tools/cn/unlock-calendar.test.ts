@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CN } from '../../../markets/cn';
-import { makeUnlockCalendarCN } from '../../../tools/cn/unlock-calendar';
-import type { CnToolFetchLike } from '../../../tools/cn/_fetch-headers';
+import { makeUnlockCalendarCN, type CnToolFetchLike } from '@bourse/market-data';
 
 function fakeRes(opts: { ok?: boolean; status?: number; body: string }) {
   return {

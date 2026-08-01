@@ -15,6 +15,7 @@ import {
   type InvestorRelationsRevisionPayload,
 } from '@bourse/analysis';
 import { Prisma, type Filing, type InvestorRelationsEvent, type Stock } from '@prisma/client';
+import { BoundedTaskQueue } from '../common/bounded-task-queue';
 import { ProviderFactoryService } from '../analysis/provider-factory.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { PreparedInvestorRelationsSource } from './investor-relations-source.service';
@@ -24,10 +25,10 @@ const INVESTOR_RELATIONS_EXTRACTION_TIMEOUT_MS = 120_000;
 @Injectable()
 export class InvestorRelationsRunnerService implements OnModuleInit {
   private readonly logger = new Logger(InvestorRelationsRunnerService.name);
-  private readonly scheduled = new Set<string>();
-  private readonly pending: string[] = [];
-  private activeRuns = 0;
-  private readonly concurrency = 2;
+  private readonly queue = new BoundedTaskQueue<string>({
+    concurrency: 2,
+    execute: (runId) => this.run(runId),
+  });
 
   constructor(
     private readonly prisma: PrismaService,
@@ -58,22 +59,7 @@ export class InvestorRelationsRunnerService implements OnModuleInit {
   }
 
   schedule(runId: string): void {
-    if (this.scheduled.has(runId)) return;
-    this.scheduled.add(runId);
-    this.pending.push(runId);
-    this.drain();
-  }
-
-  private drain(): void {
-    while (this.activeRuns < this.concurrency && this.pending.length > 0) {
-      const runId = this.pending.shift()!;
-      this.activeRuns += 1;
-      setImmediate(() => void this.run(runId).finally(() => {
-        this.activeRuns -= 1;
-        this.scheduled.delete(runId);
-        this.drain();
-      }));
-    }
+    this.queue.schedule(runId);
   }
 
   async run(runId: string): Promise<void> {

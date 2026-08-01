@@ -2,24 +2,26 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   defineMarketConfig,
   fetchSnapshot,
-  portToFetcher,
   snapshotToEvidencePack,
+  STANDARD_RESEARCH_REQUIREMENTS,
+  type DataRequirement,
   type MarketConfigMap,
   type StockSnapshot,
   type ToEvidencePackOptions,
-} from '@bourse/analysis';
-import {
-  akshareNorthboundCN,
-  consensusEpsCN,
-  lhbScanCN,
-  shareholdersCN,
-  unlockCalendarCN,
   type EvidencePackV2,
-  type ToolContext,
-  type ToolDescriptor,
 } from '@bourse/analysis';
-import { getMarket } from '@bourse/analysis';
-import type { MarketDataClient, ResearchCitation } from '@bourse/market-data';
+import type {
+  ConnectorRunContext,
+  ResearchMarketDataClient,
+  ResearchResultV2,
+  CorporateAction,
+  OwnershipObservation,
+  MarketEvent,
+  CorporateActionDataSet,
+  OwnershipDataSet,
+  MarketEventDataSet,
+  RouteConstraints,
+} from '@bourse/market-data';
 import { MARKET_DATA_CLIENT } from '../connectors/connectors.module';
 
 /**
@@ -33,7 +35,7 @@ export class SnapshotV2Service {
   private readonly configs: MarketConfigMap;
 
   constructor(
-    @Inject(MARKET_DATA_CLIENT) private readonly marketData: MarketDataClient,
+    @Inject(MARKET_DATA_CLIENT) private readonly marketData: ResearchMarketDataClient,
   ) {
     this.configs = this.buildConfigs();
   }
@@ -72,11 +74,16 @@ export class SnapshotV2Service {
   ): Promise<StockSnapshot> {
     const startedAt = Date.now();
     try {
+      // HKEX list queries fan out by language and can legitimately take just
+      // over the generic 8s snapshot deadline. Source-level route budgets
+      // still keep slow candidates from consuming this entire window.
+      const perConnectorTimeoutMs = options?.perConnectorTimeoutMs ??
+        (market === 'HK' ? 10_000 : undefined);
       const snap = await fetchSnapshot({
         symbol,
         market,
         configs: this.configs,
-        perConnectorTimeoutMs: options?.perConnectorTimeoutMs,
+        perConnectorTimeoutMs,
         historyDays: options?.historyDays,
         filingsLimit: options?.filingsLimit,
         signal: options?.signal,
@@ -102,156 +109,162 @@ export class SnapshotV2Service {
       `${market}:${symbol}`;
 
     const shared = (market: 'US' | 'CN' | 'HK') => ({
-      quote: portToFetcher((symbol, ctx) =>
-        this.marketData.getQuote(instrumentId(market, symbol), ctx)),
-      history: (symbol: string, from: string, to: string, ctx?: Parameters<MarketDataClient['getHistory']>[1]) =>
-        this.marketData.getHistory({
+      quote: async (symbol: string, ctx?: ConnectorRunContext) => snapshotEnvelope(
+        await this.marketData.getQuote(instrumentId(market, symbol), ctx),
+      ),
+      history: async (symbol: string, from: string, to: string, ctx?: ConnectorRunContext) => snapshotEnvelope(
+        await this.marketData.getHistory({
           instrumentId: instrumentId(market, symbol),
           from,
           to,
           interval: '1d',
         }, ctx),
-      profile: async (symbol: string, ctx?: Parameters<MarketDataClient['getProfile']>[1]) => {
+      ),
+      profile: async (symbol: string, ctx?: ConnectorRunContext) => {
         const result = await this.marketData.getProfile(instrumentId(market, symbol), ctx);
-        return {
-          ...result,
-          data: result.data as unknown as Record<string, unknown> | null,
-        };
+        return snapshotEnvelope(result);
       },
-      financials: portToFetcher((symbol, ctx) =>
-        this.marketData.getFinancials(instrumentId(market, symbol), ctx)),
-      filings: (symbol: string, limit: number, ctx?: Parameters<MarketDataClient['getFilings']>[2]) =>
-        this.marketData.getFilings(instrumentId(market, symbol), limit, ctx),
-      macro: portToFetcher((_, ctx) => this.marketData.getMacro(market, ctx)),
-      ...(this.marketData.hasSearchProvider
-        ? {
-            webSearch: portToFetcher(async (symbol: string, ctx) => {
-              const result = this.marketData.searchWeb(searchQuery(market, symbol), ctx);
-              if (!result) throw new Error('Web search provider is not configured.');
-              return result;
-            }),
-          }
-        : {}),
+      financials: async (symbol: string, ctx?: ConnectorRunContext) => snapshotEnvelope(
+        await this.marketData.getFinancials(instrumentId(market, symbol), ctx),
+      ),
+      consensusEps: async (symbol: string, ctx?: ConnectorRunContext) => snapshotEnvelope(
+        await this.marketData.getEarningsConsensus(instrumentId(market, symbol), ctx),
+      ),
+      filings: async (symbol: string, limit: number, ctx?: ConnectorRunContext) => snapshotEnvelope(
+        await this.marketData.listFilings({ instrumentId: instrumentId(market, symbol), limit }, ctx),
+      ),
+      macro: async (_: string, ctx?: ConnectorRunContext) => snapshotEnvelope(await this.marketData.getMacro(market, ctx)),
     });
+
+    const standard = (market: 'US' | 'CN' | 'HK') => {
+      const requirements = STANDARD_RESEARCH_REQUIREMENTS[market];
+      const macroRequirements = requirements.filter((item) => item.capability === 'macro' && item.seriesCode);
+      const corporateActions = requirementsFor<CorporateActionDataSet>(requirements, 'corporate-actions');
+      const ownership = requirementsFor<OwnershipDataSet>(requirements, 'ownership').filter((item) =>
+        market !== 'CN' || (item.dataSet !== 'stock-connect' && item.dataSet !== 'shareholder-count'),
+      );
+      const events = requirementsFor<MarketEventDataSet>(requirements, 'market-events').filter((item) =>
+        market !== 'CN' || (item.dataSet !== 'lhb' && item.dataSet !== 'unlock'),
+      );
+      return {
+        ...shared(market),
+        requirements,
+        ...(macroRequirements.length > 0 ? {
+          macro: async (_symbol: string, ctx?: ConnectorRunContext) => snapshotEnvelope(await this.marketData.getMacro({
+            market,
+            seriesCodes: macroRequirements.map((item) => item.seriesCode!),
+          }, ctx, routeConstraints(macroRequirements[0]!))),
+        } : {}),
+        ...(corporateActions.length > 0 ? {
+          corporateActions: async (symbol: string, ctx?: ConnectorRunContext) => mergeListResults(
+            await Promise.all(corporateActions.map((requirement) => this.marketData.getCorporateActions({
+              instrumentId: instrumentId(market, symbol),
+              dataSet: requirement.dataSet,
+              limit: 50,
+            }, ctx, routeConstraints(requirement)))),
+          ),
+        } : {}),
+        ...(ownership.length > 0 ? {
+          ownership: async (symbol: string, ctx?: ConnectorRunContext) => mergeListResults(
+            await Promise.all(ownership.map((requirement) => this.marketData.getOwnership({
+              instrumentId: instrumentId(market, symbol),
+              dataSet: requirement.dataSet,
+              limit: 50,
+            }, ctx, routeConstraints(requirement)))),
+          ),
+        } : {}),
+        ...(events.length > 0 ? {
+          marketEvents: async (symbol: string, ctx?: ConnectorRunContext) => mergeListResults(
+            await Promise.all(events.map((requirement) => this.marketData.getMarketEvents({
+              instrumentId: instrumentId(market, symbol),
+              dataSet: requirement.dataSet,
+              limit: 50,
+            }, ctx, routeConstraints(requirement)))),
+          ),
+        } : {}),
+      };
+    };
 
     return {
       US: defineMarketConfig('US', 'USD', {
-        ...shared('US'),
+        ...standard('US'),
       }),
       CN: defineMarketConfig('CN', 'CNY', {
-        ...shared('CN'),
-        // CN-only fact tools run through the same snapshot orchestrator;
-        // failures surface in dataAvailability with structured reason codes.
-        consensusEps: toolToFetcher(consensusEpsCN),
-        lhb: toolToFetcher(lhbScanCN),
-        northboundFlow: toolToFetcher(akshareNorthboundCN),
-        unlockCalendar: toolToFetcher(unlockCalendarCN),
-        shareholders: toolToFetcher(shareholdersCN),
+        ...standard('CN'),
+        northboundFlow: async (symbol: string, ctx?: ConnectorRunContext) => snapshotEnvelope(
+          await this.marketData.getOwnership({
+            instrumentId: instrumentId('CN', symbol),
+            dataSet: 'stock-connect',
+            limit: 20,
+          }, ctx),
+        ),
+        shareholders: async (symbol: string, ctx?: ConnectorRunContext) => snapshotEnvelope(
+          await this.marketData.getOwnership({
+            instrumentId: instrumentId('CN', symbol),
+            dataSet: 'shareholder-count',
+            limit: 4,
+          }, ctx),
+        ),
+        lhb: async (symbol: string, ctx?: ConnectorRunContext) => snapshotEnvelope(
+          await this.marketData.getMarketEvents({
+            instrumentId: instrumentId('CN', symbol),
+            dataSet: 'lhb',
+            limit: 30,
+          }, ctx),
+        ),
+        unlockCalendar: async (symbol: string, ctx?: ConnectorRunContext) => snapshotEnvelope(
+          await this.marketData.getMarketEvents({
+            instrumentId: instrumentId('CN', symbol),
+            dataSet: 'unlock',
+            limit: 90,
+          }, ctx),
+        ),
       }),
       HK: defineMarketConfig('HK', 'HKD', {
-        ...shared('HK'),
+        ...standard('HK'),
       }),
     };
   }
 }
 
-/**
- * Wrap a CN ToolDescriptor as an ExtraFetcher. The descriptor's `run()`
- * takes (input, ctx); we shape input as `{symbol, market: 'CN'}` and
- * synthesize a minimal ToolContext with the CN MarketProfile + signal.
- *
- * Returns the raw ToolResult.data — fetchSnapshot stores it on
- * RawFacts; the adapter (snapshotToEvidencePack) projects it into the
- * EvidencePackV2 shape.
- *
- * Errors bubble to fetchSnapshot's classifyError path; tool 429s
- * become `rate_limited` via the message regex; .reason='not_implemented'
- * (akshareNorthboundCN's all-mirrors-failed path) becomes
- * `not_implemented`.
- */
-function toolToFetcher(
-  tool: ToolDescriptor<{ symbol: string; market: 'CN' }, unknown>,
-): (symbol: string, ctx?: { signal?: AbortSignal }) => Promise<{
-  data: unknown | null;
-  citations: ResearchCitation[];
-  freshness: Array<{
-    provider: string;
-    asOf: string;
-    retrievedAt: string;
-    stale: boolean;
-  }>;
-  warnings: [];
-  cost?: unknown;
-}> {
-  return async (symbol, ctx) => {
-    const retrievedAt = new Date().toISOString();
-    if (!tool.run) {
-      return {
-        data: null,
-        citations: [],
-        freshness: [{ provider: tool.name, asOf: retrievedAt, retrievedAt, stale: true }],
-        warnings: [],
-      };
-    }
-    const toolCtx: ToolContext = {
-      ...(ctx?.signal ? { signal: ctx.signal } : {}),
-      ...(getMarket('CN') ? { marketProfile: getMarket('CN')! } : {}),
-    };
-    const result = await tool.run({ symbol, market: 'CN' }, toolCtx);
-    return {
-      data: result?.data ?? null,
-      citations: (result?.citations ?? []).flatMap((citation) => {
-        if (!citation.url) return [];
-        return [{
-          title: citation.title,
-          url: citation.url,
-          sourceType: toResearchSourceType(citation.sourceType),
-          provider: tool.name,
-          retrievedAt: citation.retrievedAt,
-          ...(citation.qualityTier ? { qualityTier: citation.qualityTier } : {}),
-        }];
-      }),
-      freshness: [{ provider: tool.name, asOf: retrievedAt, retrievedAt, stale: false }],
-      warnings: [],
-      ...(result?.cost ? { cost: result.cost } : {}),
-    };
-  };
-}
-
-function searchQuery(
-  market: 'US' | 'CN' | 'HK',
-  symbol: string,
-): {
-  query: string;
-  limit: number;
-  topic: 'finance';
-  freshness: '30d';
-  market: 'US' | 'CN' | 'HK';
-} {
-  const marketLabel = market === 'CN' ? 'A-share' : market === 'HK' ? 'Hong Kong' : 'US';
+function snapshotEnvelope<T>(result: ResearchResultV2<T>) {
   return {
-    query: `${symbol} ${marketLabel} company latest earnings governance regulatory risk`,
-    limit: 8,
-    topic: 'finance',
-    freshness: '30d',
-    market,
+    data: result.data,
+    citations: result.citations,
+    freshness: result.freshness,
+    warnings: result.warnings,
+    trace: result.trace,
   };
 }
 
-function toResearchSourceType(
-  sourceType: string,
-): ResearchCitation['sourceType'] {
-  switch (sourceType) {
-    case 'NEWS':
-    case 'FILING':
-    case 'SOCIAL':
-    case 'WEB':
-    case 'PRICE':
-    case 'MACRO':
-    case 'RESEARCH':
-    case 'OTHER':
-      return sourceType;
-    default:
-      return 'OTHER';
-  }
+function requirementsFor<TDataSet extends string>(
+  requirements: readonly DataRequirement[],
+  capability: DataRequirement['capability'],
+): Array<DataRequirement & { dataSet: TDataSet }> {
+  return requirements.filter((item): item is DataRequirement & { dataSet: TDataSet } =>
+    item.capability === capability && typeof item.dataSet === 'string',
+  );
+}
+
+function routeConstraints(requirement: DataRequirement): RouteConstraints | undefined {
+  const constraints: RouteConstraints = {
+    ...(requirement.maxAgeMs !== undefined ? { maxAgeMs: requirement.maxAgeMs } : {}),
+    ...(requirement.minQualityTier ? { minQualityTier: requirement.minQualityTier } : {}),
+    ...(requirement.acceptedDelays ? { acceptedDelays: requirement.acceptedDelays } : {}),
+  };
+  return Object.keys(constraints).length > 0 ? constraints : undefined;
+}
+
+function mergeListResults<T extends CorporateAction | OwnershipObservation | MarketEvent>(
+  results: readonly ResearchResultV2<T[]>[],
+) {
+  const usable = results.filter((result) => result.status === 'ok' || result.status === 'partial');
+  const data = usable.flatMap((result) => result.data);
+  return {
+    data: data.length > 0 ? data : null,
+    citations: usable.flatMap((result) => result.citations),
+    freshness: usable.flatMap((result) => result.freshness),
+    warnings: results.flatMap((result) => result.warnings),
+    trace: { attempts: results.flatMap((result) => result.trace.attempts) },
+  };
 }

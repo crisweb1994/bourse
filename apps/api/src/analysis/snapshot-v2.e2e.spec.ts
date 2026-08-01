@@ -18,27 +18,29 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type {
-  FilingPort,
-  CompanyProfilePort,
+  ProviderFilingPort as FilingPort,
+  ProviderCompanyProfilePort as CompanyProfilePort,
   FilingSummary,
-  FinancePort,
+  ProviderFinancePort as FinancePort,
   FinancialsBundle,
-  FinancialsPort,
-  MacroPort,
+  ProviderFinancialsPort as FinancialsPort,
+  ProviderMacroPort as MacroPort,
   PriceBar,
   Quote,
   ResearchResult,
-  SearchPort,
 } from '@bourse/analysis';
 import { EvidencePackV2 as EvidencePackV2Schema } from '@bourse/analysis';
-import { MarketDataClient } from '@bourse/market-data';
+import {
+  createBuiltInSources,
+  createCnPublicMarketEventsConnector,
+  createCnPublicOwnershipConnector,
+  createResearchMarketDataClient,
+} from '@bourse/market-data';
 import { SnapshotV2Service } from './snapshot-v2.service';
 
-// Note: This test uses the production SnapshotV2Service which calls
-// real CN tool descriptors (consensusEpsCN / lhbScanCN /
-// akshareNorthboundCN / unlockCalendarCN / shareholdersCN). Those tools
-// rely on `globalThis.fetch` when no custom fetchImpl is provided. To
-// avoid live network we install a global fetch mock for the test run.
+// This test uses the production SnapshotV2Service and canonical CN source
+// plugins. Their provider transports use `globalThis.fetch` when no custom
+// fetch implementation is supplied, so the test installs a global mock.
 
 // ============================================================================
 // Helpers
@@ -83,7 +85,7 @@ function maotaiQuote(): Quote {
     price: 1685,
     currency: 'CNY',
     timestamp: '2025-05-25T00:00:00.000Z',
-    marketCap: 21_000, // 亿元
+    marketCap: 2_100_000_000_000,
   };
 }
 
@@ -257,6 +259,30 @@ function mockCnFinance(): FinancePort {
     async getProfile() {
       return envelope(maotaiProfile());
     },
+    async fetchEarningsConsensus() {
+      const response = await globalThis.fetch('https://example.test/?reportName=RPT_WEB_RESPREDICT');
+      if (!response.ok) {
+        return {
+          ...envelope(null),
+          warnings: [{ code: 'RATE_LIMITED', message: `HTTP ${response.status}`, provider: 'cn-finance' }],
+        };
+      }
+      const payload = await response.json() as { result?: { data?: Array<Record<string, unknown>> } };
+      const row = payload.result?.data?.[0];
+      const estimates = [1, 2].flatMap((index) => {
+        const year = Number(row?.[`YEAR${index}`]);
+        const value = Number(row?.[`EPS${index}`]);
+        return Number.isInteger(year) && Number.isFinite(value) ? [{
+          metricCode: 'epsBasic' as const,
+          periodEndOn: `${year}-12-31`,
+          periodType: 'FY' as const,
+          value: String(value),
+          unit: 'per_share' as const,
+          currency: 'CNY',
+        }] : [];
+      });
+      return envelope({ asOf: '2025-05-25T00:00:00.000Z', estimates });
+    },
   } as unknown as FinancePort;
 }
 
@@ -293,13 +319,17 @@ function mockMacro(): MacroPort {
       return envelope({
         market: input.market,
         observations: [{
-          indicator: 'inflation' as const,
-          value: 2.5,
-          unit: 'percent' as const,
-          period: '2025',
+          market: input.market,
+          seriesCode: `${input.market}.CPI.YOY`,
+          category: 'inflation' as const,
+          name: 'Consumer price inflation',
+          value: '2.5',
+          unit: 'percent',
           frequency: 'ANNUAL' as const,
-          provider: 'world-bank' as const,
-          seriesId: 'FP.CPI.TOTL.ZG',
+          periodStart: '2025-01-01',
+          periodEnd: '2025-12-31',
+          provider: 'world-bank',
+          providerSeriesId: 'FP.CPI.TOTL.ZG',
         }],
       });
     },
@@ -318,10 +348,9 @@ function buildService(
     cnFilings?: FilingPort;
     hkFilings?: FilingPort;
     macro?: MacroPort;
-    search?: SearchPort | null;
   } = {},
 ): SnapshotV2Service {
-  return new SnapshotV2Service(new MarketDataClient({
+  return new SnapshotV2Service(createResearchMarketDataClient(createBuiltInSources({
     yahoo: overrides.yahoo ?? mockYahoo(),
     nasdaq: overrides.nasdaq ?? mockYahoo(),
     sinaUs: mockYahoo(),
@@ -335,8 +364,9 @@ function buildService(
     cnFilings: overrides.cnFilings ?? mockFilings([]),
     hkFilings: overrides.hkFilings ?? mockFilings([]),
     macro: overrides.macro ?? mockMacro(),
-    search: overrides.search ?? null,
-  }));
+    cnOwnership: createCnPublicOwnershipConnector(),
+    cnEvents: createCnPublicMarketEventsConnector(),
+  })));
 }
 
 // ============================================================================
@@ -375,9 +405,9 @@ describe('SnapshotV2 · E2E (US AAPL full coverage)', () => {
     assert.equal(pack.facts.profile?.value.employees, 166_000);
     assert.ok(pack.dataAvailability.complete.includes('profile'));
     assert.equal(pack.facts.financials?.value.periods.length, 1);
-    assert.deepEqual(pack.facts.latestFilingUrls?.value, [
-      'https://sec.gov/y.htm',
+    assert.deepEqual([...pack.facts.latestFilingUrls!.value].sort(), [
       'https://sec.gov/x.htm',
+      'https://sec.gov/y.htm',
     ]);
 
     // Compute layer fired
@@ -543,7 +573,7 @@ describe('SnapshotV2 · E2E (CN 600519 with mocked CN tools)', () => {
     const cleanup = installFetchMock([
       // Every CN endpoint returns 429
       [
-        /eastmoney|push2/i,
+        /eastmoney|push2|example\.test/i,
         () =>
           mockResponse(
             { detail: { error: 'rate limited' } },

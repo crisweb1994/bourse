@@ -15,7 +15,7 @@ import type {
   FilingDocument,
   FilingGetInput,
   FilingPage,
-  FilingPort,
+  ProviderFilingPort as FilingPort,
   FilingSearchInput,
   FilingSummary,
 } from '../../ports/filings';
@@ -67,6 +67,9 @@ export function createCnFilingsConnector(options: CnFilingsOptions = {}): Filing
           `cn-filings connector only handles CN; got ${parsed.market}`,
         );
       }
+      const providerSymbol = ctx.resolvedInstrument?.instrumentId === parsed.raw
+        ? ctx.resolvedInstrument.providerSymbol
+        : parsed.symbol;
       const exchange = inferExchange(parsed.symbol);
       if (!exchange) {
         return failure(retrievedAt, 'INVALID_INSTRUMENT', `Cannot infer CN exchange for ${parsed.symbol}`);
@@ -80,7 +83,7 @@ export function createCnFilingsConnector(options: CnFilingsOptions = {}): Filing
       for (const source of sources) {
         const result = await fetchFromSource(
           source,
-          parsed.symbol,
+          providerSymbol,
           exchange,
           limit,
           wantedForms,

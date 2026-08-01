@@ -1,7 +1,7 @@
 import type {
   InstrumentSearchMarket,
-  InstrumentSearchPort,
   InstrumentSearchResult,
+  ProviderInstrumentSearchPort as InstrumentSearchPort,
 } from '../../ports/instrument-search';
 
 interface EastMoneyItem {

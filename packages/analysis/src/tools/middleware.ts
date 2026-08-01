@@ -281,7 +281,7 @@ async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
  * that literally lets a single anti-scrape episode stall Stage 0 for
  * minutes (3 attempts × 30s × 4 serial tools ≈ 4-9 min). The shorter
  * cap means we still back off but recover fast; the real fix for the
- * 429 source itself is browser-style UA on the fetch (see tools/cn/_).
+ * 429 source itself is browser-style headers in the market-data connector.
  */
 const MAX_RETRY_AFTER_MS = 5000;
 

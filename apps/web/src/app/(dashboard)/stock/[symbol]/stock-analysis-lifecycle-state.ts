@@ -102,6 +102,14 @@ export function buildStockAnalysisUrl(input: {
   symbol: string | null;
   stockId: string;
   analysisId: string;
+  market?: string;
+  name?: string;
 }): string {
-  return `/stock/${encodeURIComponent(input.symbol ?? '')}?stockId=${input.stockId}&analysisId=${input.analysisId}`;
+  const params = new URLSearchParams({
+    stockId: input.stockId,
+    analysisId: input.analysisId,
+  });
+  if (input.market) params.set('market', input.market);
+  if (input.name) params.set('name', input.name);
+  return `/stock/${encodeURIComponent(input.symbol ?? '')}?${params.toString()}`;
 }

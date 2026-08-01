@@ -41,9 +41,9 @@ describe('official macro connector', () => {
     expect(MacroSnapshotSchema.parse(result.data)).toEqual(result.data);
     expect(result.data.observations).toHaveLength(6);
     expect(result.data.observations).toContainEqual(expect.objectContaining({
-      indicator: 'federal_debt',
-      value: 39_692_374_867_364.99,
-      unit: 'usd',
+      seriesCode: 'US.FEDERAL_DEBT',
+      value: '39692374867364.99',
+      unit: 'USD',
       provider: 'us-treasury',
     }));
     expect(result.citations.some((citation) => citation.provider === 'us-treasury')).toBe(true);
@@ -86,10 +86,29 @@ describe('official macro connector', () => {
     const result = await connector.fetchMacro({ market: 'HK' });
 
     expect(result.data.observations).toContainEqual(expect.objectContaining({
-      indicator: 'exchange_rate', provider: 'hkma', value: 7.8499,
+      seriesCode: 'HK.USD_EXCHANGE_RATE', provider: 'hkma', value: '7.8499',
     }));
     expect(result.data.observations).toContainEqual(expect.objectContaining({
-      indicator: 'interbank_rate_3m', provider: 'hkma', value: 3.21,
+      seriesCode: 'HK.INTERBANK_RATE_3M', provider: 'hkma', value: '3.21',
     }));
+  });
+
+  it('fetches only explicitly requested canonical series', async () => {
+    const urls: string[] = [];
+    const fetchLike: FetchLike = async (url) => {
+      urls.push(url);
+      return { ...jsonResponse({}), text: async () => 'observation_date,DGS10\n2026-07-24,4.41\n' };
+    };
+    const connector = createOfficialMacroConnector({ fetchLike, now: () => NOW });
+
+    const result = await connector.fetchMacro({
+      market: 'US',
+      seriesCodes: ['US.GOVERNMENT_BOND_10Y'],
+    });
+
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toContain('id=DGS10');
+    expect(result.data.observations.map((item) => item.seriesCode))
+      .toEqual(['US.GOVERNMENT_BOND_10Y']);
   });
 });

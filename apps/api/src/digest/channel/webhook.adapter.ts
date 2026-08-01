@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { BriefPayload } from '@bourse/analysis';
+import { postJson } from '../../common/http';
 import { ChannelAdapter } from './types';
 
 /**
@@ -19,30 +20,6 @@ export class WebhookAdapter implements ChannelAdapter {
     payload: BriefPayload,
     channel: { type: 'WEBHOOK'; url: string; secret: string },
   ): Promise<{ httpStatus: number }> {
-    const body = JSON.stringify(payload);
-    const sig = await hmacSha256Hex(channel.secret, body);
-    const res = await fetch(channel.url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Bourse-Signature': `sha256=${sig}`,
-      },
-      body,
-    });
-    return { httpStatus: res.status };
+    return { httpStatus: await postJson(channel.url, payload, { hmacSecret: channel.secret }) };
   }
-
-}
-
-/** Web Crypto HMAC-SHA256 → hex。Node 20 内置 globalThis.crypto.subtle。 */
-async function hmacSha256Hex(secret: string, message: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message));
-  return Buffer.from(new Uint8Array(sig)).toString('hex');
 }

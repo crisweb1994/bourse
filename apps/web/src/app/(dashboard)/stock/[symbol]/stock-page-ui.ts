@@ -31,6 +31,15 @@ export function getRequestedAnalysisId(
   return searchParams.get('analysisId') ?? searchParams.get('debateBase');
 }
 
+export function inferMarketFromSymbol(symbol: string | null): string {
+  const normalized = symbol?.trim().toUpperCase() ?? '';
+  if (normalized.endsWith('.HK')) return 'HK';
+  if (normalized.endsWith('.SS') || normalized.endsWith('.SZ')) return 'CN';
+  if (normalized.endsWith('.T')) return 'JP';
+  if (normalized.endsWith('.L')) return 'UK';
+  return normalized ? 'US' : '';
+}
+
 export interface SectionLike {
   type: SectionType;
   status: string;

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { BriefPayload } from '@bourse/analysis';
+import { postJson } from '../../common/http';
 import { ChannelAdapter } from './types';
 import { renderMarkdown } from './render';
 import { reanalyzeUrl } from './button-url';
@@ -41,12 +42,6 @@ export class TelegramAdapter implements ChannelAdapter {
         };
       }
     }
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    return { httpStatus: res.status };
+    return { httpStatus: await postJson(url, body) };
   }
-
 }

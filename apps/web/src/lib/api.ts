@@ -38,6 +38,7 @@ async function fetchApi<T>(
     throw new ApiError(res.status, body.message || res.statusText);
   }
 
+  if (res.status === 204) return undefined as T;
   return res.json();
 }
 
@@ -707,19 +708,10 @@ export function putWebSearchSetting(
 }
 
 export async function deleteWebSearchSetting(): Promise<void> {
-  // DELETE returns 204 No Content → can't go through fetchApi (which assumes
-  // JSON body), but still need explicit !res.ok handling so 401/403/500
-  // surface as ApiError instead of silently no-op'ing while the UI toasts
-  // "已删除" and clears local state.
-  const res = await fetch(`${API_URL}/api/settings/web-search`, {
+  return fetchApi<void>('/api/settings/web-search', {
     method: 'DELETE',
-    credentials: 'include',
     headers: csrfHeaders(),
   });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new ApiError(res.status, body.message || res.statusText);
-  }
 }
 
 export function testWebSearchSetting(
@@ -788,14 +780,8 @@ export function putDigestSubscription(
 }
 
 export async function deleteDigestSubscription(): Promise<void> {
-  // DELETE 204 No Content（同 deleteWebSearchSetting，绕过 fetchApi 的 JSON 假设）。
-  const res = await fetch(`${API_URL}/api/digest/subscription`, {
+  return fetchApi<void>('/api/digest/subscription', {
     method: 'DELETE',
-    credentials: 'include',
     headers: csrfHeaders(),
   });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new ApiError(res.status, body.message || res.statusText);
-  }
 }
