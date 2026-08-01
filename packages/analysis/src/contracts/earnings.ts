@@ -259,6 +259,54 @@ export const EarningsManagementClaimCandidateSchema = z.object({
 });
 export type EarningsManagementClaimCandidate = z.infer<typeof EarningsManagementClaimCandidateSchema>;
 
+/**
+ * 非 GAAP 补充指标候选（docs/structured-first-earnings-architecture.md §10）。
+ * 只进独立 supplemental 集合，不映射 canonical metricCode，不覆盖 GAAP 核心。
+ */
+export const SupplementalFactCandidateSchema = z
+  .object({
+    metricLabel: z.string().min(1), // 原始标签，如 "Non-GAAP EPS" / "经调整净利润"
+    value: MetricValueSchema,
+    unit: EarningsUnitSchema,
+    currency: z.string().length(3).optional(),
+    targetPeriodEndOn: IsoDateSchema,
+    sourceQuote: z.string().min(1),
+    sourcePage: z.number().int().positive().optional(),
+    sourceSection: z.string().min(1).optional(),
+    reconciliationContext: z.string().optional(), // 与 GAAP 的对账说明，原文定位
+  })
+  .superRefine((candidate, ctx) => {
+    if (
+      (candidate.unit === 'currency' || candidate.unit === 'per_share') &&
+      !candidate.currency
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['currency'],
+        message: 'currency is required for currency and per-share supplemental facts',
+      });
+    }
+  });
+export type SupplementalFactCandidate = z.infer<typeof SupplementalFactCandidateSchema>;
+
+/**
+ * Narrative-only 抽取 schema（structured-first）。
+ *
+ * 与 `EarningsExtractionSchema` 的关键差异：**不包含 canonical core actual
+ * `facts`**——从结构上阻止模型写入营收/归母净利润等主字段（第一道边界）。
+ * LLM 的 `eventIdentityHints` 只用于辅助诊断，不能单独创建 numeric card。
+ */
+export const EarningsNarrativeExtractionSchema = z.object({
+  eventIdentityHints: z.object({
+    periodEndOn: IsoDateSchema.optional(),
+    periodType: z.string().optional(),
+  }).optional(),
+  guidance: z.array(EarningsGuidanceCandidateSchema).default([]),
+  managementClaims: z.array(EarningsManagementClaimCandidateSchema).default([]),
+  supplementalNonGaapFacts: z.array(SupplementalFactCandidateSchema).default([]),
+});
+export type EarningsNarrativeExtraction = z.infer<typeof EarningsNarrativeExtractionSchema>;
+
 export const EarningsExtractionSchema = z.object({
   periodEndOn: IsoDateSchema,
   periodType: z.enum(['Q1', 'Q2', 'Q3', 'H1', 'FY']),
