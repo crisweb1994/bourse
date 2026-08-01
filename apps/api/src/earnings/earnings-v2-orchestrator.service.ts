@@ -39,6 +39,7 @@ import {
 } from './earnings-v2-runner.service';
 import {
   buildV2CardPayload,
+  buildV2FilingDescriptor,
   type V2ManagementClaim,
   type V2SupplementalNonGaap,
 } from './earnings-v2-card';
@@ -175,18 +176,17 @@ export class EarningsV2OrchestratorService implements OnModuleInit {
           fiscalYear: event.fiscalYear,
           reportingScope: event.reportingScope.toLowerCase() as 'consolidated' | 'parent' | 'unknown',
         },
-        filing: {
-          sourceKind: 'filing',
+        filing: buildV2FilingDescriptor({
           filingId: filing.id,
           formType: filing.formType,
-          title: filing.title ?? undefined,
+          title: filing.title,
           sourceUrl: filing.sourceUrl,
           publishedAt: filing.publishedAt.toISOString(),
           provider: filing.provider,
-          language: filing.language as 'zh-CN' | 'zh-HK' | 'en-HK' | 'en-US' | 'unknown' | undefined,
+          language: filing.language,
           unaudited: isUnaudited(filing.formType, filing.title, parserDerivation.normalizedText),
           relationType: filingRelation,
-        },
+        }),
         facts,
         selection: structured.selection,
         managementClaims: claims,

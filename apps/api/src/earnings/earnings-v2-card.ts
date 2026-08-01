@@ -66,6 +66,38 @@ export interface BuildV2CardInput {
   generatedAt: string;
 }
 
+/**
+ * 构造 v2 卡片的 filing descriptor。
+ *
+ * Prisma 的 `language/title` 是 `string | null`，schema 只接受可选字符串；
+ * 必须把 null 归一化为 undefined，否则卡片 payload 校验失败
+ * （"Expected 'zh-CN' | ... , received null"）。
+ */
+export function buildV2FilingDescriptor(input: {
+  filingId: string;
+  formType: string;
+  title: string | null;
+  sourceUrl: string;
+  publishedAt: string;
+  provider: string;
+  language: string | null;
+  unaudited: boolean;
+  relationType: EarningsCardPayload['filing']['relationType'];
+}): EarningsFilingDescriptor {
+  return {
+    sourceKind: 'filing',
+    filingId: input.filingId,
+    formType: input.formType,
+    title: input.title ?? undefined,
+    sourceUrl: input.sourceUrl,
+    publishedAt: input.publishedAt,
+    provider: input.provider,
+    language: (input.language as EarningsFilingDescriptor['language']) ?? undefined,
+    unaudited: input.unaudited,
+    relationType: input.relationType,
+  };
+}
+
 export function buildV2CardPayload(input: BuildV2CardInput): EarningsCardPayload {
   return EarningsCardPayloadSchema.parse({
     schemaVersion: input.schemaVersion,

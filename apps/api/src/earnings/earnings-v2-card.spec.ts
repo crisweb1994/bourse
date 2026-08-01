@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { StructuredEarningsSelection } from '@bourse/analysis';
-import { buildV2CardPayload, numericStatusOf } from './earnings-v2-card';
+import {
+  buildV2CardPayload,
+  buildV2FilingDescriptor,
+  numericStatusOf,
+} from './earnings-v2-card';
 
 function selectionWith(status: StructuredEarningsSelection['status']): StructuredEarningsSelection {
   if (status === 'ready') {
@@ -141,4 +145,37 @@ test('buildV2CardPayload marks pending when numeric data is unavailable', () => 
   assert.equal(payload.dataStatus?.numeric, 'pending_structured');
   assert.equal(payload.facts.length, 0);
   assert.equal(payload.statusSummary.structuredOnly, 0);
+});
+
+test('buildV2FilingDescriptor normalizes null language and title', () => {
+  const descriptor = buildV2FilingDescriptor({
+    filingId: 'filing-1',
+    formType: '10-Q',
+    title: null,
+    sourceUrl: 'https://www.sec.gov/Archives/edgar/data/1/0000000001-25-000001-index.html',
+    publishedAt: '2025-02-01T00:00:00.000Z',
+    provider: 'sec-edgar',
+    language: null,
+    unaudited: false,
+    relationType: 'SUPPLEMENTS',
+  });
+  assert.equal(descriptor.language, undefined);
+  assert.equal(descriptor.title, undefined);
+  assert.equal(descriptor.filingId, 'filing-1');
+});
+
+test('buildV2FilingDescriptor preserves a valid language', () => {
+  const descriptor = buildV2FilingDescriptor({
+    filingId: 'filing-1',
+    formType: 'annual',
+    title: '2025年半年度报告',
+    sourceUrl: 'https://example.com/filing',
+    publishedAt: '2025-08-20T00:00:00.000Z',
+    provider: 'eastmoney',
+    language: 'zh-CN',
+    unaudited: false,
+    relationType: 'SUPPLEMENTS',
+  });
+  assert.equal(descriptor.language, 'zh-CN');
+  assert.equal(descriptor.title, '2025年半年度报告');
 });
