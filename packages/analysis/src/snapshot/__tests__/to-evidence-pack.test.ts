@@ -264,6 +264,9 @@ describe('snapshotToEvidencePack · CN-only facts', () => {
       holdingShares: 123456,
       holdingPercentOfFloat: 0.12,
     }]);
+    expect(pack.facts.northboundHoldings?.sourceUrl).toBe(
+      'https://data.eastmoney.com/hsgtcg/StockHdDetail.html?code=600519&market=1',
+    );
     expect(pack.dataAvailability.complete).toContain('northboundHoldings');
     expect(pack.dataAvailability.complete).not.toContain('northboundFlow');
     expect(pack.dataAvailability.missing).toContainEqual(expect.objectContaining({ field: 'northboundFlow' }));

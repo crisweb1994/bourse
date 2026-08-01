@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { BriefPayload } from '@bourse/analysis';
+import { postJson } from '../../common/http';
 import { ChannelAdapter } from './types';
 import { renderMarkdown } from './render';
 import { reanalyzeUrl } from './button-url';
@@ -29,14 +30,10 @@ export class FeishuAdapter implements ChannelAdapter {
         ...actionButtons(payload),
       ],
     };
-    const res = await fetch(channel.url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ msg_type: 'interactive', card }),
-    });
-    return { httpStatus: res.status };
+    return {
+      httpStatus: await postJson(channel.url, { msg_type: 'interactive', card }),
+    };
   }
-
 }
 
 function cardHeader(payload: BriefPayload): {

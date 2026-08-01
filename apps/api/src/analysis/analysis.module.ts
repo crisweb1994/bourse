@@ -39,6 +39,11 @@ import { AnalysisChatService } from './analysis-chat.service';
     EvidencePackService,
     AnalysisChatService,
   ],
-  exports: [SnapshotV2Service, AnalysisChatService, ProviderResolverService],
+  exports: [
+    SnapshotV2Service,
+    AnalysisChatService,
+    ProviderResolverService,
+    ProviderFactoryService,
+  ],
 })
 export class AnalysisModule {}

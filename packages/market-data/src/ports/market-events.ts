@@ -2,8 +2,7 @@ import { z } from 'zod';
 import type { ConnectorRunContext } from '../connectors/types';
 import type { ResearchResult } from '../contracts/result';
 import type { SourceResult } from '../contracts/source-result';
-
-const DecimalStringSchema = z.string().regex(/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/);
+import { DecimalStringSchema } from '../contracts/scalars';
 
 export const MarketEventDataSetSchema = z.enum([
   'earnings-calendar',

@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { AiSettingsModule } from '../ai-settings/ai-settings.module';
 import { AnalysisModule } from '../analysis/analysis.module';
-import { ProviderFactoryService } from '../analysis/provider-factory.service';
 import { DigestController } from './digest.controller';
 import { DigestSubscriptionService } from './digest.service';
 import { DigestGeneratorService } from './brief.generator';
@@ -24,9 +23,6 @@ import { EarningsModule } from '../earnings/earnings.module';
  *  - PrismaService：全局 PrismaModule（无需显式 import）。
  *  - SnapshotV2Service / AiSettingsService：从 AnalysisModule / AiSettingsModule
  *    拿（两者都已 export）。
- *  - ProviderFactoryService：仿照 AnalysisModule 在本 module 本地声明（它只依赖
- *    全局 ConfigService；AnalysisModule 没 export 它，DigestGenerator 需要按用户
- *    AiProviderSetting 构建 provider）。
  *  - 3 个 ChannelAdapter：本地声明，注入 DeliveryService。
  */
 @Module({
@@ -38,7 +34,6 @@ import { EarningsModule } from '../earnings/earnings.module';
     DigestDeliveryService,
     DigestTriggerService,
     DigestSchedulerService,
-    ProviderFactoryService,
     WebhookAdapter,
     FeishuAdapter,
     TelegramAdapter,

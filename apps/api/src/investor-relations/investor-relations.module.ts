@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
-import { ProviderFactoryService } from '../analysis/provider-factory.service';
+import { AnalysisModule } from '../analysis/analysis.module';
 import { ConnectorsModule } from '../connectors/connectors.module';
 import { FilingsModule } from '../filings/filings.module';
 import { InvestorRelationsController } from './investor-relations.controller';
@@ -10,10 +10,9 @@ import { InvestorRelationsRunnerService } from './investor-relations-runner.serv
 import { InvestorRelationsSourceService } from './investor-relations-source.service';
 
 @Module({
-  imports: [AuthModule, ConnectorsModule, FilingsModule],
+  imports: [AuthModule, AnalysisModule, ConnectorsModule, FilingsModule],
   controllers: [InvestorRelationsController],
   providers: [
-    ProviderFactoryService,
     InvestorRelationsSourceService,
     InvestorRelationsRunnerService,
     InvestorRelationsGenerationService,

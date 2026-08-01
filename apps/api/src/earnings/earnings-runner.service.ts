@@ -30,6 +30,7 @@ import { Prisma, type EarningsEvent, type Filing, type Stock } from '@prisma/cli
 import type { ResearchMarketDataClient } from '@bourse/market-data';
 import { PrismaService } from '../prisma/prisma.service';
 import { MARKET_DATA_CLIENT } from '../connectors/connectors.module';
+import { BoundedTaskQueue } from '../common/bounded-task-queue';
 import { ProviderFactoryService } from '../analysis/provider-factory.service';
 import {
   type EarningsRunSource,
@@ -45,10 +46,10 @@ const EXTRACTION_TIMEOUT_MS = 180_000;
 @Injectable()
 export class EarningsRunnerService implements OnModuleInit {
   private readonly logger = new Logger(EarningsRunnerService.name);
-  private readonly scheduled = new Set<string>();
-  private readonly pending: string[] = [];
-  private activeRuns = 0;
-  private readonly concurrency = 4;
+  private readonly queue = new BoundedTaskQueue<string>({
+    concurrency: 4,
+    execute: (runId) => this.run(runId),
+  });
 
   constructor(
     private readonly prisma: PrismaService,
@@ -82,25 +83,7 @@ export class EarningsRunnerService implements OnModuleInit {
   }
 
   schedule(runId: string): void {
-    if (this.scheduled.has(runId)) return;
-    this.scheduled.add(runId);
-    this.pending.push(runId);
-    this.drain();
-  }
-
-  private drain(): void {
-    while (this.activeRuns < this.concurrency && this.pending.length > 0) {
-      const runId = this.pending.shift();
-      if (!runId) return;
-      this.activeRuns += 1;
-      setImmediate(() => {
-        void this.run(runId).finally(() => {
-          this.activeRuns -= 1;
-          this.scheduled.delete(runId);
-          this.drain();
-        });
-      });
-    }
+    this.queue.schedule(runId);
   }
 
   async run(runId: string): Promise<void> {

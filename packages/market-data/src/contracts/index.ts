@@ -8,3 +8,4 @@ export * from './source-document';
 export * from './source';
 export * from './source-result';
 export * from './warning';
+export * from './scalars';

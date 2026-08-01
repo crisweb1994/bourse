@@ -59,44 +59,41 @@ export function snapshotToEvidencePack(
   opts: ToEvidencePackOptions = {},
 ): EvidencePackV2 {
   const citationByField = indexCitationsByField(snap);
-  const mkFact = <T>(
-    field: string,
+  // ── facts construction ──────────────────────────────────────────────────
+  const facts: EvidencePackV2['facts'] = {};
+  const putFact = <T>(
+    key: string,
     value: T,
-    extra?: Partial<FactOf<T>>,
-  ): FactOf<T> | undefined => {
-    const citation = citationByField.get(field);
-    if (!citation) return undefined;
-    return {
+    options: {
+      sourceField?: string;
+      extra?: Partial<FactOf<T>>;
+    } = {},
+  ): void => {
+    const citation = citationByField.get(options.sourceField ?? key);
+    if (!citation) return;
+    (facts as Record<string, unknown>)[key] = {
       value,
       asOf: citation.asOf ?? citation.retrievedAt,
       retrievedAt: citation.retrievedAt,
       sourceUrl: citation.url,
       sourceTier: citation.qualityTier ?? DEFAULT_TIER,
       origin: 'from_snapshot' as const,
-      ...(extra ?? {}),
-    };
-  };
-
-  // ── facts construction ──────────────────────────────────────────────────
-  const facts: EvidencePackV2['facts'] = {};
-  const putFact = <T>(key: string, fact: FactOf<T> | undefined): void => {
-    if (fact) (facts as Record<string, unknown>)[key] = fact;
+      ...(options.extra ?? {}),
+    } satisfies FactOf<T>;
   };
 
   // Quote → quote / marketCap / currency / pe
   const q = snap.rawFacts.quote;
   if (q) {
-    if (q.price > 0) putFact('quote', mkFact('quote', q.price, { unit: q.currency }));
+    if (q.price > 0) putFact('quote', q.price, { extra: { unit: q.currency } });
     if (q.marketCap !== undefined && q.marketCap > 0) {
-      putFact('marketCap', mkFact('quote', q.marketCap, {
-        currency: q.currency,
-      }));
+      putFact('marketCap', q.marketCap, { sourceField: 'quote', extra: { currency: q.currency } });
     }
     if (typeof q.currency === 'string' && q.currency.length === 3) {
-      putFact('currency', mkFact('quote', q.currency));
+      putFact('currency', q.currency, { sourceField: 'quote' });
     }
     if (q.peRatio !== undefined && Number.isFinite(q.peRatio)) {
-      putFact('pe', mkFact('quote', q.peRatio));
+      putFact('pe', q.peRatio, { sourceField: 'quote' });
     }
   }
 
@@ -114,15 +111,15 @@ export function snapshotToEvidencePack(
     if (prof.website) value.website = prof.website;
     if (typeof prof.marketCap === 'number' && Number.isFinite(prof.marketCap)) value.marketCap = prof.marketCap;
     if (Object.keys(value).length > 0) {
-      putFact('profile', mkFact('profile', value));
+      putFact('profile', value);
     }
   }
 
   // Financials passthrough
   if (snap.rawFacts.financials) {
-    putFact('financials', mkFact('financials', snap.rawFacts.financials as FinancialsBundle, {
-      sourceTier: pickFinancialsTier(snap.rawFacts.financials),
-    }));
+    putFact('financials', snap.rawFacts.financials as FinancialsBundle, {
+      extra: { sourceTier: pickFinancialsTier(snap.rawFacts.financials) },
+    });
   }
 
   // Filings → latestFilingUrls
@@ -132,7 +129,7 @@ export function snapshotToEvidencePack(
       .filter((u): u is string => typeof u === 'string' && u.length > 0)
       .slice(0, 10);
     if (urls.length > 0) {
-      putFact('latestFilingUrls', mkFact('filings', urls));
+      putFact('latestFilingUrls', urls, { sourceField: 'filings' });
     }
   }
 
@@ -141,7 +138,7 @@ export function snapshotToEvidencePack(
   // inspect their actual URLs and dates.
   const webDocuments = projectWebDocuments(snap.rawFacts.webSearch);
   if (webDocuments.length > 0) {
-    putFact('webDocuments', mkFact('webSearch', webDocuments));
+    putFact('webDocuments', webDocuments, { sourceField: 'webSearch' });
     const recentNews = webDocuments
       .filter((item) => item.sourceType === 'news' && item.publishedAt)
       .map((item) => ({
@@ -150,23 +147,23 @@ export function snapshotToEvidencePack(
         publishedAt: item.publishedAt!,
       }));
     if (recentNews.length > 0) {
-      putFact('recentNews', mkFact('webSearch', recentNews));
+      putFact('recentNews', recentNews, { sourceField: 'webSearch' });
     }
   }
 
   const macro = snap.rawFacts.macro;
   if (macro && macro.observations.length > 0) {
-    putFact('macro', mkFact('macro', macro));
+    putFact('macro', macro);
   }
 
   if (snap.rawFacts.corporateActions?.length) {
-    putFact('corporateActions', mkFact('corporateActions', snap.rawFacts.corporateActions));
+    putFact('corporateActions', snap.rawFacts.corporateActions);
   }
   if (snap.rawFacts.ownership?.length) {
-    putFact('ownershipObservations', mkFact('ownership', snap.rawFacts.ownership));
+    putFact('ownershipObservations', snap.rawFacts.ownership, { sourceField: 'ownership' });
   }
   if (snap.rawFacts.marketEvents?.length) {
-    putFact('marketEvents', mkFact('marketEvents', snap.rawFacts.marketEvents));
+    putFact('marketEvents', snap.rawFacts.marketEvents);
   }
 
   // Consensus is canonical at the snapshot boundary; EvidencePack keeps its
@@ -181,7 +178,7 @@ export function snapshotToEvidencePack(
       }))
       .filter((estimate) => Number.isInteger(estimate.year) && Number.isFinite(estimate.value));
     if (forecasts.length > 0) {
-      putFact('consensusEps', mkFact('consensusEps', forecasts));
+      putFact('consensusEps', forecasts);
     }
   }
 
@@ -210,14 +207,14 @@ export function snapshotToEvidencePack(
     )) ?? [];
   if (nbf) {
     if (northboundFlowRows.length > 0) {
-      putFact('northboundFlow', mkFact('northboundFlow', northboundFlowRows));
+      putFact('northboundFlow', northboundFlowRows);
     }
 
     // Tushare's hk_hold endpoint reports holdings, not net capital flow.
     // Preserve those observations separately instead of coercing them into
     // hgt/sgt flow rows with a different unit and meaning.
     if (northboundHoldingRows.length > 0) {
-      putFact('northboundHoldings', mkFact('northboundFlow', northboundHoldingRows));
+      putFact('northboundHoldings', northboundHoldingRows, { sourceField: 'northboundFlow' });
     }
   }
 
@@ -233,7 +230,7 @@ export function snapshotToEvidencePack(
         topSellSeats: event.topSellSeatNames,
       }));
     if (apps.length > 0) {
-      putFact('lhbAppearances', mkFact('lhb', apps));
+      putFact('lhbAppearances', apps, { sourceField: 'lhb' });
     }
   }
 
@@ -250,7 +247,7 @@ export function snapshotToEvidencePack(
       }))
       .filter((event) => Number.isFinite(event.shares) && event.shares > 0);
     if (events.length > 0) {
-      putFact('unlockCalendar', mkFact('unlockCalendar', events));
+      putFact('unlockCalendar', events);
     }
   }
 

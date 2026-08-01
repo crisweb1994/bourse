@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { InvestorRelationsGenerationRunDto, InvestorRelationsTimelineResponseDto } from '@bourse/shared-types';
 import { ApiError, createInvestorRelationsGeneration, getInvestorRelationsGeneration, getInvestorRelationsTimeline, retryInvestorRelationsGeneration } from '@/lib/api';
-
-const POLL_MS = 1_500;
+import { useGenerationPolling } from './use-generation-polling';
 
 export function useInvestorRelations({ stockId, canGenerate }: { stockId: string | null; canGenerate: boolean }) {
   const [response, setResponse] = useState<InvestorRelationsTimelineResponseDto | null>(null);
@@ -80,16 +79,12 @@ export function useInvestorRelations({ stockId, canGenerate }: { stockId: string
     return () => { cancelled = true; };
   }, [canGenerate, refresh, start, stockId]);
 
-  useEffect(() => {
-    if (!generation || !['QUEUED', 'RUNNING'].includes(generation.status)) return;
-    const timer = window.setInterval(() => {
-      void getInvestorRelationsGeneration(generation.id).then((next) => {
-        setGeneration(next);
-        if (next.status === 'COMPLETED') void refresh();
-      }).catch(() => undefined);
-    }, POLL_MS);
-    return () => window.clearInterval(timer);
-  }, [generation, refresh]);
+  useGenerationPolling(generation, getInvestorRelationsGeneration, {
+    onUpdate: (next) => {
+      setGeneration(next);
+      if (next.status === 'COMPLETED') void refresh();
+    },
+  });
 
   return { response, generation, loading, error, start, retry };
 }
