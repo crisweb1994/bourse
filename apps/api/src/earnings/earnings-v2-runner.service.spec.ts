@@ -149,6 +149,22 @@ test('identityFromFilingMetadata parses US period-ended titles', () => {
   assert.equal(fy.identity?.periodEndOn, '2024-09-28');
 });
 
+test('identityFromFilingMetadata parses HK results-announcement titles', () => {
+  const cases = [
+    ['截至2026年 3 月 31日止三個月之業績公告', 'Q1', '2026-03-31'],
+    ['RESULTS ANNOUNCEMENT FOR THE THREE MONTHS ENDED MARCH 31, 2026', 'Q1', '2026-03-31'],
+    ['截至2025年6月30日止六个月之业绩公告', 'H1', '2025-06-30'],
+    ['RESULTS ANNOUNCEMENT FOR THE SIX MONTHS ENDED June 30, 2025', 'H1', '2025-06-30'],
+    ['RESULTS ANNOUNCEMENT FOR THE NINE MONTHS ENDED September 30, 2025', '9M', '2025-09-30'],
+    ['RESULTS ANNOUNCEMENT FOR THE TWELVE MONTHS ENDED December 31, 2025', 'FY', '2025-12-31'],
+  ] as const;
+  for (const [title, periodType, periodEndOn] of cases) {
+    const resolved = identityFromFilingMetadata({ formType: 'preliminary', title });
+    assert.equal(resolved.identity?.periodType, periodType, title);
+    assert.equal(resolved.identity?.periodEndOn, periodEndOn, title);
+  }
+});
+
 test('resolveV2Identity applies priority: source > title rule > narrative hint', () => {
   const sourceWins = resolveV2Identity(
     { expectedPeriodEndOn: '2025-12-31', periodType: 'FY' },

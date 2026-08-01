@@ -96,6 +96,43 @@ export function identityFromFilingMetadata(filing?: {
   const title = filing?.title ?? '';
   const formType = (filing?.formType ?? '').toLowerCase();
 
+  // HK 业绩公告标题："截至2026年 3 月 31日止三個月之業績公告" / "RESULTS
+  // ANNOUNCEMENT FOR THE THREE MONTHS ENDED MARCH 31, 2026"。期间长度直接
+  // 给出 quarter 类型，结束日为显式日期（支持繁体/简体/英文）。
+  const cnPeriod = /截至\s*(20\d{2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日\s*止(?:之)?(三個月|三个月|3個月|六個月|六个月|6個月|九個月|九个月|9個月|十二個月|十二个月|12個月)/i.exec(
+    title,
+  );
+  if (cnPeriod) {
+    const end = `${cnPeriod[1]}-${pad2(cnPeriod[2])}-${pad2(cnPeriod[3])}`;
+    const length = cnPeriod[4];
+    const periodType = /三/.test(length) ? 'Q1' : /六/.test(length) ? 'H1' : /九/.test(length) ? '9M' : 'FY';
+    return {
+      identity: { periodEndOn: end, periodType, fiscalYear: Number(cnPeriod[1]) },
+      diagnostics: ['identity derived from HK results-announcement title (period length + end date)'],
+    };
+  }
+
+  const enMonths = /(three|six|nine|twelve)\s+months\s+ended\s+([A-Z][a-z]+\.?)\s+(\d{1,2}),?\s+(20\d{2})/i.exec(
+    title,
+  );
+  if (enMonths) {
+    const month = MONTH_INDEX[enMonths[2].toLowerCase().replace('.', '')];
+    const day = Number(enMonths[3]);
+    const year = Number(enMonths[4]);
+    if (month && day >= 1 && day <= 31) {
+      const end = new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10);
+      const periodType =
+        enMonths[1].toLowerCase() === 'three' ? 'Q1'
+          : enMonths[1].toLowerCase() === 'six' ? 'H1'
+            : enMonths[1].toLowerCase() === 'nine' ? '9M'
+              : 'FY';
+      return {
+        identity: { periodEndOn: end, periodType, fiscalYear: year },
+        diagnostics: ['identity derived from HK results-announcement title (period length + end date)'],
+      };
+    }
+  }
+
   const cnYear = /(20\d{2})\s*年?/.exec(title);
   if (cnYear) {
     const year = Number(cnYear[1]);
@@ -141,6 +178,10 @@ export function identityFromFilingMetadata(filing?: {
   }
 
   return { diagnostics: ['no deterministic period identity in filing title'] };
+}
+
+function pad2(value: string): string {
+  return value.padStart(2, '0');
 }
 
 const MONTH_INDEX: Record<string, number> = {
