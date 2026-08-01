@@ -808,6 +808,8 @@ enum EarningsPeriodType {
   Q1
   Q2
   Q3
+  // 三季报累计（CN/HK structured-first 需要；US 无独立 9M 事件）
+  NINE_M
   H1
   FY
 }

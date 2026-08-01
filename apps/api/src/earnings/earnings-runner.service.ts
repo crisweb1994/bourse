@@ -858,7 +858,7 @@ function factIdentity(fact: MetricFact): string {
   ]);
 }
 
-function parseSourceDescriptor(value: Prisma.JsonValue): EarningsRunSource {
+export function parseSourceDescriptor(value: Prisma.JsonValue): EarningsRunSource {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new RunError('INVALID_SOURCE_DESCRIPTOR', false);
   }
@@ -901,7 +901,7 @@ function toFallbackSource(
   };
 }
 
-function parsePages(value: Prisma.JsonValue | null): PreparedEarningsSource['pages'] {
+export function parsePages(value: Prisma.JsonValue | null): PreparedEarningsSource['pages'] {
   if (!Array.isArray(value)) return undefined;
   return value.flatMap((item) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
