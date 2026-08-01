@@ -18,6 +18,10 @@ export {
   type EastmoneyFinancialsOptions,
 } from './eastmoney';
 export {
+  createEastmoneyV2FinancialsConnector,
+  type EastmoneyV2Options,
+} from './eastmoney-v2';
+export {
   createEastmoneyHkFinancialsConnector,
   type EastmoneyHkFinancialsOptions,
 } from './eastmoney-hk';
