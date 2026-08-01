@@ -240,7 +240,7 @@ export const FinancialPeriodSchema = z
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['facts'],
-          message: `duplicate reported facts for ${key} without revision distinction`,
+          message: `period ${period.id}: duplicate reported facts for ${key} without revision distinction`,
         });
       }
     }

@@ -44,6 +44,9 @@ function buildUsGaapFixture() {
           USD: [
             fact({ fy: 2024, fp: 'FY', val: 100_000, start: '2024-01-01', end: '2024-12-31', filed: '2025-02-01', accn: 'acc-fy' }),
             fact({ fy: 2025, fp: 'Q1', val: 25_000, start: '2025-01-01', end: '2025-03-31', filed: '2025-05-01', accn: 'acc-q1' }),
+            // 10-Q 同期比较列：companyfacts 会标成当前 fy/fp（frame 才是真实期间），
+            // 必须按 end == periodEndOn 排除，否则与当前期事实撞 revision 身份。
+            fact({ fy: 2025, fp: 'Q1', val: 22_000, start: '2024-01-01', end: '2024-03-31', filed: '2025-05-01', accn: 'acc-q1' }),
             // 防御性维度事实：必须被排除。
             fact({
               fy: 2025,
@@ -159,6 +162,26 @@ function buildIfrsFixture() {
         }),
         PaymentsToAcquirePropertyPlantAndEquipment: concept({
           USD: [fact({ fy: 2024, fp: 'FY', val: 2_000, start: '2024-01-01', end: '2024-12-31', filed: '2025-03-01', accn: 'ifrs-fy' })],
+        }),
+      },
+    },
+  };
+}
+
+/** 非自然财年（FYE 9/30）：Q2 单季 start=2025-01-01 不得被误标为 YTD。 */
+function buildNonCalendarFixture() {
+  return {
+    cik: 999999,
+    entityName: 'Non Calendar Corp',
+    facts: {
+      'us-gaap': {
+        RevenueFromContractWithCustomerExcludingAssessedTax: concept({
+          USD: [
+            fact({ fy: 2025, fp: 'FY', val: 400_000, start: '2024-10-01', end: '2025-09-30', filed: '2025-11-15', accn: 'acc-fy' }),
+            fact({ fy: 2025, fp: 'Q1', val: 90_000, start: '2024-10-01', end: '2024-12-31', filed: '2025-02-15', accn: 'acc-q1' }),
+            fact({ fy: 2025, fp: 'Q2', val: 100_000, start: '2025-01-01', end: '2025-03-31', filed: '2025-05-15', accn: 'acc-q2' }),
+            fact({ fy: 2025, fp: 'Q2', val: 190_000, start: '2024-10-01', end: '2025-03-31', filed: '2025-05-15', accn: 'acc-q2' }),
+          ],
         }),
       },
     },
@@ -335,6 +358,22 @@ describe('sec-edgar-xbrl-v2 — taxonomy', () => {
     expect(result.data).toBeNull();
     expect(result.warnings[0].code).toBe('PARTIAL_DATA');
     expect(result.warnings[0].message).toContain('unsupported_taxonomy');
+  });
+});
+
+describe('sec-edgar-xbrl-v2 — non-calendar fiscal year', () => {
+  it('labels quarter-start facts as discrete when the fiscal year does not start Jan 1', async () => {
+    const connector = makeConnector(buildNonCalendarFixture());
+    const result = await connector.fetchFinancials({ instrumentId: 'US:FIXT', deriveTTM: false });
+    expect(result.data).not.toBeNull();
+    const q2 = result.data!.periods.find((period) => period.id === 'period-2025-Q2')!;
+    expect(q2.periodEndOn).toBe('2025-03-31');
+    const revenueFacts = q2.facts.filter((fact) => fact.metricCode === 'revenue');
+    expect(revenueFacts).toHaveLength(2);
+    const ytd = revenueFacts.find((fact) => fact.accumulation === 'YTD')!;
+    const discrete = revenueFacts.find((fact) => fact.accumulation === 'discrete')!;
+    expect(ytd.value).toBe('190000');
+    expect(discrete.value).toBe('100000');
   });
 });
 

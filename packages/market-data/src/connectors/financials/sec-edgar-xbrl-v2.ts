@@ -230,7 +230,11 @@ function anchorPeriods(
         if (!periodKeyOf(entry)) continue;
         const key = `${entry.fy}|${entry.fp}`;
         const existing = byKey.get(key);
-        if (!existing || entry.filed > existing.filed) byKey.set(key, entry);
+        // 同一 (fy, fp) 可能混入 10-Q/10-K 的同期比较列（end 是去年同一期间）。
+        // anchor 必须取"当前期间"：end 最大者优先，其次最新 filed。
+        if (!existing || entry.end > existing.end || (entry.end === existing.end && entry.filed > existing.filed)) {
+          byKey.set(key, entry);
+        }
       }
     }
   }
@@ -254,14 +258,26 @@ function fiscalYearStart(
 ): string | undefined {
   const fyAnchor = anchors.get(`${fy}|FY`);
   if (fyAnchor?.start) return fyAnchor.start;
-  // 兜底：该财年任意 duration fact 的最早 start（非自然财年）。
+  // 兜底：该财年无年报时，先找最新结束日（当前期间），再取同结束日事实里
+  // 最早的 start。直接用"全局最早 start"会被 10-Q 同期比较列污染。
+  let latestEnd: string | undefined;
+  for (const name of V2_CONCEPTS.revenue[taxonomy]) {
+    const concept = concepts[name];
+    if (!concept) continue;
+    for (const entries of Object.values(concept.units)) {
+      for (const entry of entries) {
+        if (entry.fy !== fy || !entry.start || hasDimensions(entry)) continue;
+        if (!latestEnd || entry.end > latestEnd) latestEnd = entry.end;
+      }
+    }
+  }
   let earliest: string | undefined;
   for (const name of V2_CONCEPTS.revenue[taxonomy]) {
     const concept = concepts[name];
     if (!concept) continue;
     for (const entries of Object.values(concept.units)) {
       for (const entry of entries) {
-        if (entry.fy !== fy || !entry.start) continue;
+        if (entry.fy !== fy || !entry.start || entry.end !== latestEnd || hasDimensions(entry)) continue;
         if (!earliest || entry.start < earliest) earliest = entry.start;
       }
     }
@@ -297,7 +313,17 @@ function buildPeriods(
     const fy = anchor.fy;
     const fp = anchor.fp as PeriodKey;
     const fyStart = fiscalYearStart(fy, anchors, concepts, taxonomy);
-    const facts = extractFacts(concepts, taxonomy, { fy, fp }, fyStart, sourceUrl, snapshotId, retrievedAt, `period-${fy}-${fp}`);
+    const facts = extractFacts(
+      concepts,
+      taxonomy,
+      { fy, fp },
+      fyStart,
+      anchor.end,
+      sourceUrl,
+      snapshotId,
+      retrievedAt,
+      `period-${fy}-${fp}`,
+    );
     if (facts.length === 0) continue;
     periods.push(
       FinancialPeriodSchema.parse({
@@ -329,6 +355,7 @@ function extractFacts(
   taxonomy: XbrlTaxonomy,
   period: { fy: number; fp: PeriodKey },
   fyStart: string | undefined,
+  periodEndOn: string,
   sourceUrl: string,
   snapshotId: string,
   retrievedAt: string,
@@ -348,6 +375,10 @@ function extractFacts(
         if (!isEps && classified.unit !== 'currency') continue;
         for (const entry of entries) {
           if (entry.fy !== period.fy || entry.fp !== period.fp) continue;
+          // companyfacts 会把 10-Q/10-K 中的同期比较列也标成当前 fy/fp（frame 才是
+          // 真实期间）。只保留 end 等于当前 period 结束日的事实；同日不同 accession
+          // 的重述/更正仍会保留（revision 区分），由 selector 按 cutoff 选择。
+          if (entry.end !== periodEndOn) continue;
           if (hasDimensions(entry)) continue;
           const value = String(entry.val);
           if (!DecimalStringSchema.safeParse(value).success) continue;
@@ -359,9 +390,9 @@ function extractFacts(
                 ? 'FY'
                 : fyStart && entry.start === fyStart
                   ? 'YTD'
-                  : entry.start === `${period.fy}-01-01`
-                    ? 'YTD'
-                    : period.fp === 'Q1'
+                  : fyStart
+                    ? 'discrete' // 财年起点已知：非起点一律 discrete（避免日历 1 月 1 日误判）
+                    : entry.start === `${period.fy}-01-01` || period.fp === 'Q1'
                       ? 'YTD'
                       : 'discrete';
           matched.push({
