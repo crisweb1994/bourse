@@ -54,6 +54,7 @@ model Stock {
   earningsDeliveryRecords          EarningsDeliveryRecord[]
   investorRelationsEvents         InvestorRelationsEvent[]
   investorRelationsGenerationRuns InvestorRelationsGenerationRun[]
+  financialDataSnapshots           FinancialDataSnapshot[]
 
   @@unique([symbol, market])
   @@index([sector])
@@ -540,6 +541,7 @@ model EarningsEvent {
   filingLinks    EarningsEventFiling[]
   card           EarningsCard?
   generationRuns EarningsGenerationRun[]
+  structuredSelections EarningsStructuredSelection[]
 
   @@unique([stockId, periodEndOn, periodType, reportingScope])
   @@index([stockId, periodEndOn])
@@ -626,6 +628,62 @@ model EarningsGenerationRun {
   @@unique([requestedByUserId, clientRequestId])
   @@index([stockId, createdAt])
   @@index([status, createdAt])
+}
+
+// ============================================================================
+// Structured-first earnings (docs/structured-first-earnings-architecture.md §12)
+// ============================================================================
+
+model FinancialDataSnapshot {
+  id                String   @id @default(cuid())
+  stockId           String
+  provider          String
+  sourceNature      String
+  qualityTier       String
+  sourceUrl         String
+  schemaVersion     String
+  retrievedAt       DateTime
+  contentHash       String
+  normalizedPayload Json
+  createdAt         DateTime @default(now())
+
+  stock      Stock                         @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  selections SelectionSnapshot[]
+
+  @@unique([stockId, provider, contentHash, schemaVersion])
+  @@index([stockId, retrievedAt])
+}
+
+model EarningsStructuredSelection {
+  id                String   @id @default(cuid())
+  eventId           String
+  selectionVersion  String
+  status            String
+  selectedPeriodId  String?
+  diagnostics       Json
+  knowledgeCutoffAt DateTime
+  retryAt           DateTime?
+  createdAt         DateTime @default(now())
+
+  event     EarningsEvent      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  snapshots SelectionSnapshot[]
+
+  @@unique([eventId, selectionVersion])
+  @@index([eventId, createdAt])
+}
+
+// 多 provider 多对多：同一 selection 可引用多个 snapshot（不同 metric 来自不同
+// provider）；事实级 provenance.snapshotId 是权威引用，role 仅作汇总标记。
+model SelectionSnapshot {
+  selectionId String
+  snapshotId  String
+  role        String   @default("primary")
+  createdAt   DateTime @default(now())
+
+  selection EarningsStructuredSelection @relation(fields: [selectionId], references: [id], onDelete: Cascade)
+  snapshot  FinancialDataSnapshot       @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+
+  @@id([selectionId, snapshotId])
 }
 
 model FilingDetectionCursor {

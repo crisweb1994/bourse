@@ -279,6 +279,41 @@ export const EarningsRelationTypeSchema = z.enum([
   'SUPERSEDES',
 ]);
 
+// ============================================================================
+// Card 数据状态（docs/structured-first-earnings-architecture.md §13）
+// ============================================================================
+
+export const EarningsNumericStatusSchema = z.enum([
+  'ready',
+  'pending_structured',
+  'partial',
+  'ambiguous',
+  'unsupported',
+]);
+export type EarningsNumericStatus = z.infer<typeof EarningsNumericStatusSchema>;
+
+export const EarningsNarrativeStatusSchema = z.enum([
+  'ready',
+  'unavailable',
+  'pending',
+  'not_applicable',
+]);
+export type EarningsNarrativeStatus = z.infer<typeof EarningsNarrativeStatusSchema>;
+
+export const EarningsGuidanceStatusSchema = z.enum([
+  'ready',
+  'none_reported',
+  'unavailable',
+]);
+export type EarningsGuidanceStatus = z.infer<typeof EarningsGuidanceStatusSchema>;
+
+export const EarningsDataStatusSchema = z.object({
+  numeric: EarningsNumericStatusSchema,
+  narrative: EarningsNarrativeStatusSchema,
+  guidance: EarningsGuidanceStatusSchema,
+});
+export type EarningsDataStatus = z.infer<typeof EarningsDataStatusSchema>;
+
 export const EarningsFilingDescriptorSchema = z
   .object({
     sourceKind: z.enum(['filing', 'structured_fallback']).default('filing'),
@@ -323,6 +358,8 @@ export const EarningsCardPayloadSchema = z.object({
   filing: EarningsFilingDescriptorSchema,
   supportingFilings: z.array(EarningsFilingDescriptorSchema).default([]),
   facts: z.array(MetricFactSchema),
+  // structured-first 原子切换后必填；旧 LLM 卡片兼容期可缺省。
+  dataStatus: EarningsDataStatusSchema.optional(),
   managementClaims: z.array(
     z.object({
       id: z.string().min(1),
