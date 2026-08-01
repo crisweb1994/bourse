@@ -228,6 +228,7 @@ describe('eastmoney-v2 — reported cumulative + derived quarters', () => {
     expect(gross.value).toBe('100');
     expect(gross.derivation.kind).toBe('computed');
     expect(fcf.value).toBe('35');
+    if (fcf.derivation.kind !== 'computed') throw new Error('expected computed FCF');
     expect(fcf.derivation.formula).toBe('ocf-minus-capex-v1');
   });
 

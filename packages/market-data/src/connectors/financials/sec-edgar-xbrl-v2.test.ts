@@ -307,6 +307,7 @@ describe('sec-edgar-xbrl-v2 — us-gaap happy path', () => {
     expect(grossProfit.value).toBe('40000');
     const allIds = new Set(fy2024.facts.map((fact) => fact.id));
     for (const fact of [fcf, grossProfit]) {
+      if (fact.derivation.kind !== 'computed') throw new Error('expected computed fact');
       for (const inputId of fact.derivation.inputFactIds) {
         expect(allIds.has(inputId)).toBe(true);
       }
