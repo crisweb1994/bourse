@@ -49,6 +49,7 @@ import type {
 import type { FinancialsBundle, FinancialsInput } from './ports/financials';
 import type { MacroInput, MacroSnapshot } from './ports/macro';
 import type { InstrumentSearchResult } from './ports/instrument-search';
+import { rankInstrumentSearchResults } from './util/instrument-search-rank';
 import type { MarketSession } from './contracts/calendar';
 import type { MarketCode } from './contracts/instrument';
 import type { CachePort } from './ports/cache';
@@ -287,7 +288,7 @@ export class ResearchMarketDataClient {
       const port = source.ports.instrumentSearch;
       if (!port) return unavailable(source.manifest.id, 'Source does not implement InstrumentSearchPort.');
       return port.search(normalized, requestContext.signal ?? signal);
-    }, { merge: mergeInstrumentSearch }));
+    }, { merge: (results) => mergeInstrumentSearch(results, normalized) }));
   }
 
   private async routeInstrument<T>(
@@ -427,7 +428,10 @@ function connectorContext(context: SourceRequestContext, original: ConnectorRunC
   };
 }
 
-function mergeInstrumentSearch(results: readonly SourceResult<InstrumentSearchResult[]>[]): InstrumentSearchResult[] | null {
+function mergeInstrumentSearch(
+  results: readonly SourceResult<InstrumentSearchResult[]>[],
+  query: string,
+): InstrumentSearchResult[] | null {
   const seen = new Set<string>();
   const merged = results.flatMap((result) => result.status === 'ok' ? result.data : []).filter((item) => {
     const key = `${item.market}:${item.symbol}:${item.exchange}`.toUpperCase();
@@ -435,7 +439,7 @@ function mergeInstrumentSearch(results: readonly SourceResult<InstrumentSearchRe
     seen.add(key);
     return true;
   });
-  return merged.length > 0 ? merged : null;
+  return merged.length > 0 ? rankInstrumentSearchResults(merged, query) : null;
 }
 
 function isSupportedMarket(market: string | undefined): market is SupportedMarket {
