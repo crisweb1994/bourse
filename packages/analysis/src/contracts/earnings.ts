@@ -84,6 +84,12 @@ export const StructuredSourceSchema = z.object({
   sourceUrl: z.string().url(),
   fieldPath: z.string().min(1),
   asOf: z.string().datetime(),
+  sourceNature: z.string().optional(),
+  qualityTier: z.string().optional(),
+  snapshotId: z.string().optional(),
+  sourceRevisionId: z.string().optional(),
+  sourceFiledAt: z.string().datetime().optional(),
+  accessionNumber: z.string().optional(),
 });
 
 export const MetricProvenanceSchema = z.discriminatedUnion('kind', [
