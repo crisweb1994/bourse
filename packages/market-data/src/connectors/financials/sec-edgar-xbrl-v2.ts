@@ -110,7 +110,11 @@ export function createSecEdgarXbrlV2FinancialsConnector(
         return failure(retrievedAt, 'SOURCE_UNAVAILABLE', `CIK lookup failed: ${message}`, message);
       }
       if (!cik) {
-        return failure(retrievedAt, 'INVALID_INSTRUMENT', `Unknown SEC ticker: ${parsed.symbol}`);
+        return failure(
+          retrievedAt,
+          'INVALID_INSTRUMENT',
+          `${parsed.symbol} is not a US SEC filer (OTC/ADR tickers are not covered by EDGAR)`,
+        );
       }
 
       const url = `${COMPANYFACTS_URL}/CIK${cik.cik}.json`;
