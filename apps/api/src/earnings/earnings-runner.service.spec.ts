@@ -67,6 +67,7 @@ function payload(
       checkStatus: { status: 'passed', checks: ['source_anchor'] },
       reconcileStatus: { status: 'pending' },
     }],
+    supplementalNonGaap: [],
     managementClaims: [],
     omittedFactCount: 0,
     statusSummary: { total: 1, reconciled: 0, pending: 1, conflicted: 0, structuredOnly: 0 },

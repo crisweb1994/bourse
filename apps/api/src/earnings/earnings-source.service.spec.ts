@@ -84,6 +84,39 @@ test('EarningsSourceService requests foreign issuer filing forms for US stocks',
   assert.equal(request.limit, 100);
 });
 
+test('EarningsSourceService explains OTC/ADR tickers without SEC filings', async () => {
+  const port: FilingPort = {
+    async searchFilings() {
+      return {
+        schemaVersion: '1.0' as const,
+        data: [],
+        citations: [],
+        freshness: [],
+        warnings: [
+          {
+            code: 'INVALID_INSTRUMENT' as const,
+            message: 'MPNGY is not a US SEC filer (OTC/ADR tickers are not covered by EDGAR)',
+            provider: 'sec-edgar',
+          },
+        ],
+      };
+    },
+  };
+  const prisma = { filing: { findFirst: async () => null } } as any;
+  const service = new EarningsSourceService(prisma, clientFromPort(port), new FilingStoreService(prisma));
+
+  await assert.rejects(
+    () => service.discoverAndIngest({ ...stock, symbol: 'MPNGY', name: 'Meituan' }),
+    (error: unknown) => {
+      assert.ok(error instanceof EarningsSourceError);
+      assert.equal(error.code, 'NO_ELIGIBLE_FILING');
+      assert.ok(error.message.includes('OTC/ADR'));
+      assert.ok(error.message.includes('03690.HK'));
+      return true;
+    },
+  );
+});
+
 test('EarningsSourceService skips a non-earnings 6-K and accepts an earnings 6-K', async () => {
   const summaries = [
     { ...summary('ordinary-6k', 'https://www.sec.gov/Archives/ordinary/main.htm'), formType: '6-K', title: 'Corporate update' },

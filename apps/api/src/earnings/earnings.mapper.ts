@@ -82,6 +82,28 @@ export function toEarningsCardDto(revision: RevisionWithCard): EarningsCardDto {
         },
       };
     }),
+    dataStatus: payload.dataStatus,
+    supplementalNonGaap: payload.supplementalNonGaap.map((item) => {
+      const source = sourceForFiling(payload, item.sourceSpan.filingId);
+      return {
+        metricLabel: item.metricLabel,
+        value: item.value,
+        unit: item.unit,
+        currency: item.currency,
+        targetPeriodEndOn: item.targetPeriodEndOn,
+        reconciliationContext: item.reconciliationContext,
+        source: {
+          kind: 'filingSpan' as const,
+          sourceUrl: source.sourceUrl,
+          provider: source.provider,
+          quote: item.sourceSpan.quote,
+          page: item.sourceSpan.page,
+          section: item.sourceSpan.section,
+          startOffset: item.sourceSpan.startOffset,
+          endOffset: item.sourceSpan.endOffset,
+        },
+      };
+    }),
     omittedFactCount: payload.omittedFactCount,
     statusSummary: payload.statusSummary,
     generatedAt: revision.generatedAt.toISOString(),
@@ -155,7 +177,19 @@ function factToDto(
           startOffset: fact.provenance.startOffset,
           endOffset: fact.provenance.endOffset,
         }
-      : fact.provenance;
+      : {
+          kind: 'structuredSource',
+          sourceUrl: fact.provenance.sourceUrl,
+          provider: fact.provenance.provider,
+          fieldPath: fact.provenance.fieldPath,
+          asOf: fact.provenance.asOf,
+          sourceNature: fact.provenance.sourceNature,
+          qualityTier: fact.provenance.qualityTier,
+          snapshotId: fact.provenance.snapshotId,
+          sourceRevisionId: fact.provenance.sourceRevisionId,
+          sourceFiledAt: fact.provenance.sourceFiledAt,
+          accessionNumber: fact.provenance.accessionNumber,
+        };
 
   return {
     id: fact.id,
@@ -172,6 +206,7 @@ function factToDto(
     accountingBasis: fact.accountingBasis,
     consolidationScope: fact.consolidationScope,
     checkStatus: fact.provenance.kind === 'structuredSource' ? 'structured_only' : 'passed',
+    derivation: fact.derivation,
     reconcileStatus,
     reconciliationOverdue: fact.reconcileStatus.status === 'pending'
       && Date.now() - new Date(source.publishedAt).getTime() > 45 * 24 * 60 * 60_000,

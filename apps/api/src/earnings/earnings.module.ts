@@ -5,7 +5,9 @@ import { AnalysisModule } from '../analysis/analysis.module';
 import { EarningsController } from './earnings.controller';
 import { EarningsGenerationService } from './earnings-generation.service';
 import { EarningsQueryService } from './earnings-query.service';
-import { EarningsRunnerService } from './earnings-runner.service';
+import { EarningsV2OrchestratorService } from './earnings-v2-orchestrator.service';
+import { EarningsV2RunnerService } from './earnings-v2-runner.service';
+import { StructuredSelectionService } from './structured-selection.service';
 import { EarningsSourceService } from './earnings-source.service';
 import { FilingDetectionScheduler } from './filing-detection.scheduler';
 import { EarningsConsensusService } from './earnings-consensus.service';
@@ -25,7 +27,9 @@ import { FilingsModule } from '../filings/filings.module';
     EarningsNoticeService,
     EarningsSectionsService,
     EarningsSourceService,
-    EarningsRunnerService,
+    EarningsV2RunnerService,
+    StructuredSelectionService,
+    EarningsV2OrchestratorService,
     EarningsGenerationService,
     EarningsQueryService,
     EarningsTrendService,

@@ -84,7 +84,7 @@ export function createSecEdgarProfileConnector(
           emptyProfile(parsed.raw),
           retrievedAt,
           'INVALID_INSTRUMENT',
-          `Unknown SEC ticker: ${parsed.symbol}`,
+          `${parsed.symbol} is not a US SEC filer (OTC/ADR tickers are not covered by EDGAR)`,
         );
       }
 

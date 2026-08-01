@@ -473,6 +473,34 @@ describe('ResearchMarketDataClient', () => {
     expect(third).toHaveBeenCalledWith('AAPL', expect.any(AbortSignal));
   });
 
+  it('ranks primary listings above OTC ADRs in merged search results', async () => {
+    const otcAdr = {
+      symbol: 'MPNGY',
+      name: '美团',
+      market: 'US',
+      exchange: 'OTC',
+      currency: 'USD',
+      yahooSymbol: 'MPNGY',
+    };
+    const hkPrimary = {
+      symbol: '3690',
+      name: '美团w',
+      market: 'HK',
+      exchange: 'HKEX',
+      currency: 'HKD',
+      yahooSymbol: '3690.HK',
+    };
+    const client = new TestResearchMarketDataClient(providers({
+      instrumentSearch: [
+        { search: async () => [otcAdr] },
+        { search: async () => [hkPrimary] },
+      ],
+    }));
+
+    const response = await client.searchInstruments('美团');
+    expect(response.data?.map((item) => item.symbol)).toEqual(['3690', 'MPNGY']);
+  });
+
 });
 
 describe('connector cancellation', () => {

@@ -78,7 +78,16 @@ export class EarningsSourceService {
         : ['preview', 'preliminary', 'quarterly', 'semiannual', 'annual'];
     const listed = await this.marketData.listFilings({ instrumentId, forms, limit: stock.market === 'HK' ? 20 : stock.market === 'US' ? 100 : 10 });
     if (!listed.data?.length) {
-      throw new EarningsSourceError('NO_ELIGIBLE_FILING', true, listed.warnings[0]?.message);
+      const warning = listed.warnings[0];
+      let message = warning?.message;
+      // OTC/ADR（如 MPNGY）不在 SEC company_tickers 表里：不是系统故障，是这类
+      // 代码没有 SEC 备案，财报速读无法生成。给用户明确语义 + 港股替代引导。
+      if (stock.market === 'US' && warning?.code === 'INVALID_INSTRUMENT') {
+        message =
+          `${stock.symbol} 不是 SEC 备案的美股代码（OTC/ADR 不在 EDGAR 覆盖范围），` +
+          '暂不支持财报速读；若为港股公司，请使用其港股代码（如 03690.HK）';
+      }
+      throw new EarningsSourceError('NO_ELIGIBLE_FILING', true, message);
     }
 
     const excludedGroups = new Set(options.excludedSourceGroupIds ?? []);

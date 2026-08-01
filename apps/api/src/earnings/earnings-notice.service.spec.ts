@@ -25,6 +25,7 @@ const PAYLOAD: EarningsCardPayload = {
   },
   supportingFilings: [],
   facts: [],
+  supplementalNonGaap: [],
   managementClaims: [],
   omittedFactCount: 0,
   statusSummary: { total: 0, reconciled: 0, pending: 0, conflicted: 0, structuredOnly: 0 },

@@ -50,6 +50,12 @@ export type EarningsProvenanceDto =
       provider: string;
       fieldPath: string;
       asOf: string;
+      sourceNature?: string;
+      qualityTier?: string;
+      snapshotId?: string;
+      sourceRevisionId?: string;
+      sourceFiledAt?: string;
+      accessionNumber?: string;
     };
 
 export interface EarningsMetricFactDto {
@@ -67,6 +73,7 @@ export interface EarningsMetricFactDto {
   accountingBasis: string;
   consolidationScope: 'consolidated' | 'parent' | 'unknown';
   checkStatus: 'passed' | 'structured_only';
+  derivation?: { kind: 'reported' } | { kind: 'computed'; formula: string; inputFactIds: string[] };
   reconcileStatus: EarningsReconcileStatus;
   reconciliationOverdue?: boolean;
   comparisons: EarningsComparisonDto[];
@@ -76,6 +83,22 @@ export interface EarningsMetricFactDto {
 export interface EarningsManagementClaimDto {
   id: string;
   text: string;
+  source: Extract<EarningsProvenanceDto, { kind: 'filingSpan' }>;
+}
+
+export interface EarningsDataStatusDto {
+  numeric: 'ready' | 'pending_structured' | 'partial' | 'ambiguous' | 'unsupported';
+  narrative: 'ready' | 'unavailable' | 'pending' | 'not_applicable';
+  guidance: 'ready' | 'none_reported' | 'unavailable';
+}
+
+export interface EarningsSupplementalNonGaapDto {
+  metricLabel: string;
+  value: EarningsMetricValueDto;
+  unit: EarningsMetricFactDto['unit'];
+  currency?: string;
+  targetPeriodEndOn: string;
+  reconciliationContext?: string;
   source: Extract<EarningsProvenanceDto, { kind: 'filingSpan' }>;
 }
 
@@ -117,6 +140,8 @@ export interface EarningsCardDto {
   revisionStatus: 'PARTIAL' | 'COMPLETE';
   facts: EarningsMetricFactDto[];
   managementClaims: EarningsManagementClaimDto[];
+  dataStatus?: EarningsDataStatusDto;
+  supplementalNonGaap?: EarningsSupplementalNonGaapDto[];
   omittedFactCount: number;
   statusSummary: {
     total: number;

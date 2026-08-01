@@ -8,7 +8,7 @@ import { computeContentHash } from '@bourse/analysis';
 import { EARNINGS_EXTRACTION_PROMPT_VERSION, EARNINGS_SCHEMA_VERSION } from './earnings-prompts';
 import { Prisma, type Stock } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { EarningsRunnerService } from './earnings-runner.service';
+import { EarningsV2OrchestratorService } from './earnings-v2-orchestrator.service';
 import {
   EarningsSourceError,
   EarningsSourceService,
@@ -24,7 +24,7 @@ export class EarningsGenerationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sources: EarningsSourceService,
-    private readonly runner: EarningsRunnerService,
+    private readonly runner: EarningsV2OrchestratorService,
   ) {}
 
   async create(userId: string, stockId: string, clientRequestId: string) {

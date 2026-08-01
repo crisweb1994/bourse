@@ -79,6 +79,9 @@ export class YahooInstrumentSearchProvider implements InstrumentSearchPort {
     if (symbol.endsWith('.T')) return 'JP';
     if (symbol.endsWith('.L')) return 'UK';
     if (US_EXCHANGES.has(exchange)) return 'US';
+    // US OTC/粉单（含无保荐 ADR）：仍是美国市场证券，market 归 US；
+    // exchange 保留 'OTC Markets' 供排序降级使用。
+    if (/^(PNK|OQB|OQX)$/.test(exchange)) return 'US';
     return exchange;
   }
 }

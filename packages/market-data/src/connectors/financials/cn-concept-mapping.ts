@@ -116,6 +116,7 @@ export interface EastmoneyFinancialsRow {
   SECURITY_CODE: string;
   REPORT_DATE: string; // 'YYYY-MM-DD HH:mm:ss'
   NOTICE_DATE?: string;
+  UPDATE_DATE?: string;
   DATE_TYPE_CODE: DateTypeCode;
   REPORT_TYPE_CODE?: string; // '001' = first-issue, others = restatement
   DATA_STATE?: string;
