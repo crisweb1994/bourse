@@ -31,18 +31,19 @@ export interface V2LaneIdentity {
 
 export interface V2IdentityResolution {
   identity?: V2LaneIdentity;
-  source: 'source' | 'narrative_hint' | 'missing';
+  source: 'source' | 'title_rule' | 'narrative_hint' | 'missing';
   diagnostics: string[];
 }
 
 /**
- * 事件身份权威关系（§10）：官方 filing metadata（source）> 确定性规则 > LLM
- * hint（只能触发复核，不能单独创建 numeric card——identity 来源为
+ * 事件身份权威关系（§10）：官方 filing metadata（source）> 确定性标题/日期规则 >
+ * LLM hint（只能触发复核，不能单独创建 numeric card——identity 来源为
  * narrative_hint 时仍允许运行，但 diagnostics 会记录由 LLM 提供）。
  */
 export function resolveV2Identity(
   source: { expectedPeriodEndOn?: string; periodType?: string; fiscalYear?: number },
   narrativeHints?: { periodEndOn?: string; periodType?: string },
+  filing?: { formType?: string; title?: string | null },
 ): V2IdentityResolution {
   if (source.expectedPeriodEndOn && isExpectedPeriodType(source.periodType)) {
     return {
@@ -53,6 +54,14 @@ export function resolveV2Identity(
       },
       source: 'source',
       diagnostics: [],
+    };
+  }
+  const fromTitle = identityFromFilingMetadata(filing);
+  if (fromTitle.identity) {
+    return {
+      identity: fromTitle.identity,
+      source: 'title_rule',
+      diagnostics: fromTitle.diagnostics,
     };
   }
   if (narrativeHints?.periodEndOn && isExpectedPeriodType(narrativeHints.periodType)) {
@@ -69,9 +78,85 @@ export function resolveV2Identity(
   }
   return {
     source: 'missing',
-    diagnostics: ['no period identity available from filing metadata or narrative hints'],
+    diagnostics: ['no period identity available from filing metadata, title rules, or narrative hints'],
   };
 }
+
+/**
+ * 确定性标题/日期规则（§10 第三优先级）。
+ *
+ * CN/HK：中文标题含报告期关键字（"2025年半年度报告"、"2025年第三季度报告"、
+ * "2025年年度业绩快报" 等）；US：10-Q/10-K 标题含 "period ended <date>"。
+ * 非自然财年无法从标题确定精确季索引/财年起点时，按自然年近似并记录诊断。
+ */
+export function identityFromFilingMetadata(filing?: {
+  formType?: string;
+  title?: string | null;
+}): { identity?: V2LaneIdentity; diagnostics: string[] } {
+  const title = filing?.title ?? '';
+  const formType = (filing?.formType ?? '').toLowerCase();
+
+  const cnYear = /(20\d{2})\s*年?/.exec(title);
+  if (cnYear) {
+    const year = Number(cnYear[1]);
+    const natural = ['identity derived from filing title; natural-year assumption'];
+    if (/半年度|中期(?:报告|业绩|報)|interim/i.test(title)) {
+      return { identity: { periodEndOn: `${year}-06-30`, periodType: 'H1', fiscalYear: year }, diagnostics: natural };
+    }
+    if (/第[三3]季度|三季报|三季度/.test(title)) {
+      return { identity: { periodEndOn: `${year}-09-30`, periodType: '9M', fiscalYear: year }, diagnostics: natural };
+    }
+    if (/第[二2]季度|二季报|二季度/.test(title)) {
+      return { identity: { periodEndOn: `${year}-06-30`, periodType: 'Q2', fiscalYear: year }, diagnostics: natural };
+    }
+    if (/第[一1]季度|一季报|一季度/.test(title)) {
+      return { identity: { periodEndOn: `${year}-03-31`, periodType: 'Q1', fiscalYear: year }, diagnostics: natural };
+    }
+    if (/年度报告|年报|年度业绩|业绩(?:快报|预告)/.test(title)) {
+      return { identity: { periodEndOn: `${year}-12-31`, periodType: 'FY', fiscalYear: year }, diagnostics: natural };
+    }
+  }
+
+  const usDate = /(?:period|fiscal year|year)\s+ended\s+([A-Z][a-z]+\.?)\s+(\d{1,2}),?\s+(20\d{2})/i.exec(title);
+  if (usDate) {
+    const month = MONTH_INDEX[usDate[1].toLowerCase().replace('.', '')];
+    const day = Number(usDate[2]);
+    const year = Number(usDate[3]);
+    if (month && day >= 1 && day <= 31) {
+      const end = new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10);
+      if (formType === '10-k') {
+        return {
+          identity: { periodEndOn: end, periodType: 'FY', fiscalYear: year },
+          diagnostics: ['identity derived from 10-K title period-ended date'],
+        };
+      }
+      if (formType === '10-q') {
+        const quarter = month <= 3 ? 'Q1' : month <= 6 ? 'Q2' : 'Q3';
+        return {
+          identity: { periodEndOn: end, periodType: quarter, fiscalYear: year },
+          diagnostics: ['identity derived from 10-Q title period-ended date; quarter index uses calendar months'],
+        };
+      }
+    }
+  }
+
+  return { diagnostics: ['no deterministic period identity in filing title'] };
+}
+
+const MONTH_INDEX: Record<string, number> = {
+  january: 1, jan: 1,
+  february: 2, feb: 2,
+  march: 3, mar: 3,
+  april: 4, apr: 4,
+  may: 5,
+  june: 6, jun: 6,
+  july: 7, jul: 7,
+  august: 8, aug: 8,
+  september: 9, sep: 9, sept: 9,
+  october: 10, oct: 10,
+  november: 11, nov: 11,
+  december: 12, dec: 12,
+};
 
 function isExpectedPeriodType(value: string | undefined): value is ExpectedEarningsPeriodType {
   return (

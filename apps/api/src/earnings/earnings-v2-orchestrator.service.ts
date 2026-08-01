@@ -135,7 +135,7 @@ export class EarningsV2OrchestratorService implements OnModuleInit {
       ]);
 
       // ---- 事件身份 ----
-      const identity = resolveV2Identity(source, narrative?.extraction.eventIdentityHints);
+      const identity = resolveV2Identity(source, narrative?.extraction.eventIdentityHints, filing);
       if (!identity.identity) {
         throw new V2RunError('IDENTITY_UNKNOWN', true, identity.diagnostics.join('; '));
       }
@@ -250,7 +250,7 @@ export class EarningsV2OrchestratorService implements OnModuleInit {
         selection: unsupportedSelection('unsupported_market', [`no v2 connector for ${stock.market}`]),
       };
     }
-    const identity = resolveV2Identity(source);
+    const identity = resolveV2Identity(source, undefined, filing);
     if (!identity.identity) {
       return {
         selection: unsupportedSelection('identity_unknown', identity.diagnostics),

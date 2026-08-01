@@ -4,6 +4,7 @@ import { FinancialsBundleV2Schema, type FinancialsBundleV2, type ProviderFinanci
 import {
   buildV2FinancialsConnector,
   EarningsV2RunnerService,
+  identityFromFilingMetadata,
   resolveV2Identity,
 } from './earnings-v2-runner.service';
 import type { StructuredSelectionService } from './structured-selection.service';
@@ -114,6 +115,63 @@ test('resolveV2Identity reports missing identity', () => {
   const resolved = resolveV2Identity({}, {});
   assert.equal(resolved.source, 'missing');
   assert.equal(resolved.identity, undefined);
+});
+
+test('identityFromFilingMetadata parses CN report titles', () => {
+  const cases = [
+    ['福耀玻璃:2025年半年度报告', 'H1', '2025-06-30'],
+    ['福耀玻璃:2025年第三季度报告', '9M', '2025-09-30'],
+    ['福耀玻璃:2025年第一季度报告', 'Q1', '2025-03-31'],
+    ['福耀玻璃:2025年年度报告', 'FY', '2025-12-31'],
+    ['福耀玻璃:2025年年度业绩快报', 'FY', '2025-12-31'],
+    ['Tencent Holdings 2025中期报告', 'H1', '2025-06-30'],
+  ] as const;
+  for (const [title, periodType, periodEndOn] of cases) {
+    const resolved = identityFromFilingMetadata({ formType: 'annual', title });
+    assert.equal(resolved.identity?.periodType, periodType, title);
+    assert.equal(resolved.identity?.periodEndOn, periodEndOn, title);
+  }
+});
+
+test('identityFromFilingMetadata parses US period-ended titles', () => {
+  const q2 = identityFromFilingMetadata({
+    formType: '10-Q',
+    title: 'Quarterly report for the quarterly period ended June 30, 2025',
+  });
+  assert.equal(q2.identity?.periodType, 'Q2');
+  assert.equal(q2.identity?.periodEndOn, '2025-06-30');
+
+  const fy = identityFromFilingMetadata({
+    formType: '10-K',
+    title: 'Annual report for the fiscal year ended September 28, 2024',
+  });
+  assert.equal(fy.identity?.periodType, 'FY');
+  assert.equal(fy.identity?.periodEndOn, '2024-09-28');
+});
+
+test('resolveV2Identity applies priority: source > title rule > narrative hint', () => {
+  const sourceWins = resolveV2Identity(
+    { expectedPeriodEndOn: '2025-12-31', periodType: 'FY' },
+    { periodEndOn: '2025-03-31', periodType: 'Q1' },
+    { formType: 'annual', title: '2025年半年度报告' },
+  );
+  assert.equal(sourceWins.source, 'source');
+  assert.equal(sourceWins.identity?.periodEndOn, '2025-12-31');
+
+  const titleWins = resolveV2Identity(
+    {},
+    { periodEndOn: '2025-03-31', periodType: 'Q1' },
+    { formType: 'annual', title: '福耀玻璃:2025年半年度报告' },
+  );
+  assert.equal(titleWins.source, 'title_rule');
+  assert.equal(titleWins.identity?.periodType, 'H1');
+
+  const hintFallsBack = resolveV2Identity(
+    {},
+    { periodEndOn: '2025-03-31', periodType: 'Q1' },
+    { formType: '10-Q', title: 'Quarterly report [Sections 13 or 15(d)]' },
+  );
+  assert.equal(hintFallsBack.source, 'narrative_hint');
 });
 
 test('buildV2FinancialsConnector returns a connector for US/CN/HK and null otherwise', () => {
