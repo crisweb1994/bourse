@@ -98,6 +98,18 @@ export {
 } from './earnings-financials-adapter';
 
 export {
+  projectStructuredEarnings,
+  type CandidateSummary,
+  type ExpectedEarningsPeriodType,
+  type PendingReason,
+  type RejectedCandidate,
+  type SelectionDiagnostics,
+  type StructuredEarningsMarket,
+  type StructuredEarningsSelection,
+  type StructuredEarningsSelectionInput,
+} from './structured-earnings-selector';
+
+export {
   sectionizeFilingText,
   selectRelevantFilingSections,
   type FilingSection,

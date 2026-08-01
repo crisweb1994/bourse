@@ -1,6 +1,7 @@
 export * from './cache';
 export * from './finance';
 export * from './financials';
+export * from './financials-v2';
 export * from './filings';
 export * from './macro';
 export * from './instrument-search';
