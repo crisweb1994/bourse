@@ -10,6 +10,11 @@ export {
   type SecEdgarXbrlOptions,
 } from './sec-edgar-xbrl';
 export {
+  createSecEdgarXbrlV2FinancialsConnector,
+  type ProviderFinancialsV2Port,
+  type SecEdgarXbrlV2Options,
+} from './sec-edgar-xbrl-v2';
+export {
   createEastmoneyFinancialsConnector,
   type EastmoneyFinancialsOptions,
 } from './eastmoney';
