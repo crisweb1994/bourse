@@ -305,6 +305,64 @@ describe('projectStructuredEarnings', () => {
     expect(ocf.accumulation).toBe('YTD');
   });
 
+  it('supports HK Q1 results announcements with YTD facts', () => {
+    const bundle = makeBundle({
+      instrumentId: 'HK:01810',
+      provider: 'eastmoney-hk-financials-v2',
+      sourceNature: 'aggregated_structured',
+      qualityTier: 'B',
+      sourceUrl: 'https://emweb.securities.eastmoney.com/PC_HKF10/NewFinanceAnalysis/index?code=01810.HK',
+      periods: [
+        makePeriod({
+          id: 'period-2026-03-31-003',
+          fiscalYear: 2026,
+          fiscalPeriodType: 'Q1',
+          periodStartOn: '2026-01-01',
+          periodEndOn: '2026-03-31',
+          publishedAt: '2026-05-26T00:00:00.000Z',
+          formType: 'preliminary',
+          accountingBasis: 'HKFRS',
+          facts: [
+            makeFact({
+              id: 'fact-revenue-q1',
+              value: '75500000000',
+              currency: 'CNY',
+              periodStartOn: '2026-01-01',
+              periodEndOn: '2026-03-31',
+              accumulation: 'YTD',
+              accountingBasis: 'HKFRS',
+              provenance: {
+                ...makeFact().provenance,
+                provider: 'eastmoney-hk-financials-v2',
+                qualityTier: 'B',
+                sourceNature: 'aggregated_structured',
+                sourceField: 'OPERATE_INCOME',
+                sourceUrl: 'https://emweb.securities.eastmoney.com/',
+              },
+            }),
+          ],
+        }),
+      ],
+    });
+    const result = select(
+      bundle,
+      {
+        market: 'HK',
+        expectedPeriodEndOn: '2026-03-31',
+        expectedPeriodType: 'Q1',
+        expectedAccountingBasis: 'HKFRS',
+        expectedInstrumentId: 'HK:01810',
+        knowledgeCutoffAt: '2026-05-26T12:00:00.000Z',
+        now: '2026-05-26T12:00:00.000Z',
+      },
+    );
+    expect(result.status).toBe('ready');
+    if (result.status !== 'ready') return;
+    const revenue = result.facts.find((fact) => fact.metricCode === 'revenue')!;
+    expect(revenue.accumulation).toBe('YTD');
+    expect(revenue.value).toEqual({ kind: 'scalar', value: '75500000000' });
+  });
+
   it('prefers consolidated scope unless the event is explicitly parent', () => {
     const parentPeriod = makePeriod({
       id: 'period-parent',

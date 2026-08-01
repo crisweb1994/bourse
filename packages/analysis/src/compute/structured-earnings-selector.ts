@@ -199,6 +199,9 @@ function compatRule(
   }
   if (market === 'HK') {
     switch (expectedPeriodType) {
+      case 'Q1':
+        // HK 业绩公告常见 Q1（东财 HK MAININDICATOR DATE_TYPE 003）；Q1 起点即财年起点。
+        return { periodTypes: ['Q1'], accumulations: ['YTD', 'discrete'], preference: ['YTD'] };
       case 'H1':
         return { periodTypes: ['H1'], accumulations: ['YTD'], preference: ['YTD'] };
       case '9M':
