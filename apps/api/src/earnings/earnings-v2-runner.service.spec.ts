@@ -157,6 +157,9 @@ test('identityFromFilingMetadata parses HK results-announcement titles', () => {
     ['RESULTS ANNOUNCEMENT FOR THE SIX MONTHS ENDED June 30, 2025', 'H1', '2025-06-30'],
     ['RESULTS ANNOUNCEMENT FOR THE NINE MONTHS ENDED September 30, 2025', '9M', '2025-09-30'],
     ['RESULTS ANNOUNCEMENT FOR THE TWELVE MONTHS ENDED December 31, 2025', 'FY', '2025-12-31'],
+    ['截至2025年12月31日止年度的年度業績公佈及所得款項用途變更', 'FY', '2025-12-31'],
+    ['ANNUAL RESULTS ANNOUNCEMENT FOR THE YEAR ENDED 31 DECEMBER 2025 AND CHANGE IN USE OF PROCEEDS', 'FY', '2025-12-31'],
+    ['RESULTS ANNOUNCEMENT FOR THE SIX MONTHS ENDED 30 JUNE 2025', 'H1', '2025-06-30'],
   ] as const;
   for (const [title, periodType, periodEndOn] of cases) {
     const resolved = identityFromFilingMetadata({ formType: 'preliminary', title });
