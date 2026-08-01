@@ -7,6 +7,7 @@ import {
   Check,
   ChevronDown,
   Clock3,
+  Database,
   ExternalLink,
   FileSearch,
   History,
@@ -217,6 +218,7 @@ function EarningsCard({
           ))}
         </div>
       )}
+      {card.dataStatus && <DataStatusBanner card={card} />}
 
       <div className="divide-y divide-[var(--color-border-soft)]">
         <section aria-labelledby="earnings-metrics-title" className="px-4 py-4 sm:px-5">
@@ -224,13 +226,19 @@ function EarningsCard({
             <h3 id="earnings-metrics-title" className="m-0 text-[12px] font-medium text-[var(--color-fg-2)]">数字一览</h3>
             <span className="text-[11px] text-[var(--color-fg-3)]">
               {structuredOnly
-                ? `${card.statusSummary.total} 项原文待核`
+                ? `${card.statusSummary.total} 项 · 结构化数据源`
                 : `${card.statusSummary.reconciled}/${card.statusSummary.total} 已对账`}
             </span>
           </div>
           <div className="divide-y divide-[var(--color-border-soft)] border-y border-[var(--color-border-soft)]">
             {card.facts.map((fact) => <MetricRow key={fact.id} fact={fact} />)}
           </div>
+          {card.facts.length === 0 && card.dataStatus?.numeric === 'pending_structured' && (
+            <div className="flex items-start gap-2 pt-3 text-[11.5px] leading-5 text-[var(--color-fg-2)]">
+              <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--color-info)]" strokeWidth={1.5} />
+              目标报告期的结构化数据尚未收录；以下先展示公告叙事与指引。
+            </div>
+          )}
           {card.omittedFactCount > 0 && (
             <div className="mt-3 flex items-start gap-2 text-[11.5px] leading-5 text-[var(--color-fg-2)]">
               <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--color-warn)]" strokeWidth={1.5} />
@@ -238,6 +246,39 @@ function EarningsCard({
             </div>
           )}
         </section>
+
+        {card.supplementalNonGaap && card.supplementalNonGaap.length > 0 && (
+          <section aria-labelledby="earnings-nongaap-title" className="px-5 py-4">
+            <h3 id="earnings-nongaap-title" className="m-0 mb-3 text-[12px] font-medium text-[var(--color-fg-2)]">
+              非 GAAP 补充指标
+            </h3>
+            <div className="divide-y divide-[var(--color-border-soft)] border-y border-[var(--color-border-soft)]">
+              {card.supplementalNonGaap.map((item, index) => (
+                <details key={`${item.metricLabel}-${index}`} className="group">
+                  <summary className="grid min-h-[48px] cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 px-1 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]">
+                    <span className="min-w-0 text-[12.5px] text-[var(--color-fg-2)]">{item.metricLabel}</span>
+                    <span className="font-mono text-[13px] font-medium tabular-nums text-[var(--color-fg)]">
+                      {formatSupplementalValue(item)}
+                    </span>
+                    <ChevronDown className="col-start-2 row-start-1 h-3.5 w-3.5 text-[var(--color-fg-3)] transition-transform duration-150 group-open:rotate-180" />
+                  </summary>
+                  <div className="mb-2 ml-1 mr-1 border border-[var(--color-border-soft)] bg-[var(--color-surface-2)] px-3 py-2.5">
+                    <p className="m-0 text-[11.5px] leading-5 text-[var(--color-fg-2)]">“{item.source.quote}”</p>
+                    <p className="m-0 mt-1 font-mono text-[10px] text-[var(--color-fg-3)]">
+                      {item.source.page ? `第 ${item.source.page} 页 · ` : ''}
+                      {item.source.provider}
+                    </p>
+                    {item.reconciliationContext && (
+                      <p className="m-0 mt-2 border-t border-[var(--color-border)] pt-2 text-[11px] leading-5 text-[var(--color-fg-2)]">
+                        对账说明：{item.reconciliationContext}
+                      </p>
+                    )}
+                  </div>
+                </details>
+              ))}
+            </div>
+          </section>
+        )}
 
         {card.managementClaims.length > 0 && (
           <section aria-labelledby="earnings-claims-title" className="px-5 py-4">
@@ -266,10 +307,10 @@ function EarningsCard({
       <div className="flex min-w-0 flex-col gap-2 border-t border-[var(--color-border-soft)] bg-[var(--color-surface-2)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div className="flex min-w-0 items-start gap-2 text-[11px] leading-5 text-[var(--color-fg-2)] sm:items-center">
           {structuredOnly
-            ? <Clock3 className="h-3.5 w-3.5 text-[var(--color-info)]" strokeWidth={1.5} />
+            ? <Database className="h-3.5 w-3.5 text-[var(--color-accent)]" strokeWidth={1.5} />
             : <ShieldCheck className="h-3.5 w-3.5 text-[var(--color-accent)]" strokeWidth={1.5} />}
           {structuredOnly
-            ? '结构化数据 · 原文待核；数据截至日期见逐项来源'
+            ? '结构化数据 · 展开每项查看来源、报告期与快照'
             : '自动一致性检查不是审计；冲突项保留双来源'}
         </div>
         <Button className="min-h-11 w-full sm:min-h-7 sm:w-auto" variant="quiet" size="sm" onClick={onAsk}>
@@ -393,9 +434,31 @@ function MetricRow({ fact }: { fact: EarningsMetricFactDto }) {
             </p>
           </>
         ) : (
-          <p className="m-0 font-mono text-[10.5px] leading-5 text-[var(--color-fg-2)]">
-            {fact.provenance.provider} · {fact.provenance.fieldPath} · 数据截至 {formatDateTime(fact.provenance.asOf)}
-          </p>
+          <>
+            <p className="m-0 font-mono text-[10.5px] leading-5 text-[var(--color-fg-2)]">
+              {sourceNatureLabel(fact.provenance.sourceNature)} · {fact.provenance.provider}
+              {fact.provenance.qualityTier ? ` · Tier ${fact.provenance.qualityTier}` : ''}
+              {' · '}
+              {fact.provenance.fieldPath}
+            </p>
+            <p className="m-0 mt-1 font-mono text-[10px] leading-5 text-[var(--color-fg-3)]">
+              报告期 {fact.periodStartOn ?? fact.periodEndOn} – {fact.periodEndOn}
+              {fact.periodKind === 'duration' ? ` · ${accumulationLabel(fact.accumulation)}` : ' · 时点值'}
+              {' · '}
+              {fact.accountingBasis} · {scopeLabel(fact.consolidationScope)}
+            </p>
+            <p className="m-0 mt-1 font-mono text-[10px] leading-5 text-[var(--color-fg-3)]">
+              {fact.provenance.sourceFiledAt ? `申报 ${formatDateTime(fact.provenance.sourceFiledAt)}` : `快照 ${formatDateTime(fact.provenance.asOf)}`}
+              {fact.provenance.accessionNumber ? ` · ${fact.provenance.accessionNumber}` : ''}
+              {fact.provenance.sourceRevisionId ? ` · rev ${fact.provenance.sourceRevisionId}` : ''}
+              {fact.provenance.snapshotId ? ` · ${fact.provenance.snapshotId}` : ''}
+            </p>
+            {fact.derivation?.kind === 'computed' && (
+              <p className="m-0 mt-2 border-t border-[var(--color-border)] pt-2 text-[10.5px] leading-5 text-[var(--color-fg-2)]">
+                由已披露结构化数据计算 · 公式 {fact.derivation.formula} · 输入 {fact.derivation.inputFactIds.join(', ')}
+              </p>
+            )}
+          </>
         )}
         {fact.reconcileStatus.status === 'conflicted' && (
           <div className="mt-2 grid gap-1 border-t border-[var(--color-border)] pt-2 text-[11.5px] sm:grid-cols-2">
@@ -456,6 +519,12 @@ function EarningsSkeleton() {
 }
 
 function factState(fact: EarningsMetricFactDto) {
+  if (fact.provenance.kind === 'structuredSource') {
+    if (fact.derivation?.kind === 'computed') {
+      return { label: '由结构化数据计算', className: 'text-[var(--color-accent)]', icon: <Database className="h-3 w-3" /> };
+    }
+    return { label: '结构化数据', className: 'text-[var(--color-accent)]', icon: <ShieldCheck className="h-3 w-3" /> };
+  }
   if (fact.checkStatus === 'structured_only') {
     return { label: '原文待核', className: 'text-[var(--color-info)]', icon: <Clock3 className="h-3 w-3" /> };
   }
@@ -470,10 +539,95 @@ function factState(fact: EarningsMetricFactDto) {
 }
 
 function aggregateStatus(card: EarningsCardDto): { label: string; variant: 'emerald' | 'warn' | 'danger' | 'blue' } {
+  if (card.dataStatus) {
+    switch (card.dataStatus.numeric) {
+      case 'ready':
+        return { label: '数字就绪', variant: 'emerald' };
+      case 'pending_structured':
+        return { label: '数字更新中', variant: 'blue' };
+      case 'partial':
+        return { label: '部分数字缺失', variant: 'warn' };
+      case 'ambiguous':
+        return { label: '来源冲突', variant: 'danger' };
+      case 'unsupported':
+        return { label: '暂不支持', variant: 'warn' };
+    }
+  }
   if (card.statusSummary.conflicted > 0) return { label: `${card.statusSummary.conflicted} 项冲突`, variant: 'danger' };
   if (card.statusSummary.structuredOnly > 0) return { label: '原文待核', variant: 'blue' };
   if (card.statusSummary.pending > 0) return { label: `${card.statusSummary.reconciled}/${card.statusSummary.total} 已对账`, variant: 'warn' };
   return { label: '已对账', variant: 'emerald' };
+}
+
+function DataStatusBanner({ card }: { card: EarningsCardDto }) {
+  const status = card.dataStatus!;
+  const messages: string[] = [];
+  if (status.numeric === 'pending_structured') {
+    messages.push('目标报告期的结构化数据尚未收录，系统正在更新');
+  }
+  if (status.numeric === 'ambiguous') {
+    messages.push('多个结构化来源存在口径冲突，冲突数字暂不展示');
+  }
+  if (status.numeric === 'unsupported') {
+    messages.push('当前市场/报告期暂不支持结构化财务数据');
+  }
+  if (status.narrative === 'unavailable') {
+    messages.push('财务数据已更新，管理层解读暂不可用');
+  }
+  if (status.guidance === 'none_reported') {
+    messages.push('本次未报告业绩指引');
+  }
+  if (messages.length === 0) return null;
+  const tone =
+    status.numeric === 'ambiguous'
+      ? 'border-[var(--color-warn-line)] bg-[var(--color-warn-soft)] text-[var(--color-fg)]'
+      : 'border-[var(--color-border-soft)] bg-[var(--color-surface-2)] text-[var(--color-fg-2)]';
+  return (
+    <div className={`flex flex-wrap items-start gap-x-4 gap-y-1 border-b px-5 py-2 text-[11px] leading-5 ${tone}`} data-testid="earnings-data-status">
+      {messages.map((message) => (
+        <span key={message} className="inline-flex items-center gap-1.5">
+          <Clock3 className="h-3 w-3 shrink-0" strokeWidth={1.5} />
+          {message}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function sourceNatureLabel(sourceNature?: string): string {
+  switch (sourceNature) {
+    case 'official_structured':
+      return '官方结构化';
+    case 'official_document_derived':
+      return '官方文档派生';
+    case 'licensed_structured':
+      return '许可结构化';
+    case 'aggregated_structured':
+      return '聚合商';
+    default:
+      return '结构化数据';
+  }
+}
+
+function accumulationLabel(accumulation: EarningsMetricFactDto['accumulation']): string {
+  if (accumulation === 'YTD') return '年初至今累计';
+  if (accumulation === 'FY') return '全年';
+  return '单季';
+}
+
+function scopeLabel(scope: EarningsMetricFactDto['consolidationScope']): string {
+  if (scope === 'parent') return '母公司';
+  if (scope === 'unknown') return '口径未知';
+  return '合并';
+}
+
+function formatSupplementalValue(
+  item: NonNullable<EarningsCardDto['supplementalNonGaap']>[number],
+): string {
+  return formatRawValue(item.value, {
+    unit: item.unit,
+    currency: item.currency,
+  } as EarningsMetricFactDto);
 }
 
 function periodLabel(card: EarningsCardDto): string {
