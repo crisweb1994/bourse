@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.6.0](https://github.com/crisweb1994/bourse/compare/v0.5.0...v0.6.0) (2026-08-01)
+
+
+### Features
+
+* add capability-routed market data client ([4cb4b99](https://github.com/crisweb1994/bourse/commit/4cb4b99ba23d260e89ca4fa0a6ea9287084ad573))
+* complete market data v2 routing ([c0c616f](https://github.com/crisweb1994/bourse/commit/c0c616f66f4182b66ef1829ed9df08d396ef74a8))
+* integrate capability-routed market data sources ([5f8116b](https://github.com/crisweb1994/bourse/commit/5f8116bcc58a6006ccbf7660e598b5998ef532b8))
+
+
+### Bug Fixes
+
+* build market-data before analysis in Docker ([2215c2a](https://github.com/crisweb1994/bourse/commit/2215c2ac87d0ed19982fdeb1f3f632523a0233af))
+* improve HK evidence pack coverage ([ada2cfb](https://github.com/crisweb1994/bourse/commit/ada2cfbf47b12f82b3b81d0e958bee26dbf8a188))
+* narrow earnings check status in test ([a21f522](https://github.com/crisweb1994/bourse/commit/a21f522a1af605f7b82d65b86a37d923fc925a37))
+* normalize earnings extraction metadata ([e306a20](https://github.com/crisweb1994/bourse/commit/e306a2022bb562a2c2b1b12dd09a10fc88db766a))
+* preserve holdings and harden derived data routing ([f1cb36f](https://github.com/crisweb1994/bourse/commit/f1cb36f5bc6e5c9b540bc17102c57e8840f28762))
+* recover HK quotes and earnings briefs ([b343075](https://github.com/crisweb1994/bourse/commit/b3430753c469594000ef09b141006f253eb6c852))
+* support foreign issuer earnings filings ([e151409](https://github.com/crisweb1994/bourse/commit/e151409917a61b09de144197256a4baafcb004a5))
+* 修复多市场数据路由、财报解析与异步生成链路 ([13c9ec5](https://github.com/crisweb1994/bourse/commit/13c9ec539e116f4b946c15aff6c8286dadd99a8d))
+
 ## [0.5.0](https://github.com/crisweb1994/bourse/compare/v0.4.0...v0.5.0) (2026-07-28)
 
 
