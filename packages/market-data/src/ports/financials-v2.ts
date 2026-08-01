@@ -1,5 +1,8 @@
 import { z } from 'zod';
 import { DecimalStringSchema } from '../contracts/scalars';
+import type { ResearchResult } from '../contracts/result';
+import type { ConnectorRunContext } from '../connectors/types';
+import type { FinancialsInput } from './financials';
 
 /**
  * Financials v2 contract — structured-first earnings actuals.
@@ -333,3 +336,11 @@ export const FinancialsBundleV2Schema = z
     }
   });
 export type FinancialsBundleV2 = z.infer<typeof FinancialsBundleV2Schema>;
+
+/** v2 financials connector 端口（structured-first earnings，未接 routing）。 */
+export interface ProviderFinancialsV2Port {
+  fetchFinancials(
+    input: FinancialsInput,
+    ctx?: ConnectorRunContext,
+  ): Promise<ResearchResult<FinancialsBundleV2 | null>>;
+}

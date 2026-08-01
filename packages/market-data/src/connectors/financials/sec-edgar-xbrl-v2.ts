@@ -6,6 +6,7 @@ import type { FinancialsInput } from '../../ports/financials';
 import {
   FinancialsBundleV2Schema,
   FinancialPeriodSchema,
+  type ProviderFinancialsV2Port,
   type FinancialFact,
   type FinancialPeriod,
   type FinancialsBundleV2,
@@ -58,13 +59,6 @@ export interface SecEdgarXbrlV2Options {
   fetchLike?: FetchLike;
   timeoutMs?: number;
   now?: () => Date;
-}
-
-export interface ProviderFinancialsV2Port {
-  fetchFinancials(
-    input: FinancialsInput,
-    ctx?: ConnectorRunContext,
-  ): Promise<ResearchResult<FinancialsBundleV2 | null>>;
 }
 
 type PeriodKey = 'FY' | 'Q1' | 'Q2' | 'Q3' | 'Q4';

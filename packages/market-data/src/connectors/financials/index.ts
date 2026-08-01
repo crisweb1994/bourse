@@ -11,7 +11,6 @@ export {
 } from './sec-edgar-xbrl';
 export {
   createSecEdgarXbrlV2FinancialsConnector,
-  type ProviderFinancialsV2Port,
   type SecEdgarXbrlV2Options,
 } from './sec-edgar-xbrl-v2';
 export {
@@ -22,6 +21,10 @@ export {
   createEastmoneyHkFinancialsConnector,
   type EastmoneyHkFinancialsOptions,
 } from './eastmoney-hk';
+export {
+  createEastmoneyHkV2FinancialsConnector,
+  type EastmoneyHkV2Options,
+} from './eastmoney-hk-v2';
 export {
   createHkexDerivedFinancialsConnector,
   type HkexDerivedFinancialsOptions,
