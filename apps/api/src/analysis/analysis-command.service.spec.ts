@@ -113,14 +113,14 @@ describe('AnalysisCommandService', () => {
     assert.equal(createArgs.data.question, null);
   });
 
-  it('rejects legacy analysis types even if controller validation is bypassed', async () => {
+    it('rejects unsupported analysis types even if controller validation is bypassed', async () => {
     const { service, createCalls } = createService();
 
     await assert.rejects(
       () =>
         service.create('user-1', {
           stockId: 'stock-1',
-          analysisType: 'DEBATE',
+          analysisType: 'UNSUPPORTED',
         } as never),
       /has no section type/,
     );

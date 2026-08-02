@@ -113,7 +113,6 @@ interface AnalysisLike {
   id: string;
   analysisType: string;
   question?: string | null;
-  promptVersion?: string | null;
   sections: ReadonlyArray<AnalysisSectionLike>;
   stock: { symbol: string; market: string; name?: string | null };
 }
@@ -487,9 +486,6 @@ export async function runAnalysisWorkflowAdapter(
                   sourceMode: degradedSourceMark
                     ? 'WEB_SEARCH_FALLBACK'
                     : 'EVIDENCE_PACK',
-                  provider: ctx.provider.name,
-                  model: ctx.aiModel,
-                  promptVersion: ctx.analysis.promptVersion ?? null,
                   sectionSources: [...sectionAccs.entries()].map(
                     ([sectionType, acc]) => ({
                       sectionType,
@@ -588,9 +584,6 @@ async function persistEvidenceSnapshot(
   options: {
     sourceMode: string;
     degraded: boolean;
-    provider?: string | null;
-    model?: string | null;
-    promptVersion?: string | null;
     sectionSources?: unknown[];
   },
 ) {
@@ -634,11 +627,6 @@ async function persistEvidenceSnapshot(
         ...citations,
         ...(options.sectionSources ?? []),
       ] as any,
-      metadata: {
-        provider: options.provider ?? null,
-        model: options.model ?? null,
-        promptVersion: options.promptVersion ?? null,
-      } as any,
       contentHash,
     },
     update: {},

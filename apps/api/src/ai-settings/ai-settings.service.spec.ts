@@ -12,7 +12,6 @@ function providerRow(overrides: Record<string, unknown> = {}) {
     label: 'My Provider',
     providerType: 'OPENAI_COMPATIBLE',
     baseUrl: 'https://api.example.com/v1',
-    apiKey: null,
     apiKeyEncrypted: null,
     enabledModels: ['model-primary'],
     primaryModel: 'model-primary',
@@ -42,11 +41,6 @@ function encryptForTest(secret = ENCRYPTION_SECRET, apiKey = 'sk-secret-1234') {
   return (service as any).encryptApiKey(apiKey) as string;
 }
 
-function encryptWithJwtFallback(jwtSecret: string, apiKey = 'sk-fallback-5678') {
-  const service = new AiSettingsService({} as any, config({ JWT_SECRET: jwtSecret }) as any);
-  return (service as any).encryptApiKey(apiKey) as string;
-}
-
 describe('AiSettingsService · credential storage', () => {
   it('stores only encrypted credentials when creating a provider', async () => {
     let createData: Record<string, unknown> | undefined;
@@ -69,7 +63,7 @@ describe('AiSettingsService · credential storage', () => {
       primaryModel: 'model-primary',
     });
 
-    assert.equal(createData?.apiKey, null);
+    assert.equal('apiKey' in (createData ?? {}), false);
     assert.match(String(createData?.apiKeyEncrypted), /^v1:/);
     assert.equal(String(createData?.apiKeyEncrypted).includes('sk-secret-1234'), false);
     assert.equal(detail.hasApiKey, true);
@@ -94,7 +88,7 @@ describe('AiSettingsService · credential storage', () => {
       apiKey: 'sk-replacement-9876',
     });
 
-    assert.equal(updateData?.apiKey, null);
+    assert.equal('apiKey' in (updateData ?? {}), false);
     assert.match(String(updateData?.apiKeyEncrypted), /^v1:/);
     assert.equal(String(updateData?.apiKeyEncrypted).includes('sk-replacement-9876'), false);
     assert.equal(detail.apiKeyMasked, '****9876');
@@ -113,61 +107,7 @@ describe('AiSettingsService · credential storage', () => {
     assert.equal(runtime?.apiKey, 'sk-secret-1234');
   });
 
-  it('lazily migrates a legacy plaintext credential after a successful encrypted write', async () => {
-    let migrationData: Record<string, unknown> | undefined;
-    let migrationWhere: Record<string, unknown> | undefined;
-    const prisma = {
-      aiProviderSetting: {
-        findFirst: async () => providerRow({ apiKey: 'sk-legacy-4321' }),
-        updateMany: async ({ where, data }: {
-          where: Record<string, unknown>;
-          data: Record<string, unknown>;
-        }) => {
-          migrationWhere = where;
-          migrationData = data;
-          return { count: 1 };
-        },
-      },
-    };
-    const service = new AiSettingsService(prisma as any, config() as any);
-
-    const detail = await service.get('user-1', 'provider-1');
-
-    assert.equal(migrationWhere?.apiKey, 'sk-legacy-4321');
-    assert.equal(migrationWhere?.apiKeyEncrypted, null);
-    assert.equal(migrationData?.apiKey, null);
-    assert.match(String(migrationData?.apiKeyEncrypted), /^v1:/);
-    assert.equal(String(migrationData?.apiKeyEncrypted).includes('sk-legacy-4321'), false);
-    assert.equal(detail.apiKeyMasked, '****4321');
-  });
-
-  it('re-encrypts JWT fallback ciphertext after a dedicated key is configured', async () => {
-    const jwtSecret = 'legacy-jwt-secret';
-    const oldCiphertext = encryptWithJwtFallback(jwtSecret);
-    let rotationData: Record<string, unknown> | undefined;
-    const prisma = {
-      aiProviderSetting: {
-        findFirst: async () => providerRow({ apiKeyEncrypted: oldCiphertext }),
-        updateMany: async ({ data }: { data: Record<string, unknown> }) => {
-          rotationData = data;
-          return { count: 1 };
-        },
-      },
-    };
-    const service = new AiSettingsService(prisma as any, config({
-      AI_CREDENTIALS_ENCRYPTION_KEY: ENCRYPTION_SECRET,
-      JWT_SECRET: jwtSecret,
-    }) as any);
-
-    const detail = await service.get('user-1', 'provider-1');
-
-    assert.equal(detail.apiKeyMasked, '****5678');
-    assert.equal(rotationData?.apiKey, null);
-    assert.match(String(rotationData?.apiKeyEncrypted), /^v1:/);
-    assert.notEqual(rotationData?.apiKeyEncrypted, oldCiphertext);
-  });
-
-  it('clears both encrypted and legacy credential fields only when explicitly requested', async () => {
+  it('clears the encrypted credential only when explicitly requested', async () => {
     let updateData: Record<string, unknown> | undefined;
     const existing = providerRow({ apiKeyEncrypted: encryptForTest() });
     const prisma = {
@@ -185,7 +125,6 @@ describe('AiSettingsService · credential storage', () => {
       clearApiKey: true,
     });
 
-    assert.equal(updateData?.apiKey, null);
     assert.equal(updateData?.apiKeyEncrypted, null);
     assert.equal(detail.hasApiKey, false);
     assert.equal(detail.apiKeyMasked, null);

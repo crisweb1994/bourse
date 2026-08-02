@@ -4,7 +4,6 @@ import {
   HttpException,
   Injectable,
   InternalServerErrorException,
-  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -41,7 +40,6 @@ const CREDENTIAL_IV_BYTES = 12;
 
 @Injectable()
 export class AiSettingsService {
-  private readonly logger = new Logger(AiSettingsService.name);
   private credentialsKey: Buffer | null = null;
 
   constructor(
@@ -74,7 +72,6 @@ export class AiSettingsService {
       label: dto.label.trim() || '未命名',
       providerType: dto.providerType,
       baseUrl: this.emptyToNull(dto.baseUrl),
-      apiKey: null,
       apiKeyEncrypted: apiKey ? this.encryptApiKey(apiKey) : null,
       enabledModels: dto.enabledModels ?? [],
       primaryModel: this.emptyToNull(dto.primaryModel),
@@ -125,11 +122,9 @@ export class AiSettingsService {
     if (dto.enabled !== undefined) data.enabled = dto.enabled;
 
     if (dto.clearApiKey === true) {
-      data.apiKey = null;
       data.apiKeyEncrypted = null;
     } else if (dto.apiKey !== undefined) {
       const apiKey = dto.apiKey.trim() || null;
-      data.apiKey = null;
       data.apiKeyEncrypted = apiKey ? this.encryptApiKey(apiKey) : null;
     }
 
@@ -403,39 +398,7 @@ export class AiSettingsService {
   }
 
   private async readApiKey(row: any): Promise<string | null> {
-    if (row.apiKeyEncrypted) {
-      const decrypted = this.decryptApiKey(row.apiKeyEncrypted);
-      if (decrypted.usedJwtFallback) {
-        await this.prisma.aiProviderSetting.updateMany({
-          where: {
-            id: row.id,
-            apiKeyEncrypted: row.apiKeyEncrypted,
-          },
-          data: {
-            apiKey: null,
-            apiKeyEncrypted: this.encryptApiKey(decrypted.apiKey),
-          },
-        });
-      }
-      return decrypted.apiKey;
-    }
-
-    const legacyApiKey = row.apiKey?.trim() || null;
-    if (!legacyApiKey) return null;
-
-    const apiKeyEncrypted = this.encryptApiKey(legacyApiKey);
-    await this.prisma.aiProviderSetting.updateMany({
-      where: {
-        id: row.id,
-        apiKey: legacyApiKey,
-        apiKeyEncrypted: null,
-      },
-      data: {
-        apiKey: null,
-        apiKeyEncrypted,
-      },
-    });
-    return legacyApiKey;
+    return row.apiKeyEncrypted ? this.decryptApiKey(row.apiKeyEncrypted) : null;
   }
 
   private encryptApiKey(apiKey: string): string {
@@ -451,7 +414,7 @@ export class AiSettingsService {
     ].join(':');
   }
 
-  private decryptApiKey(payload: string): { apiKey: string; usedJwtFallback: boolean } {
+  private decryptApiKey(payload: string): string {
     const [version, ivEncoded, authTagEncoded, ciphertextEncoded, ...extra] = payload.split(':');
     if (
       version !== CREDENTIAL_CIPHER_VERSION ||
@@ -468,68 +431,31 @@ export class AiSettingsService {
     const iv = Buffer.from(ivEncoded, 'base64url');
     const authTag = Buffer.from(authTagEncoded, 'base64url');
     const ciphertext = Buffer.from(ciphertextEncoded, 'base64url');
-    for (const candidate of this.getCredentialDecryptionKeys()) {
-      try {
-        const decipher = createDecipheriv('aes-256-gcm', candidate.key, iv);
-        decipher.setAuthTag(authTag);
-        const apiKey = Buffer.concat([
-          decipher.update(ciphertext),
-          decipher.final(),
-        ]).toString('utf8');
-        return { apiKey, usedJwtFallback: candidate.usedJwtFallback };
-      } catch {
-        // Authentication failure means this ciphertext belongs to another key candidate.
-      }
+    try {
+      const decipher = createDecipheriv('aes-256-gcm', this.getCredentialsKey(), iv);
+      decipher.setAuthTag(authTag);
+      return Buffer.concat([
+        decipher.update(ciphertext),
+        decipher.final(),
+      ]).toString('utf8');
+    } catch {
+      throw new InternalServerErrorException(
+        'Unable to decrypt stored AI credential; verify AI_CREDENTIALS_ENCRYPTION_KEY',
+      );
     }
-
-    throw new InternalServerErrorException(
-      'Unable to decrypt stored AI credential; verify AI_CREDENTIALS_ENCRYPTION_KEY',
-    );
   }
 
   private getCredentialsKey(): Buffer {
     if (this.credentialsKey) return this.credentialsKey;
 
     const dedicatedSecret = this.config.get<string>('AI_CREDENTIALS_ENCRYPTION_KEY')?.trim();
-    const jwtSecret = this.config.get<string>('JWT_SECRET')?.trim();
-    const secret = dedicatedSecret || jwtSecret;
-    if (!secret) {
-      throw new InternalServerErrorException(
-        'AI credential encryption is not configured; set AI_CREDENTIALS_ENCRYPTION_KEY',
-      );
-    }
     if (!dedicatedSecret) {
-      this.logger.warn(
-        'AI_CREDENTIALS_ENCRYPTION_KEY is not set; using JWT_SECRET for credential encryption',
-      );
-    }
-    this.credentialsKey = createHash('sha256').update(secret, 'utf8').digest();
-    return this.credentialsKey;
-  }
-
-  private getCredentialDecryptionKeys(): Array<{ key: Buffer; usedJwtFallback: boolean }> {
-    const dedicatedSecret = this.config.get<string>('AI_CREDENTIALS_ENCRYPTION_KEY')?.trim();
-    const jwtSecret = this.config.get<string>('JWT_SECRET')?.trim();
-    if (!dedicatedSecret && !jwtSecret) {
       throw new InternalServerErrorException(
         'AI credential encryption is not configured; set AI_CREDENTIALS_ENCRYPTION_KEY',
       );
     }
-
-    const candidates: Array<{ key: Buffer; usedJwtFallback: boolean }> = [];
-    if (dedicatedSecret) {
-      candidates.push({
-        key: createHash('sha256').update(dedicatedSecret, 'utf8').digest(),
-        usedJwtFallback: false,
-      });
-    }
-    if (jwtSecret && jwtSecret !== dedicatedSecret) {
-      candidates.push({
-        key: createHash('sha256').update(jwtSecret, 'utf8').digest(),
-        usedJwtFallback: Boolean(dedicatedSecret),
-      });
-    }
-    return candidates;
+    this.credentialsKey = createHash('sha256').update(dedicatedSecret, 'utf8').digest();
+    return this.credentialsKey;
   }
 
   private emptyToNull(value?: string | null): string | null {

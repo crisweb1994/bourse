@@ -49,7 +49,6 @@ export class AnalysisChatService implements AnalysisChatPort {
 
     return {
       ...this.toSummary(analysis),
-      promptVersion: analysis.promptVersion,
       ...(analysis.evidenceSnapshot
         ? {
             snapshot: {
@@ -64,11 +63,6 @@ export class AnalysisChatService implements AnalysisChatPort {
               payload: analysis.evidenceSnapshot.payload as any,
               sourceSnapshots: analysis.evidenceSnapshot.sourceSnapshots,
               contentHash: analysis.evidenceSnapshot.contentHash,
-              metadata: {
-                provider: analysis.aiProvider,
-                model: analysis.aiModel,
-                promptVersion: analysis.promptVersion,
-              },
             },
           }
         : {}),

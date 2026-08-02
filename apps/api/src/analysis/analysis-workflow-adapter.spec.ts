@@ -171,15 +171,11 @@ describe('runAnalysisWorkflowAdapter — happy path', () => {
         return {};
       },
     };
-    (ctx.analysis as any).promptVersion = 'analysis-schema-v1';
-
     await runAnalysisWorkflowAdapter(ctx);
 
     assert.equal(persisted.where.analysisId, 'a1');
     assert.equal(persisted.create.payload, evidencePack);
     assert.equal(persisted.create.schemaVersion, 'evidence-pack-v1');
-    assert.equal(persisted.create.metadata.provider, 'fake');
-    assert.equal(persisted.create.metadata.model, 'claude-sonnet-4-test');
     assert.equal(persisted.create.contentHash.length, 64);
     assert.equal(sendCalls.at(-1)?.type, 'done');
   });

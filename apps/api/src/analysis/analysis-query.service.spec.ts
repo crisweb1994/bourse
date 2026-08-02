@@ -64,12 +64,12 @@ describe('AnalysisQueryService', () => {
     } as never);
 
     await service.getHistory('user-1', {
-      analysisType: 'DEBATE',
+      analysisType: 'FUNDAMENTAL',
       status: 'BUDGET_EXHAUSTED',
     });
 
     const findArgs = calls[0] as { where: Record<string, unknown> };
-    assert.equal(findArgs.where.analysisType, 'DEBATE');
+    assert.equal(findArgs.where.analysisType, 'FUNDAMENTAL');
     assert.equal(findArgs.where.status, 'BUDGET_EXHAUSTED');
   });
 

@@ -38,10 +38,6 @@ export class CreateChatGenerationDto {
   clientRequestId!: string;
 
   @IsOptional()
-  @IsIn(['OPEN_RESEARCH', 'ANALYSIS_GROUNDED'])
-  modeHint?: 'OPEN_RESEARCH' | 'ANALYSIS_GROUNDED';
-
-  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   @Type(() => String)

@@ -16,7 +16,6 @@ export interface AnalysisChatSummary {
 }
 
 export interface AnalysisChatContext extends AnalysisChatSummary {
-  promptVersion: string | null;
   snapshot?: {
     id: string;
     schemaVersion: string;
@@ -29,11 +28,6 @@ export interface AnalysisChatContext extends AnalysisChatSummary {
     payload: EvidencePackAny | Record<string, unknown>;
     sourceSnapshots: unknown;
     contentHash: string;
-    metadata?: {
-      provider?: string | null;
-      model?: string | null;
-      promptVersion?: string | null;
-    };
   };
   sections: Array<{
     id: string;

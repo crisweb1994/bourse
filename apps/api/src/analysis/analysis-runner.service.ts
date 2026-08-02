@@ -35,7 +35,6 @@ interface AnalysisRun {
   aiProvider?: string | null;
   aiModel?: string | null;
   aiProviderSettingId?: string | null;
-  promptVersion?: string | null;
   market: string;
   summaryMarkdown?: string | null;
   summaryJson?: unknown;
