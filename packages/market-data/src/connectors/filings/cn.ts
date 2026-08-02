@@ -170,7 +170,7 @@ export function createCnFilingsConnector(options: CnFilingsOptions = {}): Filing
         }
         const bytes = new Uint8Array(await response.arrayBuffer());
         // pdfjs may transfer/detach the supplied ArrayBuffer. Preserve the wire
-        // bytes and give the parser its own buffer so rawContent stays immutable.
+        // bytes and give the parser its own buffer before hashing and parsing.
         const parserBytes = bytes.slice();
         const contentHash = computeBinaryContentHash(bytes);
         const parsed = await (options.pdfParser ?? parsePdfText)(parserBytes);
@@ -191,7 +191,6 @@ export function createCnFilingsConnector(options: CnFilingsOptions = {}): Filing
           provider,
           documentKind: 'PDF',
           mimeType: 'application/pdf',
-          rawContent: bytes,
           text: parsed.text,
           pages: parsed.pages,
           contentHash,

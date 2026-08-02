@@ -221,7 +221,6 @@ describe('cn-filings connector — searchFilings', () => {
     });
     expect(out.warnings).toEqual([]);
     expect(out.data.text).toContain('100');
-    expect(out.data.rawContent).toEqual(bytes);
     expect(out.data.pages?.[0].page).toBe(1);
     expect(out.data.contentHash).toHaveLength(64);
   });
@@ -254,7 +253,6 @@ describe('cn-filings connector — searchFilings', () => {
     });
     expect(out.warnings).toEqual([]);
     expect(out.data.contentHash).toHaveLength(64);
-    expect(out.data.rawContent).toEqual(source);
   });
 });
 

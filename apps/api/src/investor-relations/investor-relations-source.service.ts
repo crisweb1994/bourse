@@ -57,7 +57,7 @@ export class InvestorRelationsSourceService {
       if (linked?.investorRelationsEventLinks.length) continue;
       try {
         const result = await this.marketData.getFilingDocument({ ...summary });
-        if (!result.data?.text || !result.data.rawContent || !result.data.contentHash) {
+        if (!result.data?.text || !result.data.contentHash) {
           failures.push(result.warnings[0]?.message ?? `${summary.sourceDocumentId}: unreadable body`);
           continue;
         }

@@ -229,8 +229,8 @@ export function createSecEdgarFilingsConnector(options: SecEdgarOptions): Filing
         }
         const filename = new URL(documentUrl).pathname.split('/').pop() ?? input.id;
         const sourceDocumentId = `${input.sourceGroupId ?? input.id}:${filename}`;
-        const rawContent = new TextEncoder().encode(raw);
-        const contentHash = computeBinaryContentHash(rawContent);
+        const sourceBytes = new TextEncoder().encode(raw);
+        const contentHash = computeBinaryContentHash(sourceBytes);
         const document: FilingDocument = {
           id: input.id,
           sourceDocumentId,
@@ -244,7 +244,6 @@ export function createSecEdgarFilingsConnector(options: SecEdgarOptions): Filing
           provider: PROVIDER,
           documentKind,
           mimeType: 'text/html',
-          rawContent,
           text,
           contentHash,
           retrievedAt,

@@ -56,7 +56,6 @@ export const FilingDocumentSchema = FilingSummarySchema.extend({
   text: z.string().optional(),
   markdown: z.string().optional(),
   mimeType: z.string().optional(),
-  rawContent: z.instanceof(Uint8Array).optional(),
   contentHash: z.string().optional(),
   retrievedAt: z.string().optional(),
   pages: z.array(FilingPageSchema).optional(),

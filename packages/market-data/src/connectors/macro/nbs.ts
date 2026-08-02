@@ -73,7 +73,7 @@ export function createNbsMacroConnector(options: NbsMacroSourceConfig & { defini
     async fetchMacro(input, ctx = {}) {
       const requested = new Set(input.seriesCodes ?? definitions.map((item) => item.seriesCode));
       const selected = definitions.filter((item) => requested.has(item.seriesCode) && (!input.categories || input.categories.includes(item.category)));
-      const results = await Promise.all(selected.map((definition) => fetchSeries(definition, input.limitPerSeries ?? input.lookback ?? 24, options, ctx)));
+      const results = await Promise.all(selected.map((definition) => fetchSeries(definition, input.limitPerSeries ?? 24, options, ctx)));
       const failed = results.find((result) => !result.ok);
       if (failed && !failed.ok) return macroFailure(failed.retrievedAt, failed.code, failed.message);
       const observations = results.flatMap((result) => result.ok ? result.observations : []);

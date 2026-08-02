@@ -74,29 +74,29 @@ export function createOfficialMacroConnector(
   return {
     async fetchMacro(input, ctx: ConnectorRunContext = {}): Promise<ResearchResult<MacroSnapshot>> {
       const retrievedAt = now().toISOString();
-      const lookback = Math.max(1, Math.min(100, Math.trunc(input.limitPerSeries ?? input.lookback ?? 1)));
+      const limit = Math.max(1, Math.min(100, Math.trunc(input.limitPerSeries ?? 1)));
       const fetchLike = resolveFetch(ctx, options);
       const tasks: Promise<SeriesOutcome>[] = WORLD_BANK_SERIES
         .filter((series) => requested(input, input.market, series.indicator))
-        .map((series) => fetchWorldBank(input.market, series, lookback, retrievedAt, fetchLike, timeoutMs, ctx));
+        .map((series) => fetchWorldBank(input.market, series, limit, retrievedAt, fetchLike, timeoutMs, ctx));
 
       if (input.market === 'US') {
         if (requested(input, 'US', 'policy_rate')) {
-          tasks.push(fetchFred('policy_rate', 'FEDFUNDS', 'Effective Federal Funds Rate', 'MONTHLY', lookback, retrievedAt, fetchLike, timeoutMs, ctx));
+          tasks.push(fetchFred('policy_rate', 'FEDFUNDS', 'Effective Federal Funds Rate', 'MONTHLY', limit, retrievedAt, fetchLike, timeoutMs, ctx));
         }
         if (requested(input, 'US', 'government_bond_10y')) {
-          tasks.push(fetchFred('government_bond_10y', 'DGS10', '10-Year Treasury Constant Maturity Rate', 'DAILY', lookback, retrievedAt, fetchLike, timeoutMs, ctx));
+          tasks.push(fetchFred('government_bond_10y', 'DGS10', '10-Year Treasury Constant Maturity Rate', 'DAILY', limit, retrievedAt, fetchLike, timeoutMs, ctx));
         }
         if (requested(input, 'US', 'federal_debt')) {
-          tasks.push(fetchUsTreasuryDebt(lookback, retrievedAt, fetchLike, timeoutMs, ctx));
+          tasks.push(fetchUsTreasuryDebt(limit, retrievedAt, fetchLike, timeoutMs, ctx));
         }
       }
       if (input.market === 'HK') {
         if (requested(input, 'HK', 'exchange_rate')) {
-          tasks.push(fetchHkma('exchange_rate', 'er-eeri-daily', 'usd', 'HKD per USD', 'local_currency_per_usd', lookback, retrievedAt, fetchLike, timeoutMs, ctx));
+          tasks.push(fetchHkma('exchange_rate', 'er-eeri-daily', 'usd', 'HKD per USD', 'local_currency_per_usd', limit, retrievedAt, fetchLike, timeoutMs, ctx));
         }
         if (requested(input, 'HK', 'interbank_rate_3m')) {
-          tasks.push(fetchHkma('interbank_rate_3m', 'hk-interbank-ir-daily', 'ir_3m', '3-month HIBOR', 'percent', lookback, retrievedAt, fetchLike, timeoutMs, ctx));
+          tasks.push(fetchHkma('interbank_rate_3m', 'hk-interbank-ir-daily', 'ir_3m', '3-month HIBOR', 'percent', limit, retrievedAt, fetchLike, timeoutMs, ctx));
         }
       }
 
@@ -133,7 +133,7 @@ export function createOfficialMacroConnector(
 }
 
 async function fetchUsTreasuryDebt(
-  lookback: number,
+  limit: number,
   retrievedAt: string,
   fetchLike: FetchLike,
   timeoutMs: number,
@@ -142,7 +142,7 @@ async function fetchUsTreasuryDebt(
   const seriesId = 'debt_to_penny:tot_pub_debt_out_amt';
   const query = new URLSearchParams({
     sort: '-record_date',
-    'page[size]': String(lookback),
+    'page[size]': String(limit),
     format: 'json',
   });
   try {
@@ -168,7 +168,7 @@ async function fetchUsTreasuryDebt(
           provider: 'us-treasury',
           seriesId,
         }];
-      }).sort((a, b) => b.period.localeCompare(a.period)).slice(0, lookback);
+      }).sort((a, b) => b.period.localeCompare(a.period)).slice(0, limit);
       if (observations.length === 0) {
         return failed('us-treasury', seriesId, 'no usable observations', 'PARTIAL_DATA');
       }
@@ -199,13 +199,13 @@ export interface OfficialMacroOptions {
 async function fetchWorldBank(
   market: MacroMarket,
   series: WorldBankSpec,
-  lookback: number,
+  limit: number,
   retrievedAt: string,
   fetchLike: FetchLike,
   timeoutMs: number,
   ctx: ConnectorRunContext,
 ): Promise<SeriesOutcome> {
-  const url = `${WORLD_BANK_BASE}/${market}/indicator/${series.id}?format=json&per_page=${Math.max(5, lookback * 3)}`;
+  const url = `${WORLD_BANK_BASE}/${market}/indicator/${series.id}?format=json&per_page=${Math.max(5, limit * 3)}`;
   try {
     return await withTimeout(ctx, timeoutMs, async (signal) => {
       const response = await fetchLike(url, { headers: { Accept: 'application/json' }, signal });
@@ -229,7 +229,7 @@ async function fetchWorldBank(
           }];
         })
         .sort((a, b) => b.period.localeCompare(a.period))
-        .slice(0, lookback);
+        .slice(0, limit);
       if (observations.length === 0) return failed('world-bank', series.id, 'no usable observations', 'PARTIAL_DATA');
       return {
         observations,
@@ -254,7 +254,7 @@ async function fetchFred(
   id: string,
   title: string,
   frequency: 'DAILY' | 'MONTHLY',
-  lookback: number,
+  limit: number,
   retrievedAt: string,
   fetchLike: FetchLike,
   timeoutMs: number,
@@ -274,7 +274,7 @@ async function fetchFred(
         const value = finite(line.slice(comma + 1).replaceAll('"', '').trim());
         if (value === null || !/^\d{4}-\d{2}-\d{2}$/.test(period)) return [];
         return [{ indicator, value, unit: 'percent', period, frequency, provider: 'fred', seriesId: id }];
-      }).sort((a, b) => b.period.localeCompare(a.period)).slice(0, lookback);
+      }).sort((a, b) => b.period.localeCompare(a.period)).slice(0, limit);
       if (observations.length === 0) return failed('fred', id, 'no usable observations', 'PARTIAL_DATA');
       return {
         observations,
@@ -297,7 +297,7 @@ async function fetchHkma(
   field: 'usd' | 'ir_3m',
   title: string,
   unit: 'percent' | 'local_currency_per_usd',
-  lookback: number,
+  limit: number,
   retrievedAt: string,
   fetchLike: FetchLike,
   timeoutMs: number,
@@ -323,7 +323,7 @@ async function fetchHkma(
         const value = finite(row[field]);
         if (typeof period !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(period) || value === null) return [];
         return [{ indicator, value, unit, period, frequency: 'DAILY', provider: 'hkma', seriesId: endpoint }];
-      }).sort((a, b) => b.period.localeCompare(a.period)).slice(0, lookback);
+      }).sort((a, b) => b.period.localeCompare(a.period)).slice(0, limit);
       if (observations.length === 0) return failed('hkma', endpoint, 'no usable observations', 'PARTIAL_DATA');
       return {
         observations,

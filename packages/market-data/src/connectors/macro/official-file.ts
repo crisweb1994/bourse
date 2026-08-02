@@ -49,7 +49,7 @@ export function createOfficialMacroFileConnector(source: OfficialMacroFileSource
     async fetchMacro(input, ctx = {}) {
       const requested = new Set(input.seriesCodes ?? source.series.map((item) => item.seriesCode));
       const definitions = source.series.filter((item) => requested.has(item.seriesCode) && (!input.categories || input.categories.includes(item.category)));
-      const results = await Promise.all(definitions.map((definition) => fetchFileSeries(source, definition, input.limitPerSeries ?? input.lookback ?? 24, ctx)));
+      const results = await Promise.all(definitions.map((definition) => fetchFileSeries(source, definition, input.limitPerSeries ?? 24, ctx)));
       const failed = results.find((result) => !result.ok);
       if (failed && !failed.ok) return failure(source.id, failed.retrievedAt, failed.message);
       const observations = results.flatMap((result) => result.ok ? result.observations : []);

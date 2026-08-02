@@ -24,8 +24,7 @@ export class FilingStoreService {
   async persist(stock: Stock, summary: FilingSummary, document: FilingDocument) {
     const normalizedText = document.text;
     const contentHash = document.contentHash;
-    const rawContent = document.rawContent;
-    if (!normalizedText || !contentHash || !rawContent) throw new FilingStoreError('BODY_UNREADABLE');
+    if (!normalizedText || !contentHash) throw new FilingStoreError('BODY_UNREADABLE');
     const provider = document.provider || summary.provider;
     const sourceDocumentId = document.sourceDocumentId;
     const existing = await this.prisma.filing.findUnique({
@@ -47,7 +46,6 @@ export class FilingStoreService {
         mimeType: document.mimeType ?? 'text/plain',
         language: document.language ?? summary.language,
         contentHash,
-        rawContent: Buffer.from(rawContent),
       },
     });
     const derivationContentHash = computeContentHash({ text: normalizedText });

@@ -63,8 +63,6 @@ export interface MacroInput {
   from?: string;
   to?: string;
   limitPerSeries?: number;
-  /** @deprecated Use limitPerSeries. Kept for one release during migration. */
-  lookback?: number;
 }
 
 export interface ProviderMacroPort {

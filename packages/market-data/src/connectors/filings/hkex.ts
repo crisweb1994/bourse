@@ -127,7 +127,6 @@ export function createHkexFilingsConnector(options: HkexFilingsOptions = {}): Fi
           language: input.language ?? 'unknown',
           documentKind: mimeType === 'application/pdf' ? 'PDF' : 'PRIMARY',
           mimeType,
-          rawContent: bytes,
           text: parsed.text,
           pages: parsed.pages,
           contentHash: computeBinaryContentHash(bytes),
