@@ -19,7 +19,7 @@ export const SCHEMA_VERSION = 'agent-result-v1' as const;
 export const SchemaVersion = z.literal(SCHEMA_VERSION);
 export type SchemaVersion = z.infer<typeof SchemaVersion>;
 
-// ===== Baseline structuredJson (mirrors shared-types BaseSectionData) =====
+// ===== Baseline structuredJson =====
 
 export const SectionConclusion = z.object({
   signal: Signal,

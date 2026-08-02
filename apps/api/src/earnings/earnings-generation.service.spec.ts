@@ -6,7 +6,7 @@ import {
   detectedRetryAt,
   EarningsGenerationService,
 } from './earnings-generation.service';
-import type { PreparedEarningsSource, StructuredFallbackSource } from './earnings-source.service';
+import type { PreparedEarningsSource } from './earnings-source.service';
 import { EarningsSourceError } from './earnings-source.service';
 
 const filingSource: PreparedEarningsSource = {
@@ -37,25 +37,6 @@ test('earnings generation idempotency advances when the derivation changes', () 
     buildEarningsGenerationIdempotencyKey('stock-1', {
       ...filingSource,
       derivationId: 'derivation-v2',
-    }),
-  );
-});
-
-test('structured fallback reasons have separate idempotency identities', () => {
-  const fallback: StructuredFallbackSource = {
-    kind: 'structuredFallback',
-    provider: 'sec-edgar',
-    sourceDocumentId: 'accession:release.htm',
-    formType: '8-K',
-    sourceUrl: 'https://example.com/release.htm',
-    publishedAt: '2026-01-01T00:00:00.000Z',
-    reason: 'LLM_DISABLED',
-  };
-  assert.notEqual(
-    buildEarningsGenerationIdempotencyKey('stock-1', fallback),
-    buildEarningsGenerationIdempotencyKey('stock-1', {
-      ...fallback,
-      reason: 'PROVIDER_UNAVAILABLE',
     }),
   );
 });

@@ -100,16 +100,9 @@ export class EarningsGenerationService {
     stock: Stock,
     options?: EarningsSourceOptions,
   ): Promise<EarningsRunSource> {
-    try {
-      return options
-        ? await this.sources.discoverAndIngest(stock, options)
-        : await this.prepareSingleFlight(stock);
-    } catch (error) {
-      if (error instanceof EarningsSourceError && error.fallbackSource) {
-        return error.fallbackSource;
-      }
-      throw error;
-    }
+    return options
+      ? this.sources.discoverAndIngest(stock, options)
+      : this.prepareSingleFlight(stock);
   }
 
   private async queueRun(
@@ -121,23 +114,21 @@ export class EarningsGenerationService {
     const stockId = stock.id;
 
     const idempotencyKey = buildEarningsGenerationIdempotencyKey(stockId, source);
-    const sourceDescriptor = source.kind === 'filing'
-      ? {
-          kind: source.kind,
-          filingId: source.filingId,
-          derivationId: source.derivationId,
-          provider: source.provider,
-          sourceDocumentId: source.sourceDocumentId,
-          sourceGroupId: source.sourceGroupId,
-          formType: source.formType,
-          title: source.title,
-          sourceUrl: source.sourceUrl,
-          publishedAt: source.publishedAt,
-          ...(source.expectedPeriodEndOn ? { expectedPeriodEndOn: source.expectedPeriodEndOn } : {}),
-          documentKind: source.documentKind,
-          language: source.language,
-        }
-      : source;
+    const sourceDescriptor = {
+      kind: source.kind,
+      filingId: source.filingId,
+      derivationId: source.derivationId,
+      provider: source.provider,
+      sourceDocumentId: source.sourceDocumentId,
+      sourceGroupId: source.sourceGroupId,
+      formType: source.formType,
+      title: source.title,
+      sourceUrl: source.sourceUrl,
+      publishedAt: source.publishedAt,
+      ...(source.expectedPeriodEndOn ? { expectedPeriodEndOn: source.expectedPeriodEndOn } : {}),
+      documentKind: source.documentKind,
+      language: source.language,
+    };
 
     let run;
     try {
@@ -253,9 +244,7 @@ export function buildEarningsGenerationIdempotencyKey(
   stockId: string,
   source: EarningsRunSource,
 ): string {
-  const sourceVersion = source.kind === 'filing'
-    ? `${source.derivationId}:${source.contentHash}`
-    : `${source.reason}:${source.sourceDocumentId}`;
+  const sourceVersion = `${source.derivationId}:${source.contentHash}`;
   return computeContentHash({
     text: JSON.stringify({
       pipelineVersion: 'earnings-pipeline-v4',

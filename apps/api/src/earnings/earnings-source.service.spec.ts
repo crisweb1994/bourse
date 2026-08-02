@@ -38,7 +38,6 @@ test('EarningsSourceService skips a non-earnings 8-K and persists EX-99.1 once',
         sourceDocumentId: `${input.id}:${isEarnings ? 'earnings.htm' : 'main.htm'}`,
         documentKind: isEarnings ? 'EARNINGS_RELEASE' : 'PRIMARY',
         text: isEarnings ? 'Revenue was 10 billion.' : 'Unrelated current report.',
-        rawContent: new TextEncoder().encode('raw'),
         contentHash: isEarnings ? 'b'.repeat(64) : 'a'.repeat(64),
         retrievedAt: '2026-07-20T00:00:00.000Z',
       });
@@ -133,7 +132,6 @@ test('EarningsSourceService skips a non-earnings 6-K and accepts an earnings 6-K
         sourceDocumentId: `${input.id}:main.htm`,
         documentKind: earnings ? 'EARNINGS_RELEASE' as const : 'OTHER' as const,
         text: earnings ? 'Financial results. Revenue was $10 billion. Net income was $2 billion.' : 'Corporate update.',
-        rawContent: new TextEncoder().encode('raw'),
         contentHash: earnings ? 'f'.repeat(64) : 'e'.repeat(64),
       });
     },
@@ -152,49 +150,6 @@ test('EarningsSourceService skips a non-earnings 6-K and accepts an earnings 6-K
   assert.deepEqual(fetched, ['ordinary-6k', 'results-6k']);
 });
 
-test('EarningsSourceService preserves filing metadata for structured fallback', async () => {
-  const port: FilingPort = {
-    async searchFilings() {
-      return envelope([summary('accession-unreadable', 'https://www.sec.gov/Archives/unreadable/main.htm')]);
-    },
-    async getFiling(input) {
-      return envelope({
-        ...summary(input.id, input.filingUrl ?? ''),
-        sourceDocumentId: `${input.id}:release.pdf`,
-        documentKind: 'EARNINGS_RELEASE' as const,
-        text: undefined,
-        rawContent: new Uint8Array([1, 2, 3]),
-        contentHash: 'c'.repeat(64),
-        retrievedAt: '2026-07-20T00:00:00.000Z',
-      });
-    },
-  };
-  const prisma = {
-    filing: { findFirst: async () => null },
-  } as any;
-  const service = new EarningsSourceService(prisma, clientFromPort(port), new FilingStoreService(prisma));
-
-  await assert.rejects(
-    () => service.discoverAndIngest(stock),
-    (error: unknown) => {
-      assert.ok(error instanceof EarningsSourceError);
-      assert.equal(error.code, 'BODY_UNREADABLE');
-      assert.deepEqual(error.fallbackSource, {
-        kind: 'structuredFallback',
-        provider: 'sec-edgar',
-        sourceDocumentId: 'accession-unreadable:release.pdf',
-        sourceGroupId: 'accession-unreadable',
-        formType: '8-K',
-        title: 'Current report',
-        sourceUrl: 'https://www.sec.gov/Archives/unreadable/main.htm',
-        publishedAt: '2026-07-20T00:00:00.000Z',
-        reason: 'BODY_UNREADABLE',
-      });
-      return true;
-    },
-  );
-});
-
 test('EarningsSourceService advances from an already-linked filing to the next supplement', async () => {
   const summaries = [
     { ...summary('quarterly-linked', 'https://www.sec.gov/Archives/q/10q.htm'), formType: '10-Q' },
@@ -210,7 +165,6 @@ test('EarningsSourceService advances from an already-linked filing to the next s
         sourceDocumentId: `${input.id}:earnings.htm`,
         documentKind: 'EARNINGS_RELEASE' as const,
         text: 'Revenue was 10 billion.',
-        rawContent: new TextEncoder().encode('raw'),
         contentHash: 'd'.repeat(64),
       });
     },
@@ -296,7 +250,6 @@ test('EarningsSourceService does not fetch an excluded source group', async () =
       return envelope({
         ...summaries.find((item) => item.sourceDocumentId === input.sourceDocumentId)!,
         text: undefined,
-        rawContent: new Uint8Array([1]),
         contentHash: 'e'.repeat(64),
       });
     },

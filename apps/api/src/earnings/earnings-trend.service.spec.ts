@@ -81,6 +81,7 @@ function card(
             delta: '0',
           },
         }],
+        dataStatus: { numeric: 'ready', narrative: 'unavailable', guidance: 'none_reported' },
         managementClaims: [],
         omittedFactCount: 0,
         statusSummary: { total: 1, reconciled: 1, pending: 0, conflicted: 0, structuredOnly: 0 },

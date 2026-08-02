@@ -8,7 +8,6 @@ export type {
   ToolCachePort,
 } from './types';
 export {
-  webSearch,
   WebSearchExecutor,
   buildAdapterFromConfig,
   buildAdapterFromEnv,

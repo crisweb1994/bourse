@@ -1,14 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  buildEarningsExtractionDerivationKey,
   decideFilingRelation,
   guidanceSourceSupportsCandidate,
   isUnaudited,
   mergeEarningsCardPayload,
   normalizeManagementClaimCandidate,
-  structuredFallbackPeriodError,
-} from './earnings-runner.service';
+} from './earnings-common';
 import type { EarningsCardPayload } from '@bourse/analysis';
 
 const span = (filingId: string, quote: string) => ({
@@ -67,6 +65,11 @@ function payload(
       checkStatus: { status: 'passed', checks: ['source_anchor'] },
       reconcileStatus: { status: 'pending' },
     }],
+    dataStatus: {
+      numeric: 'ready',
+      narrative: 'ready',
+      guidance: 'none_reported',
+    },
     supplementalNonGaap: [],
     managementClaims: [],
     omittedFactCount: 0,
@@ -153,31 +156,6 @@ test('correction replaces the affected metric while retaining an immutable sourc
   assert.equal(merged.facts[0]?.value.kind, 'scalar');
   assert.equal(merged.facts[0]?.value.kind === 'scalar' ? merged.facts[0].value.value : '', '98');
   assert.equal(merged.supportingFilings[0]?.filingId, 'release-1');
-});
-
-test('extraction derivations cannot cross filing ownership boundaries', () => {
-  const input = {
-    filingId: 'filing-1',
-    parserDerivationId: 'parser-1',
-    sourceHash: 'a'.repeat(64),
-    model: 'gpt-5.4',
-  };
-  assert.notEqual(
-    buildEarningsExtractionDerivationKey(input),
-    buildEarningsExtractionDerivationKey({ ...input, filingId: 'filing-2' }),
-  );
-});
-
-test('structured fallback requires the filing and structured periods to match', () => {
-  assert.equal(structuredFallbackPeriodError('2026-03-31', '2026-03-31'), null);
-  assert.equal(
-    structuredFallbackPeriodError(undefined, '2026-03-31')?.code,
-    'STRUCTURED_PERIOD_UNCONFIRMED',
-  );
-  assert.equal(
-    structuredFallbackPeriodError('2026-06-30', '2026-03-31')?.code,
-    'STRUCTURED_PERIOD_MISMATCH',
-  );
 });
 
 test('unaudited label requires explicit filing metadata', () => {

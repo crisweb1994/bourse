@@ -26,11 +26,6 @@ export {
 } from './executor';
 export { HallucinationFilter } from './hallucination-filter';
 export { createSearxngAdapter } from './adapters/searxng';
-// Re-export the provider-internal ToolDescriptor (legacy file path
-// `tools/web-search.ts`, now `tools/web-search/provider-internal-descriptor.ts`)
-// so `tools/index.ts` keeps its `from './web-search'` import unchanged.
-export { webSearch } from './provider-internal-descriptor';
-
 /**
  * Function-tool schema injected into chat.completions requests when an
  * executor is wired. OpenAI / DeepSeek / Qwen / Kimi / 文心 all accept

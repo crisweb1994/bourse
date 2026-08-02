@@ -5,7 +5,6 @@ export * from './structured-output';
 export * from './dimension-prompts';
 export * from './evidence-gate';
 export * from './evidence-pack-builder';
-export * from './fallback-classifier';
 export * from './judge';
 export * from './cross-dim-extract';
 export * from './validate-cross-dim';

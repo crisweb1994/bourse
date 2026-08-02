@@ -10,8 +10,6 @@ import { EarningsV2RunnerService } from './earnings-v2-runner.service';
 import { StructuredSelectionService } from './structured-selection.service';
 import { EarningsSourceService } from './earnings-source.service';
 import { FilingDetectionScheduler } from './filing-detection.scheduler';
-import { EarningsConsensusService } from './earnings-consensus.service';
-import { EarningsConsensusScheduler } from './earnings-consensus.scheduler';
 import { EarningsNoticeService } from './earnings-notice.service';
 import { EarningsSectionsService } from './earnings-sections.service';
 import { EarningsTrendService } from './earnings-trend.service';
@@ -22,8 +20,6 @@ import { FilingsModule } from '../filings/filings.module';
   controllers: [EarningsController],
   providers: [
     FilingDetectionScheduler,
-    EarningsConsensusService,
-    EarningsConsensusScheduler,
     EarningsNoticeService,
     EarningsSectionsService,
     EarningsSourceService,
@@ -34,6 +30,6 @@ import { FilingsModule } from '../filings/filings.module';
     EarningsQueryService,
     EarningsTrendService,
   ],
-  exports: [EarningsQueryService, EarningsConsensusService, EarningsSectionsService],
+  exports: [EarningsQueryService, EarningsSectionsService],
 })
 export class EarningsModule {}

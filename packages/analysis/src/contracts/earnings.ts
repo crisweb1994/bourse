@@ -189,43 +189,6 @@ export const MetricFactSchema = z
   });
 export type MetricFact = z.infer<typeof MetricFactSchema>;
 
-/** Strict LLM output before source anchoring and deterministic checks. */
-export const MetricFactCandidateSchema = z
-  .object({
-    metricCode: EarningsMetricCodeSchema,
-    value: MetricValueSchema,
-    unit: EarningsUnitSchema,
-    currency: z.string().length(3).optional(),
-    scale: z.number().int().positive().default(1),
-    periodStartOn: IsoDateSchema.optional(),
-    periodEndOn: IsoDateSchema,
-    periodKind: PeriodKindSchema,
-    accumulation: AccumulationSchema,
-    accountingBasis: z.string().min(1),
-    consolidationScope: ConsolidationScopeSchema,
-    claimedYoYPct: DecimalStringSchema.optional(),
-    sourceQuote: z.string().min(1),
-    sourcePage: z.number().int().positive().optional(),
-    sourceSection: z.string().min(1).optional(),
-  })
-  .superRefine((fact, ctx) => {
-    if ((fact.unit === 'currency' || fact.unit === 'per_share') && !fact.currency) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['currency'],
-        message: 'currency is required for currency and per-share metrics',
-      });
-    }
-    if (fact.periodKind === 'duration' && !fact.periodStartOn) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['periodStartOn'],
-        message: 'periodStartOn is required for duration metrics',
-      });
-    }
-  });
-export type MetricFactCandidate = z.infer<typeof MetricFactCandidateSchema>;
-
 export const EarningsGuidanceCandidateSchema = z.object({
   metricCode: EarningsMetricCodeSchema,
   value: MetricRangeValueSchema,
@@ -298,8 +261,8 @@ export type SupplementalFactCandidate = z.infer<typeof SupplementalFactCandidate
 /**
  * Narrative-only 抽取 schema（structured-first）。
  *
- * 与 `EarningsExtractionSchema` 的关键差异：**不包含 canonical core actual
- * `facts`**——从结构上阻止模型写入营收/归母净利润等主字段（第一道边界）。
+ * 不包含 canonical core actual `facts`，从结构上阻止模型写入营收/归母净利润
+ * 等主字段（第一道边界）。
  * LLM 的 `eventIdentityHints` 只用于辅助诊断，不能单独创建 numeric card。
  */
 export const EarningsNarrativeExtractionSchema = z.object({
@@ -312,20 +275,6 @@ export const EarningsNarrativeExtractionSchema = z.object({
   supplementalNonGaapFacts: z.array(SupplementalFactCandidateSchema).default([]),
 });
 export type EarningsNarrativeExtraction = z.infer<typeof EarningsNarrativeExtractionSchema>;
-
-export const EarningsExtractionSchema = z.object({
-  periodEndOn: IsoDateSchema,
-  periodType: z.enum(['Q1', 'Q2', 'Q3', 'H1', 'FY']),
-  fiscalYear: z.number().int(),
-  fiscalQuarter: z.number().int().min(1).max(4).optional(),
-  reportingScope: ConsolidationScopeSchema,
-  // Item-level validation belongs to the consistency/persistence stage. A
-  // malformed candidate must be omitted, not fail the whole filing envelope.
-  facts: z.array(z.unknown()),
-  guidance: z.array(z.unknown()).default([]),
-  managementClaims: z.array(z.unknown()).default([]),
-});
-export type EarningsExtraction = z.infer<typeof EarningsExtractionSchema>;
 
 export const EarningsRelationTypeSchema = z.enum([
   'SUPPLEMENTS',
@@ -370,8 +319,8 @@ export type EarningsDataStatus = z.infer<typeof EarningsDataStatusSchema>;
 
 export const EarningsFilingDescriptorSchema = z
   .object({
-    sourceKind: z.enum(['filing', 'structured_fallback']).default('filing'),
-    filingId: z.string().min(1).optional(),
+    sourceKind: z.literal('filing'),
+    filingId: z.string().min(1),
     formType: z.string().min(1),
     title: z.string().optional(),
     sourceUrl: z.string().url(),
@@ -380,15 +329,6 @@ export const EarningsFilingDescriptorSchema = z
     language: z.enum(['zh-CN', 'zh-HK', 'en-HK', 'en-US', 'unknown']).optional(),
     unaudited: z.boolean(),
     relationType: EarningsRelationTypeSchema.optional(),
-  })
-  .superRefine((filing, ctx) => {
-    if (filing.sourceKind === 'filing' && !filing.filingId) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['filingId'],
-        message: 'filingId is required for filing-backed cards',
-      });
-    }
   });
 export type EarningsFilingDescriptor = z.infer<typeof EarningsFilingDescriptorSchema>;
 
@@ -412,8 +352,7 @@ export const EarningsCardPayloadSchema = z.object({
   filing: EarningsFilingDescriptorSchema,
   supportingFilings: z.array(EarningsFilingDescriptorSchema).default([]),
   facts: z.array(MetricFactSchema),
-  // structured-first 原子切换后必填；旧 LLM 卡片兼容期可缺省。
-  dataStatus: EarningsDataStatusSchema.optional(),
+  dataStatus: EarningsDataStatusSchema,
   // 非 GAAP 补充指标独立集合：不映射 canonical metricCode，不混入 GAAP 区域。
   supplementalNonGaap: z
     .array(

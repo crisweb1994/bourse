@@ -21,6 +21,7 @@ test('earnings mapper preserves both values for a reconciliation conflict', () =
       reportingScope: 'consolidated',
     },
     filing: {
+      sourceKind: 'filing',
       filingId: 'filing-1',
       formType: 'preliminary',
       sourceUrl: 'https://example.com/filing.pdf',
@@ -61,6 +62,11 @@ test('earnings mapper preserves both values for a reconciliation conflict', () =
         delta: '200000000',
       },
     }],
+    dataStatus: {
+      numeric: 'ready',
+      narrative: 'unavailable',
+      guidance: 'none_reported',
+    },
     managementClaims: [],
     omittedFactCount: 0,
     statusSummary: { total: 1, reconciled: 0, pending: 0, conflicted: 1, structuredOnly: 0 },

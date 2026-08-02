@@ -25,18 +25,3 @@ test('buildNarrativeDerivationKey changes with model or source hash', () => {
   assert.notEqual(changedModel, buildNarrativeDerivationKey(base));
   assert.notEqual(changedHash, buildNarrativeDerivationKey(base));
 });
-
-test('buildNarrativeDerivationKey is distinct from the legacy extraction key', () => {
-  // 使用相同的输入结构但不同 schema/prompt 版本（legacy key 由 runner 生成）。
-  const legacy = require('crypto')
-    .createHash('sha256')
-    .update(
-      JSON.stringify({
-        ...base,
-        promptVersion: 'earnings-extraction-v3',
-        schemaVersion: 'earnings-card-v2',
-      }),
-    )
-    .digest('hex');
-  assert.notEqual(buildNarrativeDerivationKey(base), legacy);
-});

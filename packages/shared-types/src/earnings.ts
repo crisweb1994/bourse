@@ -117,7 +117,7 @@ export interface EarningsCardDto {
   fiscalQuarter?: number;
   reportingScope: 'consolidated' | 'parent' | 'unknown';
   filing: {
-    filingId?: string;
+    filingId: string;
     formType: string;
     title?: string;
     sourceUrl: string;
@@ -127,7 +127,7 @@ export interface EarningsCardDto {
     unaudited: boolean;
   };
   supportingFilings?: Array<{
-    filingId?: string;
+    filingId: string;
     formType: string;
     title?: string;
     sourceUrl: string;
@@ -140,7 +140,7 @@ export interface EarningsCardDto {
   revisionStatus: 'PARTIAL' | 'COMPLETE';
   facts: EarningsMetricFactDto[];
   managementClaims: EarningsManagementClaimDto[];
-  dataStatus?: EarningsDataStatusDto;
+  dataStatus: EarningsDataStatusDto;
   supplementalNonGaap?: EarningsSupplementalNonGaapDto[];
   omittedFactCount: number;
   statusSummary: {

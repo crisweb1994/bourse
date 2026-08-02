@@ -27,7 +27,7 @@ import {
   normalizeManagementClaimCandidate,
   parsePages,
   parseSourceDescriptor,
-} from './earnings-runner.service';
+} from './earnings-common';
 import type { PreparedEarningsSource } from './earnings-source.service';
 import { EarningsNoticeService } from './earnings-notice.service';
 import { StructuredSelectionService } from './structured-selection.service';

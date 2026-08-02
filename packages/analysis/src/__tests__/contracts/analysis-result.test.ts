@@ -1,4 +1,3 @@
-import type { BaseSectionData } from '@bourse/shared-types';
 import { describe, expect, it } from 'vitest';
 import {
   AnalysisResult,
@@ -213,15 +212,5 @@ describe('contracts/AnalysisResult — union structuredJson + nullable', () => {
       structuredJson: null,
     };
     expect(AnalysisResult.parse(failedResult).structuredJson).toBeNull();
-  });
-});
-
-describe('type compatibility with shared-types BaseSectionData', () => {
-  it('StructuredJson is structurally a superset of BaseSectionData', () => {
-    // Type-level check: passing a parsed StructuredJson where BaseSectionData
-    // is expected must compile. Forces baseline drift to be caught at build.
-    const parsed = StructuredJson.parse(validBaselineJson);
-    const _asBase: BaseSectionData = parsed;
-    expect(_asBase.dataAsOf).toBe('2026-01-15');
   });
 });

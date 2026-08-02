@@ -52,13 +52,7 @@ export function isActiveAnalysisType(
   return ACTIVE_ANALYSIS_TYPE_SET.has(value);
 }
 
-export const LEGACY_ANALYSIS_TYPES = ['DEBATE'] as const;
-export type LegacyAnalysisType = (typeof LEGACY_ANALYSIS_TYPES)[number];
-
-export const ALL_ANALYSIS_TYPES = [
-  ...ACTIVE_ANALYSIS_TYPES,
-  ...LEGACY_ANALYSIS_TYPES,
-] as const;
+export const ALL_ANALYSIS_TYPES = ACTIVE_ANALYSIS_TYPES;
 
 export const AnalysisType = enumObject(ALL_ANALYSIS_TYPES);
 export type AnalysisType = (typeof ALL_ANALYSIS_TYPES)[number];
@@ -80,7 +74,6 @@ export const ANALYSIS_TYPE_LABELS: Record<AnalysisType, string> = {
   SCENARIO: '情景',
   PORTFOLIO: '组合适配',
   COMPREHENSIVE: '综合分析',
-  DEBATE: 'AI 多空合议',
 };
 
 export const AnalysisStatus = {
@@ -169,17 +162,6 @@ export const InvestmentHorizon = {
 export type InvestmentHorizon =
   (typeof InvestmentHorizon)[keyof typeof InvestmentHorizon];
 
-export const PreferredStyle = {
-  VALUE: 'VALUE',
-  GROWTH: 'GROWTH',
-  DIVIDEND: 'DIVIDEND',
-  MOMENTUM: 'MOMENTUM',
-  BALANCED: 'BALANCED',
-} as const;
-
-export type PreferredStyle =
-  (typeof PreferredStyle)[keyof typeof PreferredStyle];
-
 // Markets + Daily Brief enums (mirror Prisma enums; shared-types stays
 // Prisma-free so apps/web can consume without @prisma/client).
 export const Market = {
@@ -218,66 +200,6 @@ export const ChannelType = {
 
 export type ChannelType = (typeof ChannelType)[keyof typeof ChannelType];
 
-// ===== Structured JSON Types =====
-
-export type CitationQualityTier = 'A' | 'B' | 'C' | 'D' | 'E';
-
-export interface Citation {
-  title: string;
-  url: string;
-  sourceType: 'NEWS' | 'FILING' | 'RESEARCH' | 'DATA_PROVIDER' | 'SOCIAL' | 'OTHER';
-  retrievedAt: string;
-  qualityTier?: CitationQualityTier;
-}
-
-export interface Evidence {
-  claim: string;
-  citations: Citation[];
-}
-
-export interface DataAvailability {
-  missingFields: string[];
-  reason: string;
-}
-
-export interface SectionConclusion {
-  signal: Signal;
-  confidence: Confidence;
-  oneLiner: string;
-  evidence: Evidence[];
-}
-
-export interface BaseSectionData {
-  conclusion: SectionConclusion;
-  evidence: Evidence[];
-  dataAvailability: DataAvailability;
-  dataAsOf: string;
-  disclaimer: string;
-}
-
-// ===== Comprehensive Summary =====
-
-export interface ComprehensiveSummary {
-  overallSignal: Signal;
-  overallConfidence: Confidence;
-  oneLiner: string;
-  bullCase: string[];
-  bearCase: string[];
-  biggestRisk: string;
-  valuationConclusion: string;
-  suitableInvestorType: string;
-  watchlistWorthy: boolean;
-  sectionSignals: Array<{
-    type: SectionType;
-    signal: Signal;
-    confidence: Confidence;
-    oneLiner: string;
-  }>;
-  evidence: Evidence[];
-  dataAsOf: string;
-  disclaimer: string;
-}
-
 // ===== API Types =====
 
 export interface UserDto {
@@ -286,15 +208,6 @@ export interface UserDto {
   email: string | null;
   name: string;
   avatarUrl: string | null;
-}
-
-export interface InvestorProfileDto {
-  riskTolerance: RiskTolerance;
-  investmentHorizon: InvestmentHorizon;
-  preferredStyle: PreferredStyle;
-  holdingsSummary?: string | null;
-  maxDrawdown?: number | null;
-  targetReturn?: number | null;
 }
 
 export interface StockDto {

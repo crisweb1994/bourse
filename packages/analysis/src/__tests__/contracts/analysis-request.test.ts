@@ -52,7 +52,7 @@ describe('contracts/AnalysisRequest', () => {
   });
 
   it('rejects legacy analysis types for new run requests', () => {
-    expect(() => AnalysisRequest.parse({ ...minimal, type: 'DEBATE' })).toThrow();
+    expect(() => AnalysisRequest.parse({ ...minimal, type: 'UNSUPPORTED' })).toThrow();
   });
 });
 

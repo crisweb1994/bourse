@@ -27,6 +27,11 @@ function basePayload(overrides: Partial<EarningsCardPayload> = {}): EarningsCard
     },
     supportingFilings: [],
     facts: [],
+    dataStatus: {
+      numeric: 'ready',
+      narrative: 'unavailable',
+      guidance: 'none_reported',
+    },
     managementClaims: [],
     omittedFactCount: 0,
     statusSummary: {
@@ -61,8 +66,12 @@ describe('earnings dataStatus contract', () => {
     ).toThrow();
   });
 
-  it('is optional on legacy payloads and accepted on structured-first payloads', () => {
-    expect(basePayload().dataStatus).toBeUndefined();
+  it('requires dataStatus on every card payload', () => {
+    expect(basePayload().dataStatus).toEqual({
+      numeric: 'ready',
+      narrative: 'unavailable',
+      guidance: 'none_reported',
+    });
     const structured = basePayload({
       dataStatus: {
         numeric: 'ready',

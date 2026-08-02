@@ -14,10 +14,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "vendor:fixture": "tsx src/evals/vendor-fixture.ts",
-    "eval:judge": "vitest run src/evals/__tests__/judge.test.ts",
-    "earnings:vendor": "tsx src/evals/earnings/vendor-filing.ts",
-    "earnings:extract": "tsx src/evals/earnings/extract-vendored.ts",
-    "earnings:eval": "tsx src/evals/earnings/evaluate.ts"
+    "eval:judge": "vitest run src/evals/__tests__/judge.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.0",

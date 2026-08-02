@@ -30,21 +30,7 @@ export interface PreparedEarningsSource {
   language?: FilingDocument['language'];
 }
 
-export interface StructuredFallbackSource {
-  kind: 'structuredFallback';
-  provider: string;
-  sourceDocumentId: string;
-  sourceGroupId?: string;
-  formType: string;
-  title?: string;
-  sourceUrl: string;
-  publishedAt: string;
-  expectedPeriodEndOn?: string;
-  language?: FilingDocument['language'];
-  reason: 'BODY_UNREADABLE' | 'LLM_DISABLED' | 'PROVIDER_UNAVAILABLE';
-}
-
-export type EarningsRunSource = PreparedEarningsSource | StructuredFallbackSource;
+export type EarningsRunSource = PreparedEarningsSource;
 
 export interface EarningsSourceOptions {
   excludedSourceGroupIds?: readonly string[];
@@ -99,7 +85,6 @@ export class EarningsSourceService {
     }
 
     const failures: string[] = [];
-    let fallbackSource: StructuredFallbackSource | undefined;
     for (const summary of candidates) {
       const alreadyLinked = await this.prisma.filing.findFirst({
         where: {
@@ -113,7 +98,6 @@ export class EarningsSourceService {
         select: { id: true },
       });
       if (alreadyLinked) continue;
-      fallbackSource ??= fallbackFromSummary(summary);
       let result;
       try {
         result = await this.marketData.getFilingDocument({ ...summary });
@@ -126,19 +110,7 @@ export class EarningsSourceService {
         failures.push(result.warnings[0]?.message ?? `${summary.id}: no document`);
         continue;
       }
-      fallbackSource = {
-        kind: 'structuredFallback',
-        provider: document.provider || summary.provider,
-        sourceDocumentId: document.sourceDocumentId || summary.sourceDocumentId,
-        sourceGroupId: document.sourceGroupId ?? summary.sourceGroupId,
-        formType: summary.formType,
-        title: summary.title,
-        sourceUrl: document.filingUrl || summary.filingUrl,
-        publishedAt: parsePublishedAt(summary.filingDate).toISOString(),
-        ...(summary.periodEndOn ? { expectedPeriodEndOn: summary.periodEndOn } : {}),
-        reason: 'BODY_UNREADABLE',
-      };
-      if (!document.text || !document.contentHash || !document.rawContent) {
+      if (!document.text || !document.contentHash) {
         failures.push(result.warnings[0]?.message ?? `${summary.id}: no readable body`);
         continue;
       }
@@ -186,7 +158,7 @@ export class EarningsSourceService {
     if (failures.length === 0) {
       throw new EarningsSourceError('NO_NEW_ELIGIBLE_FILING', true);
     }
-    throw new EarningsSourceError('BODY_UNREADABLE', true, failures.join('; '), fallbackSource);
+    throw new EarningsSourceError('BODY_UNREADABLE', true, failures.join('; '));
   }
 
   private async persistGroupVariants(
@@ -205,7 +177,7 @@ export class EarningsSourceService {
       });
       if (existing) return;
       const result = await this.marketData.getFilingDocument({ ...variant });
-      if (!result.data?.text || !result.data.rawContent || !result.data.contentHash) return;
+      if (!result.data?.text || !result.data.contentHash) return;
       await this.filingStore.persist(stock, variant, result.data);
     }));
   }
@@ -295,7 +267,6 @@ export class EarningsSourceError extends Error {
     public readonly code: string,
     public readonly retryable: boolean,
     detail?: string,
-    public readonly fallbackSource?: StructuredFallbackSource,
   ) {
     super(detail ? `${code}: ${detail}` : code);
   }
@@ -304,20 +275,4 @@ export class EarningsSourceError extends Error {
 function parsePublishedAt(value: string): Date {
   const parsed = new Date(value);
   return Number.isFinite(parsed.getTime()) ? parsed : new Date();
-}
-
-function fallbackFromSummary(summary: FilingSummary): StructuredFallbackSource {
-  return {
-    kind: 'structuredFallback',
-    provider: summary.provider,
-    sourceDocumentId: summary.sourceDocumentId,
-    sourceGroupId: summary.sourceGroupId,
-    formType: summary.formType,
-    title: summary.title,
-    sourceUrl: summary.filingUrl,
-    publishedAt: parsePublishedAt(summary.filingDate).toISOString(),
-    ...(summary.periodEndOn ? { expectedPeriodEndOn: summary.periodEndOn } : {}),
-    language: summary.language,
-    reason: 'BODY_UNREADABLE',
-  };
 }

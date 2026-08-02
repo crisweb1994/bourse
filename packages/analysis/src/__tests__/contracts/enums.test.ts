@@ -51,7 +51,7 @@ describe('contracts/enums', () => {
     it('SectionType accepts dimensions but rejects non-section analysis types', () => {
       expect(SectionType.parse('FUNDAMENTAL')).toBe('FUNDAMENTAL');
       expect(() => SectionType.parse('COMPREHENSIVE')).toThrow();
-      expect(() => SectionType.parse('DEBATE')).toThrow();
+      expect(() => SectionType.parse('UNSUPPORTED')).toThrow();
     });
 
     it('Signal / Confidence validate real enum values', () => {
