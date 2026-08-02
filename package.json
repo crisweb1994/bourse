@@ -11,8 +11,7 @@
     "test": "turbo test",
     "typecheck": "turbo typecheck",
     "db:generate": "turbo db:generate",
-    "db:push": "turbo db:push",
-    "db:migrate": "turbo db:migrate"
+    "db:push": "turbo db:push"
   },
   "devDependencies": {
     "turbo": "^2.5.0"

@@ -10,8 +10,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "echo 'no lint configured'",
     "db:generate": "node scripts/prisma-root-env.mjs generate",
-    "db:push": "node scripts/prisma-root-env.mjs db push",
-    "db:migrate": "node scripts/prisma-root-env.mjs migrate dev"
+    "db:push": "node scripts/prisma-root-env.mjs db push"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.0",
@@ -28,7 +27,6 @@
     "class-validator": "^0.14.1",
     "cookie-parser": "^1.4.7",
     "dotenv": "^16.6.1",
-    "ioredis": "^5.10.1",
     "jsonwebtoken": "^9.0.2",
     "openai": "^6.36.0",
     "passport": "^0.7.0",
