@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.7.0](https://github.com/crisweb1994/bourse/compare/v0.6.0...v0.7.0) (2026-08-02)
+
+
+### Features
+
+* **analysis:** split narrative-only extraction schema from core actuals ([61704a8](https://github.com/crisweb1994/bourse/commit/61704a8e3641e3247e02b4397750f63e4478e2f9))
+* **api:** add earnings v2 orchestrator and switch generation to structured-first runner ([43c3fef](https://github.com/crisweb1994/bourse/commit/43c3fef8de569863d4186d04d8b0ba4efba451a2))
+* **api:** add earnings v2 runner core — structured lane orchestration ([f93140e](https://github.com/crisweb1994/bourse/commit/f93140ec2fd547f5d3e28807be169eb218a12b85))
+* **api:** add structured selection persistence service ([6076cc6](https://github.com/crisweb1994/bourse/commit/6076cc638709bf2e161ca559f6c747971bef68dd))
+* **api:** add v2 earnings card assembly (selection status -&gt; dataStatus, non-GAAP merge) ([02afc5b](https://github.com/crisweb1994/bourse/commit/02afc5b5419f8881a3b6e92e5edd08a641e8c247))
+* **earnings:** add financials-v2 contract and event-aware exact-period selector ([75ec253](https://github.com/crisweb1994/bourse/commit/75ec253d9e46f7913fa9d8702682b82b6e9ca291))
+* **earnings:** add structured-first persistence models and card dataStatus contract ([b1ac7b2](https://github.com/crisweb1994/bourse/commit/b1ac7b23a5091e1151bc0ffc1c7d235142ef9501))
+* **earnings:** surface dataStatus, non-GAAP and v2 provenance through the API DTO ([7bc25e9](https://github.com/crisweb1994/bourse/commit/7bc25e92ee12db8a84bef7bfe9d1c173bb1d2f3e))
+* **earnings:** 财报数字结构化优先（structured-first）双通道改造 ([73e60f0](https://github.com/crisweb1994/bourse/commit/73e60f0a3af657d38431f3315158cc095f74364c))
+* **market-data:** add Eastmoney CN v2 connector emitting financials-v2 bundles (local research only) ([22bfbe0](https://github.com/crisweb1994/bourse/commit/22bfbe01146e07247e80020fd4edf1d1fc7c3c57))
+* **market-data:** add Eastmoney HK v2 connector emitting financials-v2 bundles ([e483a80](https://github.com/crisweb1994/bourse/commit/e483a80046e94cfd5c3e5b2785430d121539ebab))
+* **market-data:** add SEC EDGAR v2 connector emitting financials-v2 bundles ([330d366](https://github.com/crisweb1994/bourse/commit/330d3665243cdb9a91f5e3cdf8bc587983b06345))
+* **web:** render structured-first earnings states, provenance and non-GAAP ([0ae8ce6](https://github.com/crisweb1994/bourse/commit/0ae8ce647ab5a809be878dcd00547f5e174b5ea8))
+
+
+### Bug Fixes
+
+* **analysis:** support HK Q1 results announcements in the selector ([871fc95](https://github.com/crisweb1994/bourse/commit/871fc95de7dcffab53f873ade54f065472fe9940))
+* **api:** derive earnings period identity from filing titles (docs §10 rule 3) ([8500077](https://github.com/crisweb1994/bourse/commit/8500077e6d2aa2db0cc19038942c38d678eecf15))
+* **api:** normalize null filing language/title in v2 card payload ([33ec37e](https://github.com/crisweb1994/bourse/commit/33ec37ebd34067d2041fa4cabe4de6bcdce9f777))
+* **api:** parse annual results-announcement titles and day-first dates ([cc1881d](https://github.com/crisweb1994/bourse/commit/cc1881dfa3763890398bc5d76c58fe0dc2c3e59b))
+* **api:** parse HK results-announcement titles for period identity ([675b023](https://github.com/crisweb1994/bourse/commit/675b02387e07013f6eb920ab4852f6866d2e9347))
+* **earnings:** explain OTC/ADR tickers without SEC filings instead of raw SEC errors ([84663d7](https://github.com/crisweb1994/bourse/commit/84663d7f5c16e0af03b48153e4c26477eb7ec9be))
+* **market-data:** exclude 10-Q/10-K comparative columns and fix fiscal-year-start inference ([4291bd5](https://github.com/crisweb1994/bourse/commit/4291bd58d95f7fab65472031a46415cf0123840b))
+* **market-data:** narrow derivation unions in connector tests ([269cc82](https://github.com/crisweb1994/bourse/commit/269cc82e9832bff06eb45457dbe08dcc19f2b8cb))
+* **market-data:** rank primary listings above OTC ADRs in instrument search ([4bf8c8f](https://github.com/crisweb1994/bourse/commit/4bf8c8fa0e1559208388f7663f174b3cbd8c2252))
+
 ## [0.6.0](https://github.com/crisweb1994/bourse/compare/v0.5.0...v0.6.0) (2026-08-01)
 
 
