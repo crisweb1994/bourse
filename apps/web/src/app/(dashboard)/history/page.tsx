@@ -18,7 +18,6 @@ import {
 import {
   ACTIVE_ANALYSIS_TYPES,
   ANALYSIS_TYPE_LABELS,
-  LEGACY_ANALYSIS_TYPES,
   PROVIDER_LABELS,
   SIGNAL_LABELS_BILINGUAL,
   STATUS_LABELS,
@@ -47,10 +46,6 @@ import {
 const ANALYSIS_TYPE_OPTIONS = [
   { value: '', label: '全部类型' },
   ...ACTIVE_ANALYSIS_TYPES.map((value) => ({
-    value,
-    label: ANALYSIS_TYPE_LABELS[value],
-  })),
-  ...LEGACY_ANALYSIS_TYPES.map((value) => ({
     value,
     label: ANALYSIS_TYPE_LABELS[value],
   })),

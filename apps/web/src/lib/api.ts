@@ -250,7 +250,6 @@ export async function createChatGeneration(
     clientRequestId: string;
     analysisIds?: string[];
     sectionTypes?: string[];
-    modeHint?: 'OPEN_RESEARCH' | 'ANALYSIS_GROUNDED';
     investorRelationsEventId?: string;
   },
 ): Promise<ChatGenerationDto> {

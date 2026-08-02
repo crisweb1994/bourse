@@ -28,7 +28,7 @@ export function formatAnalysisTime(
 export function getRequestedAnalysisId(
   searchParams: Pick<URLSearchParams, 'get'>,
 ): string | null {
-  return searchParams.get('analysisId') ?? searchParams.get('debateBase');
+  return searchParams.get('analysisId');
 }
 
 export function inferMarketFromSymbol(symbol: string | null): string {

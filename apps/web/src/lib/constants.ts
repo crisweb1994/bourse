@@ -6,7 +6,6 @@ export {
   ACTIVE_ANALYSIS_TYPES,
   ANALYSIS_DIMENSIONS,
   COMPREHENSIVE_DIMENSIONS,
-  LEGACY_ANALYSIS_TYPES,
 } from '@bourse/shared-types';
 
 export const ANALYSIS_TYPE_LABELS: Record<string, string> =

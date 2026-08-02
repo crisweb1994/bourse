@@ -17,7 +17,7 @@ assert.equal(inferMarketFromSymbol('AAPL'), 'US');
 
 assert.equal(
   getRequestedAnalysisId(
-    new URLSearchParams('stockId=s1&debateBase=a-from-debate-base'),
+    new URLSearchParams('stockId=s1&analysisId=a-from-analysis'),
   ),
   'a-from-debate-base',
 );
@@ -25,7 +25,7 @@ assert.equal(
 assert.equal(
   getRequestedAnalysisId(
     new URLSearchParams(
-      'analysisId=a-direct&debateBase=a-from-debate-base',
+      'analysisId=a-direct',
     ),
   ),
   'a-direct',

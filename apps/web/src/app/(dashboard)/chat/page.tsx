@@ -298,7 +298,7 @@ export default function ChatPage() {
       const generation = await createChatGeneration(activeThread.id, {
         question,
         clientRequestId,
-        ...(selectedAnalysis ? { analysisIds: [selectedAnalysis], modeHint: 'ANALYSIS_GROUNDED' as const } : { modeHint: 'OPEN_RESEARCH' as const }),
+        ...(selectedAnalysis ? { analysisIds: [selectedAnalysis] } : {}),
         ...(selectedAnalysis && requestedSection ? { sectionTypes: [requestedSection] } : {}),
         ...(requestedInvestorRelationsEvent ? { investorRelationsEventId: requestedInvestorRelationsEvent } : {}),
       });
