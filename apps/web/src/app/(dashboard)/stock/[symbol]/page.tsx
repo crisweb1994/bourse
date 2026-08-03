@@ -7,6 +7,7 @@ import { abortAnalysis } from '@/lib/api';
 import { useAnalysisStream } from '@/hooks/use-analysis-stream';
 import { useStuckWatchdog } from '@/hooks/use-stuck-watchdog';
 import { useEarningsCard } from '@/hooks/use-earnings-card';
+import { useStockNews } from '@/hooks/use-stock-news';
 import { StockHeader } from '@/components/stock/stock-header';
 import { EarningsCardPanel } from '@/components/earnings/earnings-card-panel';
 import { EarningsTrendPanel } from '@/components/earnings/earnings-trend-panel';
@@ -61,12 +62,19 @@ export default function StockAnalysisPage({
     watchlistBusy,
     canAddToWatchlist,
     handleAddToWatchlist,
+    handleToggleWatchlist,
   } = useStockResolution({ symbol, market, name, stockId });
   const resolvedName = detail?.stock?.name ?? name;
 
   const earnings = useEarningsCard({
     stockId: effectiveStockId,
     canGenerate: Boolean(watchlistItemId),
+  });
+  const news = useStockNews({
+    symbol,
+    market,
+    stockId: effectiveStockId,
+    enabled: Boolean(effectiveStockId),
   });
   const investorRelations = useInvestorRelations({
     stockId: effectiveStockId,
@@ -197,11 +205,12 @@ export default function StockAnalysisPage({
           inWatchlist={!!watchlistItemId}
           watchlistBusy={watchlistBusy}
           onToggleWatchlist={
-            canAddToWatchlist ? handleAddToWatchlist : undefined
+            effectiveStockId ? handleToggleWatchlist : undefined
           }
           recentAnalyses={recentAnalyses}
           quote={detail?.quote ?? null}
           profile={detail?.profile ?? null}
+          news={news}
         />
       )}
 

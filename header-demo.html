@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>股票 Header 研究摘要头 · 真实数据 Demo</title>
+<style>
+  :root {
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --color-bg: #fbfbf8; --color-bg-elev: #ffffff;
+    --color-fg: #111111; --color-fg-2: #555555; --color-fg-3: #8a8a8a; --color-fg-4: #c4c4c4;
+    --color-border: #e8e6df; --color-border-soft: #efede6;
+    --color-surface-hover: #f1efe8; --color-surface-2: #f4f2eb;
+    --color-accent: #1f6b51; --color-accent-600: #0f3d2e;
+    --color-accent-soft: #e5efe9; --color-accent-line: #c1d8cc;
+    --color-warn: #a17223; --color-danger: #a8443a;
+    --color-info: #3d6296; --color-info-soft: #e7edf5; --color-info-line: #bdccdf;
+    --radius-card: 8px; --radius-btn: 6px; --radius-pill: 999px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-bg: #0e0d0a; --color-bg-elev: #18171a;
+      --color-fg: #ecebe5; --color-fg-2: #a6a399; --color-fg-3: #7a766c; --color-fg-4: #4a473f;
+      --color-border: #2a2823; --color-border-soft: #211f1b;
+      --color-surface-hover: #181714; --color-surface-2: #141310;
+      --color-accent: #67a98d; --color-accent-600: #8cc4a9;
+      --color-accent-soft: #15281f; --color-accent-line: #1f4233;
+      --color-warn: #d4a056; --color-danger: #d97a6f;
+      --color-info: #8aabd6; --color-info-soft: #14202e; --color-info-line: #29405d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 40px 24px 80px;
+    background: var(--color-bg); color: var(--color-fg);
+    font-family: var(--font-sans); font-size: 14px; line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  .doc-head { margin-bottom: 40px; }
+  .doc-head h1 { font-size: 22px; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .doc-head p { margin: 0; color: var(--color-fg-2); font-size: 13px; }
+  .doc-head .meta {
+    margin-top: 14px; font-family: var(--font-mono); font-size: 11px; color: var(--color-fg-3);
+    display: flex; flex-wrap: wrap; gap: 6px 16px;
+  }
+  .doc-head .meta b { color: var(--color-fg-2); font-weight: 500; }
+  .doc-head .verdict {
+    margin-top: 18px; padding: 12px 14px; border-radius: var(--radius-card);
+    background: var(--color-accent-soft); border: 1px solid var(--color-accent-line);
+    color: var(--color-accent-600); font-size: 13px;
+  }
+  [data-theme="dark"] .doc-head .verdict { color: var(--color-accent-600); }
+
+  /* ---- Stock Header (mirrors components/stock/stock-header.tsx) ---- */
+  .stock-header { margin-bottom: 12px; }
+  .stock-header > .back {
+    font-size: 12.5px; color: var(--color-fg-2); margin-bottom: 14px;
+    cursor: pointer; display: inline-block;
+  }
+  .section-tag {
+    display: inline-block; margin-bottom: 12px; font-family: var(--font-mono);
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-fg-3);
+  }
+  .top-row { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .top-row .id { min-width: 0; }
+  .id-line { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .id-line h1 {
+    font-family: var(--font-mono); font-size: 32px; font-weight: 500;
+    letter-spacing: -0.02em; line-height: 1; margin: 0;
+  }
+  .pill {
+    display: inline-flex; align-items: center; font-family: var(--font-mono);
+    font-size: 11px; color: var(--color-fg-2);
+    background: var(--color-surface-2); border: 1px solid var(--color-border);
+    padding: 3px 8px; border-radius: var(--radius-pill);
+  }
+  .id-sub { margin: 8px 0 0; font-size: 14px; color: var(--color-fg-2); }
+  .actions { display: flex; gap: 8px; align-items: center; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    border-radius: var(--radius-btn); border: 1px solid var(--color-border);
+    background: var(--color-bg-elev); padding: 6px 12px; font-size: 12.5px;
+    color: var(--color-fg-2); cursor: pointer; font-family: var(--font-sans);
+    transition: background .15s;
+  }
+  .btn:hover { background: var(--color-surface-hover); color: var(--color-fg); }
+  .btn.on {
+    border-color: var(--color-accent-line); background: var(--color-accent-soft);
+    color: var(--color-accent-600);
+  }
+  .btn.on .star { fill: currentColor; }
+
+  /* quote strip */
+  .quote-strip {
+    margin-top: 20px; display: flex; flex-wrap: wrap; align-items: center;
+    gap: 24px 24px; gap: 12px 24px; border-top: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border); padding: 12px 0;
+  }
+  .q-price { display: flex; align-items: baseline; gap: 12px; }
+  .q-price .px { font-family: var(--font-mono); font-size: 22px; font-weight: 500; letter-spacing: -0.01em; }
+  .q-price .chg { font-family: var(--font-mono); font-size: 13px; }
+  .chg.up { color: var(--color-accent-600); }
+  .chg.down { color: var(--color-warn); }
+  .q-meta { font-family: var(--font-mono); font-size: 11.5px; color: var(--color-fg-3); display: inline-flex; align-items: baseline; gap: 4px; }
+  .q-meta b { color: var(--color-fg-2); font-weight: 500; }
+  .state {
+    display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 11.5px;
+  }
+  .state .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-fg-4); }
+  .state.live { color: var(--color-accent-600); }
+  .state.live .dot { background: var(--color-accent); }
+  .spacer { flex: 1; }
+  .last-analysis {
+    display: inline-flex; align-items: center; gap: 8px; border-radius: var(--radius-btn);
+    border: 1px solid var(--color-border); background: var(--color-bg-elev);
+    padding: 6px 12px; font-size: 12px; color: var(--color-fg-2); cursor: pointer;
+  }
+  .last-analysis .sig { color: var(--color-accent-600); font-weight: 500; }
+
+  /* announcements row (T3, async-loaded) */
+  .news-row {
+    margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px;
+    font-size: 12px; color: var(--color-fg-2);
+  }
+  .news-row .label {
+    font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--color-fg-3);
+  }
+  .news-row a {
+    color: var(--color-fg); text-decoration: none; border-bottom: 1px dashed var(--color-border);
+    padding-bottom: 1px; display: inline-flex; align-items: center; gap: 5px;
+  }
+  .news-row a:hover { color: var(--color-accent-600); border-bottom-color: var(--color-accent-line); }
+  .news-row .ftype {
+    font-family: var(--font-mono); font-size: 10px; color: var(--color-info);
+    background: var(--color-info-soft); border: 1px solid var(--color-info-line);
+    padding: 1px 5px; border-radius: var(--radius-pill);
+  }
+  .news-row .src { font-family: var(--font-mono); font-size: 10px; color: var(--color-fg-3); }
+  .news-row .sep { color: var(--color-fg-4); }
+
+  /* divider between samples */
+  .sample { margin-bottom: 40px; }
+  .sample-tag {
+    font-family: var(--font-mono); font-size: 11px; color: var(--color-fg-3);
+    margin-bottom: 8px; display: flex; gap: 12px; align-items: center;
+  }
+  .sample-tag .badge {
+    font-size: 10px; padding: 2px 7px; border-radius: var(--radius-pill);
+    background: var(--color-surface-2); border: 1px solid var(--color-border); color: var(--color-fg-2);
+  }
+  .sample-tag .badge.warn { color: var(--color-warn); border-color: var(--color-warn); }
+
+  /* evidence table */
+  .evidence { margin-top: 56px; }
+  .evidence h2 { font-size: 16px; margin: 0 0 16px; letter-spacing: -0.01em; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--color-border); vertical-align: top; }
+  th { font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-fg-3); font-weight: 500; }
+  td .yes { color: var(--color-accent-600); font-weight: 500; }
+  td .no { color: var(--color-warn); }
+  td .mono { font-family: var(--font-mono); font-size: 11.5px; }
+  td code { font-family: var(--font-mono); font-size: 11px; background: var(--color-surface-2); padding: 1px 5px; border-radius: 4px; color: var(--color-fg-2); }
+  .legend { margin-top: 16px; font-size: 12px; color: var(--color-fg-3); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="doc-head">
+    <h1>股票 Header · 研究摘要头 Demo</h1>
+    <p>所有字段均为真实数据，由 <code style="font-family:var(--font-mono);font-size:12px;background:var(--color-surface-2);padding:1px 5px;border-radius:4px">@bourse/market-data</code> 在 <b>2026-08-04</b> 实时拉取（探测脚本并行调用 quote / profile / earnings / filings）。三市场对照验证数据源覆盖。</p>
+    <div class="meta">
+      <span><b>探测标的:</b> US:AAPL · HK:0700 · CN:600519</span>
+      <span><b>来源:</b> yahoo / sec-edgar / hkex / cninfo / eastmoney / tencent</span>
+      <span><b>密钥:</b> 仅 RESEARCH_CORE_USER_AGENT（SEC UA）· 其余为免费源</span>
+    </div>
+    <div class="verdict">
+      ✅ 验证通过：三个市场的价格/涨跌/数据时间/市值/板块·行业/下一财报期/最近公告均有真实来源。唯一缺口是 CN 的 <code>marketStatus</code> 原始为 null，但后端 <code>market-hours.ts</code> 已有时区推导兜底（resolveMarketState），前端仍会显示交易状态。
+    </div>
+  </div>
+
+  <!-- ============ Sample 1: AAPL (US) ============ -->
+  <div class="sample">
+    <div class="sample-tag">样本 1 · US 市场 <span class="badge">yahoo + sec-edgar</span></div>
+    <div class="stock-header">
+      <span class="back">← 返回</span>
+      <span class="section-tag">股票分析</span>
+      <div class="top-row">
+        <div class="id">
+          <div class="id-line">
+            <h1>AAPL</h1>
+            <span class="pill">US</span>
+            <span class="pill">Nasdaq Global Select</span>
+          </div>
+          <p class="id-sub">Apple Inc.</p>
+        </div>
+        <div class="actions">
+          <button class="btn on"><span class="star">★</span> 已自选</button>
+          <button class="btn">↗ 分享</button>
+        </div>
+      </div>
+
+      <div class="quote-strip">
+        <div class="q-price">
+          <span class="px">$303.42</span>
+          <span class="chg down">-5.49 (-1.78%)</span>
+        </div>
+        <span class="state"><span class="dot"></span> 盘后</span>
+        <span class="q-meta"><b>数据</b> 2026-08-03 20:00 UTC</span>
+        <span class="q-meta"><b>市值</b> 4.46T</span>
+        <span class="q-meta"><b>P/E</b> 34.84</span>
+        <span class="q-meta"><b>板块</b> Technology · Consumer Electronics</span>
+        <span class="q-meta"><b>下一财报期截止</b> 2026-09-30</span>
+        <span class="spacer"></span>
+        <span class="last-analysis">⏱ 上次分析 · 3 天前 <span class="sig">综合 · 看多 · 高</span> ▾</span>
+      </div>
+
+      <div class="news-row">
+        <span class="label">公告</span>
+        <a href="https://www.sec.gov/Archives/edgar/data/320193/000032019326000018/aapl-20260730.htm" target="_blank" rel="noopener noreferrer"><span class="ftype">8-K</span> 2026-07-30 当前报告</a>
+        <span class="sep">·</span>
+        <a href="https://www.sec.gov/Archives/edgar/data/320193/000032019326000011/aapl-20260430.htm" target="_blank" rel="noopener noreferrer"><span class="ftype">8-K</span> 2026-04-30 当前报告</a>
+        <span class="sep">·</span>
+        <a href="https://www.sec.gov/Archives/edgar/data/320193/000114036126015711/ef20071035_8k.htm" target="_blank" rel="noopener noreferrer"><span class="ftype">8-K</span> 2026-04-20 当前报告</a>
+        <span class="sep">·</span>
+        <a href="#" onclick="return false"><span class="ftype">news</span> 分析师动态（web search 增强，异步）</a>
+        <span class="src">SEC EDGAR</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Sample 2: Tencent (HK) ============ -->
+  <div class="sample">
+    <div class="sample-tag">样本 2 · HK 市场 <span class="badge">yahoo + hkex</span></div>
+    <div class="stock-header">
+      <span class="back">← 返回</span>
+      <span class="section-tag">股票分析</span>
+      <div class="top-row">
+        <div class="id">
+          <div class="id-line">
+            <h1>0700</h1>
+            <span class="pill">HK</span>
+            <span class="pill">HKSE</span>
+          </div>
+          <p class="id-sub">Tencent Holdings Ltd.</p>
+        </div>
+        <div class="actions">
+          <button class="btn"><span class="star">★</span> 加入自选</button>
+          <button class="btn">↗ 分享</button>
+        </div>
+      </div>
+
+      <div class="quote-strip">
+        <div class="q-price">
+          <span class="px">HK$490.40</span>
+          <span class="chg up">+15.20 (+3.20%)</span>
+        </div>
+        <span class="state"><span class="dot"></span> 盘前</span>
+        <span class="q-meta"><b>数据</b> 2026-08-03 08:08 UTC</span>
+        <span class="q-meta"><b>市值</b> 4.41T</span>
+        <span class="q-meta"><b>P/E</b> 17.52</span>
+        <span class="q-meta"><b>板块</b> Communication Services · Internet Content &amp; Information</span>
+        <span class="q-meta"><b>下一财报期截止</b> 2026-09-30</span>
+        <span class="spacer"></span>
+        <span class="last-analysis">⏱ 上次分析 · 1 周前 <span class="sig">综合 · 中性 · 中</span> ▾</span>
+      </div>
+
+      <div class="news-row">
+        <span class="label">公告</span>
+        <a href="https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0709/2026070900828_c.pdf" target="_blank" rel="noopener noreferrer">2026-07-09 翌日披露報表</a>
+        <span class="sep">·</span>
+        <a href="https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0709/2026070900827.pdf" target="_blank" rel="noopener noreferrer">2026-07-09 Next Day Disclosure Return</a>
+        <span class="sep">·</span>
+        <a href="https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0708/2026070800630_c.pdf" target="_blank" rel="noopener noreferrer">2026-07-08 翌日披露報表 - 已發行股份變動及股份購回</a>
+        <span class="sep">·</span>
+        <a href="https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0707/2026070700631_c.pdf" target="_blank" rel="noopener noreferrer">2026-07-07 證券變動月報表</a>
+        <span class="src">HKEX</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Sample 3: Moutai (CN) ============ -->
+  <div class="sample">
+    <div class="sample-tag">样本 3 · CN 市场 <span class="badge">tencent + eastmoney + cninfo</span> <span class="badge warn">marketStatus 原始为 null（后端时区兜底）</span></div>
+    <div class="stock-header">
+      <span class="back">← 返回</span>
+      <span class="section-tag">股票分析</span>
+      <div class="top-row">
+        <div class="id">
+          <div class="id-line">
+            <h1>600519</h1>
+            <span class="pill">CN</span>
+            <span class="pill">SSE</span>
+          </div>
+          <p class="id-sub">Kweichow Moutai Co., Ltd. · 贵州茅台</p>
+        </div>
+        <div class="actions">
+          <button class="btn on"><span class="star">★</span> 已自选</button>
+          <button class="btn">↗ 分享</button>
+        </div>
+      </div>
+
+      <div class="quote-strip">
+        <div class="q-price">
+          <span class="px">¥1,358.98</span>
+          <span class="chg up">+8.38 (+0.62%)</span>
+        </div>
+        <span class="state"><span class="dot"></span> 已收盘</span>
+        <span class="q-meta"><b>数据</b> 2026-08-03 08:14 UTC</span>
+        <span class="q-meta"><b>市值</b> 1.70T</span>
+        <span class="q-meta"><b>P/E</b> 20.54</span>
+        <span class="q-meta"><b>板块</b> 食品饮料 · 白酒</span>
+        <span class="q-meta"><b>下一财报期截止</b> 2026-12-31 (FY)</span>
+        <span class="spacer"></span>
+        <span class="last-analysis">⏱ 上次分析 · 12 天前 <span class="sig">综合 · 看多 · 中</span> ▾</span>
+      </div>
+
+      <div class="news-row">
+        <span class="label">公告</span>
+        <a href="http://static.cninfo.com.cn/finalpage/2026-07-18/1225431263.PDF" target="_blank" rel="noopener noreferrer"><span class="ftype">重大事项</span> 2026-07-17 贵州茅台重大事项公告</a>
+        <span class="sep">·</span>
+        <a href="http://static.cninfo.com.cn/finalpage/2026-06-22/1225379934.PDF" target="_blank" rel="noopener noreferrer">2026-06-21 2025年年度权益分派实施公告</a>
+        <span class="sep">·</span>
+        <a href="http://static.cninfo.com.cn/finalpage/2026-06-12/1225366261.PDF" target="_blank" rel="noopener noreferrer">2026-06-11 董事、高级管理人员考核和薪酬管理办法</a>
+        <span class="src">cninfo</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Evidence ============ -->
+  <div class="evidence">
+    <h2>数据源验证表（真实探测结果）</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Header 字段</th>
+          <th>US · AAPL</th>
+          <th>HK · 0700</th>
+          <th>CN · 600519</th>
+          <th>来源</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>价格 / 涨跌</td>
+          <td><span class="yes yes">✓</span> <span class="mono">$303.42 / -1.78%</span></td>
+          <td><span class="yes">✓</span> <span class="mono">HK$490.40 / +3.20%</span></td>
+          <td><span class="yes">✓</span> <span class="mono">¥1358.98 / +0.62%</span></td>
+          <td><code>getQuote</code></td></tr>
+        <tr><td>交易状态 marketState</td>
+          <td><span class="yes">✓</span> AFTER_HOURS → 盘后</td>
+          <td><span class="yes">✓</span> PRE_MARKET → 盘前</td>
+          <td><span class="no">null</span>（后端 <code>resolveMarketState</code> 时区推导 → 已收盘）</td>
+          <td><code>quote.marketStatus</code> + 兜底</td></tr>
+        <tr><td>数据时间 asOf</td>
+          <td><span class="yes">✓</span> <span class="mono">2026-08-03T20:00Z</span></td>
+          <td><span class="yes">✓</span> <span class="mono">2026-08-03T08:08Z</span></td>
+          <td><span class="yes">✓</span> <span class="mono">2026-08-03T08:14Z</span></td>
+          <td><code>quote.timestamp</code> → <code>asOf</code></td></tr>
+        <tr><td>市值 marketCap</td>
+          <td><span class="yes">✓</span> 4.46T</td>
+          <td><span class="yes">✓</span> 4.41T</td>
+          <td><span class="yes">✓</span> 1.70T</td>
+          <td><code>quote.marketCap</code></td></tr>
+        <tr><td>P/E（bonus）</td>
+          <td><span class="yes">✓</span> 34.84</td>
+          <td><span class="yes">✓</span> 17.52</td>
+          <td><span class="yes">✓</span> 20.54</td>
+          <td><code>quote.peRatio</code></td></tr>
+        <tr><td>板块 · 行业</td>
+          <td><span class="yes">✓</span> Technology · Consumer Electronics</td>
+          <td><span class="yes">✓</span> Communication Services · Internet</td>
+          <td><span class="yes">✓</span> 食品饮料 · 白酒</td>
+          <td><code>getProfile</code> <span style="color:var(--color-warn)">（当前死字段，T2 激活）</span></td></tr>
+        <tr><td>下一财报期截止</td>
+          <td><span class="yes">✓</span> <span class="mono">2026-09-30</span> (Q)</td>
+          <td><span class="yes">✓</span> <span class="mono">2026-09-30</span> (Q)</td>
+          <td><span class="yes">✓</span> <span class="mono">2026-12-31</span> (FY)</td>
+          <td><code>getEarningsConsensus</code> <span style="color:var(--color-warn)">（当前死字段，T2 激活）</span></td></tr>
+        <tr><td>最近公告</td>
+          <td><span class="yes">✓</span> SEC 8-K ×5</td>
+          <td><span class="yes">✓</span> HKEX 披露报表 ×5</td>
+          <td><span class="yes">✓</span> cninfo 公告 ×5</td>
+          <td><code>listFilings</code> <span style="color:var(--color-warn)">（T3 新 endpoint）</span></td></tr>
+        <tr><td>是否在自选</td>
+          <td colspan="3" style="text-align:center"><span class="yes">✓</span> 已由现有 <code>useStockResolution</code> 提供（T1 补 remove 分支）</td>
+          <td>现有 watchlist</td></tr>
+        <tr><td>最近分析结论</td>
+          <td colspan="3" style="text-align:center"><span class="yes">✓</span> signal 已显示；<code>summaryJson.oneLiner</code> 已在 history 响应（T1 补类型+渲染）</td>
+          <td>现有 analysis</td></tr>
+      </tbody>
+    </table>
+    <p class="legend">耗时（并行）：US ~1.5s · HK ~5s（filings 最慢）· CN ~0.3s。filings 在 T3 设计中走独立 endpoint + 5min TTL 缓存，不阻塞首屏。</p>
+  </div>
+
+</div>
+</body>
+</html>

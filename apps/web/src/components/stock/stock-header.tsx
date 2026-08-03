@@ -18,6 +18,7 @@ import {
   type AnalysisHistoryItemDto,
   type StockQuoteDto,
   type StockProfileDto,
+  type StockNewsItem,
 } from '@/lib/api';
 import { Pill, SectionTag } from '@/components/ui';
 import { ANALYSIS_TYPE_LABELS } from '@/lib/constants';
@@ -29,6 +30,17 @@ const SIGNAL_LABEL: Record<string, string> = {
   NEUTRAL: '中性',
 };
 const CONF_LABEL: Record<string, string> = { HIGH: '高', MEDIUM: '中', LOW: '低' };
+
+/**
+ * Pull the one-line conclusion out of a COMPREHENSIVE analysis summaryJson.
+ * Only COMPREHENSIVE analyses populate this shape; other types carry no
+ * prose summary, so a safe runtime read degrades gracefully to undefined.
+ */
+function readOneLiner(summaryJson: unknown): string | undefined {
+  if (typeof summaryJson !== 'object' || summaryJson === null) return undefined;
+  const v = (summaryJson as { oneLiner?: unknown }).oneLiner;
+  return typeof v === 'string' && v.trim() ? v.trim() : undefined;
+}
 
 const MARKET_STATE_LABEL: Record<string, string> = {
   REGULAR: '开盘中',
@@ -59,6 +71,12 @@ interface Props {
    */
   quote: StockQuoteDto | null;
   profile: StockProfileDto | null;
+  /**
+   * Recent announcements (filings + web-search news), fetched via a dedicated
+   * async endpoint so it never blocks the price strip. `loading` renders a
+   * skeleton; an empty/degraded result hides the row entirely.
+   */
+  news?: { items: StockNewsItem[]; loading: boolean; degraded: boolean };
 }
 
 export function StockHeader({
@@ -73,6 +91,7 @@ export function StockHeader({
   recentAnalyses,
   quote,
   profile,
+  news,
 }: Props) {
 
   return (
@@ -123,7 +142,67 @@ export function StockHeader({
           )}
         </div>
       )}
+
+      {/* Announcements row — async, never blocks the quote strip above.
+          Skeleton while loading; hidden when empty/degraded so a missing
+          source leaves no gap. */}
+      {stockId && news && <AnnouncementsRow news={news} />}
     </header>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// AnnouncementsRow — filings + web-search news
+// ----------------------------------------------------------------------------
+function AnnouncementsRow({
+  news,
+}: {
+  news: { items: StockNewsItem[]; loading: boolean; degraded: boolean };
+}) {
+  if (news.loading) {
+    return (
+      <div className="mt-3 flex items-center gap-2">
+        <span className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-[var(--color-fg-3)]">
+          公告
+        </span>
+        <Loader2 className="w-3 h-3 animate-spin text-[var(--color-fg-3)]" strokeWidth={1.5} />
+        <span className="text-[12px] text-[var(--color-fg-3)]">加载中…</span>
+      </div>
+    );
+  }
+  if (news.items.length === 0) return null;
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+      <span className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-[var(--color-fg-3)]">
+        公告
+      </span>
+      {news.items.slice(0, 4).map((item, idx) => (
+        <span key={item.url} className="inline-flex items-center gap-1.5">
+          {idx > 0 && (
+            <span className="text-[var(--color-fg-4)] text-[11px]">·</span>
+          )}
+          <a
+            href={item.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-[12px] text-[var(--color-fg)] hover:text-[var(--color-accent-600)]"
+            title={item.title}
+          >
+            {item.kind === 'filing' && item.formType && (
+              <span className="font-mono text-[10px] text-[var(--color-info)] bg-[var(--color-info-soft)] border border-[var(--color-info-line)] px-1.5 py-px rounded-[var(--radius-pill)]">
+                {item.formType}
+              </span>
+            )}
+            <span className="max-w-[220px] truncate">{item.title}</span>
+            {item.publishedAt && (
+              <span className="font-mono text-[10px] text-[var(--color-fg-3)]">
+                {item.publishedAt.slice(0, 10)}
+              </span>
+            )}
+          </a>
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -192,6 +271,11 @@ function QuoteBlock({ quote }: { quote: StockQuoteDto | null }) {
         {quote.change.toFixed(2)} ({sign}
         {quote.changePct.toFixed(2)}%)
       </span>
+      {quote.asOf && (
+        <span className="font-mono text-[11.5px] text-[var(--color-fg-3)]">
+          · 数据 {timeAgo(quote.asOf)}
+        </span>
+      )}
     </div>
   );
 }
@@ -234,7 +318,10 @@ function ProfileMeta({ profile }: { profile: StockProfileDto | null }) {
     items.push({ k: '市值', v: formatMarketCap(profile.marketCap) });
   }
   if (profile.nextEarningsDate) {
-    items.push({ k: '下次财报', v: profile.nextEarningsDate.slice(0, 10) });
+    items.push({ k: '下一财报期截止', v: profile.nextEarningsDate.slice(0, 10) });
+  }
+  if (profile.lastReportedDate) {
+    items.push({ k: '上次已披露', v: profile.lastReportedDate.slice(0, 10) });
   }
   if (profile.sector) {
     items.push({
@@ -336,6 +423,7 @@ function LastAnalysisChip({
   if (!latest) return null;
 
   const activeId = searchParams.get('analysisId');
+  const latestOneLiner = readOneLiner(latest.summaryJson);
 
   const switchTo = (a: AnalysisHistoryItemDto) => {
     setOpen(false);
@@ -359,7 +447,7 @@ function LastAnalysisChip({
         <Clock className="w-3 h-3" strokeWidth={1.5} />
         <span>上次分析 · {timeAgo(latest.generatedAt ?? latest.createdAt)}</span>
         {latest.overallSignal && (
-          <span className="text-[var(--color-accent-600)] font-medium">
+          <span className="text-[var(--color-accent-600)] font-medium whitespace-nowrap">
             {ANALYSIS_TYPE_LABELS[latest.analysisType] ??
               latest.analysisType}{' '}
             ·{' '}
@@ -367,6 +455,14 @@ function LastAnalysisChip({
             {latest.overallConfidence
               ? `·${CONF_LABEL[latest.overallConfidence] ?? latest.overallConfidence}`
               : ''}
+          </span>
+        )}
+        {latestOneLiner && (
+          <span
+            className="max-w-[220px] truncate text-[11.5px] text-[var(--color-fg-2)]"
+            title={latestOneLiner}
+          >
+            {latestOneLiner}
           </span>
         )}
         <ChevronDown
@@ -404,6 +500,7 @@ function LastAnalysisChip({
               const sigLabel = a.overallSignal
                 ? SIGNAL_LABEL[a.overallSignal] ?? a.overallSignal
                 : null;
+              const oneLiner = readOneLiner(a.summaryJson);
               return (
                 <li key={a.id}>
                   <button
@@ -441,6 +538,11 @@ function LastAnalysisChip({
                       <div className="mt-0.5 font-mono text-[10.5px] text-[var(--color-fg-3)]">
                         {timeAgo(a.generatedAt ?? a.createdAt)} · {a.aiModel ?? a.aiProvider ?? '—'}
                       </div>
+                      {oneLiner && (
+                        <div className="mt-1 text-[11.5px] leading-snug text-[var(--color-fg-2)] line-clamp-2">
+                          {oneLiner}
+                        </div>
+                      )}
                     </div>
                     {isActive && (
                       <span className="font-mono text-[10px] text-[var(--color-fg-3)] mt-0.5">

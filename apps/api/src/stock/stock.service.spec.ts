@@ -27,6 +27,7 @@ function createService(options?: {
         { search: options?.yahoo ?? (async () => []) },
       ],
     } as never)),
+    {} as never,
   );
 }
 
@@ -143,6 +144,7 @@ test('stock detail consumes canonical quote units without market-specific compen
         warnings: [],
       }),
     } as never,
+    {} as never,
   );
 
   const detail = await service.getDetail('600519', 'CN');
