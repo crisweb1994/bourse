@@ -7,6 +7,7 @@ import { abortAnalysis } from '@/lib/api';
 import { useAnalysisStream } from '@/hooks/use-analysis-stream';
 import { useStuckWatchdog } from '@/hooks/use-stuck-watchdog';
 import { useEarningsCard } from '@/hooks/use-earnings-card';
+import { useStockNews } from '@/hooks/use-stock-news';
 import { StockHeader } from '@/components/stock/stock-header';
 import { EarningsCardPanel } from '@/components/earnings/earnings-card-panel';
 import { EarningsTrendPanel } from '@/components/earnings/earnings-trend-panel';
@@ -61,12 +62,19 @@ export default function StockAnalysisPage({
     watchlistBusy,
     canAddToWatchlist,
     handleAddToWatchlist,
+    handleToggleWatchlist,
   } = useStockResolution({ symbol, market, name, stockId });
   const resolvedName = detail?.stock?.name ?? name;
 
   const earnings = useEarningsCard({
     stockId: effectiveStockId,
     canGenerate: Boolean(watchlistItemId),
+  });
+  const news = useStockNews({
+    symbol,
+    market,
+    stockId: effectiveStockId,
+    enabled: Boolean(effectiveStockId),
   });
   const investorRelations = useInvestorRelations({
     stockId: effectiveStockId,
@@ -164,6 +172,23 @@ export default function StockAnalysisPage({
     router.push(`/chat?${search.toString()}`);
   };
 
+  const openStockResearch = () => {
+    if (!symbol) return;
+    const search = new URLSearchParams({
+      stock: symbol,
+      market,
+      draft: '1',
+      from: 'stock_header',
+    });
+    // Keep the most recent completed Analysis available as context in Chat;
+    // when there is no completed report, the same entry naturally opens free
+    // research for the stock.
+    if (currentAnalysisMeta?.id && currentAnalysisMeta.status === 'COMPLETED') {
+      search.set('analysis', currentAnalysisMeta.id);
+    }
+    router.push(`/chat?${search.toString()}`);
+  };
+
   const openEarningsChat = () => {
     if (!symbol) return;
     const search = new URLSearchParams({ stock: symbol, market, draft: '1', earnings: '1' });
@@ -193,15 +218,24 @@ export default function StockAnalysisPage({
           market={market}
           exchange={exchange}
           name={resolvedName}
+          currency={
+            detail?.stock?.currency ??
+            (detail?.quote && !detail.quote.degraded
+              ? detail.quote.currency
+              : undefined)
+          }
           stockId={effectiveStockId}
           inWatchlist={!!watchlistItemId}
           watchlistBusy={watchlistBusy}
           onToggleWatchlist={
-            canAddToWatchlist ? handleAddToWatchlist : undefined
+            effectiveStockId ? handleToggleWatchlist : undefined
           }
           recentAnalyses={recentAnalyses}
           quote={detail?.quote ?? null}
           profile={detail?.profile ?? null}
+          onOpenResearch={openStockResearch}
+          onOpenAnalysis={() => setShowAnalysisForm(true)}
+          news={news}
         />
       )}
 
@@ -272,7 +306,7 @@ export default function StockAnalysisPage({
         setQuestion={setQuestion}
         loading={loading}
         stockId={effectiveStockId}
-        stockLabel={name || symbol || ''}
+        stockLabel={resolvedName || symbol || ''}
         onStart={handleStartAnalysis}
         showEmptyState={
           stream.status === 'idle' &&

@@ -348,6 +348,7 @@ export type StockProfileDto =
       sector?: string;
       industry?: string;
       nextEarningsDate?: string;
+      lastReportedDate?: string;
     }
   | { degraded: true; reason: string };
 
@@ -364,6 +365,33 @@ export async function getStockDetail(
 ): Promise<StockDetailResult> {
   return fetchApi(
     `/api/stocks/${encodeURIComponent(symbol)}?market=${encodeURIComponent(market)}`,
+  );
+}
+
+// Recent announcements feed for the stock header (filings + web-search news).
+export interface StockNewsItem {
+  title: string;
+  url: string;
+  source: string;
+  publishedAt: string | null;
+  formType?: string;
+  kind: 'filing' | 'news';
+}
+
+export interface StockNewsResponse {
+  items: StockNewsItem[];
+  degraded?: { reason: string };
+}
+
+export async function getStockNews(
+  symbol: string,
+  market: string,
+  limit?: number,
+): Promise<StockNewsResponse> {
+  const qs = new URLSearchParams({ market });
+  if (limit) qs.set('limit', String(limit));
+  return fetchApi(
+    `/api/stocks/${encodeURIComponent(symbol)}/news?${qs.toString()}`,
   );
 }
 

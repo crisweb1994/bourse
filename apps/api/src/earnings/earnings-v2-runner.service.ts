@@ -4,6 +4,7 @@ import {
   createEastmoneyV2FinancialsConnector,
   createSecEdgarXbrlV2FinancialsConnector,
   type FetchLike,
+  type FinancialsBundleV2,
   type ProviderFinancialsV2Port,
 } from '@bourse/market-data';
 import {
@@ -31,9 +32,13 @@ export interface V2LaneIdentity {
 
 export interface V2IdentityResolution {
   identity?: V2LaneIdentity;
-  source: 'source' | 'title_rule' | 'narrative_hint' | 'missing';
+  source: 'source' | 'title_rule' | 'narrative_hint' | 'provider_period' | 'missing';
   diagnostics: string[];
 }
+
+export type StructuredProviderResult = Awaited<
+  ReturnType<ProviderFinancialsV2Port['fetchFinancials']>
+>;
 
 /**
  * 事件身份权威关系（§10）：官方 filing metadata（source）> 确定性标题/日期规则 >
@@ -45,18 +50,21 @@ export function resolveV2Identity(
   narrativeHints?: { periodEndOn?: string; periodType?: string },
   filing?: { formType?: string; title?: string | null },
 ): V2IdentityResolution {
-  if (source.expectedPeriodEndOn && isExpectedPeriodType(source.periodType)) {
+  const fromTitle = identityFromFilingMetadata(filing);
+  const sourcePeriodType = isExpectedPeriodType(source.periodType)
+    ? source.periodType
+    : fromTitle.identity?.periodType ?? periodTypeFromFilingMetadata(filing, source.expectedPeriodEndOn);
+  if (source.expectedPeriodEndOn && sourcePeriodType) {
     return {
       identity: {
         periodEndOn: source.expectedPeriodEndOn,
-        periodType: source.periodType,
-        ...(source.fiscalYear !== undefined ? { fiscalYear: source.fiscalYear } : {}),
+        periodType: sourcePeriodType,
+        fiscalYear: source.fiscalYear ?? Number(source.expectedPeriodEndOn.slice(0, 4)),
       },
       source: 'source',
       diagnostics: [],
     };
   }
-  const fromTitle = identityFromFilingMetadata(filing);
   if (fromTitle.identity) {
     return {
       identity: fromTitle.identity,
@@ -80,6 +88,104 @@ export function resolveV2Identity(
     source: 'missing',
     diagnostics: ['no period identity available from filing metadata, title rules, or narrative hints'],
   };
+}
+
+/**
+ * Provider-first 的最后一小步：当公告没有可用日期（港交所标题经常如此）
+ * 时，用 Provider 自己返回的 periods 补齐事件身份。Provider 只负责返回
+ * period 元数据，核心事实仍然由后续的 selector 精确选取。
+ */
+export function resolveV2IdentityWithProviderPeriods(
+  source: { expectedPeriodEndOn?: string; periodType?: string; fiscalYear?: number },
+  narrativeHints: { periodEndOn?: string; periodType?: string } | undefined,
+  filing: { formType?: string; title?: string | null } | undefined,
+  periods: ReadonlyArray<Pick<FinancialsBundleV2['periods'][number], 'id' | 'fiscalYear' | 'fiscalPeriodType' | 'periodEndOn'>>,
+): V2IdentityResolution {
+  const resolved = resolveV2Identity(source, narrativeHints, filing);
+  if (periods.length === 0) return resolved;
+  if (resolved.identity) return alignIdentityToProviderPeriod(resolved, periods);
+
+  const expectedType = isExpectedPeriodType(source.periodType)
+    ? source.periodType
+    : periodTypeFromFilingMetadata(filing, source.expectedPeriodEndOn);
+  const titleYear = fiscalYearFromTitle(filing?.title);
+  const expectedFiscalYear = source.fiscalYear ?? titleYear;
+  let candidates = periods.filter((period) => period.fiscalPeriodType !== 'TTM');
+
+  if (source.expectedPeriodEndOn) {
+    candidates = candidates.filter((period) => period.periodEndOn === source.expectedPeriodEndOn);
+  }
+  if (expectedType) {
+    const typed = candidates.filter((period) => period.fiscalPeriodType === expectedType);
+    if (typed.length > 0) candidates = typed;
+  }
+  if (expectedFiscalYear !== undefined) {
+    const yearMatched = candidates.filter(
+      (period) => period.fiscalYear === expectedFiscalYear || period.periodEndOn.startsWith(`${expectedFiscalYear}-`),
+    );
+    if (yearMatched.length > 0) candidates = yearMatched;
+  }
+
+  const candidate = [...candidates].sort((a, b) => (a.periodEndOn < b.periodEndOn ? 1 : -1))[0];
+  if (!candidate) {
+    return {
+      ...resolved,
+      diagnostics: [
+        ...resolved.diagnostics,
+        'provider returned periods but none could be associated with the filing identity',
+      ],
+    };
+  }
+
+  return {
+    identity: {
+      periodEndOn: candidate.periodEndOn,
+      periodType: toExpectedPeriodType(candidate.fiscalPeriodType),
+      // Provider 的 fiscalYear 允许使用发行人财年开始年（HK FYE 3/31
+      // 就是这种语义）；EarningsEvent 的 fiscalYear 用报告期展示年份，
+      // 因此优先沿用源/标题年份，最后才退回 periodEndOn 年份。
+      fiscalYear: source.fiscalYear ?? titleYear ?? Number(candidate.periodEndOn.slice(0, 4)),
+    },
+    source: 'provider_period',
+    diagnostics: [
+      ...resolved.diagnostics,
+      `identity resolved from provider period ${candidate.id}`,
+    ],
+  };
+}
+
+function alignIdentityToProviderPeriod(
+  resolved: V2IdentityResolution,
+  periods: ReadonlyArray<Pick<FinancialsBundleV2['periods'][number], 'id' | 'fiscalYear' | 'fiscalPeriodType' | 'periodEndOn'>>,
+): V2IdentityResolution {
+  if (!resolved.identity) return resolved;
+  const exact = periods.filter((period) => period.periodEndOn === resolved.identity?.periodEndOn);
+  if (exact.length === 0) return resolved;
+
+  const compatible = exact.find((period) => providerPeriodMatchesExpected(resolved.identity!.periodType, period.fiscalPeriodType));
+  if (compatible) return resolved;
+  const providerPeriod = exact[0];
+  return {
+    identity: {
+      periodEndOn: providerPeriod.periodEndOn,
+      periodType: toExpectedPeriodType(providerPeriod.fiscalPeriodType),
+      fiscalYear: resolved.identity.fiscalYear ?? Number(providerPeriod.periodEndOn.slice(0, 4)),
+    },
+    source: 'provider_period',
+    diagnostics: [
+      ...resolved.diagnostics,
+      `provider period ${providerPeriod.id} corrected the filing period type for the exact end date`,
+    ],
+  };
+}
+
+function providerPeriodMatchesExpected(
+  expected: ExpectedEarningsPeriodType,
+  actual: string,
+): boolean {
+  if (expected === 'Q3') return actual === 'Q3' || actual === '9M';
+  if (expected === 'FY') return actual === 'FY';
+  return actual === expected;
 }
 
 /**
@@ -131,6 +237,29 @@ export function identityFromFilingMetadata(filing?: {
         diagnostics: ['identity derived from HK results-announcement title (period length + end date)'],
       };
     }
+  }
+
+  // HKEX 常见标题会把财年和年末月份拆开写，例如：
+  // "ANNOUNCEMENT OF THE MARCH QUARTER 2026 RESULTS AND FISCAL YEAR
+  // 2026 ANNUAL RESULTS"。这里的月份来自发行人的财年，而不是自然年。
+  const hkFiscalYear = /\bfiscal\s+year\s+(20\d{2})\s+annual\s+results\b/i.exec(title);
+  if (hkFiscalYear) {
+    const monthMatch = /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+quarter\s+20\d{2}\b/i.exec(title);
+    if (monthMatch) {
+      const year = Number(hkFiscalYear[1]);
+      const month = MONTH_INDEX[monthMatch[1].toLowerCase()];
+      const day = new Date(Date.UTC(year, month, 0)).getUTCDate();
+      return {
+        identity: {
+          periodEndOn: `${year}-${pad2(String(month))}-${pad2(String(day))}`,
+          periodType: 'FY',
+          fiscalYear: year,
+        },
+        diagnostics: ['identity derived from HKEX fiscal-year annual-results title'],
+      };
+    }
+    // 只有财年没有年末月份时，不把 12 月 31 日当成事实；交给 Provider periods。
+    return { diagnostics: ['HKEX fiscal-year title has no explicit fiscal-year-end month'] };
   }
 
   const cnYear = /(20\d{2})\s*年?/.exec(title);
@@ -210,6 +339,46 @@ function isExpectedPeriodType(value: string | undefined): value is ExpectedEarni
   );
 }
 
+function periodTypeFromFilingMetadata(
+  filing: { formType?: string; title?: string | null } | undefined,
+  periodEndOn?: string,
+): ExpectedEarningsPeriodType | undefined {
+  const formType = (filing?.formType ?? '').toLowerCase();
+  const title = filing?.title ?? '';
+  if (/10-k|20-f/.test(formType) || /annual|年报|年度|fiscal\s+year/i.test(`${formType} ${title}`)) return 'FY';
+  if (/semiannual|interim|中期|半年度|半年报/i.test(`${formType} ${title}`)) return 'H1';
+  if (/10-q/.test(formType)) {
+    return quarterFromEndDate(periodEndOn);
+  }
+  if (/quarterly|季度|三个月|three\s+months/i.test(`${formType} ${title}`)) {
+    if (/nine|九个?月|9m|third|第三|三季/i.test(title)) return '9M';
+    return 'Q1';
+  }
+  return undefined;
+}
+
+function quarterFromEndDate(periodEndOn?: string): ExpectedEarningsPeriodType | undefined {
+  if (!periodEndOn) return undefined;
+  const month = Number(periodEndOn.slice(5, 7));
+  if (!Number.isFinite(month)) return undefined;
+  if (month <= 3) return 'Q1';
+  if (month <= 6) return 'Q2';
+  if (month <= 9) return 'Q3';
+  return 'FY';
+}
+
+function fiscalYearFromTitle(title?: string | null): number | undefined {
+  const match = title?.match(/(?:fiscal\s+year|20\d{2}\s*年|year\s+ended)\s*[:：]?\s*(20\d{2})/i)
+    ?? title?.match(/\b(20\d{2})\b/);
+  return match ? Number(match[1]) : undefined;
+}
+
+function toExpectedPeriodType(value: string): ExpectedEarningsPeriodType {
+  return value === 'Q1' || value === 'Q2' || value === 'Q3' || value === 'H1' || value === '9M' || value === 'FY'
+    ? value
+    : value === 'Q4' ? 'FY' : 'FY';
+}
+
 export interface V2ConnectorOptions {
   /** SEC User-Agent；默认使用项目确认的 bourance + bourance.gmail.com。 */
   userAgent?: string;
@@ -248,6 +417,7 @@ export interface StructuredLaneInput {
   eventPublishedAt: string;
   knowledgeCutoffAt: string;
   connector: ProviderFinancialsV2Port;
+  providerResult?: StructuredProviderResult;
   now?: string;
 }
 
@@ -260,12 +430,19 @@ export interface StructuredLaneResult {
 export class EarningsV2RunnerService {
   constructor(private readonly selectionService: StructuredSelectionService) {}
 
-  async runStructuredLane(input: StructuredLaneInput): Promise<StructuredLaneResult> {
-    const instrumentId = `${input.stock.market}:${input.stock.symbol}`;
-    const result = await input.connector.fetchFinancials({
-      instrumentId,
+  async fetchProviderFinancials(input: {
+    stock: { market: string; symbol: string };
+    connector: ProviderFinancialsV2Port;
+  }): Promise<StructuredProviderResult> {
+    return input.connector.fetchFinancials({
+      instrumentId: `${input.stock.market}:${input.stock.symbol}`,
       deriveTTM: false,
     });
+  }
+
+  async runStructuredLane(input: StructuredLaneInput): Promise<StructuredLaneResult> {
+    const instrumentId = `${input.stock.market}:${input.stock.symbol}`;
+    const result = input.providerResult ?? await this.fetchProviderFinancials(input);
 
     if (!result.data) {
       const selection = unsupportedSelection(

@@ -6,6 +6,7 @@ import { UpsertStockDto } from './stock.dto';
 import { MARKET_DATA_CLIENT } from '../connectors/connectors.module';
 import { resolveMarketState } from './market-hours';
 import { TtlLruCache } from './search-cache';
+import { EarningsQueryService } from '../earnings/earnings-query.service';
 
 const CACHE_MAX = 200;
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -31,6 +32,7 @@ type ProfileDto =
       sector?: string;
       industry?: string;
       nextEarningsDate?: string;
+      lastReportedDate?: string;
     }
   | { degraded: true; reason: string };
 
@@ -44,6 +46,7 @@ export class StockService {
   constructor(
     private prisma: PrismaService,
     @Inject(MARKET_DATA_CLIENT) private readonly marketData: ResearchMarketDataClient,
+    private readonly earningsQuery: EarningsQueryService,
   ) {}
 
   async search(query: string): Promise<StockSearchResult[]> {
@@ -142,6 +145,7 @@ export class StockService {
   }
 
   private async fetchQuoteAndProfile(stock: {
+    id: string;
     symbol: string;
     market: string;
   }): Promise<{ quote: QuoteDto; profile: ProfileDto }> {
@@ -197,12 +201,80 @@ export class StockService {
     };
 
     const marketCap = typeof q.marketCap === 'number' ? q.marketCap : undefined;
+
+    // Fan out the remaining profile fields in parallel, each shielded so a
+    // single source outage cannot void the others. sector/industry come from
+    // the CompanyProfile port; nextEarningsDate is the soonest future fiscal
+    // period-end from earnings consensus (forward-looking, not the call date);
+    // lastReportedDate is the most recent already-disclosed period from the
+    // earnings module. All are best-effort: undefined just hides the field.
+    // Each call is wrapped in an async IIFE so a synchronous throw (e.g. a
+    // port method that is undefined in a partial test double) becomes a
+    // rejected promise rather than escaping Promise.allSettled.
+    const [profileSettled, earningsSettled, lastReportedSettled] =
+      await Promise.allSettled([
+        (async () => this.marketData.getProfile(instrumentId))(),
+        (async () => this.marketData.getEarningsConsensus(instrumentId))(),
+        (async () => this.earningsQuery.latest(stock.id))(),
+      ]);
+
+    const companyProfile =
+      profileSettled.status === 'fulfilled' ? profileSettled.value?.data : undefined;
+    const sector = companyProfile?.sector;
+    const industry = companyProfile?.industry;
+
+    const nextEarningsDate = this.pickNextEarningsDate(
+      earningsSettled.status === 'fulfilled' ? earningsSettled.value?.data : undefined,
+    );
+
+    const lastReportedResp =
+      lastReportedSettled.status === 'fulfilled' ? lastReportedSettled.value : undefined;
+    const lastReportedDate =
+      lastReportedResp?.available && lastReportedResp.card
+        ? lastReportedResp.card.periodEndOn
+        : undefined;
+
     const profile: ProfileDto =
-      marketCap !== undefined
-        ? { degraded: false, marketCap }
+      marketCap !== undefined ||
+      sector !== undefined ||
+      nextEarningsDate !== undefined ||
+      lastReportedDate !== undefined
+        ? {
+            degraded: false,
+            ...(marketCap !== undefined ? { marketCap } : {}),
+            ...(sector !== undefined ? { sector } : {}),
+            ...(industry !== undefined ? { industry } : {}),
+            ...(nextEarningsDate !== undefined ? { nextEarningsDate } : {}),
+            ...(lastReportedDate !== undefined ? { lastReportedDate } : {}),
+          }
         : { degraded: true, reason: 'NO_PROFILE_DATA' };
 
     return { quote, profile };
+  }
+
+  /**
+   * Resolve the soonest upcoming fiscal period-end from an earnings-consensus
+   * bundle. Returns a YYYY-MM-DD string or undefined. The date is a period-end
+   * (quarter/FY), not the literal earnings-call date — the UI labels it as
+   * "下一财报期截止" accordingly. Quarters are preferred over FY so the nearer
+   * milestone wins when both are forecast.
+   */
+  private pickNextEarningsDate(
+    bundle: { estimates?: Array<{ periodEndOn?: string; periodType?: string }> } | null | undefined,
+  ): string | undefined {
+    const today = new Date().toISOString().slice(0, 10);
+    const upcoming = (bundle?.estimates ?? [])
+      .filter((e) => typeof e.periodEndOn === 'string' && e.periodEndOn >= today)
+      .sort((a, b) => {
+        // Quarter periods sort before FY on equal date so the nearer cadence
+        // is surfaced first.
+        const periodRank = (p?: string) => (p === 'QUARTER' ? 0 : 1);
+        return (
+          a.periodEndOn!.localeCompare(b.periodEndOn!) ||
+          periodRank(a.periodType) - periodRank(b.periodType)
+        );
+      });
+    return upcoming[0]?.periodEndOn?.slice(0, 10);
   }
 }
 

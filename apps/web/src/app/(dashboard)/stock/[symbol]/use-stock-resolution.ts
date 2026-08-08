@@ -5,6 +5,7 @@ import {
   addToWatchlist,
   getStockDetail,
   getWatchlist,
+  removeFromWatchlist,
   type StockDetailResult,
 } from '@/lib/api';
 import { toast } from '@/components/ui';
@@ -150,6 +151,33 @@ export function useStockResolution({
     }
   };
 
+  const handleRemoveFromWatchlist = async () => {
+    if (!watchlistItemId || watchlistBusy) return;
+    const itemId = watchlistItemId;
+    setWatchlistBusy(true);
+    try {
+      await removeFromWatchlist(itemId);
+      setWatchlistItemId(null);
+      // Notify other surfaces (dashboard / watchlist page) via the shared
+      // event the generic useWatchlist hook listens for, so membership stays
+      // consistent without each component refetching independently.
+      window.dispatchEvent(new CustomEvent('watchlist:changed'));
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : '移出自选失败');
+    } finally {
+      setWatchlistBusy(false);
+    }
+  };
+
+  // Unified toggle for the header star: add when not yet watched, remove when
+  // already in the watchlist. Undefined when there is no stock to act on.
+  const handleToggleWatchlist =
+    effectiveStockId || detail?.candidates?.length
+      ? watchlistItemId
+        ? handleRemoveFromWatchlist
+        : handleAddToWatchlist
+      : undefined;
+
   return {
     detail,
     resolvingStock,
@@ -158,5 +186,7 @@ export function useStockResolution({
     watchlistBusy,
     canAddToWatchlist,
     handleAddToWatchlist,
+    handleRemoveFromWatchlist,
+    handleToggleWatchlist,
   };
 }
