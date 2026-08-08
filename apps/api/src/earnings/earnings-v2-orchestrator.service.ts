@@ -34,8 +34,9 @@ import { StructuredSelectionService } from './structured-selection.service';
 import {
   buildV2FinancialsConnector,
   EarningsV2RunnerService,
-  resolveV2Identity,
+  resolveV2IdentityWithProviderPeriods,
   type V2LaneIdentity,
+  type StructuredProviderResult,
 } from './earnings-v2-runner.service';
 import {
   buildV2CardPayload,
@@ -129,18 +130,37 @@ export class EarningsV2OrchestratorService implements OnModuleInit {
       const provider = this.providerFactory.buildProvider(providerName);
       const model = provider.getUtilityModel();
 
-      // ---- 双 lane 并行 ----
-      const [narrative, structured] = await Promise.all([
+      // ---- Provider 与公告文本并行 ----
+      // Provider 先拿完整 periods；公告文本只负责叙事和必要的身份提示，
+      // 不再在 Provider 调用前把核心数字判成 unsupported。
+      const providerConnector = buildV2FinancialsConnector(run.stock.market);
+      const [narrative, providerResult] = await Promise.all([
         this.runDocumentLane(run.stock, source, filing, parserDerivation, provider, model),
-        this.runStructuredLaneSafe(runId, run.stock, source, filing),
+        providerConnector
+          ? this.structuredLane.fetchProviderFinancials({ stock: run.stock, connector: providerConnector })
+          : Promise.resolve(null),
       ]);
 
       // ---- 事件身份 ----
-      const identity = resolveV2Identity(source, narrative?.extraction.eventIdentityHints, filing);
+      const identity = resolveV2IdentityWithProviderPeriods(
+        source,
+        narrative?.extraction.eventIdentityHints,
+        filing,
+        providerResult?.data?.periods ?? [],
+      );
       if (!identity.identity) {
         throw new V2RunError('IDENTITY_UNKNOWN', true, identity.diagnostics.join('; '));
       }
       const event = await this.ensureEventFromIdentity(run.stock, identity.identity);
+      const structured = await this.runStructuredLaneSafe(
+        runId,
+        run.stock,
+        event.id,
+        identity.identity,
+        providerConnector,
+        providerResult,
+        filing,
+      );
       const filingRelation = await this.linkFiling(event, filing);
       await this.prisma.earningsGenerationRun.update({
         where: { id: runId },
@@ -241,35 +261,31 @@ export class EarningsV2OrchestratorService implements OnModuleInit {
   private async runStructuredLaneSafe(
     runId: string,
     stock: Stock,
-    source: PreparedEarningsSource,
+    eventId: string,
+    identity: V2LaneIdentity,
+    connector: ReturnType<typeof buildV2FinancialsConnector>,
+    providerResult: StructuredProviderResult | null,
     filing: Filing,
   ) {
-    const connector = buildV2FinancialsConnector(stock.market);
     if (!connector) {
       return {
         selection: unsupportedSelection('unsupported_market', [`no v2 connector for ${stock.market}`]),
       };
     }
-    const identity = resolveV2Identity(source, undefined, filing);
-    if (!identity.identity) {
-      return {
-        selection: unsupportedSelection('identity_unknown', identity.diagnostics),
-      };
-    }
     // 事件由编排器统一 ensure；structured lane 仅在事件存在时落 selection。
-    const event = await this.ensureEventFromIdentity(stock, identity.identity);
     await this.prisma.earningsGenerationRun.update({
       where: { id: runId },
-      data: { eventId: event.id },
+      data: { eventId },
     });
     const knowledgeCutoffAt = new Date().toISOString();
     return this.structuredLane.runStructuredLane({
-      eventId: event.id,
+      eventId,
       stock,
-      identity: identity.identity,
+      identity,
       eventPublishedAt: filing.publishedAt.toISOString(),
       knowledgeCutoffAt,
       connector,
+      ...(providerResult ? { providerResult } : {}),
       now: knowledgeCutoffAt,
     });
   }

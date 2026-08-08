@@ -182,7 +182,7 @@ function EarningsCard({
             </h2>
             <Pill variant={status.variant} dot>{status.label}</Pill>
             {card.filing.unaudited && <Pill variant="neutral">未经审计</Pill>}
-            {card.revisionStatus === 'PARTIAL' && <Pill variant="neutral">仅数字</Pill>}
+            {card.revisionStatus === 'PARTIAL' && <Pill variant="neutral">内容不完整</Pill>}
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] text-[var(--color-fg-3)]">
             <span>{formatDateTime(card.filing.publishedAt)} 披露</span>

@@ -347,7 +347,9 @@ function fiscalCycles(rows: HkRow[]): Map<string, { fiscalYear: number; periodSt
 
   for (const group of cycleByEnd.values()) {
     const cycleEnd = group.find((row) => row.dateType === '001') ?? group[0];
-    const prevAnnual = annuals.find((annual) => annual.reportDate < cycleEnd.reportDate) ?? null;
+    // annuals 按日期升序；这里要取当前年报之前最近的一份，而不是最早的一份。
+    // 取错会把所有港股期间的 fiscalYear 错挂到历史最早财年。
+    const prevAnnual = [...annuals].reverse().find((annual) => annual.reportDate < cycleEnd.reportDate) ?? null;
     let periodStartOn: string | null = null;
     if (prevAnnual) {
       periodStartOn = addDays(prevAnnual.reportDate, 1);

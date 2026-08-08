@@ -6,6 +6,7 @@ import {
   EarningsV2RunnerService,
   identityFromFilingMetadata,
   resolveV2Identity,
+  resolveV2IdentityWithProviderPeriods,
 } from './earnings-v2-runner.service';
 import type { StructuredSelectionService } from './structured-selection.service';
 
@@ -166,6 +167,49 @@ test('identityFromFilingMetadata parses HK results-announcement titles', () => {
     assert.equal(resolved.identity?.periodType, periodType, title);
     assert.equal(resolved.identity?.periodEndOn, periodEndOn, title);
   }
+});
+
+test('identityFromFilingMetadata parses HKEX fiscal-year annual-results titles', () => {
+  const resolved = identityFromFilingMetadata({
+    formType: 'preliminary',
+    title: 'ANNOUNCEMENT OF THE MARCH QUARTER 2026 RESULTS AND FISCAL YEAR 2026 ANNUAL RESULTS',
+  });
+  assert.equal(resolved.identity?.periodType, 'FY');
+  assert.equal(resolved.identity?.periodEndOn, '2026-03-31');
+});
+
+test('resolveV2Identity infers common US filing period types from provider metadata', () => {
+  const annual = resolveV2Identity(
+    { expectedPeriodEndOn: '2025-09-28' },
+    undefined,
+    { formType: '10-K', title: 'Annual report' },
+  );
+  assert.equal(annual.source, 'source');
+  assert.equal(annual.identity?.periodType, 'FY');
+
+  const quarter = resolveV2Identity(
+    { expectedPeriodEndOn: '2025-06-30' },
+    undefined,
+    { formType: '10-Q', title: 'Quarterly report' },
+  );
+  assert.equal(quarter.source, 'source');
+  assert.equal(quarter.identity?.periodType, 'Q2');
+});
+
+test('resolveV2IdentityWithProviderPeriods fills an HK identity from Provider periods', () => {
+  const resolved = resolveV2IdentityWithProviderPeriods(
+    {},
+    undefined,
+    { formType: 'annual', title: 'Annual results' },
+    [
+      { id: 'period-2025-03-31-001', fiscalYear: 2024, fiscalPeriodType: 'FY', periodEndOn: '2025-03-31' },
+      { id: 'period-2026-03-31-001', fiscalYear: 2025, fiscalPeriodType: 'FY', periodEndOn: '2026-03-31' },
+    ],
+  );
+  assert.equal(resolved.source, 'provider_period');
+  assert.equal(resolved.identity?.periodEndOn, '2026-03-31');
+  assert.equal(resolved.identity?.periodType, 'FY');
+  assert.equal(resolved.identity?.fiscalYear, 2026);
 });
 
 test('resolveV2Identity applies priority: source > title rule > narrative hint', () => {

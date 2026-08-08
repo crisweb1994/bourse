@@ -12,15 +12,26 @@
  * the URL `?analysisId=` parameter; the page effect picks it up.
  */
 import { useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Star, Loader2, ChevronDown, Clock, Share2 } from 'lucide-react';
+import {
+  ArrowUpRight,
+  CalendarDays,
+  ChevronDown,
+  Clock,
+  Loader2,
+  MessageSquareText,
+  Share2,
+  Sparkles,
+  Star,
+} from 'lucide-react';
 import {
   type AnalysisHistoryItemDto,
   type StockQuoteDto,
   type StockProfileDto,
   type StockNewsItem,
 } from '@/lib/api';
-import { Pill, SectionTag } from '@/components/ui';
+import { Button, Pill, SectionTag } from '@/components/ui';
 import { ANALYSIS_TYPE_LABELS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
@@ -56,6 +67,7 @@ interface Props {
   market: string;
   exchange?: string;
   name: string;
+  currency?: string;
   /** null when URL has no stockId AND lookup didn't find one yet. */
   stockId: string | null;
   /** null when not on user's watchlist (PR-4 doesn't toggle — placeholder). */
@@ -71,6 +83,10 @@ interface Props {
    */
   quote: StockQuoteDto | null;
   profile: StockProfileDto | null;
+  /** Opens the stock-scoped Chat entry from the research header. */
+  onOpenResearch?: () => void;
+  /** Opens the formal analysis dialog from the research header. */
+  onOpenAnalysis?: () => void;
   /**
    * Recent announcements (filings + web-search news), fetched via a dedicated
    * async endpoint so it never blocks the price strip. `loading` renders a
@@ -84,6 +100,7 @@ export function StockHeader({
   market,
   exchange,
   name,
+  currency,
   stockId,
   inWatchlist,
   onToggleWatchlist,
@@ -91,26 +108,58 @@ export function StockHeader({
   recentAnalyses,
   quote,
   profile,
+  onOpenResearch,
+  onOpenAnalysis,
   news,
 }: Props) {
-
   return (
-    <header className="mb-6">
-      <div className="flex flex-wrap items-start justify-between gap-3 sm:items-end">
+    <header className="mb-8" aria-label={`${symbol} 股票研究概览`}>
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-5">
         <div className="min-w-0">
-          <SectionTag className="mb-3">股票分析</SectionTag>
-          <div className="flex items-baseline gap-3 flex-wrap">
-            <h1 className="font-mono text-[32px] font-medium tracking-[-0.02em] leading-none m-0">
+          <SectionTag className="mb-3">股票研究</SectionTag>
+          <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+            <h1 className="m-0 font-mono text-[36px] font-medium leading-none tracking-[-0.025em]">
               {symbol}
             </h1>
-            {market && <Pill>{market}</Pill>}
-            {exchange && <Pill>{exchange}</Pill>}
+            <div className="flex items-center gap-1.5 pb-1">
+              {market && <Pill>{market}</Pill>}
+              {exchange && <Pill>{exchange}</Pill>}
+            </div>
           </div>
-          <p className="mt-2 text-[14px] text-[var(--color-fg-2)] m-0">
-            {name}
-          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <p className="m-0 text-[15px] font-medium text-[var(--color-fg)]">
+              {name}
+            </p>
+            {currency && (
+              <span className="font-mono text-[11px] text-[var(--color-fg-3)]">
+                · {currency}
+              </span>
+            )}
+          </div>
         </div>
-        <div className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+          {stockId && onOpenResearch && (
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              onClick={onOpenResearch}
+            >
+              <MessageSquareText className="h-3.5 w-3.5" strokeWidth={1.5} />
+              研究对话
+            </Button>
+          )}
+          {stockId && onOpenAnalysis && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={onOpenAnalysis}
+            >
+              <Sparkles className="h-3.5 w-3.5" strokeWidth={1.5} />
+              {recentAnalyses.length > 0 ? '新分析' : '开始分析'}
+            </Button>
+          )}
           <WatchlistToggle
             on={inWatchlist}
             busy={!!watchlistBusy}
@@ -124,23 +173,10 @@ export function StockHeader({
       {/* Quote strip — only when stockId present (else header is the empty
           shell for resolution flow). */}
       {stockId && (
-        <div
-          className={
-            'mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 ' +
-            'border-y border-[var(--color-border)] py-3'
-          }
-        >
-          <QuoteBlock quote={quote} />
-          <MarketStateBlock state={quoteMarketState(quote)} />
-          <ProfileMeta profile={profile} />
-          <span className="flex-1" />
-          {recentAnalyses.length > 0 && (
-            <LastAnalysisChip
-              recent={recentAnalyses}
-              currentSymbol={symbol}
-            />
-          )}
-        </div>
+        <>
+          <StockFactBand quote={quote} profile={profile} currency={currency} />
+          <ResearchPulse recent={recentAnalyses} currentSymbol={symbol} />
+        </>
       )}
 
       {/* Announcements row — async, never blocks the quote strip above.
@@ -149,6 +185,204 @@ export function StockHeader({
       {stockId && news && <AnnouncementsRow news={news} />}
     </header>
   );
+}
+
+// ----------------------------------------------------------------------------
+// StockFactBand — a compact, scan-friendly layer between identity and research
+// ----------------------------------------------------------------------------
+function StockFactBand({
+  quote,
+  profile,
+  currency,
+}: {
+  quote: StockQuoteDto | null;
+  profile: StockProfileDto | null;
+  currency?: string;
+}) {
+  const quoteCurrency =
+    quote && !quote.degraded ? quote.currency : undefined;
+  const facts = profileFacts(profile);
+
+  return (
+    <section
+      className="mt-6 overflow-hidden border-y border-[var(--color-border)] bg-[var(--color-border-soft)]"
+      aria-label="行情与公司资料"
+    >
+      <div className="flex flex-wrap gap-px">
+        <QuoteBlock quote={quote} />
+        <MarketStateFact quote={quote} />
+        <FactCell label="币种" value={currency || quoteCurrency || '—'} />
+        {facts.map((fact) => (
+          <FactCell key={fact.label} label={fact.label} value={fact.value} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function FactCell({
+  label,
+  value,
+  className,
+}: {
+  label: string;
+  value: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        'min-w-[150px] flex-[1_1_150px] bg-[var(--color-bg-elev)] px-4 py-4 sm:px-5',
+        className,
+      )}
+    >
+      <div className="text-[10.5px] text-[var(--color-fg-3)]">{label}</div>
+      <div className="mt-2 truncate font-mono text-[13px] text-[var(--color-fg)]">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function MarketStateFact({ quote }: { quote: StockQuoteDto | null }) {
+  const state = quoteMarketState(quote);
+  const isLive = state === 'REGULAR';
+  const value = !quote
+    ? '行情加载中…'
+    : quote.degraded
+      ? '行情暂不可用'
+      : MARKET_STATE_LABEL[state ?? ''] ?? state ?? '未知';
+
+  return (
+    <FactCell
+      label="市场状态"
+      value={
+        <span
+          className={cn(
+            'inline-flex items-center gap-1.5',
+            isLive
+              ? 'text-[var(--color-accent-600)]'
+              : 'text-[var(--color-fg-2)]',
+          )}
+        >
+          <span
+            className={cn(
+              'h-1.5 w-1.5 shrink-0 rounded-full',
+              isLive ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-fg-4)]',
+            )}
+          />
+          {value}
+        </span>
+      }
+    />
+  );
+}
+
+function profileFacts(
+  profile: StockProfileDto | null,
+): Array<{ label: string; value: string }> {
+  if (!profile || profile.degraded) return [];
+
+  const facts: Array<{ label: string; value: string }> = [];
+  if (typeof profile.marketCap === 'number') {
+    facts.push({ label: '市值', value: formatMarketCap(profile.marketCap) });
+  }
+  if (profile.sector) {
+    facts.push({
+      label: '行业',
+      value: profile.industry
+        ? `${profile.sector} · ${profile.industry}`
+        : profile.sector,
+    });
+  }
+  if (profile.nextEarningsDate) {
+    facts.push({
+      label: '下次财报期',
+      value: profile.nextEarningsDate.slice(0, 10),
+    });
+  }
+  if (profile.lastReportedDate) {
+    facts.push({
+      label: '上次披露',
+      value: profile.lastReportedDate.slice(0, 10),
+    });
+  }
+  return facts;
+}
+
+// ----------------------------------------------------------------------------
+// ResearchPulse — makes the research state explicit instead of hiding it in
+// a long one-line history chip.
+// ----------------------------------------------------------------------------
+function ResearchPulse({
+  recent,
+  currentSymbol,
+}: {
+  recent: AnalysisHistoryItemDto[];
+  currentSymbol: string;
+}) {
+  const latest = recent[0];
+  const oneLiner = readOneLiner(latest?.summaryJson);
+  const typeLabel = latest
+    ? ANALYSIS_TYPE_LABELS[latest.analysisType] ?? latest.analysisType
+    : null;
+
+  return (
+    <section
+      className="border-b border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-4 sm:px-5"
+      aria-label="最近研究"
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          <div className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-[var(--radius-btn)] bg-[var(--color-accent-soft)] text-[var(--color-accent-600)]">
+            <Clock className="h-3.5 w-3.5" strokeWidth={1.5} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]">
+              <span className="font-medium text-[var(--color-fg)]">最近研究</span>
+              {latest ? (
+                <span className="font-mono text-[10.5px] text-[var(--color-fg-3)]">
+                  {typeLabel} · {timeAgo(latest.generatedAt ?? latest.createdAt)}
+                </span>
+              ) : (
+                <span className="font-mono text-[10.5px] text-[var(--color-fg-3)]">
+                  尚未运行分析
+                </span>
+              )}
+              {latest?.overallSignal && (
+                <span
+                  className={cn(
+                    'font-medium',
+                    signalTone(latest.overallSignal),
+                  )}
+                >
+                  {SIGNAL_LABEL[latest.overallSignal] ?? latest.overallSignal}
+                  {latest.overallConfidence
+                    ? ` · ${CONF_LABEL[latest.overallConfidence] ?? latest.overallConfidence}`
+                    : ''}
+                </span>
+              )}
+            </div>
+            <p className="mt-1.5 m-0 line-clamp-2 max-w-[820px] break-words text-[12.5px] leading-[1.55] text-[var(--color-fg-2)]">
+              {oneLiner ||
+                (latest
+                  ? '这次分析没有摘要，可打开历史查看完整报告。'
+                  : '还没有研究基线，从一次 AI 分析或研究对话开始。')}
+            </p>
+          </div>
+        </div>
+        {latest && (
+          <LastAnalysisChip recent={recent} currentSymbol={currentSymbol} />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function signalTone(signal: string | null | undefined): string {
+  if (signal === 'BULLISH') return 'text-[var(--color-accent-600)]';
+  if (signal === 'BEARISH') return 'text-[var(--color-danger)]';
+  return 'text-[var(--color-fg-2)]';
 }
 
 // ----------------------------------------------------------------------------
@@ -161,46 +395,52 @@ function AnnouncementsRow({
 }) {
   if (news.loading) {
     return (
-      <div className="mt-3 flex items-center gap-2">
-        <span className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-[var(--color-fg-3)]">
-          公告
+      <div
+        className="mt-3 flex flex-wrap items-center gap-2"
+        aria-label="正在加载最新公告"
+      >
+        <span className="mr-1 text-[11px] font-medium text-[var(--color-fg-3)]">
+          最新公告
         </span>
-        <Loader2 className="w-3 h-3 animate-spin text-[var(--color-fg-3)]" strokeWidth={1.5} />
-        <span className="text-[12px] text-[var(--color-fg-3)]">加载中…</span>
+        <span className="h-3 w-28 animate-pulse rounded-[var(--radius-pill)] bg-[var(--color-surface-2)]" />
+        <span className="h-3 w-20 animate-pulse rounded-[var(--radius-pill)] bg-[var(--color-surface-2)]" />
       </div>
     );
   }
   if (news.items.length === 0) return null;
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-      <span className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-[var(--color-fg-3)]">
-        公告
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      <span className="mr-1 text-[11px] font-medium text-[var(--color-fg-3)]">
+        最新公告
       </span>
-      {news.items.slice(0, 4).map((item, idx) => (
-        <span key={item.url} className="inline-flex items-center gap-1.5">
-          {idx > 0 && (
-            <span className="text-[var(--color-fg-4)] text-[11px]">·</span>
+      {news.items.slice(0, 4).map((item) => (
+        <a
+          key={item.url}
+          href={item.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group inline-flex min-w-0 max-w-full items-center gap-2 rounded-[var(--radius-btn)] border border-[var(--color-border)] bg-[var(--color-bg-elev)] px-2.5 py-1.5 text-[12px] text-[var(--color-fg)] transition-colors hover:bg-[var(--color-surface-hover)]"
+          title={item.title}
+        >
+          <span className="shrink-0 rounded-[var(--radius-pill)] border border-[var(--color-info-line)] bg-[var(--color-info-soft)] px-1.5 py-px font-mono text-[10px] text-[var(--color-info)]">
+            {item.formType || (item.kind === 'filing' ? '披露' : '新闻')}
+          </span>
+          <span className="min-w-0 max-w-[240px] truncate">{item.title}</span>
+          {item.source && (
+            <span className="shrink-0 font-mono text-[10px] text-[var(--color-fg-3)]">
+              {item.source}
+            </span>
           )}
-          <a
-            href={item.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-[12px] text-[var(--color-fg)] hover:text-[var(--color-accent-600)]"
-            title={item.title}
-          >
-            {item.kind === 'filing' && item.formType && (
-              <span className="font-mono text-[10px] text-[var(--color-info)] bg-[var(--color-info-soft)] border border-[var(--color-info-line)] px-1.5 py-px rounded-[var(--radius-pill)]">
-                {item.formType}
-              </span>
-            )}
-            <span className="max-w-[220px] truncate">{item.title}</span>
-            {item.publishedAt && (
-              <span className="font-mono text-[10px] text-[var(--color-fg-3)]">
-                {item.publishedAt.slice(0, 10)}
-              </span>
-            )}
-          </a>
-        </span>
+          {item.publishedAt && (
+            <span className="shrink-0 font-mono text-[10px] text-[var(--color-fg-3)]">
+              {item.publishedAt.slice(0, 10)}
+            </span>
+          )}
+          <ArrowUpRight
+            className="h-3 w-3 shrink-0 text-[var(--color-fg-3)] transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+            strokeWidth={1.5}
+          />
+        </a>
       ))}
     </div>
   );
@@ -238,43 +478,74 @@ function ShareButton({ symbol }: { symbol: string }) {
 // ----------------------------------------------------------------------------
 // QuoteBlock
 // ----------------------------------------------------------------------------
-function QuoteBlock({ quote }: { quote: StockQuoteDto | null }) {
+function QuoteBlock({
+  quote,
+  className,
+}: {
+  quote: StockQuoteDto | null;
+  className?: string;
+}) {
   if (!quote) {
     return (
-      <span className="text-[12px] text-[var(--color-fg-3)] font-mono inline-flex items-center gap-1.5">
-        <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.5} />
-        行情加载中…
-      </span>
+      <div
+        className={cn(
+          'min-w-[300px] flex-[2_1_320px] bg-[var(--color-bg-elev)] px-4 py-4 sm:px-5',
+          className,
+        )}
+      >
+        <div className="text-[10.5px] text-[var(--color-fg-3)]">最新行情</div>
+        <div className="mt-2 inline-flex items-center gap-1.5 font-mono text-[13px] text-[var(--color-fg-3)]">
+          <Loader2 className="h-3 w-3 animate-spin" strokeWidth={1.5} />
+          行情加载中…
+        </div>
+      </div>
     );
   }
   if (quote.degraded) {
     return (
-      <span className="text-[12px] text-[var(--color-fg-3)] font-mono">
-        行情暂不可用
-      </span>
+      <div
+        className={cn(
+          'min-w-[300px] flex-[2_1_320px] bg-[var(--color-bg-elev)] px-4 py-4 sm:px-5',
+          className,
+        )}
+      >
+        <div className="text-[10.5px] text-[var(--color-fg-3)]">最新行情</div>
+        <div className="mt-2 font-mono text-[13px] text-[var(--color-fg-3)]">
+          行情暂不可用
+        </div>
+      </div>
     );
   }
   const up = quote.change >= 0;
   const sign = up ? '+' : '';
   return (
-    <div className="flex items-baseline gap-3">
-      <span className="font-mono text-[22px] font-medium tracking-[-0.01em]">
-        {formatPrice(quote.price, quote.currency)}
-      </span>
-      <span
-        className={cn(
-          'font-mono text-[13px]',
-          up ? 'text-[var(--color-accent-600)]' : 'text-[var(--color-warn)]',
-        )}
-      >
-        {sign}
-        {quote.change.toFixed(2)} ({sign}
-        {quote.changePct.toFixed(2)}%)
-      </span>
-      {quote.asOf && (
-        <span className="font-mono text-[11.5px] text-[var(--color-fg-3)]">
-          · 数据 {timeAgo(quote.asOf)}
+    <div
+      className={cn(
+        'min-w-[300px] flex-[2_1_320px] bg-[var(--color-bg-elev)] px-4 py-4 sm:px-5',
+        className,
+      )}
+    >
+      <div className="text-[10.5px] text-[var(--color-fg-3)]">最新行情</div>
+      <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="font-mono text-[28px] font-medium leading-none tracking-[-0.02em]">
+          {formatPrice(quote.price, quote.currency)}
         </span>
+        <span
+          className={cn(
+            'font-mono text-[13px]',
+            up ? 'text-[var(--color-accent-600)]' : 'text-[var(--color-warn)]',
+          )}
+        >
+          {sign}
+          {quote.change.toFixed(2)} ({sign}
+          {quote.changePct.toFixed(2)}%)
+        </span>
+      </div>
+      {quote.asOf && (
+        <div className="mt-2 inline-flex items-center gap-1.5 font-mono text-[10.5px] text-[var(--color-fg-3)]">
+          <CalendarDays className="h-3 w-3" strokeWidth={1.5} />
+          数据截至 {timeAgo(quote.asOf)}
+        </div>
       )}
     </div>
   );
@@ -283,68 +554,6 @@ function QuoteBlock({ quote }: { quote: StockQuoteDto | null }) {
 function quoteMarketState(q: StockQuoteDto | null): string | null {
   if (!q || q.degraded) return null;
   return q.marketState;
-}
-
-function MarketStateBlock({ state }: { state: string | null }) {
-  if (!state) return null;
-  const isLive = state === 'REGULAR';
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1.5 font-mono text-[11.5px]',
-        isLive ? 'text-[var(--color-accent-600)]' : 'text-[var(--color-fg-2)]',
-      )}
-    >
-      <span
-        className={cn(
-          'h-1.5 w-1.5 rounded-full',
-          isLive
-            ? 'bg-[var(--color-accent)]'
-            : 'bg-[var(--color-fg-4)]',
-        )}
-      />
-      {MARKET_STATE_LABEL[state] ?? state}
-    </span>
-  );
-}
-
-// ----------------------------------------------------------------------------
-// ProfileMeta
-// ----------------------------------------------------------------------------
-function ProfileMeta({ profile }: { profile: StockProfileDto | null }) {
-  if (!profile || profile.degraded) return null;
-  const items: Array<{ k: string; v: string }> = [];
-  if (typeof profile.marketCap === 'number') {
-    items.push({ k: '市值', v: formatMarketCap(profile.marketCap) });
-  }
-  if (profile.nextEarningsDate) {
-    items.push({ k: '下一财报期截止', v: profile.nextEarningsDate.slice(0, 10) });
-  }
-  if (profile.lastReportedDate) {
-    items.push({ k: '上次已披露', v: profile.lastReportedDate.slice(0, 10) });
-  }
-  if (profile.sector) {
-    items.push({
-      k: '板块',
-      v: profile.industry
-        ? `${profile.sector} · ${profile.industry}`
-        : profile.sector,
-    });
-  }
-  if (items.length === 0) return null;
-  return (
-    <>
-      {items.map((item) => (
-        <span
-          key={item.k}
-          className="font-mono text-[11.5px] text-[var(--color-fg-3)] inline-flex items-baseline gap-1"
-        >
-          <span>{item.k}</span>
-          <span className="text-[var(--color-fg-2)]">{item.v}</span>
-        </span>
-      ))}
-    </>
-  );
 }
 
 // ----------------------------------------------------------------------------
@@ -366,6 +575,7 @@ function WatchlistToggle({
       type="button"
       onClick={onClick}
       disabled={disabled || busy}
+      aria-pressed={on}
       className={cn(
         'inline-flex items-center gap-1.5 rounded-[var(--radius-btn)] ' +
           'border px-3 py-1.5 text-[12.5px] transition-colors',
@@ -423,7 +633,6 @@ function LastAnalysisChip({
   if (!latest) return null;
 
   const activeId = searchParams.get('analysisId');
-  const latestOneLiner = readOneLiner(latest.summaryJson);
 
   const switchTo = (a: AnalysisHistoryItemDto) => {
     setOpen(false);
@@ -437,6 +646,9 @@ function LastAnalysisChip({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={`${currentSymbol} 最近分析历史`}
         className={
           'inline-flex items-center gap-2 rounded-[var(--radius-btn)] ' +
           'border border-[var(--color-border)] bg-[var(--color-bg)] ' +
@@ -455,14 +667,6 @@ function LastAnalysisChip({
             {latest.overallConfidence
               ? `·${CONF_LABEL[latest.overallConfidence] ?? latest.overallConfidence}`
               : ''}
-          </span>
-        )}
-        {latestOneLiner && (
-          <span
-            className="max-w-[220px] truncate text-[11.5px] text-[var(--color-fg-2)]"
-            title={latestOneLiner}
-          >
-            {latestOneLiner}
           </span>
         )}
         <ChevronDown
