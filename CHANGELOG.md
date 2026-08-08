@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.0](https://github.com/crisweb1994/bourse/compare/v0.7.0...v0.8.0) (2026-08-08)
+
+
+### Features
+
+* **stock:** enrich header into a research summary ([bf89a95](https://github.com/crisweb1994/bourse/commit/bf89a950280d380227fec95bbe649a51cb67d306))
+
+
+### Bug Fixes
+
+* use provider-first earnings facts ([fdc1ba2](https://github.com/crisweb1994/bourse/commit/fdc1ba22bc92b5f6dbef04fe08bc97883a879640))
+
 ## [0.7.0](https://github.com/crisweb1994/bourse/compare/v0.6.0...v0.7.0) (2026-08-02)
 
 
