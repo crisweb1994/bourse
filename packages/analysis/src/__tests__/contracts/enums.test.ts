@@ -1,67 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AnalysisType,
+  AnalysisMode,
+  AnalysisStatus,
   Confidence,
-  Recommendation,
-  RunStatus,
+  FocusWindow,
+  OverallSignal,
+  SectionStatus,
   SectionType,
-  Signal,
 } from '../../contracts/enums';
 
-describe('contracts/enums', () => {
-  describe('RunStatus', () => {
-    it('accepts all 7 superset states', () => {
-      for (const s of [
-        'PENDING',
-        'IN_PROGRESS',
-        'COMPLETED',
-        'PARTIAL_FAILED',
-        'FAILED',
-        'CANCELLED',
-        'BUDGET_EXHAUSTED',
-      ]) {
-        expect(RunStatus.parse(s)).toBe(s);
-      }
-    });
-
-    it('rejects unknown status', () => {
-      expect(() => RunStatus.parse('DONE')).toThrow();
-    });
+describe('Analysis V2 enums', () => {
+  it('contains exactly the fixed modes, windows and sections', () => {
+    expect(AnalysisMode.options).toEqual(['QUICK', 'DEEP']);
+    expect(FocusWindow.options).toEqual(['30D', '90D', '1Y', '3Y']);
+    expect(SectionType.options).toEqual([
+      'COMPANY_QUALITY',
+      'INDUSTRY_POSITION',
+      'VALUATION_SCENARIOS',
+      'RISK_REGISTER',
+      'MARKET_SIGNALS',
+    ]);
   });
 
-  describe('Recommendation', () => {
-    it('accepts BUY / HOLD / SELL', () => {
-      for (const r of ['BUY', 'HOLD', 'SELL']) {
-        expect(Recommendation.parse(r)).toBe(r);
-      }
-    });
-
-    it('rejects unknown recommendation', () => {
-      expect(() => Recommendation.parse('STRONG_BUY')).toThrow();
-    });
-  });
-
-  describe('shared-types reuse', () => {
-    it('AnalysisType validates real enum values', () => {
-      expect(AnalysisType.parse('FUNDAMENTAL')).toBe('FUNDAMENTAL');
-      expect(AnalysisType.parse('COMPREHENSIVE')).toBe('COMPREHENSIVE');
-      expect(AnalysisType.parse('PORTFOLIO')).toBe('PORTFOLIO');
-    });
-
-    it('SectionType accepts dimensions but rejects non-section analysis types', () => {
-      expect(SectionType.parse('FUNDAMENTAL')).toBe('FUNDAMENTAL');
-      expect(() => SectionType.parse('COMPREHENSIVE')).toThrow();
-      expect(() => SectionType.parse('UNSUPPORTED')).toThrow();
-    });
-
-    it('Signal / Confidence validate real enum values', () => {
-      expect(Signal.parse('BULLISH')).toBe('BULLISH');
-      expect(Confidence.parse('HIGH')).toBe('HIGH');
-    });
-
-    it('rejects values not in shared-types enums', () => {
-      expect(() => AnalysisType.parse('INVALID_TYPE')).toThrow();
-      expect(() => Signal.parse('STRONG_BUY')).toThrow();
-    });
+  it('has no budget-exhausted or legacy dimension status', () => {
+    expect(AnalysisStatus.safeParse('BUDGET_EXHAUSTED').success).toBe(false);
+    for (const status of ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'SKIPPED', 'CANCELLED']) {
+      expect(SectionStatus.safeParse(status).success).toBe(true);
+    }
+    expect(OverallSignal.safeParse('POSITIVE').success).toBe(true);
+    expect(OverallSignal.safeParse('BULLISH').success).toBe(false);
+    expect(Confidence.parse('LOW')).toBe('LOW');
   });
 });

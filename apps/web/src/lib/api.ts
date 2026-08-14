@@ -5,12 +5,13 @@ import {
   ChannelType,
 } from '@bourse/shared-types';
 import type {
-  ActiveAnalysisType,
+  AnalysisMode,
   AnalysisStatus,
-  AnalysisType,
   Confidence,
+  FocusWindow,
+  OverallSignal,
+  SectionStatus,
   SectionType,
-  Signal,
   ChatSsePayload,
   StockSearchResult,
   WatchlistItemDto,
@@ -181,12 +182,14 @@ export interface AnalysisChatSummaryDto {
   id: string;
   stockId: string;
   symbol: string;
-  analysisType: string;
+  mode: AnalysisMode;
+  focusWindow: FocusWindow;
   status: string;
-  generatedAt: string | null;
+  createdAt: string;
+  completedAt: string | null;
   dataAsOf: string | null;
-  overallSignal: string | null;
-  overallConfidence: string | null;
+  overallSignal: OverallSignal | null;
+  overallConfidence: Confidence | null;
   degraded: boolean;
   hasEvidenceSnapshot: boolean;
 }
@@ -443,22 +446,23 @@ export interface AnalysisDto {
   stockId: string;
   symbol: string;
   market: Market;
-  analysisType: AnalysisType;
+  mode: AnalysisMode;
+  focusWindow: FocusWindow;
   question: string | null;
   status: AnalysisStatus;
   aiProvider: string | null;
   aiModel: string | null;
   dataAsOf: string | null;
-  generatedAt: string | null;
-  overallSignal: Signal | null;
+  completedAt: string | null;
+  startedAt: string | null;
+  overallSignal: OverallSignal | null;
   overallConfidence: Confidence | null;
-  degradedSource?: 'WEB_SEARCH_FALLBACK' | null;
   /** Cumulative input/output tokens from the terminal trace; null when unknown. */
   inputTokens?: number | null;
   outputTokens?: number | null;
   createdAt: string;
-  /** Free-form payload; COMPREHENSIVE stores the summary block here. */
-  summaryJson?: unknown;
+  summaryJson?: OverallConclusionDto | null;
+  summaryMarkdown?: string | null;
   stock: {
     id: string;
     symbol: string;
@@ -474,30 +478,53 @@ export interface AnalysisDto {
 export interface AnalysisSectionDto {
   id: string;
   type: SectionType;
-  status: AnalysisStatus;
+  status: SectionStatus;
   reportMarkdown: string | null;
   structuredJson: any;
-  citations: any[];
   order: number;
 }
 
 export interface AnalysisHistorySectionDto {
   type: SectionType;
-  status: AnalysisStatus;
+  status: SectionStatus;
 }
 
 export type AnalysisHistoryItemDto = Omit<AnalysisDto, 'sections'> & {
   sections: AnalysisHistorySectionDto[];
 };
 
+export interface OverallEvidenceDto {
+  claim: string;
+  citations: Array<{
+    title: string;
+    url: string;
+    sourceType?: string;
+    retrievedAt?: string;
+    qualityTier?: string;
+  }>;
+}
+
+export interface OverallConclusionDto {
+  headline: string;
+  signal: OverallSignal | null;
+  confidence: Confidence;
+  rationale: OverallEvidenceDto[];
+  counterpoints: OverallEvidenceDto[];
+  changeConditions: string[];
+  missingSections: SectionType[];
+  dataAsOf: string;
+  disclaimer?: string;
+}
+
 export async function createAnalysis(
   stockId: string,
-  analysisType: ActiveAnalysisType,
+  mode: AnalysisMode,
+  focusWindow: FocusWindow,
   aiProviderSettingId?: string,
   aiModel?: string,
   question?: string,
 ): Promise<AnalysisDto> {
-  const body: Record<string, string> = { stockId, analysisType };
+  const body: Record<string, string> = { stockId, mode, focusWindow };
   if (aiProviderSettingId) body.aiProviderSettingId = aiProviderSettingId;
   if (aiModel) body.aiModel = aiModel;
   if (question?.trim()) body.question = question.trim();
@@ -520,12 +547,10 @@ export async function getAnalysisHistory(
   page = 1,
   limit = 20,
   filters?: {
-    analysisType?: AnalysisType;
+    mode?: AnalysisMode;
     status?: AnalysisStatus;
     symbol?: string;
     stockId?: string;
-    /** Filter to runs where structured evidence fell back to web_search. */
-    degradedOnly?: boolean;
   },
 ): Promise<{
   items: AnalysisHistoryItemDto[];
@@ -534,11 +559,10 @@ export async function getAnalysisHistory(
   limit: number;
 }> {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
-  if (filters?.analysisType) params.set('analysisType', filters.analysisType);
+  if (filters?.mode) params.set('mode', filters.mode);
   if (filters?.status) params.set('status', filters.status);
   if (filters?.symbol) params.set('symbol', filters.symbol);
   if (filters?.stockId) params.set('stockId', filters.stockId);
-  if (filters?.degradedOnly) params.set('degradedOnly', 'true');
   return fetchApi(`/api/analysis/history?${params.toString()}`);
 }
 
@@ -556,11 +580,8 @@ export async function abortAnalysis(id: string): Promise<{ ok: boolean }> {
   });
 }
 
-export async function retrySection(
-  analysisId: string,
-  sectionId: string,
-): Promise<{ ok: boolean }> {
-  return fetchApi(`/api/analysis/${analysisId}/sections/${sectionId}/retry`, {
+export async function retryAnalysis(analysisId: string): Promise<{ ok: boolean }> {
+  return fetchApi(`/api/analysis/${analysisId}/retry`, {
     method: 'POST',
     headers: csrfHeaders(),
   });

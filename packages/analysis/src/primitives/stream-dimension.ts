@@ -1,4 +1,4 @@
-import type { EvidencePackAny } from '../contracts/evidence-pack';
+import type { EvidencePackV2 } from '../contracts/evidence-pack-v2';
 import type { SseEvent } from '../contracts/sse-events';
 import { buildCommonSuffix } from '../dimensions/freshness';
 import type { Dimension, DimensionInput } from '../dimensions/types';
@@ -29,12 +29,10 @@ export interface StreamDimensionOptions {
   todayDate?: string;
   signal?: AbortSignal;
   /**
-   * RFC-02 §13: shared EvidencePack (v1 or v2) produced upstream by
-   * Stage 0. T9 plumbs this through but does NOT yet inject it into
-   * `dim.buildPrompts` — that's T10. Consumers can read the value via
-   * `options.evidencePack` already if they want to short-circuit early.
+   * Immutable EvidencePack v2 produced by the Snapshot stage. The workflow
+   * owns its lifetime and reuses it for retries; this function only reads it.
    */
-  evidencePack?: EvidencePackAny;
+  evidencePack?: EvidencePackV2;
   /**
    * RFC-06: bare hostnames the provider's web_search tool is allowed to
    * reach. Caller (workflow / apps/api) derives this from the market
@@ -51,6 +49,8 @@ export interface StreamDimensionOptions {
    * skips the rule (legacy behavior).
    */
   domainTiers?: Record<string, DomainTier>;
+  /** Fixed per-module web-search cap owned by the selected research mode. */
+  maxToolCalls?: number;
 }
 
 /**
@@ -104,14 +104,9 @@ export async function* streamDimension(
   const ctx = { todayDate };
   const { system, user } = dimension.buildPrompts(normalizedInput, ctx);
 
-  // When caller passed an EvidencePack v2, prepend a fact block to the dim's
-  // system prompt. v1 packs do not have the structured fact-block shape this
-  // formatter expects, so they are ignored here.
-  const evidenceBlock =
-    options.evidencePack &&
-    options.evidencePack.schemaVersion === 'evidence-pack-v2'
-      ? `${formatEvidencePackBlock(options.evidencePack, sectionType)}\n\n`
-      : '';
+  const evidenceBlock = options.evidencePack
+    ? `${formatEvidencePackBlock(options.evidencePack, sectionType)}\n\n`
+    : '';
 
   // RFC-04: split the system prompt into 2 blocks — the stable "dim
   // instructions + common suffix" goes into a cache_control: ephemeral
@@ -184,6 +179,7 @@ export async function* streamDimension(
     },
     {
       signal: options.signal,
+      ...(options.maxToolCalls ? { maxToolUses: options.maxToolCalls } : {}),
       ...(providerRounds && providerRounds.length > 0
         ? {
             rounds: providerRounds,
@@ -274,28 +270,19 @@ export async function* streamDimension(
   // Plan 3 §4.3.4: A-E quality gate (E-only removal + AB-ratio checks).
   // RFC-06: pass `domainTiers` so the gate's Rule 0 can downgrade any
   // LLM-declared qualityTier that exceeds the code-side ground truth.
-  // RFC financials Phase 1: when the pack carries facts.financials, the
-  // dim MUST declare 'financials' in factReferences[] (FUNDAMENTAL +
-  // VALUATION are the only consumers per §3.8). Soft-warn, no reject.
-  const packV2 =
-    options.evidencePack?.schemaVersion === 'evidence-pack-v2'
-      ? options.evidencePack
-      : undefined;
-  const requiredFactReferences: string[] = [];
-  if (
-    packV2?.facts.financials &&
-    (sectionType === 'FUNDAMENTAL' || sectionType === 'VALUATION')
-  ) {
-    requiredFactReferences.push('financials');
-  }
+  // When the pack carries facts.financials, the company-quality and valuation
+  // modules declare 'financials' in their factReferences[]. Soft-warn, no
+  // reject.
   const gated = applyEvidenceGate(structured.data, {
     ...(options.domainTiers ? { domainTiers: options.domainTiers } : {}),
-    ...(requiredFactReferences.length > 0
-      ? { requiredFactReferences }
-      : {}),
   });
-  const coverage = packV2?.researchCoverage?.dimensions[sectionType];
-  const fixedData = applyFixedDisclaimer(applyResearchCoverage(gated.data, coverage));
+  const coverage =
+    options.evidencePack?.schemaVersion === 'evidence-pack-v2'
+      ? options.evidencePack.researchCoverage?.dimensions[sectionType]
+      : undefined;
+  const fixedData = applyFixedDisclaimer(
+    applyResearchCoverage(gated.data, coverage),
+  );
 
   yield {
     type: 'structured_data',

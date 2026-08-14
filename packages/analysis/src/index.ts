@@ -37,12 +37,12 @@ export type { ParsedInstrumentId, ParsedProviderSymbol } from './util';
 export * from './compute';
 export * from './primitives';
 export * from './dimensions';
-export * from './personas';
 export * from './workflows';
 export * from './markets';
 export * from './guardrails';
 export * from './tools';
 export * from './prompts';
+export * from './presets';
 
 // ---- Snapshot orchestration -----------------------------------------------
 export {
@@ -68,15 +68,11 @@ export {
 
 export {
   projectForDimension,
-  projectForFundamental,
-  projectForGovernance,
-  projectForIndustry,
-  projectForPortfolio,
-  projectForRisk,
-  projectForScenario,
-  projectForSentiment,
-  projectForTechnical,
-  projectForValuation,
+  projectForCompanyQuality,
+  projectForIndustryPosition,
+  projectForValuationScenarios,
+  projectForRiskRegister,
+  projectForMarketSignals,
   type DimensionFactView,
   type DimensionName,
 } from './snapshot/fact-filter';

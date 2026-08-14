@@ -6,934 +6,335 @@ import type {
   DimensionInput,
   SseEvent,
 } from '@bourse/analysis';
+import { SECTION_ORDER, type SectionType } from '@bourse/shared-types';
 import {
   runAnalysisWorkflowAdapter,
   type AdapterContext,
 } from './analysis-workflow-adapter';
 
-// Exercises the workflow adapter by injecting scripted domain events and
-// asserting the API SSE frames plus Prisma writes.
-
 const RUN_ID = 'analysis-test-1';
-const TODAY = '2026-05-15T00:00:00.000Z';
-const URL = 'https://cninfo.com.cn/x';
+const NOW = '2026-05-15T00:00:00.000Z';
+const SOURCE_URL = 'https://example.com/source';
 
-// ===== Stub builders =====
-
-function evt<T extends SseEvent['type']>(
-  type: T,
-  rest: Record<string, unknown>,
-  seq = 0,
-): SseEvent {
-  return { type, runId: RUN_ID, seq, ...rest } as unknown as SseEvent;
-}
-
-interface PrismaCall {
-  table: 'analysisSection' | 'analysis';
-  method: 'update' | 'updateMany';
-  args: unknown;
-}
-
-interface SendCall {
+interface SentFrame {
   type: string;
   data: Record<string, unknown>;
 }
 
-function buildCtx(opts: {
+interface DbCall {
+  table: string;
+  method: string;
+  args: any;
+}
+
+function event<T extends SseEvent['type']>(
+  type: T,
+  data: Record<string, unknown>,
+  seq: number,
+): SseEvent {
+  return { type, runId: RUN_ID, seq, ...data } as unknown as SseEvent;
+}
+
+function done(status: string, seq: number): SseEvent {
+  return event('done', {
+    status,
+    result: {
+      reportMarkdown: '',
+      structuredJson: null,
+      citations: [],
+      status,
+      confidence: 'LOW',
+      trace: { tokensIn: 10, tokensOut: 20 },
+      warnings: [],
+    },
+  }, seq);
+}
+
+function evidencePack() {
+  return {
+    schemaVersion: 'evidence-pack-v2' as const,
+    symbol: 'AAPL',
+    market: 'US' as const,
+    capturedAt: NOW,
+    facts: {},
+    dataAvailability: { complete: [], missing: [], fallbacks: [] },
+    citations: [],
+    trace: { toolCalls: 0, durationMs: 0, costUsd: 0 },
+  };
+}
+
+function sectionEvents(type: SectionType, order: number, seq: number): SseEvent[] {
+  return [
+    event('section_start', { sectionType: type, order }, seq),
+    event('report_chunk', { sectionType: type, deltaText: `${type} report` }, seq + 1),
+    event('citation', {
+      sectionType: type,
+      citation: {
+        title: `${type} source`,
+        url: SOURCE_URL,
+        sourceType: 'FILING',
+        retrievedAt: NOW,
+      },
+    }, seq + 2),
+    event('structured_data', {
+      sectionType: type,
+      json: { type, summary: 'summary' },
+    }, seq + 3),
+    event('section_complete', {
+      sectionType: type,
+      status: 'COMPLETED',
+      usage: { tokensIn: 2, tokensOut: 3 },
+    }, seq + 4),
+  ];
+}
+
+function persistedSection(type: SectionType) {
+  const assessment: Record<SectionType, string> = {
+    COMPANY_QUALITY: 'MIXED',
+    INDUSTRY_POSITION: 'COMPETITIVE',
+    VALUATION_SCENARIOS: 'FAIR',
+    RISK_REGISTER: 'MEDIUM',
+    MARKET_SIGNALS: 'NEUTRAL',
+  };
+  return {
+    schemaVersion: 'analysis-section-v2',
+    type,
+    assessment: assessment[type],
+    confidence: 'MEDIUM',
+    summary: `${type} summary`,
+    findings: [],
+    limitations: [],
+    dataAsOf: '2026-05-15',
+    disclaimer: 'D',
+  };
+}
+
+function buildContext(options: {
   events: SseEvent[];
-  finalReturn?: unknown;
-  finalThrow?: Error;
-  sections?: Array<{ id: string; type: string; order: number; status: string }>;
-  market?: string;
-  mode?: 'comprehensive' | 'single';
-  analysisType?: string;
-}): {
-  ctx: AdapterContext;
-  prismaCalls: PrismaCall[];
-  sendCalls: SendCall[];
-} {
-  const prismaCalls: PrismaCall[] = [];
-  const sendCalls: SendCall[] = [];
+  existingSnapshot?: any;
+  evidencePack?: any;
+  signal?: AbortSignal;
+}) {
+  const dbCalls: DbCall[] = [];
+  const frames: SentFrame[] = [];
+  const seenOptions: ComprehensiveOptions[] = [];
+  const sections = SECTION_ORDER.map((type, order) => ({
+    id: `section-${order}`,
+    type,
+    order,
+    status: 'PENDING',
+  }));
 
-  const makeGen = (): AsyncGenerator<SseEvent, unknown, undefined> =>
-    (async function* () {
-      for (const e of opts.events) {
-        yield e;
-      }
-      if (opts.finalThrow) throw opts.finalThrow;
-      return opts.finalReturn ?? undefined;
-    })();
-
-  const fakeFactory = (
-    _provider: AgentProvider,
-    _input: DimensionInput,
-    _options: ComprehensiveOptions,
-  ): AsyncGenerator<SseEvent, unknown, undefined> => makeGen();
-
-  const fakeSingleFactory = (
-    _provider: AgentProvider,
-    _input: DimensionInput,
-  ): AsyncGenerator<SseEvent, unknown, undefined> => makeGen();
-
-  const sections =
-    opts.sections ??
-    [
-      { id: 'sec-1', type: 'FUNDAMENTAL', order: 0, status: 'PENDING' },
-      { id: 'sec-2', type: 'VALUATION', order: 1, status: 'PENDING' },
-    ];
+  const makeGenerator = async function* () {
+    for (const item of options.events) yield item;
+  };
 
   const ctx: AdapterContext = {
-    analysisId: 'a1',
+    analysisId: 'analysis-1',
+    mode: 'QUICK',
+    focusWindow: '90D',
     analysis: {
-      id: 'a1',
-      analysisType: opts.analysisType ?? 'COMPREHENSIVE',
+      id: 'analysis-1',
+      mode: 'QUICK',
+      focusWindow: '90D',
+      question: '重点研究现金流质量',
       sections,
-      stock: {
-        symbol: 'AAPL',
-        market: opts.market ?? 'CN',
-        name: 'Apple',
-      },
+      stock: { symbol: 'AAPL', market: 'US', name: 'Apple' },
     },
     provider: {
       name: 'fake',
       stream: () => Promise.reject(new Error('not used')),
       complete: () => Promise.reject(new Error('not used')),
-      getModel: () => 'm',
-      getUtilityModel: () => 'jm',
+      getModel: () => 'fake-model',
+      getUtilityModel: () => 'fake-model',
     } as unknown as AgentProvider,
     send: ((type: string, data: unknown) => {
-      sendCalls.push({
-        type,
-        data: data as Record<string, unknown>,
-      });
+      frames.push({ type, data: data as Record<string, unknown> });
     }) as AdapterContext['send'],
     prisma: {
       analysisSection: {
-        update: async (args: unknown) => {
-          prismaCalls.push({
-            table: 'analysisSection',
-            method: 'update',
-            args,
-          });
-          return {};
-        },
         updateMany: async (args: unknown) => {
-          prismaCalls.push({
-            table: 'analysisSection',
-            method: 'updateMany',
-            args,
-          });
+          dbCalls.push({ table: 'analysisSection', method: 'updateMany', args });
           return { count: 1 };
         },
       },
       analysis: {
-        update: async (args: unknown) => {
-          prismaCalls.push({ table: 'analysis', method: 'update', args });
+        updateMany: async (args: unknown) => {
+          dbCalls.push({ table: 'analysis', method: 'updateMany', args });
+          return { count: 1 };
+        },
+      },
+      analysisEvidenceSnapshot: {
+        findUnique: async () => options.existingSnapshot ?? null,
+        create: async (args: unknown) => {
+          dbCalls.push({ table: 'analysisEvidenceSnapshot', method: 'create', args });
           return {};
         },
       },
     } as unknown as AdapterContext['prisma'],
-    aiModel: 'claude-sonnet-4-test',
-    _streamFactory: fakeFactory,
-    _singleStreamFactory: fakeSingleFactory,
-    ...(opts.mode ? { mode: opts.mode } : {}),
+    evidencePackService: {
+      buildForAnalysis: async () => ({
+        pack: options.evidencePack,
+        degraded: false,
+        fallbackUsed: false,
+        missingPrivateFields: [],
+      }),
+    } as never,
+    aiModel: 'fake-model',
+    signal: options.signal,
+    _streamFactory: async function* (
+      _provider: AgentProvider,
+      _input: DimensionInput,
+      workflowOptions: ComprehensiveOptions,
+    ) {
+      seenOptions.push(workflowOptions);
+      yield* makeGenerator();
+    },
   };
 
-  return { ctx, prismaCalls, sendCalls };
+  return { ctx, dbCalls, frames, seenOptions };
 }
 
-// ===== Tests =====
-
-describe('runAnalysisWorkflowAdapter — happy path', () => {
-  it('persists the immutable EvidencePack before terminal done', async () => {
+describe('runAnalysisWorkflowAdapter', () => {
+  it('persists one immutable V2 snapshot and the completed five-module report', async () => {
+    const pack = evidencePack();
     const events: SseEvent[] = [
-      evt('done', { status: 'COMPLETED' } as never, 1),
+      event('evidence_pack_ready', { pack }, 1),
+      ...SECTION_ORDER.flatMap((type, index) => sectionEvents(type, index, 10 + index * 5)),
+      event('summary_chunk', { deltaText: '综合结论' }, 40),
+      event('summary_complete', {
+        fullMarkdown: '综合结论',
+        json: {
+          headline: '综合结论',
+          signal: null,
+          confidence: 'LOW',
+          rationale: [],
+          counterpoints: [],
+          changeConditions: [],
+          missingSections: [],
+          dataAsOf: '2026-05-15',
+          disclaimer: 'D',
+        },
+      }, 41),
+      done('COMPLETED', 42),
     ];
-    const { ctx, sendCalls } = buildCtx({ events, sections: [] });
-    const evidencePack = {
-      schemaVersion: 'evidence-pack-v1',
-      symbol: 'AAPL',
-      market: 'US',
-      capturedAt: TODAY,
-      financialSnapshot: {},
-      news: [],
-      valuation: {},
-      riskFacts: [],
-      allowedUrls: [],
-    };
-    let persisted: any;
-    ctx.evidencePackService = {
-      buildForAnalysis: async () => ({ pack: evidencePack, fallbackUsed: false }),
-    } as unknown as AdapterContext['evidencePackService'];
-    (ctx.prisma as any).analysisEvidenceSnapshot = {
-      upsert: async (args: unknown) => {
-        persisted = args;
-        return {};
-      },
-    };
-    await runAnalysisWorkflowAdapter(ctx);
-
-    assert.equal(persisted.where.analysisId, 'a1');
-    assert.equal(persisted.create.payload, evidencePack);
-    assert.equal(persisted.create.schemaVersion, 'evidence-pack-v1');
-    assert.equal(persisted.create.contentHash.length, 64);
-    assert.equal(sendCalls.at(-1)?.type, 'done');
-  });
-
-  it('keeps a completed analysis completed when snapshot persistence fails', async () => {
-    const { ctx, prismaCalls, sendCalls } = buildCtx({
-      events: [evt('done', { status: 'COMPLETED' } as never, 1)],
-      sections: [],
-    });
-    ctx.evidencePackService = {
-      buildForAnalysis: async () => ({
-        pack: {
-          schemaVersion: 'evidence-pack-v1',
-          symbol: 'AAPL',
-          market: 'US',
-          capturedAt: TODAY,
-        },
-        fallbackUsed: false,
-      }),
-    } as unknown as AdapterContext['evidencePackService'];
-    (ctx.prisma as any).analysisEvidenceSnapshot = {
-      upsert: async () => {
-        throw new Error('snapshot database unavailable');
-      },
-    };
-
-    const result = await runAnalysisWorkflowAdapter(ctx);
-
-    assert.equal(result.terminalStatus, 'COMPLETED');
-    assert.equal(sendCalls.at(-1)?.type, 'done');
-    assert.equal(sendCalls.at(-1)?.data.status, 'COMPLETED');
-    assert.equal(
-      prismaCalls.some(
-        (call) =>
-          call.table === 'analysis' &&
-          (call.args as any)?.data?.status === 'FAILED',
-      ),
-      false,
-    );
-  });
-
-  it('translates a full section event chain into apps/api SSE + persists rows', async () => {
-    const events: SseEvent[] = [
-      evt('section_start', { sectionType: 'FUNDAMENTAL', order: 0 }, 1),
-      evt(
-        'report_chunk',
-        { sectionType: 'FUNDAMENTAL', deltaText: 'hello ' },
-        2,
-      ),
-      evt(
-        'report_chunk',
-        { sectionType: 'FUNDAMENTAL', deltaText: 'world' },
-        3,
-      ),
-      evt(
-        'citation',
-        {
-          sectionType: 'FUNDAMENTAL',
-          citation: {
-            title: 'S',
-            url: URL,
-            sourceType: 'NEWS',
-            retrievedAt: TODAY,
-          },
-        },
-        4,
-      ),
-      evt(
-        'report_complete',
-        { sectionType: 'FUNDAMENTAL', fullMarkdown: 'hello world' },
-        5,
-      ),
-      evt(
-        'structured_data',
-        {
-          sectionType: 'FUNDAMENTAL',
-          json: { conclusion: { signal: 'BULLISH', confidence: 'HIGH' } },
-        },
-        6,
-      ),
-      evt(
-        'section_complete',
-        {
-          sectionType: 'FUNDAMENTAL',
-          status: 'COMPLETED',
-          usage: {
-            tokensIn: 100,
-            tokensOut: 50,
-            llmCalls: 1,
-            toolCalls: 2,
-            durationMs: 1234,
-            citationsCount: 1,
-            costUsd: 0.01,
-          },
-        },
-        7,
-      ),
-      evt('done', { status: 'COMPLETED' } as never, 8),
-    ];
-
-    const { ctx, prismaCalls, sendCalls } = buildCtx({
+    const { ctx, dbCalls, frames, seenOptions } = buildContext({
       events,
-      sections: [
-        { id: 'sec-1', type: 'FUNDAMENTAL', order: 0, status: 'PENDING' },
-      ],
+      evidencePack: pack,
     });
 
     const result = await runAnalysisWorkflowAdapter(ctx);
 
     assert.equal(result.terminalStatus, 'COMPLETED');
-    assert.equal(result.failedSectionTypes.length, 0);
-
-    // SSE: report_complete is domain-internal; the client relies on
-    // report_chunk + section_complete.
-    const sendTypes = sendCalls.map((c) => c.type);
-    assert.deepEqual(sendTypes, [
-      'section_start',
-      'report_chunk',
-      'report_chunk',
-      'citation',
-      'structured_data',
-      'section_complete',
-      'done',
-    ]);
-
-    // Section row written with accumulated markdown + structured + citations
-    const sectionUpdate = prismaCalls.find(
-      (c) => c.table === 'analysisSection' && c.method === 'update',
-    );
-    assert.ok(sectionUpdate, 'expected analysisSection.update');
-    const updateArgs = sectionUpdate!.args as {
-      where: { id: string };
-      data: Record<string, unknown>;
-    };
-    assert.equal(updateArgs.where.id, 'sec-1');
-    assert.equal(updateArgs.data.status, 'COMPLETED');
-    assert.equal(updateArgs.data.reportMarkdown, 'hello world');
-    assert.deepEqual(updateArgs.data.structuredJson, {
-      conclusion: { signal: 'BULLISH', confidence: 'HIGH' },
-    });
-
-    // Analysis row written on done
-    const analysisUpdate = prismaCalls.find((c) => c.table === 'analysis');
-    assert.ok(analysisUpdate, 'expected analysis.update');
-    const aArgs = analysisUpdate!.args as { data: { status: string } };
-    assert.equal(aArgs.data.status, 'COMPLETED');
+    assert.deepEqual(result.failedSectionTypes, []);
+    assert.equal(frames.at(-1)?.type, 'done');
+    assert.equal(frames.filter((frame) => frame.type === 'section_complete').length, 5);
+    assert.equal(dbCalls.filter((call) => call.table === 'analysisEvidenceSnapshot').length, 1);
+    assert.equal(seenOptions[0]?.evidencePack, pack);
+    assert.equal(seenOptions[0]?.mode, 'QUICK');
+    assert.equal(seenOptions[0]?.focusWindow, '90D');
   });
 
-  it('forwards summary_chunk and summary_complete; writes summary fields to Analysis', async () => {
+  it('keeps completed modules and records failed or skipped modules as partial failure', async () => {
     const events: SseEvent[] = [
-      evt(
-        'summary_chunk',
-        { deltaText: 'overall ' } as never,
-        1,
-      ),
-      evt(
-        'summary_chunk',
-        { deltaText: 'bullish' } as never,
-        2,
-      ),
-      evt(
-        'summary_complete',
-        {
-          fullMarkdown: 'overall bullish',
-          json: {
-            overallSignal: 'BULLISH',
-            overallConfidence: 'HIGH',
-            dataAsOf: '2026-05-15',
-          },
-        } as never,
-        3,
-      ),
-      evt('done', { status: 'COMPLETED' } as never, 4),
+      event('section_start', { sectionType: 'COMPANY_QUALITY', order: 0 }, 1),
+      event('error', { sectionType: 'COMPANY_QUALITY', message: 'provider failed', recoverable: false }, 2),
+      event('section_complete', { sectionType: 'COMPANY_QUALITY', status: 'FAILED' }, 3),
+      event('section_start', { sectionType: 'INDUSTRY_POSITION', order: 1 }, 4),
+      event('section_skipped', {
+        sectionType: 'INDUSTRY_POSITION',
+        reason: 'INSUFFICIENT_REQUIRED_FACTS',
+        missingFields: ['profile'],
+      }, 5),
+      event('section_complete', { sectionType: 'INDUSTRY_POSITION', status: 'SKIPPED' }, 6),
+      done('PARTIAL_FAILED', 7),
     ];
-
-    const { ctx, prismaCalls, sendCalls } = buildCtx({ events });
-
-    await runAnalysisWorkflowAdapter(ctx);
-
-    // Two summary_chunk events + summary_complete + done.
-    const sendTypes = sendCalls.map((c) => c.type);
-    assert.deepEqual(sendTypes, [
-      'summary_chunk',
-      'summary_chunk',
-      'summary_complete',
-      'done',
-    ]);
-
-    const summaryComplete = sendCalls.find(
-      (c) => c.type === 'summary_complete',
-    );
-    assert.deepEqual(summaryComplete!.data, {
-      summaryJson: {
-        overallSignal: 'BULLISH',
-        overallConfidence: 'HIGH',
-        dataAsOf: '2026-05-15',
-      },
-    });
-
-    const analysisUpdate = prismaCalls.find((c) => c.table === 'analysis');
-    const aData = (analysisUpdate!.args as { data: Record<string, unknown> })
-      .data;
-    assert.equal(aData.summaryMarkdown, 'overall bullish');
-    assert.equal(aData.overallSignal, 'BULLISH');
-    assert.equal(aData.overallConfidence, 'HIGH');
-    assert.equal(aData.dataAsOf, '2026-05-15');
-  });
-});
-
-describe('runAnalysisWorkflowAdapter — partial / fail / cancel', () => {
-  it('PARTIAL_FAILED: failed section listed in failedSectionTypes', async () => {
-    const events: SseEvent[] = [
-      evt('section_start', { sectionType: 'FUNDAMENTAL', order: 0 }, 1),
-      evt(
-        'section_complete',
-        { sectionType: 'FUNDAMENTAL', status: 'FAILED' },
-        2,
-      ),
-      evt('done', { status: 'PARTIAL_FAILED' } as never, 3),
-    ];
-
-    const { ctx } = buildCtx({
-      events,
-      sections: [
-        { id: 'sec-1', type: 'FUNDAMENTAL', order: 0, status: 'PENDING' },
-      ],
-    });
+    const { ctx, frames } = buildContext({ events });
 
     const result = await runAnalysisWorkflowAdapter(ctx);
+
     assert.equal(result.terminalStatus, 'PARTIAL_FAILED');
-    assert.deepEqual(result.failedSectionTypes, ['FUNDAMENTAL']);
+    assert.deepEqual(result.failedSectionTypes, [
+      'COMPANY_QUALITY',
+      'INDUSTRY_POSITION',
+      'VALUATION_SCENARIOS',
+      'RISK_REGISTER',
+      'MARKET_SIGNALS',
+    ]);
+    assert.ok(frames.some((frame) => frame.type === 'section_skipped'));
+    assert.ok(frames.some((frame) => frame.type === 'error'));
   });
 
-  it('FAILED: factory throws → terminal status FAILED, error + done emitted', async () => {
-    const { ctx, sendCalls } = buildCtx({
-      events: [],
-      finalThrow: new Error('boom'),
+  it('reuses an existing immutable snapshot when retrying an analysis', async () => {
+    const pack = evidencePack();
+    const { ctx, dbCalls, seenOptions } = buildContext({
+      events: [done('FAILED', 1)],
+      existingSnapshot: { payload: pack, degraded: true },
+      evidencePack: { ...pack, symbol: 'SHOULD_NOT_BE_USED' },
     });
 
     const result = await runAnalysisWorkflowAdapter(ctx);
+
     assert.equal(result.terminalStatus, 'FAILED');
-
-    const errSend = sendCalls.find((c) => c.type === 'error');
-    assert.ok(errSend, 'expected error SSE');
-    assert.equal(errSend!.data.message, 'boom');
-
-    const doneSend = sendCalls.find((c) => c.type === 'done');
-    assert.ok(doneSend, 'expected done SSE');
-    assert.equal(doneSend!.data.status, 'FAILED');
+    assert.equal(dbCalls.some((call) => call.table === 'analysisEvidenceSnapshot' && call.method === 'create'), false);
+    assert.equal(seenOptions[0]?.evidencePack, pack);
   });
 
-  it('marks unfinished sections as FAILED after a mid-stream throw', async () => {
-    // 3 sections seeded. 1 completes normally, 1 starts but never completes,
-    // 1 never starts. Then factory throws (mimics an upstream failure
-    // mid-stream).
-    const events: SseEvent[] = [
-      evt('section_start', { sectionType: 'FUNDAMENTAL', order: 0 }, 1),
-      evt(
-        'section_complete',
-        { sectionType: 'FUNDAMENTAL', status: 'COMPLETED' },
-        2,
-      ),
-      evt('section_start', { sectionType: 'VALUATION', order: 1 }, 3),
-      // VALUATION never gets section_complete; INDUSTRY never even starts.
-    ];
-
-    const { ctx, prismaCalls } = buildCtx({
-      events,
-      finalThrow: new Error('boom'),
-      sections: [
-        { id: 'sec-1', type: 'FUNDAMENTAL', order: 0, status: 'PENDING' },
-        { id: 'sec-2', type: 'VALUATION', order: 1, status: 'PENDING' },
-        { id: 'sec-3', type: 'INDUSTRY', order: 2, status: 'PENDING' },
+  it('passes completed module results to retry without rerunning them', async () => {
+    const pack = evidencePack();
+    const { ctx, seenOptions, frames } = buildContext({
+      events: [
+        ...sectionEvents('MARKET_SIGNALS', 4, 1),
+        event('summary_complete', {
+          fullMarkdown: '综合结论',
+          json: {
+            headline: '综合结论', signal: null, confidence: 'LOW',
+            rationale: [], counterpoints: [], changeConditions: [],
+            missingSections: [], dataAsOf: '2026-05-15', disclaimer: 'D',
+          },
+        }, 6),
+        done('COMPLETED', 7),
       ],
+      existingSnapshot: { payload: pack, degraded: false },
     });
+    ctx.analysis.sections = ctx.analysis.sections.map((section) =>
+      section.type === 'MARKET_SIGNALS'
+        ? section
+        : {
+            ...section,
+            status: 'COMPLETED',
+            reportMarkdown: `${section.type} report`,
+            structuredJson: persistedSection(section.type as SectionType),
+          },
+    );
 
     const result = await runAnalysisWorkflowAdapter(ctx);
-    assert.equal(result.terminalStatus, 'FAILED');
 
-    // The orphan sweep should run a single updateMany on the two stragglers.
-    const orphanSweep = prismaCalls.find(
-      (c) =>
-        c.table === 'analysisSection' &&
-        c.method === 'updateMany' &&
-        (c.args as { data?: { status?: string } }).data?.status === 'FAILED',
-    );
-    assert.ok(orphanSweep, 'expected orphan-section updateMany with FAILED');
-    const sweepArgs = orphanSweep!.args as {
-      where: { type: { in: string[] } };
-      data: { status: string; errorMessage: string };
-    };
-    assert.deepEqual(new Set(sweepArgs.where.type.in), new Set(['VALUATION', 'INDUSTRY']));
-    assert.equal(sweepArgs.data.status, 'FAILED');
-    assert.match(sweepArgs.data.errorMessage, /failed/i);
-
-    // failedSectionTypes must include both stragglers (not the completed one).
+    assert.equal(result.terminalStatus, 'COMPLETED');
     assert.deepEqual(
-      new Set(result.failedSectionTypes),
-      new Set(['VALUATION', 'INDUSTRY']),
+      seenOptions[0]?.existingResults?.map((item) => item.type),
+      ['COMPANY_QUALITY', 'INDUSTRY_POSITION', 'VALUATION_SCENARIOS', 'RISK_REGISTER'],
     );
+    assert.equal(frames.filter((frame) => frame.type === 'section_start').length, 1);
   });
 
-  it('persists section-scoped error messages without sweep overwrite', async () => {
-    // Mimics what comprehensive.ts emits when streamDimension throws
-    // mid-wave: a top-level `error` event with sectionType + message,
-    // followed by the workflow moving on (no section_complete for that
-    // dim). Adapter must capture the real message into the DB row.
-    const events: SseEvent[] = [
-      evt('section_start', { sectionType: 'FUNDAMENTAL', order: 0 }, 1),
-      evt(
-        'error',
-        {
-          sectionType: 'FUNDAMENTAL',
-          message: '404 status code (no body)',
-          recoverable: false,
-        } as never,
-        2,
-      ),
-      evt('done', { status: 'PARTIAL_FAILED' } as never, 3),
-    ];
-
-    const { ctx, prismaCalls } = buildCtx({
-      events,
-      sections: [
-        { id: 'sec-fund', type: 'FUNDAMENTAL', order: 0, status: 'PENDING' },
-      ],
+  it('marks the run cancelled and preserves already emitted content on abort', async () => {
+    const controller = new AbortController();
+    const { ctx, dbCalls, frames } = buildContext({
+      events: [],
+      signal: controller.signal,
     });
-
-    const result = await runAnalysisWorkflowAdapter(ctx);
-    assert.equal(result.terminalStatus, 'PARTIAL_FAILED');
-
-    // The error-event handler should have called prisma.analysisSection.update
-    // with status=FAILED + the real message (NOT the sweep fallback text).
-    const updates = prismaCalls.filter(
-      (c) =>
-        c.table === 'analysisSection' &&
-        c.method === 'update' &&
-        (c.args as { data?: { status?: string } }).data?.status === 'FAILED',
-    );
-    assert.ok(updates.length >= 1, 'expected analysisSection.update with FAILED');
-    const data = (updates[0]!.args as { data: { errorMessage: string } }).data;
-    assert.equal(data.errorMessage, '404 status code (no body)');
-    // Sweep must NOT have run for this section (already in failedSectionTypes).
-    const sweepRuns = prismaCalls.filter(
-      (c) =>
-        c.table === 'analysisSection' &&
-        c.method === 'updateMany' &&
-        (c.args as { data?: { errorMessage?: string } }).data?.errorMessage
-          ?.includes('Run failed before this section completed'),
-    );
-    assert.equal(sweepRuns.length, 0, 'sweep should NOT overwrite real error');
-  });
-
-  it('marks an in-progress orphan section as FAILED', async () => {
-    const events: SseEvent[] = [
-      evt('section_start', { sectionType: 'FUNDAMENTAL', order: 0 }, 1),
-      // Never reaches section_complete — generator throws.
-    ];
-
-    const { ctx, prismaCalls } = buildCtx({
-      events,
-      finalThrow: new Error('boom'),
-      sections: [
-        { id: 'sec-1', type: 'FUNDAMENTAL', order: 0, status: 'PENDING' },
-      ],
-    });
-
-    const result = await runAnalysisWorkflowAdapter(ctx);
-    assert.equal(result.terminalStatus, 'FAILED');
-
-    const orphanSweep = prismaCalls.find(
-      (c) =>
-        c.table === 'analysisSection' &&
-        c.method === 'updateMany' &&
-        (c.args as { data?: { status?: string } }).data?.status === 'FAILED',
-    );
-    assert.ok(orphanSweep, 'expected orphan updateMany with FAILED');
-
-    // Zero sections actually finished; the only seeded section is the orphan.
-    assert.deepEqual(result.failedSectionTypes, ['FUNDAMENTAL']);
-  });
-});
-
-describe('runAnalysisWorkflowAdapter — non-CN market', () => {
-  it('omits marketProfile for non-CN runs but still drives streaming', async () => {
-    const events: SseEvent[] = [evt('done', { status: 'COMPLETED' } as never, 1)];
-    const factoryOptions: ComprehensiveOptions[] = [];
-    const fakeFactory = (
-      _p: AgentProvider,
-      _i: DimensionInput,
-      o: ComprehensiveOptions,
-    ): AsyncGenerator<SseEvent, unknown, undefined> => {
-      factoryOptions.push(o);
-      return (async function* () {
-        for (const e of events) yield e;
-      })();
+    ctx._streamFactory = async function* () {
+      controller.abort();
+      const error = new Error('aborted');
+      error.name = 'AbortError';
+      throw error;
     };
-
-    const { ctx } = buildCtx({ events, market: 'US' });
-    ctx._streamFactory = fakeFactory;
-
-    await runAnalysisWorkflowAdapter(ctx);
-
-    assert.equal(factoryOptions.length, 1);
-    assert.equal(factoryOptions[0]!.marketProfile, undefined);
-    assert.equal(factoryOptions[0]!.waveMode, 'auto');
-  });
-});
-
-describe('runAnalysisWorkflowAdapter — selective judge', () => {
-  it('writes judgeResult to section without forwarding internal judge events', async () => {
-    const judgeResult = {
-      schemaVersion: 'judge-result-v1' as const,
-      pass: false,
-      concerns: ['PE 30x unsupported by peerPE p50'],
-      suggestedRevisions: ['revise to MEDIUM'],
-      confidenceAdjustment: 'DOWNGRADE_TO_MEDIUM' as const,
-    };
-    const events: SseEvent[] = [
-      evt('section_start', { sectionType: 'VALUATION', order: 0 }, 1),
-      evt(
-        'structured_data',
-        {
-          sectionType: 'VALUATION',
-          json: {
-            conclusion: { signal: 'BULLISH', confidence: 'HIGH' },
-            evidence: [],
-          },
-        },
-        2,
-      ),
-      evt(
-        'section_complete',
-        {
-          sectionType: 'VALUATION',
-          status: 'COMPLETED',
-          usage: {
-            tokensIn: 200,
-            tokensOut: 100,
-            llmCalls: 1,
-            toolCalls: 0,
-            durationMs: 1000,
-            citationsCount: 0,
-            costUsd: 0.02,
-          },
-        },
-        3,
-      ),
-      evt('judge_start', { sectionType: 'VALUATION' }, 4),
-      evt(
-        'judge_complete',
-        {
-          sectionType: 'VALUATION',
-          result: judgeResult,
-          traceTokensIn: 150,
-          traceTokensOut: 40,
-          traceCostUsd: 0.005,
-          traceDurationMs: 80,
-        },
-        5,
-      ),
-      evt('done', { status: 'COMPLETED' } as never, 6),
-    ];
-
-    const { ctx, prismaCalls, sendCalls } = buildCtx({
-      events,
-      sections: [{ id: 'sec-val', type: 'VALUATION', order: 0, status: 'PENDING' }],
-    });
-    const result = await runAnalysisWorkflowAdapter(ctx);
-
-    assert.equal(result.terminalStatus, 'COMPLETED');
-
-    assert.equal(sendCalls.some((c) => c.type === 'judge_start'), false);
-    assert.equal(sendCalls.some((c) => c.type === 'judge_complete'), false);
-
-    // structuredJson updated with judgeResult sub-field + downgraded confidence
-    const sectionUpdates = prismaCalls.filter(
-      (c) => c.table === 'analysisSection' && c.method === 'updateMany',
-    );
-    assert.ok(sectionUpdates.length >= 1, 'expected an analysisSection.updateMany on judge_complete');
-    const lastUpdate = sectionUpdates[sectionUpdates.length - 1]!.args as {
-      data: { structuredJson: Record<string, unknown> };
-    };
-    const persisted = lastUpdate.data.structuredJson;
-    assert.deepEqual(persisted.judgeResult, judgeResult);
-    const conclusion = persisted.conclusion as { confidence: string };
-    assert.equal(conclusion.confidence, 'MEDIUM');
-  });
-
-  it('KEEP adjustment leaves section confidence unchanged', async () => {
-    const judgeResult = {
-      schemaVersion: 'judge-result-v1' as const,
-      pass: true,
-      concerns: [],
-      suggestedRevisions: [],
-      confidenceAdjustment: 'KEEP' as const,
-    };
-    const events: SseEvent[] = [
-      evt('section_start', { sectionType: 'RISK', order: 0 }, 1),
-      evt(
-        'structured_data',
-        {
-          sectionType: 'RISK',
-          json: {
-            conclusion: { signal: 'BEARISH', confidence: 'HIGH' },
-            evidence: [],
-          },
-        },
-        2,
-      ),
-      evt(
-        'section_complete',
-        {
-          sectionType: 'RISK',
-          status: 'COMPLETED',
-          usage: {
-            tokensIn: 100,
-            tokensOut: 50,
-            llmCalls: 1,
-            toolCalls: 0,
-            durationMs: 500,
-            citationsCount: 0,
-            costUsd: 0.01,
-          },
-        },
-        3,
-      ),
-      evt('judge_start', { sectionType: 'RISK' }, 4),
-      evt(
-        'judge_complete',
-        {
-          sectionType: 'RISK',
-          result: judgeResult,
-          traceTokensIn: 100,
-          traceTokensOut: 30,
-          traceCostUsd: 0.003,
-          traceDurationMs: 50,
-        },
-        5,
-      ),
-      evt('done', { status: 'COMPLETED' } as never, 6),
-    ];
-
-    const { ctx, prismaCalls } = buildCtx({
-      events,
-      sections: [{ id: 'sec-risk', type: 'RISK', order: 0, status: 'PENDING' }],
-    });
-    await runAnalysisWorkflowAdapter(ctx);
-
-    // The adapter calls updateMany twice for a CN run: once at start to flip
-    // all sections to IN_PROGRESS, then once per judge_complete carrying
-    // structuredJson. We want the latter, so filter for entries that have
-    // a structuredJson payload and take the last.
-    const judgeUpdates = prismaCalls.filter(
-      (c) =>
-        c.table === 'analysisSection' &&
-        c.method === 'updateMany' &&
-        (c.args as { data?: { structuredJson?: unknown } }).data
-          ?.structuredJson !== undefined,
-    );
-    assert.ok(judgeUpdates.length >= 1, 'expected a structuredJson updateMany on judge_complete');
-    const updateMany = judgeUpdates[judgeUpdates.length - 1]!.args as {
-      data: { structuredJson: Record<string, unknown> };
-    };
-    const conclusion = updateMany.data.structuredJson.conclusion as {
-      confidence: string;
-    };
-    // KEEP must not move confidence away from HIGH.
-    assert.equal(conclusion.confidence, 'HIGH');
-    assert.deepEqual(updateMany.data.structuredJson.judgeResult, judgeResult);
-  });
-});
-
-describe('runAnalysisWorkflowAdapter — single dimension mode', () => {
-  it('drives streamSingle, persists the section, finalizes overall* from done.result (no summary fields)', async () => {
-    const events: SseEvent[] = [
-      evt('section_start', { sectionType: 'VALUATION', order: 0 }, 1),
-      evt('report_chunk', { sectionType: 'VALUATION', deltaText: 'val' }, 2),
-      evt(
-        'structured_data',
-        {
-          sectionType: 'VALUATION',
-          json: {
-            dataAsOf: '2026-05-10',
-            conclusion: { signal: 'BEARISH', confidence: 'MEDIUM' },
-          },
-        },
-        3,
-      ),
-      evt(
-        'section_complete',
-        { sectionType: 'VALUATION', status: 'COMPLETED' },
-        4,
-      ),
-      evt('cost_update', { totalUsd: 0.02, totalTokens: 100, toolCalls: 0 }, 5),
-      evt(
-        'done',
-        {
-          status: 'COMPLETED',
-          result: {
-            signal: 'BEARISH',
-            confidence: 'MEDIUM',
-            structuredJson: { dataAsOf: '2026-05-10' },
-          },
-        } as never,
-        6,
-      ),
-    ];
-
-    const { ctx, prismaCalls, sendCalls } = buildCtx({
-      events,
-      mode: 'single',
-      analysisType: 'VALUATION',
-      market: 'US',
-      sections: [
-        { id: 'sec-1', type: 'VALUATION', order: 0, status: 'PENDING' },
-      ],
-    });
 
     const result = await runAnalysisWorkflowAdapter(ctx);
 
-    assert.equal(result.terminalStatus, 'COMPLETED');
-    assert.equal(result.failedSectionTypes.length, 0);
-
-    // Section row persisted COMPLETED.
-    const sectionUpdate = prismaCalls.find(
-      (c) => c.table === 'analysisSection' && c.method === 'update',
-    );
-    assert.ok(sectionUpdate, 'expected analysisSection.update');
-
-    // Analysis finalize: overall* come from done.result, NOT summary fields.
-    const analysisUpdate = prismaCalls.find(
-      (c) => c.table === 'analysis' && c.method === 'update',
-    );
-    assert.ok(analysisUpdate, 'expected analysis.update');
-    const data = (analysisUpdate!.args as { data: Record<string, unknown> })
-      .data;
-    assert.equal(data.status, 'COMPLETED');
-    assert.equal(data.overallSignal, 'BEARISH');
-    assert.equal(data.overallConfidence, 'MEDIUM');
-    assert.equal(data.dataAsOf, '2026-05-10');
-    assert.equal('summaryMarkdown' in data, false);
-    assert.equal('summaryJson' in data, false);
-
-    assert.ok(sendCalls.some((c) => c.type === 'done'));
-  });
-});
-
-describe('runAnalysisWorkflowAdapter — evidence_pack_ready', () => {
-  it('forwards evidence_pack_ready as API SSE and captures degradedSource when WEB_SEARCH_FALLBACK', async () => {
-    const pack = {
-      dataAvailability: { degradedSource: 'WEB_SEARCH_FALLBACK' },
-    };
-    const events: SseEvent[] = [
-      evt('evidence_pack_ready', { pack }, 1),
-      evt('done', { status: 'COMPLETED' } as never, 2),
-    ];
-
-    const { ctx, sendCalls, prismaCalls } = buildCtx({ events });
-    await runAnalysisWorkflowAdapter(ctx);
-
-    // SSE frame forwarded to client.
-    const epFrame = sendCalls.find((c) => c.type === 'evidence_pack_ready');
-    assert.ok(epFrame, 'expected evidence_pack_ready SSE frame');
-    assert.deepEqual((epFrame!.data as { pack: unknown }).pack, pack);
-
-    // degradedSource written to Analysis row.
-    const analysisUpdate = prismaCalls.find(
-      (c) => c.table === 'analysis' && c.method === 'update',
-    );
-    assert.ok(analysisUpdate, 'expected analysis.update');
-    const data = (analysisUpdate!.args as { data: Record<string, unknown> }).data;
-    assert.equal(data.degradedSource, 'WEB_SEARCH_FALLBACK');
-  });
-
-  it('does not set degradedSource when evidence pack has no degraded marker', async () => {
-    const pack = { dataAvailability: { degradedSource: null } };
-    const events: SseEvent[] = [
-      evt('evidence_pack_ready', { pack }, 1),
-      evt('done', { status: 'COMPLETED' } as never, 2),
-    ];
-
-    const { ctx, prismaCalls } = buildCtx({ events });
-    await runAnalysisWorkflowAdapter(ctx);
-
-    const analysisUpdate = prismaCalls.find(
-      (c) => c.table === 'analysis' && c.method === 'update',
-    );
-    assert.ok(analysisUpdate);
-    const data = (analysisUpdate!.args as { data: Record<string, unknown> }).data;
-    // When not degraded the field is omitted from the update payload entirely.
-    assert.equal('degradedSource' in data, false);
-  });
-});
-
-describe('runAnalysisWorkflowAdapter — section_skipped', () => {
-  it('forwards section_skipped SSE and marks the section SKIPPED in DB', async () => {
-    const events: SseEvent[] = [
-      evt(
-        'section_skipped',
-        {
-          sectionType: 'FUNDAMENTAL',
-          reason: 'MISSING_DATA',
-          missingFields: ['revenue'],
-        },
-        1,
-      ),
-      evt('done', { status: 'PARTIAL_FAILED' } as never, 2),
-    ];
-
-    const { ctx, sendCalls, prismaCalls } = buildCtx({
-      events,
-      sections: [
-        { id: 'sec-fund', type: 'FUNDAMENTAL', order: 0, status: 'PENDING' },
-      ],
-    });
-    await runAnalysisWorkflowAdapter(ctx);
-
-    // SSE frame forwarded.
-    const skipFrame = sendCalls.find((c) => c.type === 'section_skipped');
-    assert.ok(skipFrame, 'expected section_skipped SSE frame');
-    assert.equal(
-      (skipFrame!.data as { sectionType: string }).sectionType,
-      'FUNDAMENTAL',
-    );
-
-    // DB row updated to SKIPPED.
-    const sectionUpdate = prismaCalls.find(
-      (c) =>
-        c.table === 'analysisSection' &&
-        c.method === 'update' &&
-        (c.args as { where?: { id: string } }).where?.id === 'sec-fund',
-    );
-    assert.ok(sectionUpdate, 'expected analysisSection.update for sec-fund');
-  });
-});
-
-describe('runAnalysisWorkflowAdapter — web_search_warning', () => {
-  it('silently drops web_search_warning (no SSE frame, no DB write)', async () => {
-    const events: SseEvent[] = [
-      evt('section_start', { sectionType: 'RISK', order: 0 }, 1),
-      evt(
-        'web_search_warning',
-        { sectionType: 'RISK', message: 'quota exceeded' },
-        2,
-      ),
-      evt('report_chunk', { sectionType: 'RISK', deltaText: 'text' }, 3),
-      evt('section_complete', { sectionType: 'RISK', status: 'COMPLETED' }, 4),
-      evt('done', { status: 'COMPLETED' } as never, 5),
-    ];
-
-    const { ctx, sendCalls } = buildCtx({
-      events,
-      sections: [{ id: 'sec-risk', type: 'RISK', order: 0, status: 'PENDING' }],
-    });
-    await runAnalysisWorkflowAdapter(ctx);
-
-    const wsWarn = sendCalls.find((c) => c.type === 'web_search_warning');
-    assert.equal(wsWarn, undefined, 'web_search_warning must not be forwarded as SSE');
+    assert.equal(result.terminalStatus, 'CANCELLED');
+    assert.equal(frames.at(-1)?.data.status, 'CANCELLED');
+    assert.ok(dbCalls.some((call) => call.table === 'analysis' && call.method === 'updateMany'));
   });
 });

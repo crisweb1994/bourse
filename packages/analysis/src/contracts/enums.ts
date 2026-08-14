@@ -1,46 +1,38 @@
 import { z } from 'zod';
 import {
-  ACTIVE_ANALYSIS_TYPES,
-  AnalysisType as SharedAnalysisType,
-  Confidence as SharedConfidence,
+  ANALYSIS_MODES,
+  FOCUS_WINDOWS,
   SECTION_TYPES,
-  Signal as SharedSignal,
+  AnalysisStatus as SharedAnalysisStatus,
+  Confidence as SharedConfidence,
+  OverallSignal as SharedOverallSignal,
+  SectionStatus as SharedSectionStatus,
 } from '@bourse/shared-types';
 
-// ===== Reused from @bourse/shared-types =====
-// Wrapped via z.nativeEnum so we get runtime validation without redefining values.
+export const AnalysisMode = z.enum(ANALYSIS_MODES);
+export type AnalysisMode = z.infer<typeof AnalysisMode>;
 
-export const AnalysisType = z.nativeEnum(SharedAnalysisType);
-export type AnalysisType = z.infer<typeof AnalysisType>;
-
-export const ActiveAnalysisType = z.enum(ACTIVE_ANALYSIS_TYPES);
-export type ActiveAnalysisType = z.infer<typeof ActiveAnalysisType>;
+export const FocusWindow = z.enum(FOCUS_WINDOWS);
+export type FocusWindow = z.infer<typeof FocusWindow>;
 
 export const SectionType = z.enum(SECTION_TYPES);
 export type SectionType = z.infer<typeof SectionType>;
 
-export const Signal = z.nativeEnum(SharedSignal);
-export type Signal = z.infer<typeof Signal>;
+export const SectionStatus = z.nativeEnum(SharedSectionStatus);
+export type SectionStatus = z.infer<typeof SectionStatus>;
+
+export const AnalysisStatus = z.nativeEnum(SharedAnalysisStatus);
+export type AnalysisStatus = z.infer<typeof AnalysisStatus>;
+
+export const OverallSignal = z.nativeEnum(SharedOverallSignal);
+export type OverallSignal = z.infer<typeof OverallSignal>;
 
 export const Confidence = z.nativeEnum(SharedConfidence);
 export type Confidence = z.infer<typeof Confidence>;
 
-// ===== Agent-only enums (additions over shared-types) =====
+/** Directional language used only inside a module's private prompt context. */
+export const ModuleSignal = z.enum(['BULLISH', 'NEUTRAL', 'BEARISH']);
+export type ModuleSignal = z.infer<typeof ModuleSignal>;
 
-// RunStatus mirrors shared-types/Prisma analysis terminal states while keeping
-// the workflow package Prisma-free.
-export const RunStatus = z.enum([
-  'PENDING',
-  'IN_PROGRESS',
-  'COMPLETED',
-  'PARTIAL_FAILED',
-  'FAILED',
-  'CANCELLED',
-  'BUDGET_EXHAUSTED',
-]);
-export type RunStatus = z.infer<typeof RunStatus>;
-
-// Actionable recommendation, intentionally decoupled from `Signal`.
-// signal=BULLISH does NOT imply recommendation=BUY; see MVP doc §9.1.
-export const Recommendation = z.enum(['BUY', 'HOLD', 'SELL']);
-export type Recommendation = z.infer<typeof Recommendation>;
+export const RunStatus = AnalysisStatus;
+export type RunStatus = AnalysisStatus;

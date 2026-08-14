@@ -1,40 +1,74 @@
 import { Injectable } from '@nestjs/common';
+import type { AnalysisSseCallback, AnalysisSseEventName } from './analysis-sse.contract';
 
-/**
- * In-process registry of currently-running analyses keyed by analysisId.
- *
- * The runner registers an `AbortController` when it starts a run and releases
- * it when the generator settles. The command service's `abort()` calls
- * `abort(id)` to interrupt the in-flight generator (which has the signal
- * threaded through to the provider SDK) — turning the "stop" button from a
- * pure SSE-disconnect into a real backend cancellation.
- *
- * Scope: single-instance OSS deployment only. A multi-replica setup would
- * need a distributed handle (DB lease / pub-sub); out of scope here.
- */
+interface ActiveRun {
+  controller: AbortController;
+  subscribers: Set<AnalysisSseCallback>;
+  done: Promise<void>;
+  resolveDone: () => void;
+}
+
 @Injectable()
 export class AnalysisRunRegistry {
-  private readonly controllers = new Map<string, AbortController>();
+  private readonly runs = new Map<string, ActiveRun>();
 
   register(id: string, controller: AbortController): void {
-    this.controllers.set(id, controller);
+    if (this.runs.has(id)) return;
+    let resolveDone!: () => void;
+    const done = new Promise<void>((resolve) => {
+      resolveDone = resolve;
+    });
+    this.runs.set(id, {
+      controller,
+      subscribers: new Set(),
+      done,
+      resolveDone,
+    });
+  }
+
+  subscribe(id: string, callback: AnalysisSseCallback): boolean {
+    const run = this.runs.get(id);
+    if (!run) return false;
+    run.subscribers.add(callback);
+    return true;
+  }
+
+  unsubscribe(id: string, callback: AnalysisSseCallback): void {
+    this.runs.get(id)?.subscribers.delete(callback);
+  }
+
+  broadcast(
+    id: string,
+    event: AnalysisSseEventName,
+    data: unknown,
+  ): void {
+    const run = this.runs.get(id);
+    if (!run) return;
+    for (const subscriber of run.subscribers) {
+      subscriber(event as never, data as never);
+    }
+  }
+
+  async wait(id: string): Promise<void> {
+    await this.runs.get(id)?.done;
   }
 
   release(id: string): void {
-    this.controllers.delete(id);
+    const run = this.runs.get(id);
+    if (!run) return;
+    run.resolveDone();
+    this.runs.delete(id);
   }
 
-  /** Trigger the in-flight generator's AbortSignal. No-op if not running. */
   abort(id: string): boolean {
-    const controller = this.controllers.get(id);
+    const controller = this.runs.get(id)?.controller;
     if (!controller || controller.signal.aborted) return false;
     controller.abort();
     return true;
   }
 
-  /** Test/diagnostic helper. */
   isRunning(id: string): boolean {
-    const controller = this.controllers.get(id);
-    return !!controller && !controller.signal.aborted;
+    const run = this.runs.get(id);
+    return Boolean(run && !run.controller.signal.aborted);
   }
 }

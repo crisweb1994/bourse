@@ -77,7 +77,7 @@ export interface ClaudeProviderConfig {
   model?: string;
   /**
    * 次模型 (utility). Used for structured JSON extraction/repair,
-   * COMPREHENSIVE summary and search query rewriting. Falls back to `model`
+   * Analysis summary and search query rewriting. Falls back to `model`
    * when unset. web_search + evidence normalization still go through `model`.
    */
   utilityModel?: string;
@@ -131,11 +131,11 @@ export class ClaudeProvider implements AgentProvider {
   }
 
   /**
-   * Single-round (back-compat) when `options.rounds` is empty/absent.
-   * Multi-round (MVP doc §4.2.1) when `options.rounds` has entries: replays
+   * Single-round when `options.rounds` is empty/absent.
+   * Multi-round when `options.rounds` has entries: replays
    * each prior assistant turn into the next call's `messages`, letting the
-   * model deepen analysis with web_search across turns. Total budget is
-   * code-side: rounds × per-round maxToolUses.
+   * model deepen analysis with web_search across turns. The limits remain
+   * code-owned: rounds x per-round maxToolUses.
    */
   async stream(
     systemPrompt: SystemPromptInput,

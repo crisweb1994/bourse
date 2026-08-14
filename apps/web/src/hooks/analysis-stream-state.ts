@@ -1,5 +1,5 @@
 import { isSectionType } from '@bourse/shared-types';
-import type { AnalysisStatus, SectionType } from '@bourse/shared-types';
+import type { AnalysisStatus, SectionStatus, SectionType } from '@bourse/shared-types';
 
 export interface AnalysisCitation {
   title: string;
@@ -7,13 +7,22 @@ export interface AnalysisCitation {
   claim?: string;
   sectionType?: SectionType;
   searchAdapter?: string;
+  retrievedAt?: string;
 }
+
+export type SectionUiStatus =
+  | 'pending'
+  | 'streaming'
+  | 'completed'
+  | 'failed'
+  | 'skipped'
+  | 'cancelled';
 
 export interface SectionData {
   id?: string;
   type: SectionType;
   order: number;
-  status: 'pending' | 'streaming' | 'completed' | 'failed' | 'skipped';
+  status: SectionUiStatus;
   markdown: string;
   structuredJson: any;
   citations: AnalysisCitation[];
@@ -23,9 +32,7 @@ export interface SectionData {
 }
 
 export interface AnalysisStreamEventPayloadMap {
-  evidence_pack_ready: {
-    pack: unknown;
-  };
+  evidence_pack_ready: { pack: unknown };
   section_skipped: {
     sectionType: SectionType;
     reason: string;
@@ -36,46 +43,26 @@ export interface AnalysisStreamEventPayloadMap {
     sectionId: string;
     order: number;
   };
-  report_chunk: {
-    text: string;
-    sectionType?: SectionType;
-  };
+  report_chunk: { text: string; sectionType?: SectionType };
   citation: {
     title: string;
     url: string;
     claim: string;
     sectionType?: SectionType;
     searchAdapter?: string;
+    retrievedAt?: string;
   };
-  structured_data: {
-    json: unknown;
-    sectionType: SectionType;
-  };
+  structured_data: { json: unknown; sectionType: SectionType };
   section_complete: {
     sectionType: SectionType;
-    status: AnalysisStatus;
+    status: SectionStatus;
     error?: string | null;
   };
-  summary_chunk: {
-    text: string;
-  };
-  summary_complete: {
-    summaryJson: unknown;
-  };
-  cost_update: {
-    /** Cumulative input + output tokens across the run so far. */
-    totalTokens: number;
-    /** Cumulative provider tool calls (e.g. web_search) across the run. */
-    toolCalls: number;
-  };
-  done: {
-    analysisId: string;
-    status?: AnalysisStatus;
-  };
-  error: {
-    message: string;
-    failedSections?: SectionType[];
-  };
+  summary_chunk: { text: string };
+  summary_complete: { summaryJson: unknown };
+  cost_update: { totalTokens: number; toolCalls: number };
+  done: { analysisId: string; status?: AnalysisStatus };
+  error: { message: string; failedSections?: SectionType[]; sectionType?: SectionType };
 }
 
 export type AnalysisStreamEventName = keyof AnalysisStreamEventPayloadMap;
@@ -95,19 +82,12 @@ const ANALYSIS_STREAM_EVENT_NAMES = [
   'error',
 ] as const satisfies readonly AnalysisStreamEventName[];
 
-const ANALYSIS_STREAM_EVENT_NAME_SET = new Set<string>(
-  ANALYSIS_STREAM_EVENT_NAMES,
-);
+const ANALYSIS_STREAM_EVENT_NAME_SET = new Set<string>(ANALYSIS_STREAM_EVENT_NAMES);
 
-export function isAnalysisStreamEventName(
-  value: string,
-): value is AnalysisStreamEventName {
+export function isAnalysisStreamEventName(value: string): value is AnalysisStreamEventName {
   return ANALYSIS_STREAM_EVENT_NAME_SET.has(value);
 }
 
-/**
- * Surfaced when EvidencePack dataAvailability reports WEB_SEARCH_FALLBACK.
- */
 export interface DegradedInfo {
   kind: 'AUTH' | 'NETWORK' | 'RATE_LIMIT_HARD' | 'OTHER';
   failedTools: string[];
@@ -115,7 +95,8 @@ export interface DegradedInfo {
 }
 
 export interface AnalysisStreamState {
-  status: 'idle' | 'streaming' | 'completed' | 'error';
+  status: 'idle' | 'streaming' | 'completed' | 'error' | 'cancelled';
+  terminalStatus: AnalysisStatus | null;
   currentSection: SectionType | null;
   sections: Partial<Record<SectionType, SectionData>>;
   summaryMarkdown: string;
@@ -123,21 +104,13 @@ export interface AnalysisStreamState {
   error: string | null;
   analysisId: string | null;
   degraded: DegradedInfo | null;
-  /**
-   * Latest cumulative token totals seen from `cost_update` events. Null until
-   * the backend emits the first one (typically after the first dimension
-   * completes). Drives the live "$0.43 · 12k tokens" chip during streaming.
-   */
   usage: { totalTokens: number; toolCalls: number } | null;
-  /**
-   * True when another browser/process owns the live SSE run and this client is
-   * polling for replay snapshots.
-   */
   attachedElsewhere: boolean;
 }
 
 export const INITIAL_ANALYSIS_STREAM_STATE: AnalysisStreamState = {
   status: 'idle',
+  terminalStatus: null,
   currentSection: null,
   sections: {},
   summaryMarkdown: '',
@@ -151,51 +124,43 @@ export const INITIAL_ANALYSIS_STREAM_STATE: AnalysisStreamState = {
 
 export const ALREADY_RUNNING_RE = /already (running|in progress)/i;
 
-export function startStreamState(
-  state: AnalysisStreamState,
-  analysisId: string,
-): AnalysisStreamState {
+export function startStreamState(state: AnalysisStreamState, analysisId: string): AnalysisStreamState {
   return {
     ...INITIAL_ANALYSIS_STREAM_STATE,
     status: 'streaming',
     analysisId,
-    attachedElsewhere:
-      state.analysisId === analysisId ? state.attachedElsewhere : false,
+    attachedElsewhere: state.analysisId === analysisId ? state.attachedElsewhere : false,
   };
 }
 
 export function stopWatchingStreamState(
   state: AnalysisStreamState,
+  terminalStatus: 'COMPLETED' | 'CANCELLED' = 'COMPLETED',
 ): AnalysisStreamState {
+  if (state.status !== 'streaming') {
+    return {
+      ...state,
+      status: terminalStatus === 'CANCELLED' ? 'cancelled' : state.status,
+      terminalStatus,
+      attachedElsewhere: false,
+    };
+  }
   return {
     ...state,
-    status: state.status === 'streaming' ? 'completed' : state.status,
-    error: state.status === 'streaming' ? null : state.error,
+    status: terminalStatus === 'CANCELLED' ? 'cancelled' : 'completed',
+    terminalStatus,
+    error: null,
     attachedElsewhere: false,
   };
 }
 
-export function markAttachedElsewhere(
-  state: AnalysisStreamState,
-): AnalysisStreamState {
-  return {
-    ...state,
-    status: 'streaming',
-    attachedElsewhere: true,
-    error: null,
-  };
+export function markAttachedElsewhere(state: AnalysisStreamState): AnalysisStreamState {
+  return { ...state, status: 'streaming', attachedElsewhere: true, error: null };
 }
 
-export function markStreamConnectionError(
-  state: AnalysisStreamState,
-  message: string,
-): AnalysisStreamState {
+export function markStreamConnectionError(state: AnalysisStreamState, message: string): AnalysisStreamState {
   if (state.attachedElsewhere) return state;
-  return {
-    ...state,
-    status: 'error',
-    error: message,
-  };
+  return { ...state, status: 'error', error: message };
 }
 
 export function isAlreadyRunningStreamError(message: unknown): boolean {
@@ -208,22 +173,35 @@ function parseSectionType(value: unknown): SectionType | null {
 
 function parseDegradedInfo(pack: unknown): DegradedInfo | null {
   if (!pack || typeof pack !== 'object') return null;
-  const availability = (pack as { dataAvailability?: unknown }).dataAvailability;
-  if (!availability || typeof availability !== 'object') return null;
-  const dataAvailability = availability as {
-    degradedSource?: unknown;
-    fallbackReason?: {
-      kind?: DegradedInfo['kind'];
-      failedTools?: string[];
-      message?: string;
+  const raw = pack as {
+    degraded?: unknown;
+    dataAvailability?: {
+      degradedSource?: unknown;
+      fallbackReason?: { kind?: DegradedInfo['kind']; failedTools?: string[]; message?: string };
+      missing?: unknown[];
     };
   };
-  if (dataAvailability.degradedSource !== 'WEB_SEARCH_FALLBACK') return null;
+  const availability = raw.dataAvailability;
+  const isDegraded = raw.degraded === true || availability?.degradedSource === 'WEB_SEARCH_FALLBACK';
+  if (!isDegraded) return null;
   return {
-    kind: dataAvailability.fallbackReason?.kind ?? 'OTHER',
-    failedTools: dataAvailability.fallbackReason?.failedTools ?? [],
-    message: dataAvailability.fallbackReason?.message ?? '',
+    kind: availability?.fallbackReason?.kind ?? 'OTHER',
+    failedTools: availability?.fallbackReason?.failedTools ?? [],
+    message:
+      availability?.fallbackReason?.message ??
+      (availability?.missing?.length ? '部分数据源不可用' : '证据数据已降级'),
   };
+}
+
+function sectionStatusToUi(status: SectionStatus): SectionUiStatus {
+  switch (status) {
+    case 'COMPLETED': return 'completed';
+    case 'FAILED': return 'failed';
+    case 'SKIPPED': return 'skipped';
+    case 'CANCELLED': return 'cancelled';
+    case 'IN_PROGRESS': return 'streaming';
+    default: return 'pending';
+  }
 }
 
 export function applyAnalysisStreamEvent(
@@ -232,6 +210,10 @@ export function applyAnalysisStreamEvent(
   data: any,
 ): AnalysisStreamState {
   switch (event) {
+    case 'evidence_pack_ready': {
+      const degraded = parseDegradedInfo(data.pack);
+      return degraded && !state.degraded ? { ...state, degraded } : state;
+    }
     case 'section_skipped': {
       const sectionType = parseSectionType(data.sectionType);
       if (!sectionType) return state;
@@ -245,38 +227,27 @@ export function applyAnalysisStreamEvent(
             type: sectionType,
             order: existing?.order ?? Object.keys(state.sections).length,
             status: 'skipped',
-            markdown: '',
-            structuredJson: null,
-            citations: [],
+            markdown: existing?.markdown ?? '',
+            structuredJson: existing?.structuredJson ?? null,
+            citations: existing?.citations ?? [],
             skipReason: data.reason,
-            skipMissingFields: data.missingFields ?? [],
+            skipMissingFields: Array.isArray(data.missingFields) ? data.missingFields : [],
           },
         },
       };
     }
-
-    case 'evidence_pack_ready': {
-      const degraded = parseDegradedInfo(data.pack);
-      if (!degraded) return state;
-      return {
-        ...state,
-        degraded: state.degraded ?? degraded,
-      };
-    }
-
     case 'section_start': {
       const sectionType = parseSectionType(data.sectionType);
       if (!sectionType) return state;
-      const { order, sectionId } = data;
       return {
         ...state,
         currentSection: sectionType,
         sections: {
           ...state.sections,
           [sectionType]: {
-            id: sectionId,
+            id: data.sectionId,
             type: sectionType,
-            order,
+            order: Number.isInteger(data.order) ? data.order : Object.keys(state.sections).length,
             status: 'streaming',
             markdown: '',
             structuredJson: null,
@@ -285,156 +256,77 @@ export function applyAnalysisStreamEvent(
         },
       };
     }
-
     case 'report_chunk': {
-      const rawSectionType = data.sectionType;
-      if (rawSectionType !== undefined && rawSectionType !== null) {
-        const sectionType = parseSectionType(rawSectionType);
-        if (!sectionType) return state;
-        const existing = state.sections[sectionType];
-        if (!existing) return state;
-        return {
-          ...state,
-          sections: {
-            ...state.sections,
-            [sectionType]: {
-              ...existing,
-              markdown: existing.markdown + data.text,
-            },
-          },
-        };
-      }
-      const currentSection = state.currentSection;
-      if (!currentSection || !state.sections[currentSection]) return state;
+      const explicit = data.sectionType == null ? null : parseSectionType(data.sectionType);
+      const target = explicit ?? state.currentSection;
+      if (!target || !state.sections[target] || typeof data.text !== 'string') return state;
       return {
         ...state,
         sections: {
           ...state.sections,
-          [currentSection]: {
-            ...state.sections[currentSection],
-            markdown: state.sections[currentSection].markdown + data.text,
-          },
+          [target]: { ...state.sections[target]!, markdown: state.sections[target]!.markdown + data.text },
         },
       };
     }
-
     case 'structured_data': {
       const sectionType = parseSectionType(data.sectionType);
-      if (!sectionType || !data.json || !state.sections[sectionType]) {
-        return state;
-      }
+      if (!sectionType || !state.sections[sectionType]) return state;
+      return { ...state, sections: { ...state.sections, [sectionType]: { ...state.sections[sectionType]!, structuredJson: data.json } } };
+    }
+    case 'citation': {
+      const sectionType = data.sectionType == null ? state.currentSection : parseSectionType(data.sectionType);
+      if (!sectionType || !state.sections[sectionType] || typeof data.url !== 'string') return state;
+      const existing = state.sections[sectionType]!;
+      if (existing.citations.some((citation) => citation.url === data.url)) return state;
       return {
         ...state,
         sections: {
           ...state.sections,
           [sectionType]: {
-            ...state.sections[sectionType],
-            structuredJson: data.json,
+            ...existing,
+            citations: [...existing.citations, {
+              title: typeof data.title === 'string' ? data.title : data.url,
+              url: data.url,
+              claim: typeof data.claim === 'string' ? data.claim : undefined,
+              sectionType,
+              searchAdapter: data.searchAdapter,
+              retrievedAt: data.retrievedAt,
+            }],
           },
         },
       };
     }
-
-    case 'citation': {
-      const rawSectionType = data.sectionType;
-      const sectionType =
-        rawSectionType === undefined || rawSectionType === null
-          ? null
-          : parseSectionType(rawSectionType);
-      if (rawSectionType !== undefined && rawSectionType !== null && !sectionType) {
-        return state;
-      }
-      const targetType =
-        sectionType && state.sections[sectionType]
-          ? sectionType
-          : state.currentSection;
-      if (!targetType || !state.sections[targetType]) return state;
-      const citation: AnalysisCitation = {
-        title: data.title,
-        url: data.url,
-        claim: data.claim,
-        ...(sectionType ? { sectionType } : {}),
-        ...(data.searchAdapter ? { searchAdapter: data.searchAdapter } : {}),
-      };
-      return {
-        ...state,
-        sections: {
-          ...state.sections,
-          [targetType]: {
-            ...state.sections[targetType],
-            citations: [...state.sections[targetType].citations, citation],
-          },
-        },
-      };
-    }
-
     case 'section_complete': {
       const sectionType = parseSectionType(data.sectionType);
-      const { status, error } = data;
-      if (!sectionType) return state;
-      if (!state.sections[sectionType]) return state;
+      if (!sectionType || !state.sections[sectionType]) return state;
       return {
         ...state,
         sections: {
           ...state.sections,
           [sectionType]: {
-            ...state.sections[sectionType],
-            status: status === 'COMPLETED' ? 'completed' : 'failed',
-            errorMessage: error ?? null,
+            ...state.sections[sectionType]!,
+            status: sectionStatusToUi(data.status),
+            errorMessage: data.error ?? null,
           },
         },
       };
     }
-
     case 'summary_chunk':
-      return {
-        ...state,
-        summaryMarkdown: state.summaryMarkdown + data.text,
-      };
-
+      return { ...state, summaryMarkdown: state.summaryMarkdown + (typeof data.text === 'string' ? data.text : '') };
     case 'summary_complete':
-      return {
-        ...state,
-        summaryJson: data.summaryJson,
-      };
-
-    case 'cost_update': {
-      const totalTokens =
-        typeof data?.totalTokens === 'number' ? data.totalTokens : null;
-      const toolCalls =
-        typeof data?.toolCalls === 'number' ? data.toolCalls : 0;
-      if (totalTokens === null) return state;
-      return {
-        ...state,
-        usage: { totalTokens, toolCalls },
-      };
-    }
-
+      return { ...state, summaryJson: data.summaryJson ?? null };
+    case 'cost_update':
+      return typeof data.totalTokens === 'number'
+        ? { ...state, usage: { totalTokens: data.totalTokens, toolCalls: typeof data.toolCalls === 'number' ? data.toolCalls : 0 } }
+        : state;
     case 'done': {
-      const terminal =
-        typeof data?.status === 'string'
-          ? (data.status as string).toUpperCase()
-          : 'COMPLETED';
-      // CANCELLED is a user-initiated stop, not a failure — treat it as a
-      // normal terminal state so the UI doesn't flash an error banner. This
-      // also closes a race where SSE done/CANCELLED arrives before the abort
-      // POST resolves: previously done set status=error and the later
-      // stopWatchingStreamState() no-op'd (state was no longer 'streaming'),
-      // leaving the page stuck on "Run ended in CANCELLED". The stuck-run
-      // watchdog surfaces its own warning independently of this status.
-      const failed =
-        terminal === 'FAILED' || terminal === 'BUDGET_EXHAUSTED';
-      return {
-        ...state,
-        status: failed ? 'error' : 'completed',
-        error: failed ? state.error || `Run ended in ${terminal}` : state.error,
-        attachedElsewhere: false,
-      };
+      const terminal = typeof data.status === 'string' ? data.status.toUpperCase() as AnalysisStatus : 'COMPLETED';
+      if (terminal === 'CANCELLED') return { ...state, status: 'cancelled', terminalStatus: terminal, error: null, attachedElsewhere: false };
+      if (terminal === 'FAILED') return { ...state, status: 'error', terminalStatus: terminal, error: state.error ?? '研究失败', attachedElsewhere: false };
+      return { ...state, status: 'completed', terminalStatus: terminal, attachedElsewhere: false };
     }
-
     case 'error':
-      return markStreamConnectionError(state, data.message);
-
+      return markStreamConnectionError(state, typeof data.message === 'string' ? data.message : '研究连接失败');
     default:
       return state;
   }

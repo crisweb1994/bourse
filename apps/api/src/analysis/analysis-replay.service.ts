@@ -1,99 +1,100 @@
 import { Injectable } from '@nestjs/common';
-import {
-  isTerminalAnalysisStatus,
-  type AnalysisStatus,
-  type SectionType,
-} from '@bourse/shared-types';
+import type { SectionStatus, SectionType, AnalysisStatus } from '@bourse/shared-types';
 import type { SseCallback } from './types';
-
-interface ReplayCitation {
-  title?: string;
-  url?: string;
-  claim?: string;
-}
 
 interface ReplaySection {
   id: string;
   type: SectionType;
   order: number;
-  status: AnalysisStatus;
+  status: SectionStatus;
   reportMarkdown?: string | null;
   structuredJson?: unknown;
-  citations?: unknown;
   errorMessage?: string | null;
+}
+
+interface ReplayEvidenceSnapshot {
+  capturedAt: Date | string;
+  dataAsOf: unknown;
+  degraded: boolean;
+  missingFields: string[];
+  sourceMode?: string;
 }
 
 interface ReplayAnalysis {
   id: string;
-  analysisType: string;
   status: AnalysisStatus;
   summaryMarkdown?: string | null;
   summaryJson?: unknown;
   sections: ReplaySection[];
+  evidenceSnapshot?: ReplayEvidenceSnapshot | null;
 }
+
+const TERMINAL_SECTION_STATUSES = new Set<SectionStatus>([
+  'COMPLETED',
+  'FAILED',
+  'SKIPPED',
+  'CANCELLED',
+]);
 
 @Injectable()
 export class AnalysisReplayService {
-  /**
-   * Replay a still-running analysis as a progress snapshot. This emits no
-   * summary and no done event; the caller decides how the client should poll
-   * or attach after the snapshot.
-   */
   replayInProgressRun(analysis: ReplayAnalysis, send: SseCallback) {
+    this.replayEvidenceSnapshot(analysis.evidenceSnapshot, send);
     for (const section of analysis.sections) {
-      send('section_start', {
-        sectionType: section.type,
-        sectionId: section.id,
-        order: section.order,
-      });
-      if (section.reportMarkdown) {
-        send('report_chunk', {
-          text: section.reportMarkdown,
-          sectionType: section.type,
-        });
-      }
-
-      if (!isTerminalAnalysisStatus(section.status)) continue;
-
-      this.replaySectionDetails(section, send);
-      send('section_complete', {
-        sectionType: section.type,
-        status: section.status,
-        error: section.errorMessage ?? null,
-      });
+      this.replaySection(section, send, false);
     }
   }
 
   replayTerminalRun(analysis: ReplayAnalysis, send: SseCallback) {
+    this.replayEvidenceSnapshot(analysis.evidenceSnapshot, send);
     for (const section of analysis.sections) {
-      this.replayTerminalSection(section, send);
+      this.replaySection(section, send, true);
     }
-
-    if (analysis.analysisType === 'COMPREHENSIVE' && analysis.summaryMarkdown) {
+    if (analysis.summaryMarkdown) {
       send('summary_chunk', { text: analysis.summaryMarkdown });
-      if (analysis.summaryJson) {
-        send('summary_complete', { summaryJson: analysis.summaryJson });
-      }
     }
-
+    if (analysis.summaryJson) {
+      send('summary_complete', { summaryJson: analysis.summaryJson });
+    }
     send('done', { analysisId: analysis.id, status: analysis.status });
   }
 
-  private replayTerminalSection(section: ReplaySection, send: SseCallback) {
+  private replayEvidenceSnapshot(
+    snapshot: ReplayEvidenceSnapshot | null | undefined,
+    send: SseCallback,
+  ) {
+    if (!snapshot) return;
+    send('evidence_pack_ready', {
+      pack: {
+        capturedAt:
+          snapshot.capturedAt instanceof Date
+            ? snapshot.capturedAt.toISOString()
+            : snapshot.capturedAt,
+        dataAsOf: snapshot.dataAsOf,
+        degraded: snapshot.degraded,
+        missingFields: snapshot.missingFields,
+      },
+    });
+  }
+
+  private replaySection(
+    section: ReplaySection,
+    send: SseCallback,
+    forceComplete: boolean,
+  ) {
     send('section_start', {
       sectionType: section.type,
       sectionId: section.id,
       order: section.order,
     });
-
     if (section.reportMarkdown) {
       send('report_chunk', {
         text: section.reportMarkdown,
         sectionType: section.type,
       });
     }
-
-    this.replaySectionDetails(section, send);
+    if (!forceComplete && !TERMINAL_SECTION_STATUSES.has(section.status)) return;
+    this.replayStructuredCitations(section, send);
     send('section_complete', {
       sectionType: section.type,
       status: section.status,
@@ -101,26 +102,33 @@ export class AnalysisReplayService {
     });
   }
 
-  private replaySectionDetails(section: ReplaySection, send: SseCallback) {
-    const citations = this.replayCitations(section.citations);
-    for (const citation of citations) {
-      send('citation', {
-        title: citation.title ?? '',
-        url: citation.url ?? '',
-        claim: citation.claim || '',
-        sectionType: section.type,
-      });
+  private replayStructuredCitations(section: ReplaySection, send: SseCallback) {
+    const data = section.structuredJson as any;
+    const findings = Array.isArray(data?.findings) ? data.findings : [];
+    for (const finding of findings) {
+      for (const evidence of Array.isArray(finding?.evidence) ? finding.evidence : []) {
+        for (const citation of Array.isArray(evidence?.citations) ? evidence.citations : []) {
+          if (typeof citation?.url !== 'string') continue;
+          send('citation', {
+            title: typeof citation.title === 'string' ? citation.title : citation.url,
+            url: citation.url,
+            claim: typeof evidence.claim === 'string' ? evidence.claim : '',
+            sectionType: section.type,
+            ...(typeof citation.sourceType === 'string'
+              ? { sourceType: citation.sourceType }
+              : {}),
+            ...(typeof citation.retrievedAt === 'string'
+              ? { retrievedAt: citation.retrievedAt }
+              : {}),
+          });
+        }
+      }
     }
-
     if (section.structuredJson) {
       send('structured_data', {
         json: section.structuredJson,
         sectionType: section.type,
       });
     }
-  }
-
-  private replayCitations(value: unknown): ReplayCitation[] {
-    return Array.isArray(value) ? (value as ReplayCitation[]) : [];
   }
 }

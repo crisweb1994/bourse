@@ -13,9 +13,22 @@ export type ApiSseFrame<T extends AnalysisSseEventName = AnalysisSseEventName> =
 export function mapEvidencePackReadyEvent(
   event: Extract<SseEvent, { type: 'evidence_pack_ready' }>,
 ): ApiSseFrame<'evidence_pack_ready'> {
+  const pack = event.pack as {
+    capturedAt?: unknown;
+    dataAsOf?: unknown;
+    dataAvailability?: { missing?: unknown[]; degradedSource?: unknown };
+  };
+  const availability = pack.dataAvailability;
   return {
     event: 'evidence_pack_ready',
-    data: { pack: event.pack },
+    data: {
+      pack: {
+        capturedAt: typeof pack.capturedAt === 'string' ? pack.capturedAt : null,
+        dataAsOf: pack.dataAsOf ?? null,
+        degraded: availability?.degradedSource === 'WEB_SEARCH_FALLBACK',
+        missingFields: Array.isArray(availability?.missing) ? availability.missing : [],
+      },
+    },
   };
 }
 
@@ -68,6 +81,8 @@ export function mapCitationEvent(
       url: event.citation.url,
       claim: '',
       sectionType: event.sectionType,
+      retrievedAt: event.citation.retrievedAt,
+      sourceType: event.citation.sourceType,
       ...(event.citation.searchAdapter
         ? { searchAdapter: event.citation.searchAdapter }
         : {}),
@@ -95,6 +110,7 @@ export function mapSectionCompleteEvent(
     data: {
       sectionType: event.sectionType,
       status: event.status,
+      ...(event.status !== 'COMPLETED' ? { error: null } : {}),
     },
   };
 }

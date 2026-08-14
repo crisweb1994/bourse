@@ -1,13 +1,15 @@
-import type { EvidencePackAny } from '@bourse/analysis';
+import type { EvidencePackV2 } from '@bourse/analysis';
 
 /** Versioned read-only boundary exposed by AnalysisModule to Chat. */
 export interface AnalysisChatSummary {
   id: string;
   stockId: string;
   symbol: string;
-  analysisType: string;
+  mode: string;
+  focusWindow: string;
   status: string;
-  generatedAt: string | null;
+  createdAt: string;
+  completedAt: string | null;
   dataAsOf: string | null;
   overallSignal: string | null;
   overallConfidence: string | null;
@@ -25,7 +27,7 @@ export interface AnalysisChatContext extends AnalysisChatSummary {
     sourceMode: string;
     degraded: boolean;
     missingFields: string[];
-    payload: EvidencePackAny | Record<string, unknown>;
+    payload: EvidencePackV2 | Record<string, unknown>;
     sourceSnapshots: unknown;
     contentHash: string;
   };
@@ -35,7 +37,11 @@ export interface AnalysisChatContext extends AnalysisChatSummary {
     status: string;
     reportMarkdown: string | null;
     structuredJson: unknown;
-    citations: unknown;
+    citations: Array<{
+      title: string;
+      url: string;
+      claim: string;
+    }>;
   }>;
 }
 

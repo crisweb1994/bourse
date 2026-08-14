@@ -8,7 +8,8 @@ import { WatchlistTable } from '@/components/watchlist/watchlist-table';
 import { useWatchlist } from '@/hooks/use-watchlist';
 import { getAnalysisHistory, type AnalysisHistoryItemDto } from '@/lib/api';
 import {
-  ANALYSIS_TYPE_LABELS,
+  MODE_LABELS,
+  FOCUS_WINDOW_LABELS,
   SIGNAL_LABELS_BILINGUAL,
   STATUS_LABELS,
 } from '@/lib/constants';
@@ -130,8 +131,7 @@ export default function DashboardPage() {
                     </span>
                     <Pill variant="flat">
                       <span className="font-mono">
-                        {ANALYSIS_TYPE_LABELS[item.analysisType] ||
-                          item.analysisType}
+                        {MODE_LABELS[item.mode]} · {FOCUS_WINDOW_LABELS[item.focusWindow]}
                       </span>
                     </Pill>
                     <Pill variant={statusPillVariant(item.status)} dot>

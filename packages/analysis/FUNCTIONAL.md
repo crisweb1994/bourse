@@ -1,267 +1,221 @@
-# `@bourse/analysis` — 功能说明
+# `@bourse/analysis` 功能说明
 
-> Framework-free 核心包。承载 connectors + compute + snapshot + evidence pack +
-> dimensions + workflows + SSE 契约 + evals。`apps/api` 是唯一的 host(NestJS 注入
-> 端口、驱动 SSE),`apps/web` 只消费 SSE 契约。
+> `@bourse/analysis` 是无框架的研究核心包。它负责连接器、一次性事实快照、确定性计算、证据契约、五个研究模块和 SSE 事件；`apps/api` 负责认证、持久化和运行生命周期，`apps/web` 只消费 API 契约。
 >
-> 依赖图:`shared-types ← analysis ← apps/{api,web}`。
+> 依赖关系：`shared-types <- analysis <- apps/{api,web}`。
 >
-> 本文反映 **Path A 恢复 + Stage-0 删除后**的终态(2026-05-30)。历史的 Stage-0
-> 内部 builder(`buildEvidencePackV2`)与双层包装工具(`quoteSnapshot`/`filingSearch`)
-> 已删除;结构化 evidence pack 现在**只有一条来源**:Path A。
+> 本文只描述 Analysis V2 的当前产品契约。Analysis 数据按空库上线，旧报告不迁移、不兼容。
 
 ---
 
-## 1. 这个包做什么
+## 1. 目标与边界
 
-把"一支股票的代码"变成"九维 AI 分析 + 综合结论",同时严守一条铁律:
-**数字由代码算,LLM 只负责解读**。
+输入一支股票、研究模式和时间窗，输出一份带来源的研究报告。客观事实由代码和数据连接器提供，LLM 只负责解释、归纳和组织语言。
 
-整条链路:
+Analysis V2 固定运行五个模块：
+
+| 顺序 | 模块 | 负责的问题 | 不负责的问题 |
+|---|---|---|---|
+| 1 | `COMPANY_QUALITY` 公司质量 | 商业模式、收入利润现金流、资本效率、资产负债表和经营韧性 | 行业排名、股价贵不贵、完整风险清单 |
+| 2 | `INDUSTRY_POSITION` 行业与竞争 | 行业结构、增长驱动、竞争对手、市场位置、护城河、替代和监管 | 重写完整财务、目标价 |
+| 3 | `VALUATION_SCENARIOS` 估值与情景 | 当前价格隐含的假设、估值方法和悲观/基准/乐观区间 | 单一目标价、买卖或仓位建议 |
+| 4 | `RISK_REGISTER` 风险清单 | 会使当前判断失效的风险、机制、监测指标和失效条件 | 重新写完前序模块 |
+| 5 | `MARKET_SIGNALS` 市场信号 | 价格、波动、成交量和代码计算的技术指标 | 把价格走势当作公司质量证据、精确买卖点 |
+
+四个事实模块并行；风险模块在事实模块之后运行，因为它可以引用前序结果；最后生成一份综合结论。所有五个模块都会运行，`QUICK` 只减少每个模块的研究轮数和搜索量，不减少模块数量。
+
+明确不做：事件专项、自定义日期、单模块新建分析、跨股票比较、用户自定义 token/调用预算、自动交易和仓位建议。
+
+---
+
+## 2. 用户输入契约
+
+```ts
+{
+  symbol: string;
+  market: string;
+  mode: 'QUICK' | 'DEEP';
+  focusWindow?: '30D' | '90D' | '1Y' | '3Y'; // 默认 90D
+  locale?: string;                              // 默认 zh-CN
+  question?: string;                            // 可选，最多 500 字
+}
+```
+
+- `QUICK`：五个模块各进行一轮研究，控制搜索和 findings 数量，适合首次快速了解。
+- `DEEP`：允许第二轮交叉核验和更多搜索，输出结构与 QUICK 相同，便于比较两次报告。
+- `focusWindow` 主要约束价格、新闻、公告和近期事件。财务模块仍可读取最新财报及更长历史，避免 30D 把长期财务趋势截断。
+- 研究重点会传给各模块，只改变排序和解释角度，不改变模块职责，也不能覆盖系统规则。
+- 首版输出中文；来源标题和公司名称可以保留原文。用户输入作为普通研究问题处理，不作为系统指令。
+
+研究 preset 是代码常量，不做设置页和数据库配置：
+
+| 模式 | 轮数 | 每模块工具调用上限 | 每模块 findings 上限 |
+|---|---:|---:|---:|
+| `QUICK` | 1 | 2 | 3 |
+| `DEEP` | 2 | 5 | 6 |
+
+这些上限只用于保护一次运行的可控性，不向用户暴露，也不会产生额外的产品状态。
+
+---
+
+## 3. 数据链路与 Evidence Snapshot
 
 ```mermaid
 flowchart LR
-  subgraph host["apps/api (host)"]
-    SV2["SnapshotV2Service\nfetchAsEvidencePack(symbol, market)"]
-  end
-  subgraph core["@bourse/analysis"]
-    FS["fetchSnapshot()\n— fetch 一次"]
-    CMP["runComputeLayer()\n— ratios / indicators / red-flags / DCF"]
-    PACK["snapshotToEvidencePack()\n→ EvidencePackV2"]
-    WF["streamComprehensive()\n9 维 + 综合"]
-  end
-  SV2 --> FS --> CMP --> PACK --> SV2
-  SV2 -. "options.evidencePack" .-> WF
-  WF --> SSE(["SSE 事件流 → apps/web"])
+  INPUT["symbol + market + mode + focusWindow"] --> FETCH["fetchSnapshot()\n并发读取数据源一次"]
+  FETCH --> COMPUTE["runComputeLayer()\n比率 / 技术指标 / 风险旗标 / 估值辅助"]
+  COMPUTE --> PACK["snapshotToEvidencePack()"]
+  PACK --> STORE["AnalysisEvidenceSnapshot\n捕获时间 + dataAsOf + 缺失字段"]
+  STORE --> FACTS["四个事实模块并行"]
+  FACTS --> RISK["风险清单第二波"]
+  RISK --> SUMMARY["综合结论\n只整合已有结果"]
+  SUMMARY --> SSE["SSE -> API -> Web"]
 ```
 
-要点:`apps/api` 先在 host 侧把 pack **预建好**(Path A),再通过
-`options.evidencePack` 注入 `streamComprehensive`。workflow 不再自己拉数据。
+### 3.1 Snapshot 原则
+
+1. 一次 Analysis 只抓取一份 Evidence Snapshot，五个模块共享它。
+2. Snapshot 是不可变研究输入，包含原始事实、计算事实、来源、抓取时间和数据时点。
+3. 连接器失败不静默填空；缺失和过期字段进入 `dataAvailability`/`researchCoverage`。
+4. 数字由 `compute/` 确定性计算，LLM 不重新计算 PE、RSI、MACD、均线、DCF 输入或区间。
+5. 估值只输出情景区间。关键输入缺失时 `valueRange` 为 `null`，不得凭空补一个目标价。
+6. 技术指标由代码生成，LLM 只能解释指标和限制。
+
+### 3.2 降级规则
+
+| 数据情况 | 行为 |
+|---|---|
+| Snapshot 完全无法建立 | Analysis 失败；保留错误信息，不能生成无依据报告 |
+| 模块的关键事实缺失 | 模块 `SKIPPED` 或输出 `UNASSESSABLE`，并列出缺失字段 |
+| 只有可选事实缺失或过期 | 继续生成，置信度上限降低并写入 limitations |
+| `quote` 或 `history` 缺失 | `MARKET_SIGNALS` 跳过 |
+| `financials` 缺失 | 公司质量和估值禁止精确财务/估值结论；综合结论不得给方向性 signal |
+| 网页搜索可用但结构化数据缺失 | 仅补充事件和叙述，不能覆盖或重算结构化数字 |
+
+结构化来源优先于网页搜索；没有可靠证据时明确写“无法判断”，不编造数字。
 
 ---
 
-## 2. 目录职责
+## 4. 模块输出
+
+每个模块输出同一基础结构，并根据模块类型增加专属字段：
+
+```ts
+{
+  schemaVersion: 'analysis-section-v2';
+  type: SectionType;
+  assessment: string;
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  summary: string;
+  findings: Finding[];
+  limitations: string[];
+  dataAsOf: string;
+  disclaimer: string;
+}
+```
+
+`Finding` 必须包含结论、证据和引用。证据可以被多个模块引用，但只有负责该事实的模块展开完整背景；其他模块只说明它如何支持本模块判断，避免重复。
+
+模块评价枚举：
+
+- 公司质量：`STRONG` / `MIXED` / `WEAK` / `UNASSESSABLE`
+- 行业与竞争：`LEADING` / `COMPETITIVE` / `CHALLENGED` / `UNASSESSABLE`
+- 估值与情景：`UNDERVALUED` / `FAIR` / `OVERVALUED` / `UNASSESSABLE`
+- 风险清单：`LOW` / `MEDIUM` / `HIGH` / `UNASSESSABLE`
+- 市场信号：`POSITIVE` / `NEUTRAL` / `NEGATIVE` / `UNASSESSABLE`
+
+风险模块额外记录 `basedOnIncompleteSections`，让用户知道它是否建立在部分事实模块之上。
+
+综合结论只从已完成模块中归纳：
+
+- `signal` 只能是 `POSITIVE`、`NEUTRAL`、`CAUTIOUS` 或 `null`。
+- 公司质量、估值与风险清单任一关键依据不足时，`signal` 必须为 `null`。
+- 综合结论不得生成模块中不存在的新数字或新事实；模块评价冲突时必须在文字中解释。
+- 统一附带免责声明和引用，不给买卖、目标价或仓位指令。
+
+---
+
+## 5. 工作流与失败语义
+
+```mermaid
+flowchart TB
+  START["创建 Analysis"] --> SNAP["建立并保存 Snapshot"]
+  SNAP --> FACT["公司质量 / 行业与竞争 / 估值与情景 / 市场信号\n并行"]
+  FACT --> RISK["风险清单\n使用已完成事实"]
+  RISK --> SUM["综合结论"]
+  SUM --> END["done"]
+  SNAP -. "致命失败" .-> FAIL["FAILED"]
+  FACT -. "部分失败" .-> PARTIAL["PARTIAL_FAILED"]
+  START -. "用户取消" .-> CANCEL["CANCELLED"]
+```
+
+Analysis 状态：`PENDING`、`IN_PROGRESS`、`COMPLETED`、`PARTIAL_FAILED`、`FAILED`、`CANCELLED`。
+
+Section 状态：`PENDING`、`IN_PROGRESS`、`COMPLETED`、`FAILED`、`SKIPPED`、`CANCELLED`。
+
+- 五个模块全部完成且综合结论完成：`COMPLETED`。
+- 至少有模块完成，但模块或综合结论失败/跳过：`PARTIAL_FAILED`。
+- Snapshot 致命失败或没有任何模块完成：`FAILED`。
+- 用户主动停止：`CANCELLED`；已经完成的内容保留，不支持继续执行。
+- 浏览器断开不影响服务端运行；服务重启会把进行中的 Analysis 标记为 `FAILED`。
+
+---
+
+## 6. 重试、重跑与快照复用
+
+- **重试失败部分**：仅对失败/跳过模块重跑；如果事实模块重新完成，则连同风险清单和综合结论一起重建。复用原 Evidence Snapshot，不重新抓取数据，修改原 Analysis 记录。
+- **再跑一次**：创建新的 Analysis，复制原模式、时间窗和研究问题，重新抓取 Snapshot；原报告保留在历史中。
+- **取消**：只允许对运行中的 Analysis 操作。取消后是终态，不能 resume；可重新创建一份研究。
+- 同一用户同一股票最多一份 `PENDING`/`IN_PROGRESS` Analysis，避免重复消耗。
+- 终态报告可回放：先回放 Snapshot 元数据，再回放模块正文、结构化数据、引用、综合结论和 `done`。
+
+---
+
+## 7. SSE 事件
+
+事件都带 `runId` 和单调递增 `seq`，服务端据此支持断线后的回放。
+
+| 事件 | 作用 |
+|---|---|
+| `evidence_pack_ready` | Snapshot 证据包已准备，包含数据时点和降级信息 |
+| `section_start` | 模块开始 |
+| `report_chunk` / `report_complete` | 模块 Markdown 流及完整正文 |
+| `structured_data` | 通过 schema 校验的模块结果 |
+| `citation` | 模块引用，必须包含 URL、来源类型和 `retrievedAt` |
+| `section_skipped` | 依据不足而有意跳过，带缺失字段 |
+| `section_complete` | 模块终态和用量信息 |
+| `summary_chunk` / `summary_complete` | 综合结论流及结构化结果 |
+| `cost_update` | 运行用量观测，不改变研究状态 |
+| `web_search_warning` | 网搜降级软告警 |
+| `error` | 模块或综合结论错误 |
+| `done` | Analysis 终态和完整结果 |
+
+`apps/api` 的 workflow adapter 将核心事件持久化为 `Analysis`、`AnalysisSection` 和 `AnalysisEvidenceSnapshot`；前端不直接依赖核心包内部类型。
+
+---
+
+## 8. 目录职责
 
 | 目录 | 职责 |
 |---|---|
-| `contracts/` | 所有 public 类型的 **zod schema**(schema-first,TS 类型 `z.infer` 派生):evidence-pack(v1/v2)、sse-events、analysis-result、comprehensive-summary、cross-dim-validator、enums |
-| `ports/` | 连接器抽象接口(FinancePort / FinancialsPort / FilingPort + cache / rate-limiter)。host 注入实现 |
-| `connectors/` | 端口实现:finance(Yahoo / Nasdaq US 备用 / SEC Profile 备用 / eastmoney)、financials(SEC XBRL / eastmoney)、filings(EDGAR / CNInfo / HKEX)、macro(FRED / World Bank / HKMA)、search |
-| `snapshot/` | **fetch 一次** + 投影成 evidence pack:`fetch-snapshot` / `to-evidence-pack` / `market-config` / `fact-filter` |
-| `compute/` | **代码计算层**:ratios / technical-indicators / red-flags / relative / peer-table / valuation-helpers / units / read-bundle |
-| `dimensions/` | 9 维定义(`DIMENSION_CONFIGS` 单一真源 → `ALL_DIMENSIONS` 派生) |
-| `workflows/` | `comprehensive`(9 维 + 综合 + wave 并发 + 校验 + judge)、`single`、`wave-executor` |
-| `primitives/` | provider 抽象、structured-output、stream-dimension、judge、summary-prompts、dimension-prompts、evidence-pack-builder(v1 web_search 兜底)、validate-cross-dim |
-| `tools/` | ToolMiddleware + 5 个 CN 信号工具(eastmoney) |
-| `markets/` | US / CN / HK MarketProfile(domainTiers / sourcePriorities) |
-| `personas/` | 当前仅 `judge-neutral`；投资方法论 Persona 已进入产品规划 |
-| `guardrails/` | 输出守卫 |
-| `evals/` | judge + vendor-fixture compute 回归 |
-| `util/` | content-hash / instrument-id / normalize-url |
+| `contracts/` | Zod-first 的 Analysis、模块结果、引用、EvidencePack 和 SSE 契约 |
+| `ports/` / `connectors/` | 市场行情、财务、公告、宏观和搜索数据源；由 host 注入实现 |
+| `snapshot/` | 一次性抓取、数据可用性、模块事实投影和 EvidencePack |
+| `compute/` | 财务比率、技术指标、风险旗标、同行和估值辅助的纯函数 |
+| `dimensions/` | 五个固定模块的 prompt、输出 schema 和执行顺序 |
+| `workflows/` | 四个事实模块并行、风险第二波、综合结论和失败语义 |
+| `primitives/` | Provider、结构化输出、模块流和综合结论提示词 |
+| `markets/` | US / CN / HK 数据源优先级与搜索域策略 |
+| `tools/` | 需要时提供的市场数据工具；不允许模块自行重算数字 |
+
+不为五个固定模块再引入 planner、agent registry、持久化队列或多层资源配置。
 
 ---
 
-## 3. 硬不变式(违反即 bug)
+## 9. 验证重点
 
-1. **代码计算,LLM 判断** — ratios / indicators / red flags / peer 对比 / 历史百分位
-   / DCF 由 `compute/` 算出,prompt 注入结果让 LLM 解读;**禁止** LLM 自己推导数字。
-2. **fetch 一次** — 一次 `fetchSnapshot(symbol)` 拉齐所有 connector 数据,9 维共享。
-3. **Snapshot 是值** — 不持久化中间态,只持久化用户可见结果。
-4. **Schema-first** — public 类型先写 zod,TS 类型 `z.infer` 派生。
-5. **Provenance 必填** — citation 必带 `retrievedAt`;pack 级 `citations[]`。
-6. **Auth + CSRF** — 在 host 侧强制(本包 framework-free,不涉及)。
-
----
-
-## 4. fetchSnapshot —— fetch 一次
-
-`fetchSnapshot(symbol, config, options)` 并发拉取一个市场的全部数据源,**任一源失败
-被捕获**并降级到 `dataAvailability`,绝不让整次抓取崩。
-
-```mermaid
-flowchart TB
-  IN["fetchSnapshot(symbol, MarketConfig)"]
-  IN --> Q["quote"]
-  IN --> H["history"]
-  IN --> F["financials"]
-  IN --> FL["filings"]
-  IN --> P["profile (US+CN; HK 未接)"]
-  IN --> EX["CN extras: consensusEps / lhb /\nnorthboundFlow / unlockCalendar / shareholders"]
-  Q & H & F & FL & P & EX --> AGG["聚合 → StockSnapshot.rawFacts\n失败项 → dataAvailability.missing[reason]"]
-  AGG --> CMP["runComputeLayer(rawFacts)\n→ computedFacts"]
-  CMP --> OUT["StockSnapshot { rawFacts, computedFacts, dataAvailability }"]
-```
-
-- connector 数据走 `portToFetcher`(包装 host 注入的端口)。
-- US quote/history 优先 Yahoo；返回无效值时改用 Nasdaq，并在 citation 和 warning 中保留实际来源。
-- US Profile 优先 Yahoo；不可用时改用 SEC issuer submissions 的 SIC/发行人信息，并保留 A 级引用和 fallback warning。
-- CN 信号由 `ResearchMarketDataClient` 声明 capability/dataSet，经统一 Router
-  选择 canonical source plugin；失败带结构化 reason 码进 `dataAvailability`,而非静默空。
-- **fetch 一次**:9 维不再各自拉数据,全部读这一个 snapshot。
-- **覆盖矩阵**:snapshot 生成 `researchCoverage`。缺 quote/history 的 TECHNICAL 直接
-  `section_skipped`；其它维度在缺失或陈旧关键事实时保留报告，但由代码压低
-  confidence、标记 missing/stale facts，并移除不受支持的目标价。
-
-> **profile**:US(Yahoo assetProfile)+ CN(eastmoney F10 RPT_F10_BASIC_ORGINFO)
-> 已接,落 `facts.profile`(sector/industry/description/employees/website)。HK 暂无
-> profile 源(未接)。
->
-> **financials**:US(SEC XBRL)/ CN(eastmoney)/ HK(eastmoney F10
-> RPT_HKF10_FN_MAININDICATOR,报告币种取自 INCOME.CURRENCY_CODE)均已接。
-
----
-
-## 5. 计算层(compute)—— 不变式 #1 的载体
-
-`runComputeLayer` 把 `rawFacts` 喂给纯函数,产出 `computedFacts`,prompt 只引用这些值。
-
-| 模块 | 产出 |
-|---|---|
-| `financial-ratios` | PE / PB / ROE / 毛利率 / 负债率 等 |
-| `technical-indicators` | MA / RSI / 波动率 / 趋势 |
-| `red-flags` | 规则触发的风险旗标 |
-| `relative` | 历史百分位(自身时间序列定位) |
-| `peer-table` | 同业对比表 |
-| `valuation-helpers` | DCF / EV 等估值辅助 |
-| `units` / `read-bundle` | 单位归一化 + 安全读数(safeDiv / pickAnchor / EV 计算) |
-
----
-
-## 6. Evidence Pack —— 喂给 LLM 的契约
-
-```mermaid
-flowchart TB
-  ANY["EvidencePackAny\n(discriminatedUnion by schemaVersion)"]
-  ANY --> V2["EvidencePackV2 ('evidence-pack-v2')\nPath A 产物:facts + computedFacts\n+ dataAvailability{complete[], missing[]}"]
-  ANY --> V1["EvidencePack ('evidence-pack-v1')\nweb_search 兜底产物\n+ dataAvailability{degradedSource, missingPrivateFields[]}"]
-```
-
-- **V2** 是生产正路:`snapshotToEvidencePack(snapshot)` 把 rawFacts + computedFacts
-  扁平投影,dimension prompts 实际消费它。
-- **V1** 仅在 web_search 兜底时出现(下一节)。
-- `formatEvidencePackBlock(v2Pack, sectionType)` 把 V2 与当前维度覆盖门禁渲染进 dimension prompt;
-  默认明令 LLM **"数字字段必须引用 pack 内值,不允许 web_search 重取"**。开启
-  `allowWebSearchGaps`(env `ANALYSIS_DIM_WEB_SEARCH_GAPS`,默认关)后,**仅** pack 标
-  missing 的字段允许 LLM 自主 web_search 补,补来的值须标 `(网搜补充·未经代码核验)`、
-  不得覆盖代码核验值、不得参与比率重算(守 #1)。
-
-### Pack 解析 + 市场无关的 web_search 兜底
-
-```mermaid
-flowchart TB
-  S["streamComprehensive(options)"]
-  S --> A{"options.evidencePack?\n(Path A 注入)"}
-  A -- 有 --> B{"pack 严重降级?\n(缺 financials)"}
-  A -- 无 --> B
-  B -- "否" --> USE["用该 pack(或无 pack 直接跑)"]
-  B -- "是" --> V1B["buildEvidencePack() v1\nLLM web_search 重建 → degradedSource=WEB_SEARCH_FALLBACK"]
-  V1B --> SKIP["按 missingPrivateFields 跳过\n依赖私有数据的维度"]
-  USE --> READY["yield evidence_pack_ready"]
-  SKIP --> READY
-```
-
-- **严重降级** = `isPackCriticallyDegraded`:`dataAvailability.complete` 缺 `financials`
-  (核心基本面输入)。
-- 恢复是 **market-agnostic** 且**生产恒开**(apps/api 对每次 run 启用)。单元测试通过
-  `recoverMissingEvidence` 隔离 no-pack 路径。
-
-> ✅ **B 已落地 + 按字段自主补抓(flagged)**:整包恢复触发已放宽为「缺 financials 即
-> 触发」且生产恒开。另:`allowWebSearchGaps`(env,默认关)开启后,维度 LLM 可对 pack
-> 标 missing 的字段**按字段自主 web_search 补**,补来的值打 `(网搜补充·未经代码核验)`
-> 标记、隔离于 compute 权威计算(compute 在 snapshot 阶段已跑完,物理上无法被回灌)
-> ——守住 #1。
-
----
-
-## 7. 单维流水线 streamDimension
-
-每一维都是一条 7 段事件流水线:
-
-```mermaid
-sequenceDiagram
-  participant W as workflow
-  participant D as streamDimension
-  participant P as AgentProvider (LLM)
-  W->>D: run(dim, input, pack)
-  D-->>W: section_start
-  loop 流式正文
-    P-->>D: text chunk
-    D-->>W: report_chunk
-  end
-  D-->>W: report_complete
-  D-->>W: structured_data (zod 校验 + repair)
-  D-->>W: citation × N (必带 retrievedAt)
-  D-->>W: section_complete
-  Note over D,W: 私有数据缺失时 → section_skipped(不跑残缺数据)
-```
-
-9 维:`FUNDAMENTAL` `VALUATION` `TECHNICAL` `SENTIMENT` `RISK` `GOVERNANCE`
-`INDUSTRY` `SCENARIO` `PORTFOLIO`。每维通过 `requiresPrivateData` 声明对 CN 私有
-信号(northboundFlow / lhb / unlockCalendar / consensusEps)的依赖,用于降级跳过。
-
----
-
-## 8. 综合工作流 streamComprehensive
-
-```mermaid
-flowchart TB
-  ST["streamComprehensive(provider, input, options)"]
-  ST --> PK["① Pack 解析(§6)→ evidence_pack_ready"]
-  PK --> WV["② Wave 执行:groupByWave + runWithSemaphore\n(waveMode='auto' 时按 dim.wave 分波,波内并发)"]
-  WV --> DIMS["③ 各维 streamDimension(§7)\nskip / retry-once / fail-run"]
-  DIMS --> VAL["④ 跨维校验 validateCrossDim\n(仅 marketProfile 存在时,如 CN)"]
-  VAL --> JUDGE["⑤ 选择性 judge\n(HIGH/强偏向的维度,并发上限 3)"]
-  JUDGE --> SUM["⑥ 综合 summary:summary_chunk × N → summary_complete"]
-  SUM --> DONE["⑦ done(status: COMPLETED / PARTIAL_FAILED / FAILED / BUDGET_EXHAUSTED)"]
-```
-
-- **失败语义**:`skip`(记失败、继续)/ `retry-once`(重试一次再跳)/ `fail-run`
-  (在 summary 前停,status=FAILED)。
-- **预算**:`budget.maxTokens / maxCostUsd / maxToolCalls` 在维度边界检查,超限 →
-  `BUDGET_EXHAUSTED`。
-- **执行模式**:默认顺序流式执行;需要并发时使用 `waveMode:'auto'` 分波执行。
-- `single` workflow(`streamSingle`)是单维精简版,跳过 wave / 校验 / judge。
-
----
-
-## 9. SSE 事件契约(`contracts/sse-events.ts`)
-
-| 事件 | 时机 |
-|---|---|
-| `evidence_pack_ready` | pack 解析完成(前端据此读 degradedSource) |
-| `section_start` / `report_chunk` / `report_complete` | 单维正文流 |
-| `structured_data` | 单维结构化结论(zod) |
-| `citation` | 引用(必带 retrievedAt) |
-| `section_complete` / `section_skipped` | 单维结束 / 降级跳过 |
-| `judge_start` / `judge_complete` | 选择性 judge |
-| `summary_chunk` / `summary_complete` | 综合结论 |
-| `cost_update` | 边界处成本/用量 |
-| `web_search_warning` | web_search 软告警 |
-| `done` / `error` | 终态 |
-
-前端契约稳定;`apps/api` 的 adapter 负责把这些事件投影成 apps/api 的 SSE 形状 +
-写 `Analysis` / `AnalysisSection` 行。
-
----
-
-## 10. 市场 & CN 信号数据源
-
-- `markets/`:US / CN / HK 的 MarketProfile —— `domainTiers`(web_search 白名单 +
-  质量分级)、`sourcePriorities`。仅 CN 配了 domainTiers。
-- CN 信号的 provider connector 位于 `packages/market-data`，通过
-  `ownership`、`market-events` 与 `earnings-consensus` canonical port 暴露。
-  公开端点字段会随报表改版腐化，
-  需用 fixture 定期校准:
-  - `shareholdersCN` — 股东户数/人均(`RPT_F10_EH_HOLDERNUM`)
-  - `unlockCalendarCN` — 限售解禁(`RPT_LIFT_STAGE`)
-  - `lhbScanCN` — 龙虎榜
-  - `akshareNorthboundCN` — 北向资金
-
----
-
-## 11. Evals
-
-- `eval:judge` / vendor-fixture:用真实 fixture 回归 compute 层,防止 ratios /
-  indicators 计算漂移。
-- 集成测试 `apps/api/.../snapshot-v2.e2e.spec.ts`(mock 连接器)验证 Path A 装配:
-  US 产出 `computedFacts.ratios.pe`、CN 携带 5 个信号、硬失败优雅降级。
+- 合约测试：请求、模式、时间窗、五个模块、引用、状态和 SSE 事件。
+- 计算测试：比率、技术指标、估值辅助和风险旗标由 fixture 回归。
+- 工作流测试：并行事实模块、风险依赖、QUICK/DEEP、部分失败、跳过、取消、总结失败和终态。
+- API 测试：Snapshot 持久化、重试复用 Snapshot、再跑创建新记录、历史查询和终态回放。
+- 人工样本：至少覆盖 US / HK / CN 的不同公司类型，重点检查事实重复、缺失数据是否诚实披露以及引用是否可回链。

@@ -3,15 +3,11 @@ import type { SectionType } from '../contracts/enums';
 import type { StructuredJson } from '../contracts/analysis-result';
 
 const SECTION_TYPES = [
-  'FUNDAMENTAL',
-  'GOVERNANCE',
-  'VALUATION',
-  'INDUSTRY',
-  'RISK',
-  'TECHNICAL',
-  'SENTIMENT',
-  'SCENARIO',
-  'PORTFOLIO',
+  'COMPANY_QUALITY',
+  'INDUSTRY_POSITION',
+  'VALUATION_SCENARIOS',
+  'RISK_REGISTER',
+  'MARKET_SIGNALS',
 ] as const;
 
 export const ResearchCoverageStatusSchema = z.enum([
@@ -51,43 +47,26 @@ interface CoverageRule {
 }
 
 const RULES: Record<SectionType, CoverageRule> = {
-  FUNDAMENTAL: {
+  COMPANY_QUALITY: {
     allOf: ['financials'],
     degradedBlockedClaims: ['精确财务趋势、ROIC 或现金流质量结论'],
   },
-  GOVERNANCE: {
-    allOf: ['filings'],
-    degradedBlockedClaims: ['治理质量评级、股权结构比例或高管交易结论'],
-  },
-  VALUATION: {
-    allOf: ['quote', 'financials'],
-    degradedBlockedClaims: ['DCF、反向 DCF、精确目标价或精确估值区间'],
-  },
-  INDUSTRY: {
+  INDUSTRY_POSITION: {
     allOf: ['profile'],
     degradedBlockedClaims: ['公司市场份额、行业排名或精确竞争地位'],
   },
-  RISK: {
+  VALUATION_SCENARIOS: {
+    allOf: ['quote', 'financials'],
+    degradedBlockedClaims: ['DCF、反向 DCF、精确目标价或精确估值区间'],
+  },
+  RISK_REGISTER: {
     anyOf: ['financials', 'filings', 'macro'],
     degradedBlockedClaims: ['量化损失幅度、偿债风险或宏观敏感度结论'],
   },
-  TECHNICAL: {
+  MARKET_SIGNALS: {
     allOf: ['quote', 'history'],
     degradedBlockedClaims: ['趋势、支撑阻力、均线、RSI、MACD 或成交量结论'],
     skipWhenInsufficient: true,
-  },
-  SENTIMENT: {
-    allOf: ['quote'],
-    degradedBlockedClaims: ['资金净流入、分析师共识、内部人交易或做空比例结论'],
-  },
-  SCENARIO: {
-    allOf: ['quote', 'financials', 'macro'],
-    degradedBlockedClaims: ['情景目标价、概率分配或精确财务敏感性'],
-  },
-  PORTFOLIO: {
-    allOf: ['quote', 'history'],
-    degradedBlockedClaims: ['波动率、Beta 或相关性结论'],
-    alwaysBlockedClaims: ['个性化仓位百分比、与现有持仓的相关性或组合边际风险'],
   },
 };
 
@@ -114,8 +93,8 @@ export function buildResearchCoverage(
   ) as ResearchCoverage['dimensions'];
 
   const core = [
-    dimensions.FUNDAMENTAL!,
-    dimensions.VALUATION!,
+    dimensions.COMPANY_QUALITY!,
+    dimensions.VALUATION_SCENARIOS!,
   ];
   const coreFailures = core.filter((item) => !item.minimumViable).length;
   const highConfidenceFacts = ['quote', 'history', 'financials', 'filings', 'macro']
@@ -156,13 +135,13 @@ export function applyResearchCoverage<T extends StructuredJson>(
 ): T {
   if (!coverage) return data;
 
-  const current = data.conclusion.confidence;
+  const current = data.confidence;
   const capped =
     CONFIDENCE_RANK[current] > CONFIDENCE_RANK[coverage.confidenceCap]
       ? coverage.confidenceCap
       : current;
   const missingFields = [...new Set(coverage.missingCriticalFacts)];
-  const reasonParts = [data.dataAvailability.reason];
+  const reasonParts = [...data.limitations];
   if (coverage.status !== 'PASS') {
     reasonParts.push(
       `研究覆盖度 ${coverage.status}: ${coverage.missingCriticalFacts.join(', ') || '建议数据不足'}`,
@@ -171,17 +150,10 @@ export function applyResearchCoverage<T extends StructuredJson>(
 
   const next: StructuredJson = {
     ...data,
-    conclusion: { ...data.conclusion, confidence: capped },
-    dataAvailability: {
-      ...data.dataAvailability,
-      missingFields,
-      reason: reasonParts.filter(Boolean).join('；'),
-    },
+    confidence: capped,
+    limitations: [...new Set([...reasonParts, ...missingFields])],
   };
-
-  if (coverage.blockedClaims.some((claim) => claim.includes('目标价'))) {
-    delete next.priceTarget;
-  }
+  if (coverage.status === 'INSUFFICIENT_EVIDENCE') next.assessment = 'UNASSESSABLE';
   return next as T;
 }
 

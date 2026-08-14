@@ -1,27 +1,39 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import {
   isTerminalAnalysisStatus,
+  type AnalysisMode,
   type AnalysisStatus,
+  type FocusWindow,
+  type SectionStatus,
   type SectionType,
 } from '@bourse/shared-types';
+import {
+  AnalysisStatus as PrismaAnalysisStatus,
+  FocusWindow as PrismaFocusWindow,
+  SectionStatus as PrismaSectionStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { parseAnalysisConcurrency } from './concurrency';
 import { AnalysisReplayService } from './analysis-replay.service';
 import { AnalysisRunRegistry } from './analysis-run-registry.service';
 import { EvidencePackService } from './evidence-pack.service';
 import { ProviderResolverService } from './provider-resolver.service';
 import { runAnalysisWorkflowAdapter } from './analysis-workflow-adapter';
-import type { SseCallback } from './types';
+import type { AnalysisSseCallback } from './analysis-sse.contract';
+
+const FOCUS_WINDOW_FROM_PRISMA: Record<PrismaFocusWindow, FocusWindow> = {
+  [PrismaFocusWindow.D30]: '30D',
+  [PrismaFocusWindow.D90]: '90D',
+  [PrismaFocusWindow.Y1]: '1Y',
+  [PrismaFocusWindow.Y3]: '3Y',
+};
 
 interface AnalysisRunSection {
   id: string;
   type: SectionType;
   order: number;
-  status: AnalysisStatus;
+  status: SectionStatus;
   reportMarkdown?: string | null;
   structuredJson?: unknown;
-  citations?: unknown;
   errorMessage?: string | null;
 }
 
@@ -29,7 +41,8 @@ interface AnalysisRun {
   id: string;
   symbol: string;
   userId: string;
-  analysisType: string;
+  mode: AnalysisMode;
+  focusWindow: FocusWindow;
   question?: string | null;
   status: AnalysisStatus;
   aiProvider?: string | null;
@@ -39,37 +52,29 @@ interface AnalysisRun {
   summaryMarkdown?: string | null;
   summaryJson?: unknown;
   sections: AnalysisRunSection[];
-  stock: {
-    symbol: string;
-    market: string;
-    name?: string | null;
-  };
+  evidenceSnapshot?: {
+    capturedAt: Date;
+    dataAsOf: unknown;
+    degraded: boolean;
+    missingFields: string[];
+    sourceMode: string;
+  } | null;
+  stock: { symbol: string; market: string; name?: string | null };
 }
 
-/**
- * SSE run loop: drives the analysis from PENDING → IN_PROGRESS → terminal.
- * The actual dim/summary orchestration lives in
- * `@bourse/analysis` (streamComprehensive/streamSingle); this service is
- * the apps/api glue that claims the row and resolves the workflow provider. The
- * adapter translates workflow events into API SSE events and persistence.
- *
- * Reads analysis rows straight from prisma (not via query/command services)
- * because claim + status-machine writes are run-loop internals, not CRUD.
- */
 @Injectable()
 export class AnalysisRunnerService {
   private readonly logger = new Logger(AnalysisRunnerService.name);
 
   constructor(
-    private prisma: PrismaService,
-    private providerResolver: ProviderResolverService,
-    private config: ConfigService,
-    private evidencePackService: EvidencePackService,
-    private replayService: AnalysisReplayService,
-    private runRegistry: AnalysisRunRegistry,
+    private readonly prisma: PrismaService,
+    private readonly providerResolver: ProviderResolverService,
+    private readonly evidencePackService: EvidencePackService,
+    private readonly replayService: AnalysisReplayService,
+    private readonly runRegistry: AnalysisRunRegistry,
   ) {}
 
-  async runAnalysis(analysisId: string, send: SseCallback) {
+  async runAnalysis(analysisId: string, send: AnalysisSseCallback) {
     const analysis = await this.loadAnalysis(analysisId);
     if (!analysis) {
       send('error', { message: 'Analysis not found' });
@@ -82,105 +87,106 @@ export class AnalysisRunnerService {
     }
 
     if (analysis.status === 'IN_PROGRESS') {
-      this.attachInProgressRun(analysis, send);
+      this.replayService.replayInProgressRun(analysis, send);
+      if (this.runRegistry.subscribe(analysisId, send)) {
+        await this.runRegistry.wait(analysisId);
+      } else {
+        await this.markInterrupted(analysisId);
+        send('done', { analysisId, status: 'FAILED' });
+      }
       return;
     }
 
     await this.startPendingRun(analysisId, analysis, send);
   }
 
-  private loadAnalysis(analysisId: string): Promise<AnalysisRun | null> {
-    return this.prisma.analysis.findUnique({
+  private async loadAnalysis(analysisId: string): Promise<AnalysisRun | null> {
+    const row = await this.prisma.analysis.findUnique({
       where: { id: analysisId },
-      include: { sections: { orderBy: { order: 'asc' } }, stock: true },
+      include: {
+        sections: { orderBy: { order: 'asc' } },
+        stock: true,
+        evidenceSnapshot: {
+          select: {
+            capturedAt: true,
+            dataAsOf: true,
+            degraded: true,
+            missingFields: true,
+            sourceMode: true,
+          },
+        },
+      },
     });
-  }
-
-  private attachInProgressRun(analysis: AnalysisRun, send: SseCallback) {
-    // Mid-stream attach: emit a snapshot of current section progress so
-    // the polling client (use-analysis-stream.ts) can render real state
-    // instead of an empty "正在初始化分析…" loader on every 3s retry.
-    // The `error: already running` below still tells the client to keep
-    // polling — each retry refreshes with newer progress.
-    this.replayService.replayInProgressRun(analysis, send);
-    send('error', { message: 'Analysis is already running' });
+    if (!row) return null;
+    return {
+      ...row,
+      mode: row.mode as AnalysisMode,
+      focusWindow: FOCUS_WINDOW_FROM_PRISMA[row.focusWindow],
+      status: row.status as AnalysisStatus,
+      market: row.market,
+      sections: row.sections.map((section) => ({
+        ...section,
+        type: section.type as SectionType,
+        status: section.status as SectionStatus,
+      })),
+      evidenceSnapshot: row.evidenceSnapshot,
+      stock: row.stock,
+    };
   }
 
   private async startPendingRun(
     analysisId: string,
     analysis: AnalysisRun,
-    send: SseCallback,
+    firstSubscriber: AnalysisSseCallback,
   ) {
     const claimed = await this.prisma.analysis.updateMany({
-      where: { id: analysisId, status: { in: ['PENDING', 'FAILED'] } },
-      data: { status: 'IN_PROGRESS' },
+      where: { id: analysisId, status: 'PENDING' },
+      data: { status: 'IN_PROGRESS', startedAt: new Date(), errorCode: null, errorMessage: null },
     });
-
     if (claimed.count === 0) {
       const latest = await this.loadAnalysis(analysisId);
       if (latest && isTerminalAnalysisStatus(latest.status)) {
-        this.replayService.replayTerminalRun(latest, send);
-        return;
+        this.replayService.replayTerminalRun(latest, firstSubscriber);
+      } else {
+        firstSubscriber('error', { message: 'Analysis cannot be started in its current state' });
       }
-      send('error', {
-        message: 'Analysis cannot be started in its current state',
-      });
       return;
     }
 
-    // Register the abort handle IMMEDIATELY after claim, so the user-facing
-    // abort endpoint can interrupt the run even during provider resolution
-    // (which can take seconds for the lazy WebSearchExecutor build). The
-    // signal is checked again below to honor an abort that landed in the
-    // window between claim and provider resolution.
     const abortController = new AbortController();
     this.runRegistry.register(analysisId, abortController);
-    try {
-      const isComprehensive = analysis.analysisType === 'COMPREHENSIVE';
-      const {
-        primary: provider,
-        aiModel,
-      } = await this.providerResolver.resolveWorkflowProvider(analysis.userId, {
-        settingIdHint: analysis.aiProviderSettingId,
-        providerNameHint: analysis.aiProvider,
-        modelHint: analysis.aiModel,
-      });
+    this.runRegistry.subscribe(analysisId, firstSubscriber);
+    const send: AnalysisSseCallback = (event, data) => {
+      this.runRegistry.broadcast(analysisId, event, data);
+    };
 
-      // Abort that arrived during provider resolution — checked TWO ways
-      // because there's a race between claim and registry.register that the
-      // in-memory signal alone can't close:
-      //   (a) abortController.signal.aborted — covers aborts that landed
-      //       after register() but before this check.
-      //   (b) DB row already CANCELLED — covers aborts that landed in the
-      //       window between claim (line above) and register(). In that
-      //       window registry.abort() returns false (no controller yet), so
-      //       the abort endpoint just flips the DB; we must re-read it here
-      //       or we'd kick off the workflow on a run the user cancelled.
-      // Either way: don't burn tokens. Surface CANCELLED to the client.
-      if (abortController.signal.aborted) {
-        await this.prisma.analysis.update({
-          where: { id: analysisId },
-          data: { status: 'CANCELLED' },
+    try {
+      const { primary: provider, aiModel } =
+        await this.providerResolver.resolveWorkflowProvider(analysis.userId, {
+          settingIdHint: analysis.aiProviderSettingId,
+          providerNameHint: analysis.aiProvider,
+          modelHint: analysis.aiModel,
         });
-        send('done', { analysisId, status: 'CANCELLED' });
+      if (abortController.signal.aborted) {
+        const settled = await this.settleUnexpectedRun(
+          analysisId,
+          'CANCELLED',
+          'Cancelled by user',
+          'CANCELLED_BY_USER',
+        );
+        if (settled) send('done', { analysisId, status: 'CANCELLED' });
         return;
       }
-      const currentRow = await this.prisma.analysis.findUnique({
+      const current = await this.prisma.analysis.findUnique({
         where: { id: analysisId },
         select: { status: true },
       });
-      if (currentRow?.status === 'CANCELLED') {
-        // Abort endpoint already wrote CANCELLED during the claim/register
-        // race window — honor it instead of overriding back to IN_PROGRESS.
-        send('done', { analysisId, status: 'CANCELLED' });
+      if (current?.status !== 'IN_PROGRESS') {
+        send('done', { analysisId, status: current?.status as AnalysisStatus });
         return;
       }
-
-      const tag = this.logTag(analysisId);
-      const mode = isComprehensive ? 'comprehensive' : 'single';
-      this.logger.log(`${tag} adapter path engaged (mode=${mode})`);
+      this.logger.log(`[${analysisId.slice(-8)}] starting ${analysis.mode} workflow`);
       await runAnalysisWorkflowAdapter({
-        mode,
         analysisId,
         analysis,
         provider,
@@ -188,18 +194,99 @@ export class AnalysisRunnerService {
         prisma: this.prisma,
         evidencePackService: this.evidencePackService,
         aiModel,
-        waveSemaphore: parseAnalysisConcurrency(
-          this.config.get('ANALYSIS_PARALLEL_CONCURRENCY'),
-        ),
+        mode: analysis.mode,
+        focusWindow: analysis.focusWindow,
+        waveSemaphore: 4,
         signal: abortController.signal,
       });
+    } catch (error) {
+      const aborted = abortController.signal.aborted ||
+        (error instanceof Error && error.name === 'AbortError');
+      const status = aborted ? 'CANCELLED' : 'FAILED';
+      const settled = await this.settleUnexpectedRun(
+        analysisId,
+        status,
+        aborted ? 'Cancelled by user' : error instanceof Error ? error.message : String(error),
+        aborted ? 'CANCELLED_BY_USER' : 'PROVIDER_RESOLVE_FAILED',
+      );
+      // The adapter normally persists and emits its own terminal event. Only
+      // emit here when the failure happened before the adapter could do so.
+      if (settled) {
+        if (!aborted) {
+          send('error', {
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+        send('done', { analysisId, status });
+      }
     } finally {
       this.runRegistry.release(analysisId);
     }
   }
 
-  private logTag(analysisId: string, sectionType?: string) {
-    const short = analysisId.slice(-8);
-    return sectionType ? `[${short}][${sectionType}]` : `[${short}]`;
+  private async settleUnexpectedRun(
+    analysisId: string,
+    status: 'FAILED' | 'CANCELLED',
+    message: string,
+    errorCode: string,
+  ): Promise<boolean> {
+    const now = new Date();
+    const updated = await this.prisma.analysis.updateMany({
+      where: {
+        id: analysisId,
+        status: PrismaAnalysisStatus.IN_PROGRESS,
+      },
+      data: {
+        status: status === 'CANCELLED'
+          ? PrismaAnalysisStatus.CANCELLED
+          : PrismaAnalysisStatus.FAILED,
+        errorCode,
+        errorMessage: message,
+        completedAt: now,
+      },
+    });
+    if (updated.count === 0) return false;
+
+    await this.prisma.analysisSection.updateMany({
+      where: {
+        analysisId,
+        status: {
+          in: [PrismaSectionStatus.PENDING, PrismaSectionStatus.IN_PROGRESS],
+        },
+      },
+      data: {
+        status: status === 'CANCELLED'
+          ? PrismaSectionStatus.CANCELLED
+          : PrismaSectionStatus.FAILED,
+        errorCode,
+        errorMessage: message,
+        completedAt: now,
+      },
+    });
+    return true;
+  }
+
+  private async markInterrupted(analysisId: string) {
+    await this.prisma.analysis.updateMany({
+      where: { id: analysisId, status: 'IN_PROGRESS' },
+      data: {
+        status: 'FAILED',
+        errorCode: 'PROCESS_INTERRUPTED',
+        errorMessage: 'Analysis process was interrupted',
+        completedAt: new Date(),
+      },
+    });
+    await this.prisma.analysisSection.updateMany({
+      where: {
+        analysisId,
+        status: { in: [PrismaSectionStatus.PENDING, PrismaSectionStatus.IN_PROGRESS] },
+      },
+      data: {
+        status: PrismaSectionStatus.FAILED,
+        errorCode: 'PROCESS_INTERRUPTED',
+        errorMessage: 'Analysis process was interrupted',
+        completedAt: new Date(),
+      },
+    });
   }
 }

@@ -113,7 +113,7 @@ export function useAnalysisStream() {
     }
   }, []);
 
-  const stopStream = useCallback(() => {
+  const stopStream = useCallback((terminalStatus: 'COMPLETED' | 'CANCELLED' = 'COMPLETED') => {
     abortRef.current?.abort();
     clearAttachPoll();
     // User pressed "停止" — they want to stop watching, not declare the
@@ -122,7 +122,7 @@ export function useAnalysisStream() {
     // whatever sections were collected. The backend may still be running;
     // re-attach by reloading or navigating back.
     reqIdRef.current++;
-    setState(stopWatchingStreamState);
+    setState((s) => stopWatchingStreamState(s, terminalStatus));
   }, []);
 
   const reset = useCallback(() => {

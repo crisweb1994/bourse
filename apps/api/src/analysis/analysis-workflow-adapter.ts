@@ -1,16 +1,19 @@
 import { Logger } from '@nestjs/common';
 import { createHash } from 'node:crypto';
-import type { AnalysisTerminalStatus } from '@bourse/shared-types';
+import type {
+  AnalysisMode,
+  AnalysisTerminalStatus,
+  FocusWindow,
+} from '@bourse/shared-types';
 import {
   type AgentProvider,
   type ComprehensiveOptions,
   type DimensionInput,
-  type EvidencePackAny,
-  getDimension,
+  type EvidencePackV2,
   getMarket,
+  SectionResult,
   type SseEvent,
   streamComprehensive,
-  streamSingle,
 } from '@bourse/analysis';
 import type { PrismaService } from '../prisma/prisma.service';
 import {
@@ -37,81 +40,34 @@ import type { AnalysisSseEventName } from './analysis-sse.contract';
 import type { EvidencePackService } from './evidence-pack.service';
 import type { SseCallback } from './types';
 
-/**
- * Factory the adapter calls to obtain the event stream. Default uses
- * agent's `streamComprehensive`; tests pass a fake that yields a scripted
- * event sequence so DB writes / SSE translation can be asserted without
- * running real LLM calls.
- */
 export type StreamComprehensiveFactory = (
   provider: AgentProvider,
   input: DimensionInput,
   options: ComprehensiveOptions,
 ) => AsyncGenerator<SseEvent, unknown, undefined>;
 
-const defaultFactory: StreamComprehensiveFactory = (
-  provider,
-  input,
-  options,
-) => streamComprehensive(provider, input, options);
+const defaultFactory: StreamComprehensiveFactory = (provider, input, options) =>
+  streamComprehensive(provider, input, options);
 
-/**
- * Single-dimension counterpart of StreamComprehensiveFactory. Default uses
- * agent's `streamSingle`; tests inject a scripted sequence.
- */
-export type SingleStreamFactory = (
-  provider: AgentProvider,
-  input: DimensionInput,
-) => AsyncGenerator<SseEvent, unknown, undefined>;
-
-/**
- * Drives the package analysis workflow and bridges it to apps/api concerns:
- * evidence pack injection, API SSE frames, and database persistence. Both
- * comprehensive and single-dimension analyses enter through this adapter.
- */
 export interface AdapterContext {
   analysisId: string;
-  /**
-   * 'comprehensive' (default) drives streamComprehensive over all dimensions;
-   * 'single' drives streamSingle over the one dimension named by
-   * `analysis.analysisType`.
-   */
-  mode?: 'comprehensive' | 'single';
-  /** Loaded Analysis row including `.sections` (orderBy: order asc) + `.stock`. */
+  mode: AnalysisMode;
+  focusWindow: FocusWindow;
   analysis: AnalysisLike;
   provider: AgentProvider;
-  /** apps/api SSE callback — translation target. */
   send: SseCallback;
   prisma: PrismaService;
-  /**
-   * Explicit data-preparation stage. Builds the evidence pack (connector →
-   * compute → snapshotToEvidencePack + CN tool signals) before workflow
-   * execution. Optional so tests with scripted stream factories can omit it.
-   */
   evidencePackService?: EvidencePackService;
-  /** Resolved model written back to the Analysis row. */
   aiModel: string;
-  /** Per-wave concurrency cap forwarded into streamComprehensive. */
   waveSemaphore?: number;
-  /**
-   * Abort signal from the runner's registry. Threaded into streamComprehensive
-   * / streamSingle so the user-facing abort endpoint can interrupt the live
-   * LLM request. The catch block treats AbortError as CANCELLED, not FAILED.
-   */
   signal?: AbortSignal;
-  /**
-   * Test-only: substitute `streamComprehensive`. Production callers MUST
-   * pass undefined; the adapter then uses the real agent workflow.
-   */
   _streamFactory?: StreamComprehensiveFactory;
-  /** Test-only: substitute `streamSingle` for mode==='single'. */
-  _singleStreamFactory?: SingleStreamFactory;
 }
 
-/** Minimal shape of the Analysis row + relations the adapter touches. */
 interface AnalysisLike {
   id: string;
-  analysisType: string;
+  mode: AnalysisMode;
+  focusWindow: FocusWindow;
   question?: string | null;
   sections: ReadonlyArray<AnalysisSectionLike>;
   stock: { symbol: string; market: string; name?: string | null };
@@ -122,6 +78,8 @@ interface AnalysisSectionLike {
   type: string;
   order: number;
   status: string;
+  reportMarkdown?: string | null;
+  structuredJson?: unknown;
 }
 
 export interface AdapterResult {
@@ -137,327 +95,266 @@ export async function runAnalysisWorkflowAdapter(
 ): Promise<AdapterResult> {
   const tag = `[${ctx.analysisId}]`;
   const persistence = new AnalysisPersistenceMapper(ctx.prisma);
-
-  // ===== Map sectionType → DB row id (O(1) lookup at event time) =====
-  const sectionByType = new Map<string, AnalysisSectionLike>();
-  for (const s of ctx.analysis.sections) {
-    sectionByType.set(s.type, s);
-  }
-
-  // ===== Per-section accumulators (built on section_start) =====
+  const sectionByType = new Map<string, AnalysisSectionLike>(
+    ctx.analysis.sections.map((section) => [section.type, section]),
+  );
   const sectionAccs = new Map<string, AnalysisSectionAccumulator>();
-
-  // ===== Run-level state =====
-  const failedSectionTypes: string[] = [];
-  // Authoritative tally of sections that genuinely reached status=COMPLETED
-  // via a section_complete SSE event. RunAggregate.sectionsCompletedCount
-  // reads from here so abort / mid-stream throw can't inflate it.
   const completedSectionTypes = new Set<string>();
+  const failedSectionTypes: string[] = [];
 
-  let factConflictCount = 0;
-  // ComprehensiveSummary surfaced via summary_complete — used to update
-  // Analysis.overallSignal / overallConfidence / summaryMarkdown / summaryJson
-  // before the terminal `done` SSE is sent.
   let summaryMarkdown = '';
   let summaryJson: unknown = null;
-  // Captured on evidence_pack_ready and written to Analysis.degradedSource.
-  let degradedSourceMark: 'WEB_SEARCH_FALLBACK' | null = null;
   let summaryDataAsOf: string | null = null;
-  let capturedEvidencePack: EvidencePackAny | undefined;
-  // Final cumulative token totals for the Analysis row. Accumulated from
-  // section_complete / judge_complete events as they arrive so an abort
-  // mid-run still has meaningful numbers to persist (the terminal `done`
-  // event's trace overrides these on the normal completion path).
+  let capturedEvidencePack: EvidencePackV2 | undefined;
+  let snapshotPersisted = false;
+  let degradedSourceMark: 'WEB_SEARCH_FALLBACK' | null = null;
   let accumulatedInputTokens = 0;
   let accumulatedOutputTokens = 0;
-  let finalInputTokens: number | null = null;
-  let finalOutputTokens: number | null = null;
+  let terminalStatus: AdapterResult['terminalStatus'] = 'FAILED';
 
-  // ===== Event handlers (close over mutable run state above) =====
+  const addFailed = (type: string) => {
+    if (!failedSectionTypes.includes(type)) failedSectionTypes.push(type);
+  };
 
-  function onEvidencePackReady(event: Extract<SseEvent, { type: 'evidence_pack_ready' }>) {
-    capturedEvidencePack = event.pack as EvidencePackAny;
-    sendFrame(ctx.send, mapEvidencePackReadyEvent(event));
-    // Capture the degraded marker for the terminal Analysis row.
-    const da = (
-      event.pack as { dataAvailability?: { degradedSource?: string } }
+  // A retry keeps completed sections in the same Analysis row. Feed their
+  // validated results back into the workflow so only failed/skipped sections
+  // make provider calls while the summary still sees the whole report.
+  const existingResults = ctx.analysis.sections.flatMap((section) => {
+    if (section.status !== 'COMPLETED') return [];
+    const parsed = SectionResult.safeParse(section.structuredJson);
+    if (!parsed.success) return [];
+    completedSectionTypes.add(section.type);
+    const citations = parsed.data.findings.flatMap((finding) =>
+      finding.evidence.flatMap((evidence) => evidence.citations),
+    );
+    const uniqueCitations = Array.from(
+      new Map(citations.map((citation) => [citation.url, citation])).values(),
+    );
+    return [{
+      type: parsed.data.type,
+      reportMarkdown: section.reportMarkdown ?? '',
+      structuredJson: parsed.data,
+      citations: uniqueCitations,
+      confidence: parsed.data.confidence,
+      status: 'COMPLETED' as const,
+      warnings: [],
+      usage: { tokensIn: 0, tokensOut: 0 },
+    }];
+  });
+
+  const onEvidencePackReady = async (
+    event: Extract<SseEvent, { type: 'evidence_pack_ready' }>,
+  ) => {
+    capturedEvidencePack = event.pack as EvidencePackV2;
+    const availability = (
+      capturedEvidencePack as { dataAvailability?: { degradedSource?: string } }
     ).dataAvailability;
-    if (da?.degradedSource === 'WEB_SEARCH_FALLBACK') {
-      degradedSourceMark = 'WEB_SEARCH_FALLBACK'; // mutates outer state
+    if (availability?.degradedSource === 'WEB_SEARCH_FALLBACK') {
+      degradedSourceMark = 'WEB_SEARCH_FALLBACK';
     }
-  }
+    if (!snapshotPersisted && capturedEvidencePack) {
+      await persistEvidenceSnapshot(ctx.prisma, ctx.analysisId, capturedEvidencePack, {
+        degraded: degradedSourceMark !== null,
+        sourceMode: degradedSourceMark ? 'WEB_SEARCH_FALLBACK' : 'EVIDENCE_PACK',
+      });
+      snapshotPersisted = true;
+    }
+    sendFrame(ctx.send, mapEvidencePackReadyEvent(event));
+  };
 
-  async function onSectionSkipped(event: Extract<SseEvent, { type: 'section_skipped' }>) {
-    sendFrame(ctx.send, mapSectionSkippedEvent(event));
+  const onSectionSkipped = async (
+    event: Extract<SseEvent, { type: 'section_skipped' }>,
+  ) => {
     const row = sectionByType.get(event.sectionType);
-    if (row) await persistence.persistSectionSkipped(row.id);
-  }
+    if (row) {
+      await persistence.persistSectionSkipped(row.id, event.reason);
+    }
+    addFailed(event.sectionType);
+    sendFrame(ctx.send, mapSectionSkippedEvent(event));
+  };
 
-  function onSectionStart(event: Extract<SseEvent, { type: 'section_start' }>) {
+  const onSectionStart = (event: Extract<SseEvent, { type: 'section_start' }>) => {
     const row = sectionByType.get(event.sectionType);
     if (!row) {
-      logger.warn(
-        `${tag} section_start for unknown sectionType=${event.sectionType}; skipping`,
-      );
+      logger.warn(`${tag} unknown section ${event.sectionType}`);
       return;
     }
-    sectionAccs.set(event.sectionType, { // mutates outer state
+    sectionAccs.set(event.sectionType, {
       sectionId: row.id,
       markdown: '',
       citations: [],
       structuredJson: null,
     });
     sendFrame(ctx.send, mapSectionStartEvent(event, row));
-  }
+  };
 
-  function onReportChunk(event: Extract<SseEvent, { type: 'report_chunk' }>) {
+  const onReportChunk = (event: Extract<SseEvent, { type: 'report_chunk' }>) => {
     const acc = sectionAccs.get(event.sectionType);
-    if (acc) acc.markdown += event.deltaText; // mutates acc
+    if (acc) acc.markdown += event.deltaText;
     sendFrame(ctx.send, mapReportChunkEvent(event));
-  }
+  };
 
-  function onCitation(event: Extract<SseEvent, { type: 'citation' }>) {
+  const onCitation = (event: Extract<SseEvent, { type: 'citation' }>) => {
     const acc = sectionAccs.get(event.sectionType);
-    const cit = {
-      title: event.citation.title,
-      url: event.citation.url,
-      sourceType: event.citation.sourceType,
-      retrievedAt: event.citation.retrievedAt,
-    };
-    if (acc) acc.citations.push(cit); // mutates acc
+    if (acc) {
+      acc.citations.push({
+        title: event.citation.title,
+        url: event.citation.url,
+        sourceType: event.citation.sourceType,
+        retrievedAt: event.citation.retrievedAt,
+      });
+    }
     sendFrame(ctx.send, mapCitationEvent(event));
-  }
+  };
 
-  function onReportComplete(event: Extract<SseEvent, { type: 'report_complete' }>) {
-    // No SSE — overwrites chunk accumulation with the authoritative full markdown.
+  const onReportComplete = (event: Extract<SseEvent, { type: 'report_complete' }>) => {
     const acc = sectionAccs.get(event.sectionType);
-    if (acc) acc.markdown = event.fullMarkdown || acc.markdown; // mutates acc
-  }
+    if (acc) acc.markdown = event.fullMarkdown || acc.markdown;
+  };
 
-  function onStructuredData(event: Extract<SseEvent, { type: 'structured_data' }>) {
+  const onStructuredData = (event: Extract<SseEvent, { type: 'structured_data' }>) => {
     const acc = sectionAccs.get(event.sectionType);
-    if (acc) acc.structuredJson = event.json; // mutates acc
+    if (acc) acc.structuredJson = event.json;
     sendFrame(ctx.send, mapStructuredDataEvent(event));
-  }
+  };
 
-  async function onSectionComplete(event: Extract<SseEvent, { type: 'section_complete' }>) {
+  const onSectionComplete = async (
+    event: Extract<SseEvent, { type: 'section_complete' }>,
+  ) => {
     const acc = sectionAccs.get(event.sectionType);
     if (!acc) {
-      logger.warn(
-        `${tag} section_complete for unknown sectionType=${event.sectionType}; skipping persistence`,
-      );
+      addFailed(event.sectionType);
       return;
     }
-    const completed = event.status === 'COMPLETED';
     await persistence.persistSectionComplete(event, acc);
-    if (completed) {
-      completedSectionTypes.add(event.sectionType); // mutates outer state
-    } else {
-      failedSectionTypes.push(event.sectionType); // mutates outer state
-    }
+    if (event.status === 'COMPLETED') completedSectionTypes.add(event.sectionType);
+    else addFailed(event.sectionType);
     if (event.usage) {
       accumulatedInputTokens += event.usage.tokensIn;
       accumulatedOutputTokens += event.usage.tokensOut;
     }
     sendFrame(ctx.send, mapSectionCompleteEvent(event));
-  }
+  };
 
-  async function onJudgeComplete(event: Extract<SseEvent, { type: 'judge_complete' }>) {
-    const acc = sectionAccs.get(event.sectionType);
-    if (acc) {
-      await persistence.persistJudgeResult(ctx.analysisId, event, acc);
-    }
-    accumulatedInputTokens += event.traceTokensIn;
-    accumulatedOutputTokens += event.traceTokensOut;
-  }
-
-  function onSummaryChunk(event: Extract<SseEvent, { type: 'summary_chunk' }>) {
-    summaryMarkdown += event.deltaText; // mutates outer state
+  const onSummaryChunk = (event: Extract<SseEvent, { type: 'summary_chunk' }>) => {
+    summaryMarkdown += event.deltaText;
     sendFrame(ctx.send, mapSummaryChunkEvent(event));
-  }
+  };
 
-  function onSummaryComplete(event: Extract<SseEvent, { type: 'summary_complete' }>) {
-    summaryMarkdown = event.fullMarkdown || summaryMarkdown; // mutates outer state
+  const onSummaryComplete = (
+    event: Extract<SseEvent, { type: 'summary_complete' }>,
+  ) => {
+    summaryMarkdown = event.fullMarkdown || summaryMarkdown;
     summaryJson = event.json;
-    summaryDataAsOf = (event.json as { dataAsOf?: string }).dataAsOf ?? null;
+    summaryDataAsOf =
+      (event.json as { dataAsOf?: string } | null)?.dataAsOf ?? null;
     sendFrame(ctx.send, mapSummaryCompleteEvent(event));
-  }
+  };
 
-  async function onError(event: Extract<SseEvent, { type: 'error' }>) {
-    // Forward as a non-terminal warning surface; terminal status is
-    // decided by the `done` event below.
-    logger.error(
-      `${tag} dim ${event.sectionType ?? '(run-level)'} error: ${event.message}`,
-    );
+  const onError = async (event: Extract<SseEvent, { type: 'error' }>) => {
+    logger.error(`${tag} ${event.sectionType ?? 'run'} error: ${event.message}`);
     sendFrame(ctx.send, mapErrorEvent(event));
-    // Section-scoped errors may arrive without a later section_complete.
-    // Persist the real message now so the orphan sweep does not replace
-    // it with a generic run-level failure.
     if (event.sectionType) {
       const acc = sectionAccs.get(event.sectionType);
       if (acc) {
-        try {
-          await persistence.persistSectionErrorById(acc.sectionId, event.message);
-        } catch (e) {
-          logger.warn(
-            `${tag} could not persist FAILED state for ${event.sectionType}: ${e instanceof Error ? e.message : String(e)}`,
-          );
-        }
+        await persistence.persistSectionErrorById(acc.sectionId, event.message);
       } else {
-        // Section never got section_start (dim threw before yielding
-        // it). updateMany by (analysisId, type) is the safe path.
-        try {
-          await persistence.persistSectionErrorByType(
-            ctx.analysisId,
-            event.sectionType,
-            event.message,
-          );
-        } catch (e) {
-          logger.warn(
-            `${tag} could not persist FAILED state for ${event.sectionType}: ${e instanceof Error ? e.message : String(e)}`,
-          );
-        }
+        await persistence.persistSectionErrorByType(
+          ctx.analysisId,
+          event.sectionType,
+          event.message,
+        );
       }
-      if (!failedSectionTypes.includes(event.sectionType)) {
-        failedSectionTypes.push(event.sectionType); // mutates outer state
-      }
+      addFailed(event.sectionType);
     }
-  }
+  };
 
-  // ===== Assemble workflow options =====
-  // marketProfile (CN only) feeds the cross-dim validator + domain-tier source
-  // routing. Comprehensive passes the full profile (enables the validator);
-  // single only uses its domainTiers → allowedDomains for web_search routing
-  // (single has no cross-dim validator). The evidence pack is pre-built by
-  // EvidencePackService below for BOTH modes.
+  const queuedSectionIds = ctx.analysis.sections
+    .filter((section) => section.status !== 'COMPLETED')
+    .map((section) => section.id);
+  await persistence.markQueuedSectionsInProgress(queuedSectionIds);
+
+  const todayDate = new Date().toISOString().slice(0, 10);
   const marketProfile =
     ctx.analysis.stock.market === 'CN' ? getMarket('CN') ?? undefined : undefined;
   const marketDomainTiers = marketProfile?.domainTiers;
   const marketAllowedDomains = marketDomainTiers
-    ? Object.keys(marketDomainTiers).filter((h) => marketDomainTiers[h] !== 'E')
+    ? Object.keys(marketDomainTiers).filter((host) => marketDomainTiers[host] !== 'E')
     : undefined;
-
   const dimInput: DimensionInput = {
     symbol: ctx.analysis.stock.symbol,
     market: ctx.analysis.stock.market,
     locale: 'zh-CN',
     ...(ctx.analysis.stock.name ? { name: ctx.analysis.stock.name } : {}),
     ...(ctx.analysis.question ? { question: ctx.analysis.question } : {}),
+    focusWindow: ctx.focusWindow,
   };
 
-  // Mark queued sections as IN_PROGRESS up front so concurrent reads see a
-  // coherent run state rather than racing per-section updates.
-  const queuedTypes = ctx.analysis.sections
-    .filter((s) => s.status !== 'COMPLETED')
-    .map((s) => s.id);
-  await persistence.markQueuedSectionsInProgress(queuedTypes);
-
-  // ===== Drive the agent workflow =====
-  const todayDate = new Date().toISOString().slice(0, 10);
-
-  // Path A: pre-build the evidence pack (connector → compute + CN tool signals)
-  // for BOTH single and comprehensive — single-dim analyses now get the same
-  // structured facts + computed ratios, not LLM-only. When it's absent or
-  // critically degraded (neither quote nor financials) the comprehensive
-  // workflow web_search-recovers; partial gaps are filled per-field by each
-  // dim. (Tests omit evidencePackService + inject a stream factory.)
-  const evidencePackResult = ctx.evidencePackService
-    ? await ctx.evidencePackService.buildForAnalysis(ctx.analysis)
-    : null;
-  const prebuiltPack = evidencePackResult?.pack;
-  capturedEvidencePack = prebuiltPack;
-  if (evidencePackResult?.fallbackUsed) {
+  const existingSnapshot = await ctx.prisma.analysisEvidenceSnapshot.findUnique({
+    where: { analysisId: ctx.analysisId },
+    select: { payload: true, degraded: true },
+  });
+  const evidencePackResult = existingSnapshot
+    ? null
+    : ctx.evidencePackService
+      ? await ctx.evidencePackService.buildForAnalysis(ctx.analysis, ctx.signal)
+      : null;
+  capturedEvidencePack = (existingSnapshot?.payload ?? evidencePackResult?.pack) as
+    | EvidencePackV2
+    | undefined;
+  snapshotPersisted = Boolean(existingSnapshot);
+  if (existingSnapshot?.degraded || evidencePackResult?.fallbackUsed) {
     degradedSourceMark = 'WEB_SEARCH_FALLBACK';
   }
-
-  let gen: AsyncGenerator<SseEvent, unknown, undefined>;
-  if (ctx.mode === 'single') {
-    if (ctx._singleStreamFactory) {
-      gen = ctx._singleStreamFactory(ctx.provider, dimInput);
-    } else {
-      const dimension = getDimension(
-        ctx.analysis.analysisType as Parameters<typeof getDimension>[0],
-      );
-      if (!dimension) {
-        throw new Error(
-          `Unknown dimension for single-mode analysis: ${ctx.analysis.analysisType}`,
-        );
-      }
-      gen = streamSingle(ctx.provider, dimension, dimInput, {
-        runId: `analysis-${ctx.analysisId}`,
-        todayDate,
-        signal: ctx.signal,
-        ...(prebuiltPack ? { evidencePack: prebuiltPack } : {}),
-        ...(marketAllowedDomains && marketAllowedDomains.length > 0
-          ? { allowedDomains: marketAllowedDomains }
-          : {}),
-        ...(marketDomainTiers ? { domainTiers: marketDomainTiers } : {}),
-      });
-    }
-  } else {
-    const factory = ctx._streamFactory ?? defaultFactory;
-    gen = factory(ctx.provider, dimInput, {
-      runId: `analysis-${ctx.analysisId}`,
-      todayDate,
-      waveMode: 'auto',
-      signal: ctx.signal,
-      ...(ctx.waveSemaphore ? { waveSemaphore: ctx.waveSemaphore } : {}),
-      ...(marketProfile ? { marketProfile } : {}),
-      ...(prebuiltPack ? { evidencePack: prebuiltPack } : {}),
-      recoverMissingEvidence: true,
+  if (capturedEvidencePack && !snapshotPersisted) {
+    await persistEvidenceSnapshot(ctx.prisma, ctx.analysisId, capturedEvidencePack, {
+      degraded: degradedSourceMark !== null,
+      sourceMode: degradedSourceMark ? 'WEB_SEARCH_FALLBACK' : 'EVIDENCE_PACK',
     });
+    snapshotPersisted = true;
   }
 
-  let terminalStatus: AdapterResult['terminalStatus'] = 'FAILED';
+  const factory = ctx._streamFactory ?? defaultFactory;
+  const gen = factory(ctx.provider, dimInput, {
+    runId: `analysis-${ctx.analysisId}`,
+    todayDate,
+    mode: ctx.mode,
+    focusWindow: ctx.focusWindow,
+    waveMode: 'auto',
+    signal: ctx.signal,
+    ...(ctx.waveSemaphore ? { waveSemaphore: ctx.waveSemaphore } : {}),
+    ...(marketProfile ? { marketProfile } : {}),
+    ...(capturedEvidencePack ? { evidencePack: capturedEvidencePack } : {}),
+    ...(existingResults.length > 0 ? { existingResults } : {}),
+    recoverMissingEvidence: true,
+    ...(marketAllowedDomains && marketAllowedDomains.length > 0
+      ? { allowedDomains: marketAllowedDomains }
+      : {}),
+    ...(marketDomainTiers ? { domainTiers: marketDomainTiers } : {}),
+  } as ComprehensiveOptions);
 
   try {
     while (true) {
       const next = await gen.next();
-      if (next.done) {
-        // Generator returns ComprehensiveResult; we've already consumed the
-        // terminal `done` event above. Nothing more to do here.
-        break;
-      }
+      if (next.done) break;
       const event = next.value;
-
       switch (event.type) {
-        case 'evidence_pack_ready': onEvidencePackReady(event); break;
-        case 'section_skipped':     await onSectionSkipped(event); break;
-        case 'section_start':       onSectionStart(event); break;
-        case 'report_chunk':        onReportChunk(event); break;
-        case 'citation':            onCitation(event); break;
-        case 'report_complete':     onReportComplete(event); break;  // no SSE, state only
-        case 'structured_data':     onStructuredData(event); break;
-        case 'web_search_warning':  break;  // not forwarded to API SSE
-        case 'section_complete':    await onSectionComplete(event); break;
-        case 'judge_start':         break;  // no action needed
-        case 'judge_complete':      await onJudgeComplete(event); break;
-        case 'summary_chunk':       onSummaryChunk(event); break;
-        case 'summary_complete':    onSummaryComplete(event); break;
-        case 'cost_update': {
-          // Forward cumulative token totals to the client for live display.
-          // We do NOT split input vs output here — the workflow only emits
-          // the combined `totalTokens`. The split is recovered from the
-          // terminal `done` event's trace for persistence (see `done` below).
-          sendFrame(ctx.send, mapCostUpdateEvent(event));
-          break;
-        }
-        case 'error':               await onError(event); break;
-
+        case 'evidence_pack_ready': await onEvidencePackReady(event); break;
+        case 'section_skipped': await onSectionSkipped(event); break;
+        case 'section_start': onSectionStart(event); break;
+        case 'report_chunk': onReportChunk(event); break;
+        case 'citation': onCitation(event); break;
+        case 'report_complete': onReportComplete(event); break;
+        case 'structured_data': onStructuredData(event); break;
+        case 'web_search_warning': break;
+        case 'section_complete': await onSectionComplete(event); break;
+        case 'summary_chunk': onSummaryChunk(event); break;
+        case 'summary_complete': onSummaryComplete(event); break;
+        case 'cost_update': sendFrame(ctx.send, mapCostUpdateEvent(event)); break;
+        case 'error': await onError(event); break;
         case 'done': {
           terminalStatus = event.status as AdapterResult['terminalStatus'];
-          // Final per-pass token totals come off the terminal trace; these
-          // are authoritative (the per-dim cost_update events only carry the
-          // combined total). Persisted to Analysis.inputTokens/outputTokens.
-          const result = event.result as
-            | { trace?: { tokensIn?: number; tokensOut?: number } }
-            | undefined;
-          if (result?.trace && typeof result.trace.tokensIn === 'number') {
-            finalInputTokens = result.trace.tokensIn;
-          }
-          if (result?.trace && typeof result.trace.tokensOut === 'number') {
-            finalOutputTokens = result.trace.tokensOut;
-          }
+          const trace = event.result?.trace;
           await persistence.persistRunDone({
             analysisId: ctx.analysisId,
             mode: ctx.mode,
@@ -468,106 +365,58 @@ export async function runAnalysisWorkflowAdapter(
             summaryDataAsOf,
             todayDate,
             degradedSourceMark,
-            inputTokens: finalInputTokens,
-            outputTokens: finalOutputTokens,
+            inputTokens:
+              typeof trace?.tokensIn === 'number'
+                ? trace.tokensIn
+                : accumulatedInputTokens || null,
+            outputTokens:
+              typeof trace?.tokensOut === 'number'
+                ? trace.tokensOut
+                : accumulatedOutputTokens || null,
             doneEvent: event,
           });
-          if (
-            capturedEvidencePack &&
-            (terminalStatus === 'COMPLETED' || terminalStatus === 'PARTIAL_FAILED')
-          ) {
-            try {
-              await persistEvidenceSnapshot(
-                ctx.prisma,
-                ctx.analysisId,
-                capturedEvidencePack,
-                {
-                  degraded: degradedSourceMark !== null,
-                  sourceMode: degradedSourceMark
-                    ? 'WEB_SEARCH_FALLBACK'
-                    : 'EVIDENCE_PACK',
-                  sectionSources: [...sectionAccs.entries()].map(
-                    ([sectionType, acc]) => ({
-                      sectionType,
-                      citations: acc.citations,
-                    }),
-                  ),
-                },
-              );
-            } catch (snapshotError) {
-              logger.warn(
-                `${tag} evidence snapshot persistence failed: ${snapshotError instanceof Error ? snapshotError.message : String(snapshotError)}`,
-              );
-            }
-          }
           sendFrame(ctx.send, mapDoneEvent(ctx.analysisId, terminalStatus));
           break;
         }
       }
     }
   } catch (err) {
-    // AbortError comes from the user pressing "stop" — the runner's registry
-    // aborted the in-flight generator and the provider SDK rethrew it.
-    // Anthropic throws APIUserAbortError, OpenAI throws AbortError; we match
-    // by name substring + the signal's own aborted flag as a fallback.
-    const isAbort =
+    const aborted =
       (err instanceof Error && /Abort/i.test(err.name)) ||
       ctx.signal?.aborted === true;
-    if (isAbort) {
+    if (aborted) {
       terminalStatus = 'CANCELLED';
-      logger.warn(`${tag} analysis aborted by user (CANCELLED)`);
-      // Use accumulated per-section/judge tokens (the done trace is never
-      // emitted on the abort path) so the history view still shows what
-      // was burned before the user pressed stop.
       await persistence.persistRunCancelled({
         analysisId: ctx.analysisId,
-        inputTokens:
-          accumulatedInputTokens > 0 ? accumulatedInputTokens : null,
-        outputTokens:
-          accumulatedOutputTokens > 0 ? accumulatedOutputTokens : null,
+        inputTokens: accumulatedInputTokens || null,
+        outputTokens: accumulatedOutputTokens || null,
       });
       sendFrame(ctx.send, mapDoneEvent(ctx.analysisId, terminalStatus));
     } else {
       terminalStatus = 'FAILED';
-      const message =
-        err instanceof Error ? err.message : String(err ?? 'Unknown error');
-      logger.error(
-        `${tag} streamComprehensive threw (${terminalStatus}): ${message}`,
-      );
-      await persistence.persistRunFailed(ctx.analysisId);
+      const message = err instanceof Error ? err.message : String(err);
+      await persistence.persistRunFailed(ctx.analysisId, message);
       sendFrame(ctx.send, mapThrownError(message));
       sendFrame(ctx.send, mapDoneEvent(ctx.analysisId, terminalStatus));
     }
   }
 
-  // Every code path ends here: no section should remain PENDING/IN_PROGRESS
-  // once the run has reached a terminal status.
   const orphanTypes = ctx.analysis.sections
-    .map((s) => s.type)
+    .map((section) => section.type)
     .filter(
-      (t) =>
-        !completedSectionTypes.has(t) && !failedSectionTypes.includes(t),
+      (type) =>
+        !completedSectionTypes.has(type) && !failedSectionTypes.includes(type),
     );
   if (orphanTypes.length > 0) {
-    try {
-      await persistence.sweepOrphanSections({
-        analysisId: ctx.analysisId,
-        orphanTypes,
-        terminalStatus,
-      });
-    } catch (e) {
-      logger.warn(
-        `${tag} orphan-section sweep failed: ${e instanceof Error ? e.message : String(e)}`,
-      );
-    }
-    for (const t of orphanTypes) failedSectionTypes.push(t);
+    await persistence.sweepOrphanSections({
+      analysisId: ctx.analysisId,
+      orphanTypes,
+      terminalStatus,
+    });
+    for (const type of orphanTypes) addFailed(type);
   }
 
-  return {
-    terminalStatus,
-    factConflictCount,
-    failedSectionTypes,
-  };
+  return { terminalStatus, factConflictCount: 0, failedSectionTypes };
 }
 
 function sendFrame<T extends AnalysisSseEventName>(
@@ -580,21 +429,9 @@ function sendFrame<T extends AnalysisSseEventName>(
 async function persistEvidenceSnapshot(
   prisma: PrismaService,
   analysisId: string,
-  pack: EvidencePackAny,
-  options: {
-    sourceMode: string;
-    degraded: boolean;
-    sectionSources?: unknown[];
-  },
+  pack: EvidencePackV2,
+  options: { sourceMode: string; degraded: boolean },
 ) {
-  const snapshotStore = (prisma as any).analysisEvidenceSnapshot;
-  if (!snapshotStore?.upsert) {
-    logger.warn(
-      `[${analysisId}] evidence snapshot delegate unavailable; run db:generate before production use`,
-    );
-    return;
-  }
-
   const raw = pack as unknown as Record<string, any>;
   const availability = raw.dataAvailability ?? {};
   const missing = Array.isArray(availability.missing)
@@ -602,18 +439,16 @@ async function persistEvidenceSnapshot(
         typeof item === 'string' ? item : String(item?.field ?? 'unknown'),
       )
     : [];
-  const citations = Array.isArray(raw.citations) ? raw.citations : [];
+  if (Array.isArray(availability.missingPrivateFields)) {
+    for (const field of availability.missingPrivateFields) {
+      if (typeof field === 'string' && !missing.includes(field)) missing.push(field);
+    }
+  }
   const capturedAt =
-    typeof raw.capturedAt === 'string'
-      ? raw.capturedAt
-      : new Date().toISOString();
-  const contentHash = createHash('sha256')
-    .update(canonicalJson(pack))
-    .digest('hex');
-
-  await snapshotStore.upsert({
-    where: { analysisId },
-    create: {
+    typeof raw.capturedAt === 'string' ? raw.capturedAt : new Date().toISOString();
+  const contentHash = createHash('sha256').update(canonicalJson(pack)).digest('hex');
+  await prisma.analysisEvidenceSnapshot.create({
+    data: {
       analysisId,
       schemaVersion: String(raw.schemaVersion ?? 'unknown'),
       evidencePackVersion: String(raw.schemaVersion ?? 'unknown'),
@@ -623,13 +458,9 @@ async function persistEvidenceSnapshot(
       degraded: options.degraded,
       missingFields: missing,
       payload: pack as any,
-      sourceSnapshots: [
-        ...citations,
-        ...(options.sectionSources ?? []),
-      ] as any,
+      sourceSnapshots: Array.isArray(raw.citations) ? raw.citations : [],
       contentHash,
     },
-    update: {},
   });
 }
 

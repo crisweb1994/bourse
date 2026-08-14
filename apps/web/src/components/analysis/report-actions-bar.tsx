@@ -7,18 +7,16 @@ import {
   RefreshCcw,
   Star,
   Check,
-  GitCompare,
   Printer,
   MessageSquareText,
 } from 'lucide-react';
 import type { SectionData } from '@/hooks/use-analysis-stream';
 import { Button, SectionTag, toast } from '@/components/ui';
 import {
-  ANALYSIS_TYPE_LABELS as SECTION_LABEL,
+  SECTION_LABELS as SECTION_LABEL,
   SIGNAL_LABELS,
   CONFIDENCE_LABELS,
 } from '@/lib/constants';
-import { cn } from '@/lib/utils';
 
 interface SectionsForExport {
   sections: SectionData[];
@@ -37,10 +35,6 @@ export interface ReportActionsBarProps extends SectionsForExport {
   onAddToWatchlist?: () => void;
   /** Same-type re-run handler. Caller already has stockId + selectedType. */
   onRerun?: () => void;
-  /** "对比上次" — only enabled when a previous comparable analysis exists. */
-  onCompareWithLast?: () => void;
-  /** True while the comparison Dialog is mounted (visual press-state). */
-  comparing?: boolean;
   /** Open Chat grounded to this exact Analysis id. */
   onAskAnalysis?: () => void;
 }
@@ -57,8 +51,6 @@ export function ReportActionsBar({
   watchlistBusy,
   onAddToWatchlist,
   onRerun,
-  onCompareWithLast,
-  comparing,
   onAskAnalysis,
 }: ReportActionsBarProps) {
   const [copied, setCopied] = useState(false);
@@ -144,17 +136,6 @@ export function ReportActionsBar({
         导出 PDF
       </Button>
 
-      {onCompareWithLast && (
-        <Button
-          size="sm"
-          onClick={onCompareWithLast}
-          disabled={comparing}
-          className={cn(comparing && 'opacity-60')}
-        >
-          <GitCompare className="h-3 w-3" strokeWidth={1.5} />
-          对比上次
-        </Button>
-      )}
 
       {onRerun && (
         <Button size="sm" onClick={onRerun}>

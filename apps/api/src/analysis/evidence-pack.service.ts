@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { EvidencePackAny } from '@bourse/analysis';
+import type { EvidencePackV2 } from '@bourse/analysis';
 import { SnapshotV2Service } from './snapshot-v2.service';
 
 interface AnalysisForEvidencePack {
@@ -11,7 +11,7 @@ interface AnalysisForEvidencePack {
 }
 
 export interface EvidencePackBuildResult {
-  pack?: EvidencePackAny;
+  pack?: EvidencePackV2;
   degraded: boolean;
   fallbackUsed: boolean;
   missingPrivateFields: string[];
@@ -26,11 +26,13 @@ export class EvidencePackService {
 
   async buildForAnalysis(
     analysis: AnalysisForEvidencePack,
+    signal?: AbortSignal,
   ): Promise<EvidencePackBuildResult> {
     try {
       const pack = await this.snapshotV2.fetchAsEvidencePack(
         analysis.stock.symbol,
         analysis.stock.market as 'US' | 'CN' | 'HK',
+        signal ? { signal } : undefined,
       );
       return {
         pack,
@@ -51,7 +53,7 @@ export class EvidencePackService {
   }
 
   private describePackAvailability(
-    pack: EvidencePackAny,
+    pack: EvidencePackV2,
   ): Omit<EvidencePackBuildResult, 'pack' | 'error'> {
     const availability = (
       pack as {

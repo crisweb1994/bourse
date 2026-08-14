@@ -39,20 +39,18 @@ export class AnalysisController {
     @CurrentUser() user: any,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-    @Query('analysisType') analysisType?: string,
+    @Query('mode') mode?: string,
     @Query('status') status?: string,
     @Query('symbol') symbol?: string,
     @Query('stockId') stockId?: string,
-    @Query('degradedOnly') degradedOnly?: string,
   ) {
     return this.queryService.getHistory(user.id, {
       page: page ? parseInt(page, 10) : 1,
       limit: limit ? parseInt(limit, 10) : 20,
-      analysisType,
+      mode,
       status,
       symbol,
       stockId,
-      degradedOnly: degradedOnly === 'true' || degradedOnly === '1',
     });
   }
 
@@ -73,14 +71,13 @@ export class AnalysisController {
     return this.queryService.getById(user.id, id);
   }
 
-  @Post(':id/sections/:sectionId/retry')
+  @Post(':id/retry')
   @UseGuards(CsrfGuard)
-  retrySection(
+  retry(
     @CurrentUser() user: any,
     @Param('id') id: string,
-    @Param('sectionId') sectionId: string,
   ) {
-    return this.commandService.retrySection(user.id, id, sectionId);
+    return this.commandService.retry(user.id, id);
   }
 
   @Get(':id/stream')

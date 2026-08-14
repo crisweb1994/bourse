@@ -1,4 +1,4 @@
-export type NavStatus = 'pending' | 'streaming' | 'completed' | 'failed' | 'skipped';
+export type NavStatus = 'pending' | 'streaming' | 'completed' | 'failed' | 'skipped' | 'cancelled';
 
 export const NAV_ACTIVE_RAIL_CLASS =
   'absolute left-0 top-1/2 h-[34px] w-[2px] -translate-y-1/2 bg-[var(--color-fg)]';
@@ -22,6 +22,8 @@ export function getNavStatusMarker(status: NavStatus): {
       return { label: '×', className: 'text-[var(--color-danger)]' };
     case 'skipped':
       return { label: '—', className: 'text-[var(--color-warn)]' };
+    case 'cancelled':
+      return { label: '×', className: 'text-[var(--color-fg-3)]' };
     case 'pending':
     default:
       return { label: '○', className: 'text-[var(--color-fg-4)]' };

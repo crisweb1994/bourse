@@ -1,4 +1,3 @@
-import type { CrossDimTolerance } from '../contracts/cross-dim-validator';
 import type { SourceTier } from '../contracts/evidence-pack-v2';
 
 /**
@@ -78,12 +77,4 @@ export interface MarketProfile {
    */
   sourcePriorities?: Record<string, string[]>;
 
-  /**
-   * RFC-03: per-market deviation thresholds for the cross-dim validator
-   * (price / marketCap / pe). Each fact gets a warning/downgrade/fail
-   * trio in PERCENT. Undefined → validator uses DEFAULT_CROSS_DIM_TOLERANCE.
-   * Currency comparison is always exact-match (no tolerance), so it's
-   * NOT part of this config.
-   */
-  crossDimTolerance?: CrossDimTolerance;
 }

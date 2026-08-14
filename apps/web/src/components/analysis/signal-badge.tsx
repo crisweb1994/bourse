@@ -6,8 +6,11 @@ import { SIGNAL_LABELS, CONFIDENCE_LABELS } from '@/lib/constants';
 // PR-9 · Style A signal mapping. Bull = sage-on-forest (accent-soft),
 // bear = brick-on-warm-pink (danger-soft), neutral = neutral pill.
 const SIGNAL_VARIANT: Record<string, PillProps['variant']> = {
-  BULLISH: 'emerald',
+  POSITIVE: 'emerald',
   NEUTRAL: 'neutral',
+  CAUTIOUS: 'danger',
+  // Kept for non-Analysis callers that still use directional labels.
+  BULLISH: 'emerald',
   BEARISH: 'danger',
 };
 

@@ -576,7 +576,7 @@ function AnalysisPicker({ analyses, value, onChange }: { analyses: AnalysisChatS
     value && !analyses.some((analysis) => analysis.id === value),
   );
 
-  return <Select value={value || '__open__'} onValueChange={(next) => onChange(next === '__open__' ? '' : next)} ariaLabel="选择研究上下文" sans className="h-9 max-w-[230px] text-[12px]"><SelectOption value="__open__"><span className="inline-flex items-center gap-2"><BookOpen className="h-3.5 w-3.5" />自由研究</span></SelectOption>{selectedAnalysisIsPending && <SelectOption value={value}>当前 Analysis</SelectOption>}{analyses.map((analysis) => <SelectOption key={analysis.id} value={analysis.id}>{analysis.analysisType} · {analysis.dataAsOf || '无日期'}{analysis.hasEvidenceSnapshot ? '' : ' · 旧证据'}</SelectOption>)}</Select>;
+  return <Select value={value || '__open__'} onValueChange={(next) => onChange(next === '__open__' ? '' : next)} ariaLabel="选择研究上下文" sans className="h-9 max-w-[230px] text-[12px]"><SelectOption value="__open__"><span className="inline-flex items-center gap-2"><BookOpen className="h-3.5 w-3.5" />自由研究</span></SelectOption>{selectedAnalysisIsPending && <SelectOption value={value}>当前研究</SelectOption>}{analyses.map((analysis) => <SelectOption key={analysis.id} value={analysis.id}>{analysis.mode} · {analysis.focusWindow} · {analysis.dataAsOf || '无日期'}</SelectOption>)}</Select>;
 }
 
 function IconButton({ label, danger = false, onClick, children }: { label: string; danger?: boolean; onClick: () => void; children: React.ReactNode }) {

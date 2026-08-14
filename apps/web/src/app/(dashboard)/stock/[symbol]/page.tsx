@@ -15,10 +15,8 @@ import { InvestorRelationsTimeline } from '@/components/investor-relations/inves
 import { useInvestorRelations } from '@/hooks/use-investor-relations';
 import type { InvestorRelationsEventDto } from '@bourse/shared-types';
 import { Card, toast } from '@/components/ui';
-import { AnalysisDialogs } from './_components/analysis-dialogs';
 import { AnalysisLauncher } from './_components/analysis-launcher';
 import { AnalysisStreamView } from './_components/analysis-stream-view';
-import { SwitchedNotice } from './_components/conflict-dialog';
 import {
   StockPageBackButton,
   StockResolutionStatus,
@@ -38,8 +36,10 @@ export default function StockAnalysisPage({
   const { symbol, stockId, market, name, analysisId } =
     useStockPageParams(params);
   const {
-    selectedType,
-    setSelectedType,
+    selectedMode,
+    setSelectedMode,
+    selectedFocusWindow,
+    setSelectedFocusWindow,
     selectedSettingId,
     setSelectedSettingId,
     selectedModel,
@@ -81,10 +81,7 @@ export default function StockAnalysisPage({
     canGenerate: Boolean(watchlistItemId),
   });
 
-  // Single source of truth for the analysis lifecycle (load / create / switch /
-  // conflict). Owns recentAnalyses / currentAnalysisMeta / checkingOngoing /
-  // loading + the conflict state, drives stream attach + the form's default
-  // type. See useStockAnalysisLifecycle.
+  // The lifecycle hook owns history loading, report creation and stream attach.
   const lifecycle = useStockAnalysisLifecycle({
     stream,
     effectiveStockId,
@@ -93,8 +90,6 @@ export default function StockAnalysisPage({
     market,
     name: resolvedName,
     router,
-    setFormType: setSelectedType,
-    closeForm: () => setShowAnalysisForm(false),
     formSettingId: selectedSettingId,
     formModel: selectedModel,
   });
@@ -103,12 +98,11 @@ export default function StockAnalysisPage({
     currentAnalysisMeta,
     checkingOngoing,
     loading,
-    conflictAnalysis,
-    autoSwitchedFrom,
   } = lifecycle;
   const handleStartAnalysis = async () => {
     const started = await lifecycle.startAnalysis({
-      type: selectedType,
+      mode: selectedMode,
+      focusWindow: selectedFocusWindow,
       settingId: selectedSettingId || undefined,
       model: selectedModel || undefined,
       question: question.trim() || undefined,
@@ -116,9 +110,7 @@ export default function StockAnalysisPage({
     if (started) setQuestion('');
   };
   const handleRerun = lifecycle.rerun;
-  const handleRetry = lifecycle.retrySection;
-  const handleViewOngoing = lifecycle.viewOngoing;
-  const handleCancelAndNew = lifecycle.cancelAndNew;
+  const handleRetry = lifecycle.retryAnalysis;
 
   const exchange =
     currentAnalysisMeta?.stock.exchange ||
@@ -135,8 +127,9 @@ export default function StockAnalysisPage({
     setAborting(true);
     try {
       await abortAnalysis(stream.analysisId);
-      // stopStream flips status off 'streaming' → the watchdog auto-clears.
-      stream.stopStream();
+      // The server has recorded cancellation; stop the local SSE and expose
+      // the same terminal state immediately.
+      stream.stopStream('CANCELLED');
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : '强制重置失败');
     } finally {
@@ -146,19 +139,15 @@ export default function StockAnalysisPage({
 
   const resultLayout = useAnalysisResultLayout({
     stream,
-    analysisType: currentAnalysisMeta?.analysisType,
+    initialSections: currentAnalysisMeta?.sections ?? [],
   });
   const {
     sectionList,
-    isMultiSection,
     navItems,
     effectiveActive,
-    rightInsightsSummary,
-    hasRightPanel,
     failedSections,
     handleNavClick,
   } = resultLayout;
-  const [compareOpen, setCompareOpen] = useState(false);
 
   const openAnalysisChat = (sectionType?: string) => {
     if (!symbol || !currentAnalysisMeta?.id) return;
@@ -204,14 +193,6 @@ export default function StockAnalysisPage({
   return (
     <>
       <StockPageBackButton router={router} />
-      {autoSwitchedFrom && (
-        <SwitchedNotice
-          ongoing={autoSwitchedFrom}
-          onCancelAndNew={lifecycle.cancelAutoSwitchedAndNew}
-          onDismiss={lifecycle.dismissAutoSwitched}
-        />
-      )}
-
       {symbol && (
         <StockHeader
           symbol={symbol}
@@ -295,8 +276,10 @@ export default function StockAnalysisPage({
       <AnalysisLauncher
         open={showAnalysisForm}
         onOpenChange={setShowAnalysisForm}
-        selectedType={selectedType}
-        setSelectedType={setSelectedType}
+        selectedMode={selectedMode}
+        setSelectedMode={setSelectedMode}
+        selectedFocusWindow={selectedFocusWindow}
+        setSelectedFocusWindow={setSelectedFocusWindow}
         providerSettings={providerSettings}
         selectedSettingId={selectedSettingId}
         setSelectedSettingId={setSelectedSettingId}
@@ -319,23 +302,17 @@ export default function StockAnalysisPage({
         <AnalysisStreamView
           stream={stream}
           currentAnalysisMeta={currentAnalysisMeta}
-          recentAnalyses={recentAnalyses}
           sectionList={sectionList}
-          isMultiSection={isMultiSection}
           navItems={navItems}
           effectiveActive={effectiveActive}
-          rightInsightsSummary={rightInsightsSummary}
-          hasRightPanel={hasRightPanel}
           failedSections={failedSections}
           stuckSuspected={stuckSuspected}
           aborting={aborting}
           showMetaBar={!showAnalysisForm}
-          effectiveStockId={effectiveStockId}
           symbol={symbol}
           market={market}
           watchlistItemId={watchlistItemId}
           watchlistBusy={watchlistBusy}
-          compareOpen={compareOpen}
           onNavClick={handleNavClick}
           onOpenAnalysisForm={() => setShowAnalysisForm(true)}
           onStop={handleAbortStuck}
@@ -343,22 +320,10 @@ export default function StockAnalysisPage({
           onRetry={handleRetry}
           onAddToWatchlist={handleAddToWatchlist}
           onRerun={handleRerun}
-          onCompareOpenChange={setCompareOpen}
           onAskAnalysis={openAnalysisChat}
         />
       )}
 
-      <AnalysisDialogs
-        compareOpen={compareOpen}
-        onCompareOpenChange={setCompareOpen}
-        currentAnalysis={currentAnalysisMeta}
-        currentSummary={stream.summaryJson}
-        recentAnalyses={recentAnalyses}
-        conflictAnalysis={conflictAnalysis}
-        onDismissConflict={lifecycle.dismissConflict}
-        onViewConflict={handleViewOngoing}
-        onCancelAndNew={handleCancelAndNew}
-      />
     </>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { Sparkles } from 'lucide-react';
-import type { ActiveAnalysisType } from '@bourse/shared-types';
+import type { AnalysisMode, FocusWindow } from '@bourse/shared-types';
 import { type AiProviderSettingDto } from '@/lib/api';
 import { Button, Card, Dialog } from '@/components/ui';
 import { AnalysisForm } from './analysis-form';
@@ -9,8 +9,10 @@ import { AnalysisForm } from './analysis-form';
 interface AnalysisLauncherProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  selectedType: ActiveAnalysisType;
-  setSelectedType: (value: ActiveAnalysisType) => void;
+  selectedMode: AnalysisMode;
+  setSelectedMode: (value: AnalysisMode) => void;
+  selectedFocusWindow: FocusWindow;
+  setSelectedFocusWindow: (value: FocusWindow) => void;
   providerSettings: AiProviderSettingDto[];
   selectedSettingId: string;
   setSelectedSettingId: (value: string) => void;
@@ -28,8 +30,10 @@ interface AnalysisLauncherProps {
 export function AnalysisLauncher({
   open,
   onOpenChange,
-  selectedType,
-  setSelectedType,
+  selectedMode,
+  setSelectedMode,
+  selectedFocusWindow,
+  setSelectedFocusWindow,
   providerSettings,
   selectedSettingId,
   setSelectedSettingId,
@@ -53,8 +57,10 @@ export function AnalysisLauncher({
         size="lg"
       >
         <AnalysisForm
-          selectedType={selectedType}
-          setSelectedType={setSelectedType}
+          selectedMode={selectedMode}
+          setSelectedMode={setSelectedMode}
+          selectedFocusWindow={selectedFocusWindow}
+          setSelectedFocusWindow={setSelectedFocusWindow}
           providerSettings={providerSettings}
           selectedSettingId={selectedSettingId}
           setSelectedSettingId={setSelectedSettingId}
@@ -86,7 +92,7 @@ export function AnalysisLauncher({
                 <span className="font-medium text-[var(--color-fg)]">
                   {stockLabel}
                 </span>{' '}
-                开启 AI 深度分析，获取基本面、估值、风险等多维度洞察。
+                开启研究，获取公司质量、估值、风险等核心判断。
               </p>
             </div>
             <Button

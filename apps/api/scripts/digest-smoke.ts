@@ -30,7 +30,7 @@
  *   - 1 个测试用户（githubId=digest-smoke）
  *   - 该用户 1 条默认 AiProviderSetting（从 .env 的 AI key + provider/model 读）
  *   - 3 只自选股（US: AAPL/MSFT/NVDA；CN: 600519/000858/300750）
- *   - 第一只票一条 35 天前的 COMPREHENSIVE Analysis → 触发 drift + stale 异动
+ *   - 第一只票一条 35 天前的 QUICK Analysis → 触发 drift + stale 异动
  *
  * 不删数据、不调推送（task6）、不落库 Brief（task5 职责只到生成 BriefPayload）。
  */
@@ -190,12 +190,13 @@ async function seed(prisma: PrismaService, logger: Logger): Promise<string> {
         stockId: firstStock.id,
         symbol: firstStock.symbol,
         market,
-        analysisType: 'COMPREHENSIVE',
+        mode: 'QUICK',
+        focusWindow: 'D90',
         status: 'COMPLETED',
-        overallSignal: 'BULLISH',
+        overallSignal: 'POSITIVE',
         overallConfidence: 'MEDIUM',
         dataAsOf: staleDay,
-        generatedAt: staleAt,
+        completedAt: staleAt,
         summaryMarkdown: '（smoke seed）35 天前的分析，用于验证 drift/stale 异动',
         createdAt: staleAt,
       },
@@ -203,8 +204,10 @@ async function seed(prisma: PrismaService, logger: Logger): Promise<string> {
         stockId: firstStock.id,
         symbol: firstStock.symbol,
         market,
+        mode: 'QUICK',
+        focusWindow: 'D90',
         dataAsOf: staleDay,
-        generatedAt: staleAt,
+        completedAt: staleAt,
         createdAt: staleAt,
       },
     });

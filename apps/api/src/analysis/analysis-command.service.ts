@@ -1,22 +1,30 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import {
-  COMPREHENSIVE_DIMENSIONS,
-  isSectionType,
-} from '@bourse/shared-types';
-import {
+  AnalysisMode as PrismaAnalysisMode,
   AnalysisStatus as PrismaAnalysisStatus,
-  AnalysisType as PrismaAnalysisType,
+  FocusWindow as PrismaFocusWindow,
   Prisma,
+  SectionStatus as PrismaSectionStatus,
   SectionType as PrismaSectionType,
 } from '@prisma/client';
+import { SECTION_ORDER } from '@bourse/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAnalysisDto } from './analysis.dto';
 import { AnalysisRunRegistry } from './analysis-run-registry.service';
+import { mapAnalysisDto } from './analysis-query.service';
 import { ProviderResolverService } from './provider-resolver.service';
+
+const FOCUS_WINDOW_TO_PRISMA: Record<string, PrismaFocusWindow> = {
+  '30D': PrismaFocusWindow.D30,
+  '90D': PrismaFocusWindow.D90,
+  '1Y': PrismaFocusWindow.Y1,
+  '3Y': PrismaFocusWindow.Y3,
+};
 
 @Injectable()
 export class AnalysisCommandService {
@@ -32,48 +40,64 @@ export class AnalysisCommandService {
     });
     if (!stock) throw new NotFoundException('Stock not found');
 
+    const ongoing = await this.prisma.analysis.findFirst({
+      where: {
+        userId,
+        stockId: stock.id,
+        status: { in: [PrismaAnalysisStatus.PENDING, PrismaAnalysisStatus.IN_PROGRESS] },
+      },
+      select: { id: true },
+    });
+    if (ongoing) {
+      throw new ConflictException('An analysis for this stock is already running');
+    }
+
     const { aiModel, providerName, settingId } =
       await this.providerResolver.resolveAnalysisMetadata(userId, {
         settingIdHint: dto.aiProviderSettingId,
         modelHint: dto.aiModel,
       });
 
-    const isComprehensive = dto.analysisType === 'COMPREHENSIVE';
-    const sections = isComprehensive
-      ? COMPREHENSIVE_DIMENSIONS.map((type, order) => ({
-          type: PrismaSectionType[type],
-          order,
-        }))
-      : [
-          {
-            type: this.sectionTypeForSingleAnalysis(dto.analysisType),
-            order: 0,
-          },
-        ];
+    const mode = dto.mode as PrismaAnalysisMode;
+    const focusWindow = FOCUS_WINDOW_TO_PRISMA[dto.focusWindow ?? '90D'];
+    if (!focusWindow) throw new Error('Invalid focus window');
 
-    return this.prisma.analysis.create({
+    const created = await this.prisma.analysis.create({
       data: {
         userId,
         stockId: stock.id,
         symbol: stock.symbol,
         market: stock.market,
-        analysisType: PrismaAnalysisType[dto.analysisType],
+        mode,
+        focusWindow,
         question: dto.question?.trim() || null,
         aiProvider: providerName,
         aiModel,
         aiProviderSettingId: settingId,
-        sections: { create: sections },
+        sections: {
+          create: SECTION_ORDER.map((type, order) => ({
+            type: PrismaSectionType[type],
+            order,
+          })),
+        },
       },
       include: { sections: { orderBy: { order: 'asc' } }, stock: true },
     });
+    return mapAnalysisDto(created);
   }
 
   async delete(userId: string, id: string) {
     const analysis = await this.prisma.analysis.findFirst({
       where: { id, userId },
-      select: { id: true },
+      select: { id: true, status: true },
     });
     if (!analysis) throw new NotFoundException('Analysis not found');
+    if (
+      analysis.status === PrismaAnalysisStatus.PENDING ||
+      analysis.status === PrismaAnalysisStatus.IN_PROGRESS
+    ) {
+      throw new ConflictException('Cancel the running analysis before deleting it');
+    }
 
     await this.prisma.analysis.delete({ where: { id } });
     return { ok: true };
@@ -82,7 +106,7 @@ export class AnalysisCommandService {
   async abort(userId: string, id: string) {
     const analysis = await this.prisma.analysis.findFirst({
       where: { id, userId },
-      include: { sections: true },
+      select: { id: true, status: true },
     });
     if (!analysis) throw new NotFoundException('Analysis not found');
 
@@ -91,92 +115,127 @@ export class AnalysisCommandService {
       analysis.status !== PrismaAnalysisStatus.IN_PROGRESS
     ) {
       throw new ForbiddenException(
-        'Only PENDING or IN_PROGRESS analyses can be aborted',
+        'Only PENDING or IN_PROGRESS analyses can be cancelled',
       );
     }
 
-    // Interrupt the in-flight generator first (if it's running in this
-    // process). The signal is threaded through to the provider SDK, so the
-    // live LLM HTTP request is aborted and the adapter's catch block marks
-    // the run CANCELLED. Returns false when the run isn't in-memory (e.g.
-    // after a process restart); the DB flip below still covers that case.
     this.runRegistry.abort(id);
-
-    await this.prisma.analysisSection.updateMany({
-      where: {
-        analysisId: id,
-        status: {
-          in: [
-            PrismaAnalysisStatus.PENDING,
-            PrismaAnalysisStatus.IN_PROGRESS,
-          ],
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.analysisSection.updateMany({
+        where: {
+          analysisId: id,
+          analysis: {
+            status: {
+              in: [PrismaAnalysisStatus.PENDING, PrismaAnalysisStatus.IN_PROGRESS],
+            },
+          },
+          status: {
+            in: [PrismaSectionStatus.PENDING, PrismaSectionStatus.IN_PROGRESS],
+          },
         },
-      },
-      data: {
-        status: PrismaAnalysisStatus.CANCELLED,
-        errorMessage: 'Manually cancelled by user',
-      },
-    });
-    await this.prisma.analysis.update({
-      where: { id },
-      data: { status: PrismaAnalysisStatus.CANCELLED },
-    });
+        data: {
+          status: PrismaSectionStatus.CANCELLED,
+          errorCode: 'CANCELLED_BY_USER',
+          errorMessage: 'Manually cancelled by user',
+          completedAt: now,
+        },
+      }),
+      this.prisma.analysis.updateMany({
+        where: {
+          id,
+          status: {
+            in: [PrismaAnalysisStatus.PENDING, PrismaAnalysisStatus.IN_PROGRESS],
+          },
+        },
+        data: {
+          status: PrismaAnalysisStatus.CANCELLED,
+          errorCode: 'CANCELLED_BY_USER',
+          errorMessage: 'Manually cancelled by user',
+          completedAt: now,
+        },
+      }),
+    ]);
 
     return { ok: true };
   }
 
-  async retrySection(userId: string, analysisId: string, sectionId: string) {
+  async retry(userId: string, analysisId: string) {
     const analysis = await this.prisma.analysis.findFirst({
       where: { id: analysisId, userId },
-      include: { sections: true },
+      include: { sections: true, evidenceSnapshot: true },
     });
     if (!analysis) throw new NotFoundException('Analysis not found');
-
-    const section = analysis.sections.find((item) => item.id === sectionId);
-    if (!section) throw new NotFoundException('Section not found');
-
-    if (section.status !== PrismaAnalysisStatus.FAILED) {
-      throw new Error('Only FAILED sections can be retried');
+    if (!['FAILED', 'PARTIAL_FAILED'].includes(analysis.status)) {
+      throw new ConflictException('Only failed analyses can be retried');
+    }
+    if (!analysis.evidenceSnapshot) {
+      throw new ConflictException('This analysis has no evidence snapshot; create a new analysis');
     }
 
-    // A failed run may have persisted provider metadata from an older env
-    // configuration. Resolve it again before retrying so an unbound analysis
-    // follows the current root .env (while an explicitly bound user setting
-    // continues to use that setting).
-    const { aiModel, providerName, settingId } =
-      await this.providerResolver.resolveAnalysisMetadata(userId, {
-        settingIdHint: analysis.aiProviderSettingId,
+    const factTypes = new Set([
+      'COMPANY_QUALITY',
+      'INDUSTRY_POSITION',
+      'VALUATION_SCENARIOS',
+      'MARKET_SIGNALS',
+    ]);
+    const retryingFact = analysis.sections.some(
+      (section) =>
+        factTypes.has(section.type) &&
+        (section.status === PrismaSectionStatus.FAILED ||
+          section.status === PrismaSectionStatus.SKIPPED),
+    );
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.analysisSection.updateMany({
+        where: {
+          analysisId,
+          status: {
+            in: [PrismaSectionStatus.FAILED, PrismaSectionStatus.SKIPPED],
+          },
+        },
+        data: {
+          status: PrismaSectionStatus.PENDING,
+          reportMarkdown: null,
+          structuredJson: Prisma.JsonNull,
+          errorCode: null,
+          errorMessage: null,
+          startedAt: null,
+          completedAt: null,
+        },
       });
 
-    await this.prisma.analysisSection.update({
-      where: { id: sectionId },
-      data: {
-        status: PrismaAnalysisStatus.PENDING,
-        reportMarkdown: null,
-        structuredJson: Prisma.JsonNull,
-        citations: Prisma.JsonNull,
-        errorMessage: null,
-      },
-    });
-    await this.prisma.analysis.update({
-      where: { id: analysisId },
-      data: {
-        status: PrismaAnalysisStatus.PENDING,
-        aiProvider: providerName,
-        aiModel,
-        aiProviderSettingId: settingId,
-      },
+      if (retryingFact) {
+        await tx.analysisSection.updateMany({
+          where: { analysisId, type: PrismaSectionType.RISK_REGISTER },
+          data: {
+            status: PrismaSectionStatus.PENDING,
+            reportMarkdown: null,
+            structuredJson: Prisma.JsonNull,
+            errorCode: null,
+            errorMessage: null,
+            startedAt: null,
+            completedAt: null,
+          },
+        });
+      }
+
+      await tx.analysis.update({
+        where: { id: analysisId },
+        data: {
+          status: PrismaAnalysisStatus.PENDING,
+          summaryMarkdown: null,
+          summaryJson: Prisma.JsonNull,
+          overallSignal: null,
+          overallConfidence: null,
+          errorCode: null,
+          errorMessage: null,
+          startedAt: null,
+          completedAt: null,
+        },
+      });
     });
 
     return { ok: true };
-  }
-
-  private sectionTypeForSingleAnalysis(
-    analysisType: CreateAnalysisDto['analysisType'],
-  ) {
-    if (!isSectionType(analysisType)) {
-      throw new Error(`Analysis type ${analysisType} has no section type`);
-    }
-    return PrismaSectionType[analysisType];
   }
 }
