@@ -57,6 +57,11 @@ export function useWatchlistSparklines(
   const [states, setStates] = useState<Record<string, SparklineState>>({});
   const generation = useRef(0);
 
+  // 调用方（watchlist-table）每次 render 都新建 items 数组 —— 以内容派生的
+  // 稳定字符串键作为 effect 依赖，否则 setStates 每轮触发重渲染死循环
+  // （Maximum update depth exceeded）。
+  const itemsKey = items.map((item) => `${item.market}:${item.symbol}`).join('|');
+
   useEffect(() => {
     const gen = ++generation.current;
     const unique = new Map<string, { symbol: string; market: string }>();
@@ -92,7 +97,8 @@ export function useWatchlistSparklines(
         return next;
       });
     });
-  }, [items]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemsKey]);
 
   return states;
 }
