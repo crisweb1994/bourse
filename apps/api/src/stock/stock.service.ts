@@ -1,6 +1,12 @@
-import { Inject, Injectable } from '@nestjs/common';
-import { Market, type StockSearchResult } from '@bourse/shared-types';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Market,
+  type StockHistoryResponse,
+  type StockSearchResult,
+  STOCK_HISTORY_DAYS_WHITELIST,
+} from '@bourse/shared-types';
 import type { ResearchMarketDataClient } from '@bourse/market-data';
+import { computeTechnicalIndicators, derivePriceSeries } from '@bourse/analysis';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpsertStockDto } from './stock.dto';
 import { MARKET_DATA_CLIENT } from '../connectors/connectors.module';
@@ -126,6 +132,61 @@ export class StockService {
    * carries its own `{ degraded, reason }` marker so a stock with valid
    * quote but missing profile still renders most of the panel.
    */
+  /**
+   * Chart history for the stock page (visualization §五⑦ / D3).
+   *
+   * P1 invariant: every indicator is computed server-side by the SAME pure
+   * functions the analysis snapshot uses; the frontend only renders. Days are
+   * whitelisted to the supported chart windows (default 365 = fixed chart
+   * window per D1). Does not require a DB stock row (design R-7) — resolves
+   * straight through the capability router, so first-visit symbols work.
+   */
+  async getChartHistory(
+    symbol: string,
+    market: string,
+    days?: number,
+  ): Promise<StockHistoryResponse> {
+    const normalizedMarket = market.trim().toUpperCase();
+    if (normalizedMarket !== 'US' && normalizedMarket !== 'CN' && normalizedMarket !== 'HK') {
+      throw new BadRequestException('market must be one of US | CN | HK');
+    }
+    const window =
+      days !== undefined
+        ? (STOCK_HISTORY_DAYS_WHITELIST as readonly number[]).find((d) => d === days)
+        : 365;
+    if (window === undefined) {
+      throw new BadRequestException(
+        `days must be one of ${STOCK_HISTORY_DAYS_WHITELIST.join(' | ')}`,
+      );
+    }
+
+    const instrumentId = `${normalizedMarket}:${symbol}`;
+    const to = new Date().toISOString().slice(0, 10);
+    const from = new Date(Date.now() - window * 86_400_000).toISOString().slice(0, 10);
+    const result = await this.marketData.getHistory(
+      { instrumentId, from, to, interval: '1d' },
+      { timeoutMs: 15_000 },
+    );
+    const bars = Array.isArray(result.data) ? result.data : [];
+    if (bars.length === 0) {
+      throw new NotFoundException('暂无行情历史数据');
+    }
+
+    const historyTier = (result.citations[0] as { qualityTier?: string } | undefined)
+      ?.qualityTier;
+    const priceSeries = derivePriceSeries(bars, (historyTier ?? 'B') as 'A' | 'B' | 'C' | 'D' | 'E');
+    if (!priceSeries) {
+      throw new NotFoundException('行情历史数据不可用');
+    }
+    const technical = computeTechnicalIndicators({ bars });
+
+    return {
+      priceSeries,
+      technical: technical.indicators,
+      provenance: { history: priceSeries.sourceTier },
+    };
+  }
+
   async getDetail(symbol: string, market: string) {
     const stock = await this.findBySymbolAndMarket(symbol, market);
     if (!stock) {

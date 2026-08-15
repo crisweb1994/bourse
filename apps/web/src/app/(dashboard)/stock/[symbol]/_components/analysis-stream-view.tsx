@@ -10,6 +10,9 @@ import { LeftSectionNav, type NavItem } from '@/components/analysis/left-section
 import { ScrollSection } from '@/components/analysis/scroll-section';
 import { ReportActionsBar } from '@/components/analysis/report-actions-bar';
 import { DataQualityNotice } from '@/components/analysis/data-quality-notice';
+import { useEvidence } from '@/components/charts/use-evidence';
+import { SignalMatrix } from '@/components/charts/primitives/signal-matrix';
+import { ChartFrame } from '@/components/charts/chart-frame';
 import { Button, Card, Pill, SectionTag } from '@/components/ui';
 import { FOCUS_WINDOW_LABELS, MODE_LABELS, SECTION_LABELS } from '@/lib/constants';
 import { formatAnalysisTime } from '../stock-page-ui';
@@ -76,6 +79,9 @@ export function AnalysisStreamView({
 }: Props) {
   const summary = stream.summaryJson;
   const isTerminal = stream.status === 'completed' || stream.status === 'error' || stream.status === 'cancelled';
+  // Visualization §六 (P6): mount-fetch keyed by analysis id; SSE events are
+  // only a refresh signal, never the sole trigger.
+  const evidence = useEvidence(currentAnalysisMeta?.id ?? null);
   return (
     <div className="space-y-4">
       {showMetaBar && currentAnalysisMeta && (
@@ -108,6 +114,27 @@ export function AnalysisStreamView({
 
       {summary && <ConclusionBanner signal={summary.signal} confidence={summary.confidence} headline={summary.headline} dataAsOf={summary.dataAsOf} />}
 
+      {/* C6 · 五模块信号矩阵（方向 A 图形化；维度独立，不合成总分 V2） */}
+      {currentAnalysisMeta && sectionList.length > 0 ? (
+        <ChartFrame
+          title="模块信号矩阵"
+          status="ready"
+          asOf={evidence.status === 'ready' ? evidence.data.capturedAt : null}
+          ariaSummary="五个研究模块各自的方向评估、置信度与一句话结论，附分歧度汇总"
+        >
+          <SignalMatrix
+            rows={sectionList.map((section) => ({
+              type: section.type,
+              assessment: section.structuredJson?.assessment as string | undefined,
+              confidence: section.structuredJson?.confidence as string | undefined,
+              summary: section.structuredJson?.summary as string | undefined,
+              status: section.status,
+            }))}
+            onJump={(type) => onNavClick(`section-${type}`)}
+          />
+        </ChartFrame>
+      ) : null}
+
       {stream.status === 'streaming' && (
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" onClick={() => void onStop()}><Square className="h-3 w-3" strokeWidth={1.5} />取消研究</Button>
@@ -119,7 +146,7 @@ export function AnalysisStreamView({
       <div className="grid gap-6 lg:grid-cols-[200px_minmax(0,1fr)]">
         <LeftSectionNav items={navItems} activeId={effectiveActive} onSelect={onNavClick} />
         <div className="min-w-0 space-y-6">
-          {sectionList.map((section) => <ScrollSection key={section.type} section={section} onRetry={onRetry} showCitations onAsk={onAskAnalysis} />)}
+          {sectionList.map((section) => <ScrollSection key={section.type} section={section} onRetry={onRetry} showCitations onAsk={onAskAnalysis} evidence={evidence} />)}
           {stream.summaryMarkdown && (
             <section id="section-SUMMARY" className="scroll-mt-4">
               <Card>

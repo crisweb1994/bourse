@@ -44,6 +44,7 @@ import type {
 import type { FinancialsBundle, MarketEvent, OwnershipObservation } from '@bourse/market-data';
 import type { StockSnapshot } from './types';
 import { buildResearchCoverage } from './research-coverage';
+import { derivePriceSeries } from '../compute/chart-series';
 
 const DEFAULT_TIER: SourceTier = 'B';
 
@@ -324,6 +325,15 @@ export function snapshotToEvidencePack(
     })),
   };
 
+  // ── priceSeries (visualization §四.①) ────────────────────────────────────
+  // Render data derived from rawFacts.history on a single adjusted basis;
+  // tier follows the history connector citation, defaulting to B like putFact.
+  const historyTier: SourceTier =
+    citationByField.get('history')?.qualityTier ?? DEFAULT_TIER;
+  const priceSeries = snap.rawFacts.history
+    ? derivePriceSeries(snap.rawFacts.history, historyTier)
+    : null;
+
   // ── envelope ────────────────────────────────────────────────────────────
   const pack: EvidencePackV2 = {
     schemaVersion: 'evidence-pack-v2',
@@ -367,6 +377,7 @@ export function snapshotToEvidencePack(
     },
     researchCoverage,
     computedFacts,
+    ...(priceSeries ? { priceSeries } : {}),
   };
 
   return pack;

@@ -9,6 +9,7 @@ import { useStuckWatchdog } from '@/hooks/use-stuck-watchdog';
 import { useEarningsCard } from '@/hooks/use-earnings-card';
 import { useStockNews } from '@/hooks/use-stock-news';
 import { StockHeader } from '@/components/stock/stock-header';
+import { StockPriceChart } from '@/components/charts/stock-price-chart';
 import { EarningsCardPanel } from '@/components/earnings/earnings-card-panel';
 import { EarningsTrendPanel } from '@/components/earnings/earnings-trend-panel';
 import { InvestorRelationsTimeline } from '@/components/investor-relations/investor-relations-timeline';
@@ -222,6 +223,9 @@ export default function StockAnalysisPage({
           news={news}
         />
       )}
+
+      {/* Visualization D3 - L1 resident price chart (fixed 365d window D1) */}
+      {symbol && <StockPriceChart symbol={symbol} market={market} />}
 
       <StockResolutionStatus
         requestedStockId={stockId}

@@ -1,6 +1,6 @@
 import type { EvidencePackV2 } from '../contracts/evidence-pack-v2';
 import type { SseEvent } from '../contracts/sse-events';
-import { enforceComputedValueRanges, SectionResult } from '../contracts/analysis-result';
+import { enforceComputedValueRanges, hasComputedValuationFact, validateValuationSemantics, degradeValuationSemantics, SectionResult } from '../contracts/analysis-result';
 import { buildCommonSuffix } from '../dimensions/freshness';
 import type { Dimension, DimensionInput } from '../dimensions/types';
 import { enforceSymbol } from '../guardrails/symbol';
@@ -18,7 +18,8 @@ import type {
   ProviderStreamResult,
   SystemPromptInput,
 } from './provider';
-import { structuredOutputWithRepair } from './structured-output';
+import { structuredOutputWithRepair, parseStructured, mergeProviderUsage } from './structured-output';
+import { StructuredOutputError } from './errors';
 import { HallucinationFilter } from '../tools/web-search/hallucination-filter';
 
 export interface StreamDimensionOptions {
@@ -417,9 +418,6 @@ export async function* streamDimension(
   // When the pack carries facts.financials, the company-quality and valuation
   // modules declare 'financials' in their factReferences[]. Soft-warn, no
   // reject.
-  const gated = applyEvidenceGate(structured.data, {
-    ...(options.domainTiers ? { domainTiers: options.domainTiers } : {}),
-  });
   const isV2Pack = options.evidencePack?.schemaVersion === 'evidence-pack-v2';
   const coverage =
     isV2Pack
@@ -427,14 +425,66 @@ export async function* streamDimension(
       : undefined;
   // FUNCTIONAL.md (估值): without a code-computed valuation the scenario
   // valueRange must be null; enforce it here instead of trusting the prompt.
-  const hasComputedValuation =
-    isV2Pack
-      ? options.evidencePack?.computedFacts?.valuation != null
-      : false;
-  const fixedData = enforceComputedValueRanges(
-    applyFixedDisclaimer(applyResearchCoverage(gated.data, coverage)),
-    hasComputedValuation,
-  );
+  // Visualization §四.④ (R-4): the shared predicate keeps the enforcer and
+  // the post-chain semantic validator on the same definition.
+  const computedValuationPresent = isV2Pack
+    ? hasComputedValuationFact(options.evidencePack?.computedFacts)
+    : false;
+  const postChain = (raw: SectionResult): SectionResult =>
+    enforceComputedValueRanges(
+      applyFixedDisclaimer(
+        applyResearchCoverage(
+          applyEvidenceGate(raw, {
+            ...(options.domainTiers ? { domainTiers: options.domainTiers } : {}),
+          }).data,
+          coverage,
+        ),
+      ),
+      computedValuationPresent,
+    );
+  let fixedData = postChain(structured.data);
+
+  // Visualization §四.④ — post-chain semantic validation for VALUATION (the
+  // root fix lives in the extraction prompt; this is the rare-path backstop).
+  // Flow: validate AFTER enforce (R-4) → one repair call with the gap list →
+  // re-run chain + re-validate → pass | degrade-with-limitations. Schema
+  // failure of the repair call throws (existing StructuredOutputError
+  // semantics); semantic shortfall degrades instead of fabricating.
+  if (sectionType === 'VALUATION_SCENARIOS') {
+    const verdict = validateValuationSemantics(fixedData, computedValuationPresent);
+    if (!verdict.ok) {
+      const repairUser =
+        `${jsonPrompts.user}\n\n上一次输出存在以下语义问题，请修复后重新输出完整 JSON（只输出 JSON，不要解释）：\n` +
+        verdict.gaps.map((g) => `- ${g}`).join('\n');
+      let second: Awaited<ReturnType<AgentProvider['complete']>>;
+      let parsed: ReturnType<typeof parseStructured<SectionResult>>;
+      try {
+        second = await provider.complete(jsonPrompts.system, repairUser, {
+          signal: moduleController.signal,
+          maxTokens: options.maxStructuredTokens ?? 6_000,
+        });
+        parsed = parseStructured<SectionResult>(second.text, dimension.outputSchema);
+      } catch (error) {
+        cleanup();
+        throw error;
+      }
+      if (!parsed.success) {
+        throw new StructuredOutputError(
+          `Valuation semantic repair failed schema: ${parsed.error}`,
+          parsed.error,
+        );
+      }
+      const repaired = postChain(parsed.data);
+      const verdict2 = validateValuationSemantics(repaired, computedValuationPresent);
+      fixedData = verdict2.ok ? repaired : degradeValuationSemantics(repaired, verdict2.gaps);
+      // Merge repair cost into the section usage ledger (degrade never hides cost).
+      structured = {
+        data: structured.data,
+        usage: mergeProviderUsage(structured.usage, second.usage),
+        llmCalls: structured.llmCalls + 1,
+      };
+    }
+  }
 
   // The report stream is user-facing text, but a provider may still return a
   // structured JSON object despite the prompt. Emit one final replacement so

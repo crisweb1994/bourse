@@ -23,15 +23,28 @@
 import { z } from 'zod';
 import type { PriceBar } from '@bourse/market-data';
 import type { ComputeWarning } from './types';
+import { smaPoints, type ChartPricePoint } from './chart-series';
 
 // ============================================================================
 // Schema
 // ============================================================================
 
+/** Chart-facing moving-average series as {t, v} points (design §四.②).
+ *  Self-describing alignment: every t is a bar date; first sma{w} point is
+ *  bars[w-1].t. Optional/additive — absent when bars are insufficient. */
+const TechnicalSeriesSchema = z.object({
+  sma20: z.array(z.object({ t: z.string(), v: z.number() })),
+  sma50: z.array(z.object({ t: z.string(), v: z.number() })),
+  sma200: z.array(z.object({ t: z.string(), v: z.number() })),
+});
+
 export const ComputedTechnicalIndicatorsSchema = z.object({
   asOf: z.string().datetime(),
   bars: z.number().int().nonnegative(),
   lastClose: z.number().nullable(),
+
+  // Chart series (additive, visualization §四.②)
+  series: TechnicalSeriesSchema.optional(),
 
   // Trend
   sma20: z.number().nullable(),
@@ -152,6 +165,14 @@ export function computeTechnicalIndicators(
   const trendLabel = labelTrend(lastClose, sma20, sma50, sma200);
   const momentumLabel = labelMomentum(rsi14);
 
+  // Chart series (visualization §四.②) — smaPoints derives from the SAME
+  // closes basis as the scalars above (adjustedClose ?? close, invariant I4).
+  const series: { sma20: ChartPricePoint[]; sma50: ChartPricePoint[]; sma200: ChartPricePoint[] } = {
+    sma20: smaPoints(bars, 20),
+    sma50: smaPoints(bars, 50),
+    sma200: smaPoints(bars, 200),
+  };
+
   const indicators: ComputedTechnicalIndicators = {
     // Connectors often emit date-only (`YYYY-MM-DD`) for daily bars; the
     // schema requires full ISO datetime. Coerce `YYYY-MM-DD` → midnight
@@ -179,6 +200,7 @@ export function computeTechnicalIndicators(
     obvTrend: obvTrendLabel,
     trend: trendLabel,
     momentum: momentumLabel,
+    series,
   };
 
   return { indicators, warnings };

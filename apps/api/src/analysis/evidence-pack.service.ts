@@ -34,7 +34,12 @@ export class EvidencePackService {
         analysis.stock.symbol,
         analysis.stock.market as 'US' | 'CN' | 'HK',
         {
-          historyDays: historyDaysForFocusWindow(analysis.focusWindow),
+          // Visualization design D1 (2026-08-15 product decision): the
+          // snapshot history window is a FIXED 365-day chart window —
+          // FocusWindow no longer feeds it. Focus stays a prompt-narrative
+          // concern ("重点关注最近 {window}"), and technical indicators keep
+          // full-year evidence even for 30D analyses. The 5y valuation
+          // history is fetched separately (fail-soft) inside fetchSnapshot.
           ...(signal ? { signal } : {}),
         },
       );
@@ -85,15 +90,5 @@ export class EvidencePackService {
       fallbackUsed,
       missingPrivateFields,
     };
-  }
-}
-
-function historyDaysForFocusWindow(focusWindow?: FocusWindow): number {
-  switch (focusWindow) {
-    case '30D': return 30;
-    case '90D': return 90;
-    case '3Y': return 365 * 3;
-    case '1Y':
-    default: return 365;
   }
 }

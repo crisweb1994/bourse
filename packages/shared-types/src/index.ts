@@ -1,6 +1,7 @@
 export * from './chat';
 export * from './build-metadata';
 export * from './earnings';
+export * from './charts';
 
 // ===== Enums =====
 

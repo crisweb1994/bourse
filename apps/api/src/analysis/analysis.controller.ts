@@ -71,6 +71,13 @@ export class AnalysisController {
     return this.queryService.getById(user.id, id);
   }
 
+  /** Chart evidence projection (visualization §五⑥): read-only, ownership
+   *  via the same userId scoping as getById. */
+  @Get(':id/evidence')
+  getEvidence(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.queryService.getChartEvidence(user.id, id);
+  }
+
   @Post(':id/retry')
   @UseGuards(CsrfGuard)
   retry(

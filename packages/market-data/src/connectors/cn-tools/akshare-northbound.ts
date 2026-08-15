@@ -75,18 +75,23 @@ const NORTHBOUND_MIRRORS: ReadonlyArray<{
   buildUrl: (code: string, exchange: 'SS' | 'SZ', daysBack: number) => string;
   parse: (body: unknown) => AkshareNorthboundOutput['rows'];
 }> = [
-  // Mirror 1: Eastmoney datacenter HSGT holding detail per stock (working
-  // as of 2026-05; same backend akshare's `stock_hsgt_hold_stock_em` uses).
+  // Mirror 1: Eastmoney datacenter HSGT holding detail per stock (same
+  // backend akshare's `stock_hsgt_hold_stock_em` uses).
+  // 2026-08-15: Eastmoney renamed the sort/date column HOLD_DATE → TRADE_DATE
+  // and reshaped the payload (HOLD_SHARES_NUM → HOLD_SHARES in raw shares,
+  // ratios under *_SHARES_RATIO, daily delta via HOLD_MARKETCAP_CHG1). The
+  // daily per-stock disclosure itself has stopped (quarter-end snapshots
+  // only), so this mirror now primarily serves the latest holding snapshot;
+  // daily flow keeps coming from Mirror 2.
   {
     name: 'eastmoney-datacenter',
     buildUrl: (code, _exchange, daysBack) => {
-      // RPT_MUTUAL_HOLDSTOCKNORTH_STA returns per-stock daily north-bound
-      // holding with computed net inflow when MUTUAL_TYPE is filtered.
+      // RPT_MUTUAL_HOLDSTOCKNORTH_STA returns per-stock north-bound holding.
       return (
         `https://datacenter.eastmoney.com/securities/api/data/v1/get?` +
         `reportName=RPT_MUTUAL_HOLDSTOCKNORTH_STA` +
         `&columns=ALL&source=WEB` +
-        `&sortColumns=HOLD_DATE&sortTypes=-1` +
+        `&sortColumns=TRADE_DATE&sortTypes=-1` +
         `&pageNumber=1&pageSize=${daysBack}` +
         `&filter=(SECURITY_CODE%3D%22${code}%22)`
       );
@@ -207,20 +212,52 @@ function parseEastmoneyHoldDetail(body: unknown): AkshareNorthboundOutput['rows'
   for (const r of rows) {
     if (!r || typeof r !== 'object') continue;
     const o = r as Record<string, unknown>;
-    const date = typeof o.HOLD_DATE === 'string' ? o.HOLD_DATE.split(' ')[0] : null;
+    // 2026-08 schema: date lives in TRADE_DATE (HOLD_DATE no longer exists).
+    const date =
+      typeof o.TRADE_DATE === 'string'
+        ? o.TRADE_DATE.split(' ')[0]!
+        : typeof o.HOLD_DATE === 'string'
+          ? o.HOLD_DATE.split(' ')[0]!
+          : null;
     if (!date) continue;
-    const net = pickFloat(o.ADD_MARKET_CAP) ?? pickFloat(o.NET_BUY_AMT);
-    if (net === null) continue;
-    // 沪股通 / 深股通 split: Eastmoney encodes via MUTUAL_TYPE (1=hgt, 3=sgt)
-    const isHgt = String(o.MUTUAL_TYPE ?? '').includes('1');
-    const isSgt = String(o.MUTUAL_TYPE ?? '').includes('3');
+    // Daily net inflow: the dedicated ADD_MARKET_CAP/NET_BUY_AMT columns are
+    // gone; HOLD_MARKETCAP_CHG1 (1-day holding market-cap delta, 万元) is the
+    // closest surviving proxy — it mixes price moves, so treat as indicative.
+    const chg1 = pickFloat(o.HOLD_MARKETCAP_CHG1);
+    const net =
+      pickFloat(o.ADD_MARKET_CAP) ??
+      pickFloat(o.NET_BUY_AMT) ??
+      (chg1 !== null ? chg1 / 1e4 : null);
+    // HOLD_SHARES_NUM was already 万股 (legacy); HOLD_SHARES is raw shares (2026-08 schema).
+    const legacyShares = pickFloat(o.HOLD_SHARES_NUM);
+    const sharesNew = pickFloat(o.HOLD_SHARES);
+    const holdShares =
+      legacyShares !== null
+        ? legacyShares
+        : sharesNew !== null
+          ? sharesNew / 1e4
+          : null;
+    // HOLD_MARKET_CAP kept its name but switched 亿元 → 元 in the 2026-08
+    // schema. Any real holding in 元 is ≥ ~1e8; in 亿元 it is ≤ ~1e5 — a
+    // magnitude split cleanly separates the two without extra round-trips.
+    const capRaw = pickFloat(o.HOLD_MARKET_CAP);
+    const holdMarketValue = capRaw !== null ? (capRaw >= 1e6 ? capRaw / 1e8 : capRaw) : null;
+    const holdPctOfFloat =
+      pickDecimalFromPct(o.SHARES_HOLDRATIO) ??
+      pickDecimalFromPct(o.FREE_SHARES_RATIO) ??
+      pickDecimalFromPct(o.TOTAL_SHARES_RATIO);
+    // A row is useful if it carries either flow or holding information.
+    if (net === null && holdShares === null && holdMarketValue === null) continue;
+    // 沪股通 / 深股通 split: Eastmoney encodes via MUTUAL_TYPE (001=hgt, 003=sgt)
+    const isHgt = String(o.MUTUAL_TYPE ?? '').endsWith('1');
+    const isSgt = String(o.MUTUAL_TYPE ?? '').endsWith('3');
     out.push({
       date,
-      hgt: isHgt ? net : 0,
-      sgt: isSgt ? net : 0,
-      holdShares: pickFloat(o.HOLD_SHARES_NUM),
-      holdMarketValue: pickFloat(o.HOLD_MARKET_CAP),
-      holdPctOfFloat: pickDecimalFromPct(o.SHARES_HOLDRATIO),
+      hgt: net !== null && isHgt ? net : 0,
+      sgt: net !== null && isSgt ? net : 0,
+      holdShares,
+      holdMarketValue,
+      holdPctOfFloat,
     });
   }
   return out;

@@ -3,6 +3,8 @@ import {
   Market,
   DigestSession,
   ChannelType,
+  type ChartEvidenceResponse,
+  type StockHistoryResponse,
 } from '@bourse/shared-types';
 import type {
   AnalysisMode,
@@ -541,6 +543,27 @@ export async function createAnalysis(
 
 export async function getAnalysis(id: string): Promise<AnalysisDto> {
   return fetchApi(`/api/analysis/${id}`);
+}
+
+/** Chart evidence projection (visualization §五⑥). `available:false` is a
+ *  stable contract — distinguish "no snapshot" from transport errors. */
+export async function getChartEvidence(
+  id: string,
+): Promise<ChartEvidenceResponse> {
+  return fetchApi<ChartEvidenceResponse>(`/api/analysis/${id}/evidence`);
+}
+
+/** L1 stock-page chart feed (visualization §五⑦). */
+export async function getStockHistory(
+  symbol: string,
+  market: Market | string,
+  days?: number,
+): Promise<StockHistoryResponse> {
+  const q = new URLSearchParams({ market: String(market) });
+  if (days !== undefined) q.set('days', String(days));
+  return fetchApi<StockHistoryResponse>(
+    `/api/stocks/${encodeURIComponent(symbol)}/history?${q.toString()}`,
+  );
 }
 
 export async function getAnalysisHistory(

@@ -11,15 +11,16 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@bourse/shared-types": "workspace:*",
     "@microsoft/fetch-event-source": "^2.0.1",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-switch": "^1.2.6",
-    "@bourse/shared-types": "workspace:*",
     "@tailwindcss/typography": "^0.5.19",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "lightweight-charts": "^5.2.1",
     "lucide-react": "^0.468.0",
     "next": "^15.2.0",
     "next-themes": "^0.4.4",

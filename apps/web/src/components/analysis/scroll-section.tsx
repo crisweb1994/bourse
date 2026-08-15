@@ -2,20 +2,24 @@
 
 import { Clock, Loader2, MessageSquareText, RotateCcw, XCircle } from 'lucide-react';
 import type { SectionData } from '@/hooks/use-analysis-stream';
+import type { ChartEvidenceResponse } from '@bourse/shared-types';
 import { MarkdownRenderer } from '@/components/shared/markdown-renderer';
 import { Button, Card, Pill, SectionTag } from '@/components/ui';
 import { SECTION_LABELS, ASSESSMENT_LABELS } from '@/lib/constants';
 import { StructuredCard } from './structured-card';
 import { CitationList } from './citation-list';
+import { SectionCharts } from '@/components/charts/section-charts';
 
 interface Props {
   section: SectionData;
   onRetry?: () => void;
   showCitations?: boolean;
   onAsk?: (sectionType: string) => void;
+  /** Chart evidence (visualization §六): ready state renders module charts. */
+  evidence?: { status: string; data?: ChartEvidenceResponse } | null;
 }
 
-export function ScrollSection({ section, onRetry, showCitations = true, onAsk }: Props) {
+export function ScrollSection({ section, onRetry, showCitations = true, onAsk, evidence }: Props) {
   const label = SECTION_LABELS[section.type] ?? section.type;
   const assessment = section.structuredJson?.assessment as string | undefined;
   return (
@@ -68,6 +72,18 @@ export function ScrollSection({ section, onRetry, showCitations = true, onAsk }:
               {showCitations && section.citations.length > 0 && <CitationList citations={section.citations} />}
             </div>
           )}
+
+          {/* Visualization §六: module charts (C2–C5). D2 — renders whenever
+             data exists (evidence-driven), including SKIPPED VALUATION in QUICK. */}
+          {section.status !== 'streaming' && section.status !== 'pending' ? (
+            <div className="mt-4">
+              <SectionCharts
+                sectionType={section.type}
+                structuredJson={section.structuredJson as Record<string, unknown> | null | undefined}
+                evidence={evidence}
+              />
+            </div>
+          ) : null}
         </div>
       </Card>
     </section>

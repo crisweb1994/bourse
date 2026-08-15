@@ -118,6 +118,97 @@ export function enforceComputedValueRanges<T extends SectionResult>(
   } as T;
 }
 
+/**
+ * Shared predicate: does the evidence pack carry a code-computed valuation?
+ * Both `enforceComputedValueRanges` callers and the post-chain semantic
+ * validator (visualization design §四.④, R-4) MUST derive this from the same
+ * function — divergent predicates would let extraction pass while the
+ * enforcer still nulls ranges (false-positive acceptance).
+ */
+export function hasComputedValuationFact(
+  computedFacts: { valuation: unknown } | null | undefined,
+): boolean {
+  return computedFacts != null && computedFacts.valuation != null;
+}
+
+export interface ValuationSemantics {
+  ok: boolean;
+  /** Human-readable gap list; doubles as the semantic-repair prompt input. */
+  gaps: string[];
+}
+
+/**
+ * Post-chain semantic validator for VALUATION_SCENARIOS (design §四.④).
+ * Runs AFTER enforceComputedValueRanges so "extraction-time pass, final
+ * state still empty" cannot slip through (R-4). Skipped when the module
+ * itself declared UNASSESSABLE — empty scenarios are then legitimate
+ * degradation, not an extraction failure.
+ *
+ * Rules (root fix lives in the extraction prompt; this is the rare-path
+ * backstop, target trigger rate <10% per acceptance A3):
+ *  - scenarios ≥ 1 and ≥ 2 distinct cases including BASE; no duplicate case
+ *  - methods ≥ 1
+ *  - when the snapshot has a computed valuation: ≥ 1 non-null valueRange
+ */
+export function validateValuationSemantics(
+  result: SectionResult,
+  computedValuationPresent: boolean,
+): ValuationSemantics {
+  if (result.type !== 'VALUATION_SCENARIOS') return { ok: true, gaps: [] };
+  if (result.assessment === 'UNASSESSABLE') return { ok: true, gaps: [] };
+
+  const gaps: string[] = [];
+  const scenarios = result.scenarios;
+  if (scenarios.length === 0) {
+    gaps.push('scenarios 为空：至少需要 2 个不同 case（含 BASE）');
+  } else {
+    const cases = scenarios.map((s) => s.case);
+    const distinct = new Set(cases);
+    if (distinct.size !== cases.length) {
+      gaps.push(`case 重复：${cases.join('、')}`);
+    }
+    if (!distinct.has('BASE')) {
+      gaps.push('缺少 BASE 情景');
+    }
+    if (distinct.size < 2) {
+      gaps.push('至少需要 2 个不同 case 的 scenario');
+    }
+    if (computedValuationPresent && !scenarios.some((s) => s.valueRange !== null)) {
+      gaps.push('快照含代码计算估值时，至少 1 个 scenario 的 valueRange 必须是非 null 数值区间');
+    }
+  }
+  if (result.methods.length === 0) {
+    gaps.push('methods 为空：至少 1 项估值方法（name/rationale/inputs）');
+  }
+  return { ok: gaps.length === 0, gaps };
+}
+
+/**
+ * Degrade exit (design §四.④ layer 3): keep the legal subset of what the LLM
+ * did produce, record the gap as a limitation, never fabricate the missing
+ * pieces. Called only when the semantic repair pass still failed.
+ */
+export function degradeValuationSemantics<T extends SectionResult>(
+  result: T,
+  gaps: string[],
+): T {
+  if (result.type !== 'VALUATION_SCENARIOS') return result;
+  const seen = new Set<string>();
+  const deduped = result.scenarios.filter((s) => {
+    if (seen.has(s.case)) return false;
+    seen.add(s.case);
+    return true;
+  });
+  return {
+    ...result,
+    scenarios: deduped,
+    limitations: [
+      ...result.limitations,
+      `情景区间不完整（提取修复未达成）：${gaps.join('；')}`,
+    ],
+  } as T;
+}
+
 export const AnyStructuredJson = z.union([SectionResult, OverallConclusion]);
 export type AnyStructuredJson = z.infer<typeof AnyStructuredJson>;
 

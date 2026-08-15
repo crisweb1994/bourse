@@ -14,6 +14,7 @@ import {
   PeerComparisonSchema,
   RedFlagSchema,
 } from '../compute';
+import { PriceSeriesBlockSchema } from '../compute/chart-series';
 import { Citation } from './citation';
 import { Confidence } from './enums';
 import { ResearchCoverageSchema } from '../snapshot/research-coverage';
@@ -360,6 +361,13 @@ export const EvidencePackV2 = z.object({
    * citations[] of the underlying raw facts — no per-field stamping.
    */
   computedFacts: ComputedFactsBlock.optional(),
+  /**
+   * Chart-facing downsampled-free OHLCV block on a single price basis
+   * (visualization technical design §四.①). Additive optional: omitted when
+   * history fetch failed or produced zero usable bars. NOT a research-evidence
+   * fact — it is render data, so it stays outside `facts`/coverage semantics.
+   */
+  priceSeries: PriceSeriesBlockSchema.optional(),
 });
 export type EvidencePackV2 = z.infer<typeof EvidencePackV2>;
 

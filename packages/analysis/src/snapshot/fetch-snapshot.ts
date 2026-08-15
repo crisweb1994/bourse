@@ -46,7 +46,7 @@ import type {
   MarketConfigMap,
   SnapshotFetcherEnvelope,
 } from './market-config';
-import type { ConnectorRunContext } from '@bourse/market-data';
+import type { ConnectorRunContext, PriceBar } from '@bourse/market-data';
 
 // ----------------------------------------------------------------------------
 // Options
@@ -58,8 +58,14 @@ export interface FetchSnapshotOptions {
   configs: MarketConfigMap;
   /** Per-connector timeout (ms). Default 8000. */
   perConnectorTimeoutMs?: number;
-  /** History window in days back. Default 365. */
+  /** History window in days back. Default 365.
+   *  Visualization design D1: this is the fixed chart window — FocusWindow no
+   *  longer feeds it (focus is a prompt-narrative concern only). */
   historyDays?: number;
+  /** Valuation-only long history in days back. Default 1825 (5y, feeds
+   *  peHistorySeries). 0 disables the extra fetch. Fail-soft: falls back to
+   *  the main history window when the fetch fails. */
+  valuationHistoryDays?: number;
   /** Filings limit. Default 10. */
   filingsLimit?: number;
   /** External abort signal (caller cancellation). */
@@ -67,6 +73,8 @@ export interface FetchSnapshotOptions {
 }
 
 const DEFAULT_TIMEOUT_MS = 8_000;
+/** Visualization §四.③ — fixed 5-year window for valuation history. */
+export const DEFAULT_VALUATION_HISTORY_DAYS = 1825;
 const DEFAULT_HISTORY_DAYS = 365;
 const DEFAULT_FILINGS_LIMIT = 10;
 
@@ -123,11 +131,41 @@ export async function fetchSnapshot(
     tasks.map((t) => runWithTimeout(t, timeoutMs, options.signal)),
   );
 
+  // Valuation-only long history (§四.③): fired alongside the main wave so
+  // latency stays flat; discarded when financials never arrive; fail-soft.
+  const valuationDays =
+    options.valuationHistoryDays ?? DEFAULT_VALUATION_HISTORY_DAYS;
+  const valuationHistoryPromise: Promise<PriceBar[] | null> =
+    valuationDays > 0 && config.history
+      ? runWithTimeout(
+          {
+            field: 'history',
+            fn: (ctx) =>
+              config.history!(options.symbol, isoDaysAgo(valuationDays), today, ctx),
+          },
+          timeoutMs,
+          options.signal,
+        )
+          .then((r) => (Array.isArray(r.value) ? (r.value as PriceBar[]) : null))
+          .catch(() => null)
+      : Promise.resolve(null);
+
+  const [valuationHistory] = await Promise.all([valuationHistoryPromise]);
+
   const rawFacts = assembleRawFacts(results);
   const dataAvailability = assembleAvailability(results);
+  if (rawFacts.financials && valuationDays > 0 && config.history && valuationHistory === null) {
+    // Fail-soft: valuation compute falls back to the main window below.
+    dataAvailability.warnings.push('valuation_history_unavailable');
+  }
 
   // 2. Compute layer ---------------------------------------------------------
-  const computedFacts = runComputeLayer(rawFacts, options.market, dataAvailability);
+  const computedFacts = runComputeLayer(
+    rawFacts,
+    options.market,
+    dataAvailability,
+    valuationHistory,
+  );
 
   // 3. Preserve connector provenance. A source that did not produce a usable
   // fact cannot become a citation for the run.
@@ -494,6 +532,7 @@ function runComputeLayer(
   rawFacts: RawFacts,
   market: Market,
   availability: DataAvailability,
+  valuationHistory: PriceBar[] | null = null,
 ): ComputedFacts {
   const warnings: ComputeWarning[] = [];
 
@@ -517,7 +556,10 @@ function runComputeLayer(
   const valuationOut = computeValuation({
     bundle: rawFacts.financials,
     quote: rawFacts.quote,
-    history: rawFacts.history,
+    // §四.③: PE history needs FY-end closes across ~5 years; the main
+    // chart-history window (365d) starves it. Fail-soft fallback keeps the
+    // current behavior when the long fetch is unavailable.
+    history: valuationHistory ?? rawFacts.history,
     market,
     consensusEpsGrowth: deriveConsensusEpsGrowth(rawFacts.consensusEps),
   });
