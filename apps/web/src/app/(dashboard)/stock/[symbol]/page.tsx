@@ -107,7 +107,10 @@ export default function StockAnalysisPage({
       model: selectedModel || undefined,
       question: question.trim() || undefined,
     });
-    if (started) setQuestion('');
+    if (started) {
+      setQuestion('');
+      setShowAnalysisForm(false);
+    }
   };
   const handleRerun = lifecycle.rerun;
   const handleRetry = lifecycle.retryAnalysis;

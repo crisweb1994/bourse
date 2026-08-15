@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { AnalysisResult, SCHEMA_VERSION, SectionResult } from '../../contracts/analysis-result';
+import {
+  AnalysisResult,
+  enforceComputedValueRanges,
+  SCHEMA_VERSION,
+  SectionResult,
+} from '../../contracts/analysis-result';
 
 const citation = {
   title: 'Source',
@@ -85,5 +90,75 @@ describe('AnalysisResult V2 contracts', () => {
       trace,
       warnings: [],
     })).toThrow();
+  });
+
+  it('drops legacy calculationId fields on valuation value ranges', () => {
+    const parsed = SectionResult.parse({
+      ...section,
+      type: 'VALUATION_SCENARIOS',
+      assessment: 'FAIR',
+      scenarios: [{
+        case: 'BASE',
+        assumptions: ['增速持平'],
+        valueRange: {
+          low: 90,
+          high: 110,
+          currency: 'USD',
+          calculationId: 'legacy-id',
+        },
+        invalidators: [],
+      }],
+    });
+    expect(parsed.type === 'VALUATION_SCENARIOS' && parsed.scenarios[0]?.valueRange)
+      .toEqual({ low: 90, high: 110, currency: 'USD' });
+  });
+
+  it('forces valuation value ranges to null without a computed valuation', () => {
+    const valuation = SectionResult.parse({
+      ...section,
+      type: 'VALUATION_SCENARIOS',
+      assessment: 'FAIR',
+      scenarios: [{
+        case: 'BASE',
+        assumptions: [],
+        valueRange: { low: 90, high: 110, currency: 'USD' },
+        invalidators: [],
+      }],
+    });
+    const enforced = enforceComputedValueRanges(valuation, false);
+    expect(
+      enforced.type === 'VALUATION_SCENARIOS' && enforced.scenarios[0]?.valueRange,
+    ).toBeNull();
+
+    const kept = enforceComputedValueRanges(valuation, true);
+    expect(
+      kept.type === 'VALUATION_SCENARIOS' && kept.scenarios[0]?.valueRange,
+    ).toEqual({ low: 90, high: 110, currency: 'USD' });
+
+    // Non-valuation sections pass through untouched.
+    const company = SectionResult.parse(section);
+    expect(enforceComputedValueRanges(company, false)).toBe(company);
+  });
+
+  it('normalizes descriptive risk severity fields from provider output', () => {
+    const parsed = SectionResult.parse({
+      ...section,
+      type: 'RISK_REGISTER',
+      assessment: 'MEDIUM',
+      risks: [{
+        title: '投入风险',
+        mechanism: '资本开支上升',
+        likelihood: '较高',
+        impact: '压缩增长预期、削弱自由现金流',
+        indicators: [],
+        invalidates: [],
+        evidence: [],
+      }],
+      basedOnIncompleteSections: [],
+    });
+    expect(parsed.type === 'RISK_REGISTER' && parsed.risks[0]).toMatchObject({
+      likelihood: 'HIGH',
+      impact: 'MEDIUM',
+    });
   });
 });

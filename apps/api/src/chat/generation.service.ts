@@ -14,6 +14,7 @@ import {
   type EarningsCardDto,
   type InvestorRelationsEventDto,
   type ChatSseEnvelope,
+  OverallSignal,
 } from '@bourse/shared-types';
 import { ProviderResolverService } from '../analysis/provider-resolver.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -50,6 +51,15 @@ interface GenerationState {
 
 const PROMPT_VERSION = 'chat-phase1-v1';
 const MAX_HISTORY_MESSAGES = 12;
+/**
+ * Open Research must not emit a formal Analysis signal. The blocked
+ * vocabulary is derived from the report-level OverallSignal enum so this
+ * guard cannot drift when the signal contract changes again.
+ */
+const FORMAL_SIGNAL_RE = new RegExp(
+  String.raw`(?:^|\n)\s*(?:正式)?(?:Signal|信号|评级)\s*[:：]\s*(?:${Object.values(OverallSignal).join('|')})\b`,
+  'im',
+);
 
 class GenerationCancelledError extends Error {}
 
@@ -823,10 +833,7 @@ export class ChatGenerationService implements OnModuleInit {
         throw new Error(`Invalid citation reference: ${id}`);
       }
     }
-    if (
-      intent === 'OPEN_RESEARCH'
-      && /(?:^|\n)\s*(?:正式)?(?:Signal|信号|评级)\s*[:：]\s*(?:BULLISH|BEARISH|NEUTRAL)\b/im.test(answer)
-    ) {
+    if (intent === 'OPEN_RESEARCH' && FORMAL_SIGNAL_RE.test(answer)) {
       throw new Error('Open Research cannot emit a formal Analysis signal');
     }
   }

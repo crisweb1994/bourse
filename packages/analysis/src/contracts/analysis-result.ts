@@ -58,7 +58,6 @@ const ValuationResult = SectionResultBase.extend({
       low: z.number(),
       high: z.number(),
       currency: z.string().min(1),
-      calculationId: z.string().min(1),
     }).nullable(),
     invalidators: z.array(z.string()),
   })).default([]),
@@ -84,15 +83,40 @@ const MarketResult = SectionResultBase.extend({
   assessment: z.enum(['POSITIVE', 'NEUTRAL', 'NEGATIVE', 'UNASSESSABLE']),
 });
 
-export const SectionResult = z.discriminatedUnion('type', [
+const SectionResultSchema = z.discriminatedUnion('type', [
   CompanyQualityResult,
   IndustryResult,
   ValuationResult,
   RiskResult,
   MarketResult,
 ]);
-export type SectionResult = z.infer<typeof SectionResult>;
+export const SectionResult = z.preprocess(
+  normalizeSectionCandidate,
+  SectionResultSchema,
+);
+export type SectionResult = z.infer<typeof SectionResultSchema>;
 export type StructuredJson = SectionResult;
+
+/**
+ * FUNCTIONAL.md (估值): scenario value ranges may only quote code-computed
+ * valuation results. When the snapshot carries no computed valuation at all,
+ * force every scenario's valueRange to null — the model must not invent
+ * price targets, and a prompt rule alone is not an enforcement point.
+ */
+export function enforceComputedValueRanges<T extends SectionResult>(
+  result: T,
+  hasComputedValuation: boolean,
+): T {
+  if (hasComputedValuation || result.type !== 'VALUATION_SCENARIOS') return result;
+  return {
+    ...result,
+    scenarios: result.scenarios.map((scenario) =>
+      scenario.valueRange === null
+        ? scenario
+        : { ...scenario, valueRange: null },
+    ),
+  } as T;
+}
 
 export const AnyStructuredJson = z.union([SectionResult, OverallConclusion]);
 export type AnyStructuredJson = z.infer<typeof AnyStructuredJson>;
@@ -110,3 +134,34 @@ export const AnalysisResult = z.object({
 export type AnalysisResult = z.infer<typeof AnalysisResult>;
 
 export { Finding, SectionResultBase };
+
+/**
+ * Providers sometimes put the explanatory sentence in a risk's enum field
+ * (for example `impact: "压缩增长预期"`). The prose report still carries the
+ * explanation; normalize only the card-level severity so one malformed field
+ * does not fail the entire module.
+ */
+function normalizeSectionCandidate(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const raw = value as Record<string, unknown>;
+  if (raw.type !== 'RISK_REGISTER' || !Array.isArray(raw.risks)) return value;
+  return {
+    ...raw,
+    risks: raw.risks.map((risk) => {
+      if (!risk || typeof risk !== 'object' || Array.isArray(risk)) return risk;
+      const item = risk as Record<string, unknown>;
+      return {
+        ...item,
+        likelihood: normalizeRiskLevel(item.likelihood),
+        impact: normalizeRiskLevel(item.impact),
+      };
+    }),
+  };
+}
+
+function normalizeRiskLevel(value: unknown): 'LOW' | 'MEDIUM' | 'HIGH' {
+  const text = typeof value === 'string' ? value.toUpperCase() : '';
+  if (text === 'LOW' || /低|轻微|有限/.test(text)) return 'LOW';
+  if (text === 'HIGH' || /高|重大|严重|显著/.test(text)) return 'HIGH';
+  return 'MEDIUM';
+}

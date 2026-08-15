@@ -185,7 +185,9 @@ describe('AnalysisCommandService', () => {
 
     assert.equal(transactionCalls, 1);
     assert.equal(sectionCalls.length, 2);
-    assert.deepEqual((sectionCalls[0] as any).where.status.in, ['FAILED', 'SKIPPED']);
+    // Only genuinely FAILED sections reset; SKIPPED stays terminal because
+    // the same immutable snapshot would skip it again.
+    assert.deepEqual((sectionCalls[0] as any).where.status, 'FAILED');
     assert.deepEqual((sectionCalls[1] as any).where.type, 'RISK_REGISTER');
     assert.equal((sectionCalls[0] as any).data.status, 'PENDING');
     assert.equal((sectionCalls[1] as any).data.status, 'PENDING');
@@ -227,5 +229,74 @@ describe('AnalysisCommandService', () => {
       () => service.retry('user-1', 'analysis-1'),
       /no evidence snapshot/,
     );
+  });
+
+  it('refuses retry when only skipped sections remain (same snapshot would skip again)', async () => {
+    const service = new AnalysisCommandService(
+      {
+        analysis: {
+          findFirst: async () => ({
+            id: 'analysis-1',
+            status: 'PARTIAL_FAILED',
+            sections: [
+              { type: 'COMPANY_QUALITY', status: 'COMPLETED' },
+              { type: 'INDUSTRY_POSITION', status: 'COMPLETED' },
+              { type: 'VALUATION_SCENARIOS', status: 'SKIPPED' },
+              { type: 'RISK_REGISTER', status: 'COMPLETED' },
+              { type: 'MARKET_SIGNALS', status: 'SKIPPED' },
+            ],
+            evidenceSnapshot: { id: 'snapshot-1' },
+          }),
+        },
+      } as any,
+      {} as any,
+      {} as any,
+    );
+
+    await assert.rejects(
+      () => service.retry('user-1', 'analysis-1'),
+      /No failed sections to retry/,
+    );
+  });
+
+  it('persists cancellation before aborting the active provider run', async () => {
+    const order: string[] = [];
+    const service = new AnalysisCommandService(
+      {
+        analysis: {
+          findFirst: async () => ({
+            id: 'analysis-1',
+            status: 'IN_PROGRESS',
+          }),
+          updateMany: async () => {
+            order.push('analysis-cancelled');
+            return { count: 1 };
+          },
+        },
+        analysisSection: {
+          updateMany: async () => {
+            order.push('sections-cancelled');
+            return { count: 1 };
+          },
+        },
+        $transaction: async (operations: Promise<unknown>[]) => {
+          order.push('transaction-start');
+          await Promise.all(operations);
+          order.push('transaction-complete');
+        },
+      } as any,
+      {} as any,
+      {
+        abort: () => {
+          order.push('provider-abort');
+          return true;
+        },
+      } as any,
+    );
+
+    await service.abort('user-1', 'analysis-1');
+
+    assert.equal(order.at(-1), 'provider-abort');
+    assert.equal(order.indexOf('transaction-complete') < order.indexOf('provider-abort'), true);
   });
 });

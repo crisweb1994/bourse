@@ -70,10 +70,10 @@ describe('openai/extractUrlsFromText', () => {
 describe('OpenAIProvider — web-search executor lifecycle', () => {
   it('memoizes the executor across factory calls (per-run, not per-stream)', () => {
     // Regression: previously the factory was invoked fresh on every provider
-    // stream, so each dimension / summary / judge phase got its own executor
+    // stream, so every module / structured-output pass got its own executor
     // and its own maxSearchesPerRun budget — one analysis could burn
-    // `cap × (9 + summary + judge)` searches. The provider now memoizes the
-    // executor for its own lifetime (one provider == one analysis run).
+    // `cap × (modules × rounds + summary)` searches. The provider now
+    // memoizes the executor for its own lifetime (one provider == one run).
     let invocations = 0;
     const sentinel = {} as unknown as WebSearchExecutor;
     const provider = new OpenAIProvider({

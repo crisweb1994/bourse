@@ -256,7 +256,6 @@ describe('runAnalysisWorkflowAdapter', () => {
     assert.equal(result.terminalStatus, 'PARTIAL_FAILED');
     assert.deepEqual(result.failedSectionTypes, [
       'COMPANY_QUALITY',
-      'INDUSTRY_POSITION',
       'VALUATION_SCENARIOS',
       'RISK_REGISTER',
       'MARKET_SIGNALS',

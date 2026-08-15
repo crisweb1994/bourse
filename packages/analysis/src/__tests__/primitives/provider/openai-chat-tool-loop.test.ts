@@ -229,4 +229,38 @@ describe('OpenAIProvider chat.completions — web_search tool-call loop', () => 
     );
     expect(stopMsg).toBeDefined();
   });
+
+  it('honors maxToolUses on the OpenAI-compatible route', async () => {
+    const toolRound = (id: string, query: string) => [
+      {
+        choices: [{ delta: {
+          tool_calls: [{ index: 0, id, type: 'function', function: { name: 'web_search', arguments: JSON.stringify({ query }) } }],
+        } }],
+      },
+      { choices: [{ finish_reason: 'tool_calls' }] },
+    ];
+    const finalRound = [
+      { choices: [{ delta: { content: 'bounded answer' } }] },
+      { choices: [{ finish_reason: 'stop' }] },
+    ];
+    const executor = buildFakeExecutor({});
+    const { client, captured } = buildScriptedClient([
+      toolRound('call_1', 'first'),
+      toolRound('call_2', 'second'),
+      finalRound,
+    ]);
+    const provider = new OpenAIProvider({
+      apiKey: 'k',
+      forceChatCompletions: true,
+      webSearchExecutorFactory: () => executor,
+      _internalClient: client,
+    });
+
+    const result = await provider.stream('sys', 'user', () => {}, { maxToolUses: 1 });
+
+    expect(executor.execute).toHaveBeenCalledTimes(1);
+    expect(result.toolUseCounts?.webSearch).toBe(1);
+    expect(result.text).toContain('bounded answer');
+    expect(captured[1]!.tools).toBeUndefined();
+  });
 });

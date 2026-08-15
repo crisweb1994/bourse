@@ -1,5 +1,6 @@
 import type { EvidencePackV2 } from '../contracts/evidence-pack-v2';
 import type { SseEvent } from '../contracts/sse-events';
+import { enforceComputedValueRanges, SectionResult } from '../contracts/analysis-result';
 import { buildCommonSuffix } from '../dimensions/freshness';
 import type { Dimension, DimensionInput } from '../dimensions/types';
 import { enforceSymbol } from '../guardrails/symbol';
@@ -13,10 +14,12 @@ import { applyEvidenceGate } from './evidence-gate';
 import { applyResearchCoverage } from '../snapshot/research-coverage';
 import type {
   AgentProvider,
+  ProviderUsage,
   ProviderStreamResult,
   SystemPromptInput,
 } from './provider';
 import { structuredOutputWithRepair } from './structured-output';
+import { HallucinationFilter } from '../tools/web-search/hallucination-filter';
 
 export interface StreamDimensionOptions {
   /** Required: stable run id propagated on every SseEvent. */
@@ -51,6 +54,26 @@ export interface StreamDimensionOptions {
   domainTiers?: Record<string, DomainTier>;
   /** Fixed per-module web-search cap owned by the selected research mode. */
   maxToolCalls?: number;
+  /** Fixed streamed-report output cap owned by the selected research mode. */
+  maxOutputTokens?: number;
+  /** Fixed structured-card output cap owned by the selected research mode. */
+  maxStructuredTokens?: number;
+  /** Hard wall-clock limit for the whole module, including structured output. */
+  timeoutMs?: number;
+}
+
+class DimensionTimeoutError extends Error {
+  constructor(sectionType: string, timeoutMs: number) {
+    super(`Analysis section ${sectionType} timed out after ${timeoutMs}ms`);
+    this.name = 'DimensionTimeoutError';
+  }
+}
+
+function abortError(reason?: unknown): Error {
+  if (reason instanceof Error) return reason;
+  const error = new Error('The operation was aborted');
+  error.name = 'AbortError';
+  return error;
 }
 
 /**
@@ -135,13 +158,64 @@ export async function* streamDimension(
 
   // Bridge push (provider.stream onChunk) → pull (this generator)
   const queue: SseEvent[] = [];
+  const reportFilter = new HallucinationFilter();
+  let reportDeliveryMode: 'unknown' | 'markdown' | 'structured' = 'unknown';
+  let reportProbe = '';
   let resumeIter: (() => void) | null = null;
-  const wake = (): void => {
+  let wake = (): void => {
     if (resumeIter !== null) {
       const r = resumeIter;
       resumeIter = null;
       r();
     }
+  };
+
+  // Use one internal signal so provider streaming and structured extraction
+  // share the same caller-cancellation and module-timeout boundary.
+  const moduleController = new AbortController();
+  let callerAborted = options.signal?.aborted === true;
+  let timedOut = false;
+  const timeoutMs = options.timeoutMs;
+  const timeoutError =
+    typeof timeoutMs === 'number' && timeoutMs > 0
+      ? new DimensionTimeoutError(sectionType, timeoutMs)
+      : null;
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  let boundaryReject: ((reason: unknown) => void) | null = null;
+  const moduleBoundary = timeoutError
+    ? new Promise<never>((_, reject) => {
+        boundaryReject = reject;
+      })
+    : null;
+  // The boundary is created before the stream starts, so attach a handler now
+  // even though it is only awaited during structured extraction. This keeps a
+  // timeout rejection from being reported as an unhandled promise rejection
+  // while the streamed report is still draining.
+  if (moduleBoundary) void moduleBoundary.catch(() => undefined);
+  const abortFromCaller = () => {
+    callerAborted = true;
+    if (!moduleController.signal.aborted) {
+      moduleController.abort(options.signal?.reason);
+    }
+    boundaryReject?.(abortError(options.signal?.reason));
+    wake();
+  };
+
+  if (options.signal) {
+    if (options.signal.aborted) abortFromCaller();
+    else options.signal.addEventListener('abort', abortFromCaller, { once: true });
+  }
+  if (timeoutError) {
+    timeoutHandle = setTimeout(() => {
+      timedOut = true;
+      if (!moduleController.signal.aborted) moduleController.abort(timeoutError);
+      boundaryReject?.(timeoutError);
+      wake();
+    }, timeoutMs!);
+  }
+  const cleanup = () => {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+    options.signal?.removeEventListener('abort', abortFromCaller);
   };
 
   // Plan 3 §4.3.5: when the dim has a multiRoundPlan, build rounds[] for
@@ -159,13 +233,33 @@ export async function* streamDimension(
     user,
     (chunk) => {
       if (chunk.type === 'text') {
-        queue.push({
-          type: 'report_chunk',
-          runId,
-          seq: next(),
-          sectionType,
-          deltaText: chunk.text,
-        });
+        if (reportDeliveryMode === 'structured') return;
+        if (reportDeliveryMode === 'unknown') {
+          reportProbe += chunk.text;
+          const trimmed = reportProbe.trimStart();
+          // A leading `[` is also a normal Markdown link/list. Structured
+          // module output is an object, so only `{` is safe to classify here.
+          const looksLikeJson = /^\{/.test(trimmed) || /^```\s*json\b/i.test(trimmed);
+          const looksLikeMarkdown = trimmed.length > 0 && !looksLikeJson;
+          if (!looksLikeJson && !looksLikeMarkdown) return;
+          reportDeliveryMode = looksLikeJson ? 'structured' : 'markdown';
+          if (reportDeliveryMode === 'structured') {
+            reportProbe = '';
+            return;
+          }
+          chunk = { type: 'text', text: reportProbe };
+          reportProbe = '';
+        }
+        const cleaned = reportFilter.feed(chunk.text);
+        if (cleaned) {
+          queue.push({
+            type: 'report_chunk',
+            runId,
+            seq: next(),
+            sectionType,
+            deltaText: cleaned,
+          });
+        }
       } else {
         queue.push({
           type: 'citation',
@@ -178,8 +272,9 @@ export async function* streamDimension(
       wake();
     },
     {
-      signal: options.signal,
+      signal: moduleController.signal,
       ...(options.maxToolCalls ? { maxToolUses: options.maxToolCalls } : {}),
+      ...(options.maxOutputTokens ? { maxTokens: options.maxOutputTokens } : {}),
       ...(providerRounds && providerRounds.length > 0
         ? {
             rounds: providerRounds,
@@ -207,32 +302,59 @@ export async function* streamDimension(
       wake();
     });
 
-  while (!settled || queue.length > 0) {
+  while ((!settled && !callerAborted && !timedOut) || queue.length > 0) {
     while (queue.length > 0) {
       const evt = queue.shift();
       if (evt !== undefined) yield evt;
     }
-    if (!settled) {
+    if (!settled && !callerAborted && !timedOut) {
       await new Promise<void>((resolve) => {
         resumeIter = resolve;
       });
     }
   }
 
-  if (streamError !== null) throw streamError;
+  if (timedOut) {
+    cleanup();
+    throw timeoutError;
+  }
+  if (callerAborted) {
+    cleanup();
+    throw abortError(options.signal?.reason);
+  }
+  if (streamError !== null) {
+    cleanup();
+    throw streamError;
+  }
   if (streamResult === null) {
+    cleanup();
     throw new Error('streamDimension: provider.stream resolved without result');
   }
 
   const finalStream: ProviderStreamResult = streamResult;
-
-  yield {
-    type: 'report_complete',
-    runId,
-    seq: next(),
-    sectionType,
-    fullMarkdown: finalStream.text,
-  };
+  if ((reportDeliveryMode as string) !== 'structured' && reportProbe) {
+    const cleaned = reportFilter.feed(reportProbe);
+    if (cleaned) {
+      yield {
+        type: 'report_chunk',
+        runId,
+        seq: next(),
+        sectionType,
+        deltaText: cleaned,
+      };
+    }
+    reportProbe = '';
+  }
+  const filterTail = reportFilter.flush();
+  if (filterTail) {
+    yield {
+      type: 'report_chunk',
+      runId,
+      seq: next(),
+      sectionType,
+      deltaText: filterTail,
+    };
+  }
 
   // RFC-01: surface web_search errors that happened during stream phase as
   // dedicated SSE events so UI can render warnings adjacent to the report.
@@ -259,13 +381,35 @@ export async function* streamDimension(
     finalStream.text,
     allowedUrls,
   );
-  const structured = await structuredOutputWithRepair(
-    provider,
-    jsonPrompts.system,
-    jsonPrompts.user,
-    dimension.outputSchema,
-    { signal: options.signal },
-  );
+  let structured: {
+    data: SectionResult;
+    usage: ProviderUsage;
+    llmCalls: number;
+  };
+  try {
+    const structuredPromise = structuredOutputWithRepair<SectionResult>(
+      provider,
+      jsonPrompts.system,
+      jsonPrompts.user,
+      dimension.outputSchema,
+      // Keep the extraction response bounded. The report itself can be long,
+      // but the validated card is intentionally compact so providers do not
+      // truncate a JSON array halfway through a risk list.
+      {
+        signal: moduleController.signal,
+        maxTokens: options.maxStructuredTokens ?? 6_000,
+      },
+    );
+    structured = moduleBoundary
+      ? await Promise.race([
+          structuredPromise,
+          moduleBoundary,
+        ])
+      : await structuredPromise;
+  } catch (error) {
+    cleanup();
+    throw error;
+  }
 
   // Plan 3 §4.3.4: A-E quality gate (E-only removal + AB-ratio checks).
   // RFC-06: pass `domainTiers` so the gate's Rule 0 can downgrade any
@@ -276,13 +420,32 @@ export async function* streamDimension(
   const gated = applyEvidenceGate(structured.data, {
     ...(options.domainTiers ? { domainTiers: options.domainTiers } : {}),
   });
+  const isV2Pack = options.evidencePack?.schemaVersion === 'evidence-pack-v2';
   const coverage =
-    options.evidencePack?.schemaVersion === 'evidence-pack-v2'
-      ? options.evidencePack.researchCoverage?.dimensions[sectionType]
+    isV2Pack
+      ? options.evidencePack?.researchCoverage?.dimensions[sectionType]
       : undefined;
-  const fixedData = applyFixedDisclaimer(
-    applyResearchCoverage(gated.data, coverage),
+  // FUNCTIONAL.md (估值): without a code-computed valuation the scenario
+  // valueRange must be null; enforce it here instead of trusting the prompt.
+  const hasComputedValuation =
+    isV2Pack
+      ? options.evidencePack?.computedFacts?.valuation != null
+      : false;
+  const fixedData = enforceComputedValueRanges(
+    applyFixedDisclaimer(applyResearchCoverage(gated.data, coverage)),
+    hasComputedValuation,
   );
+
+  // The report stream is user-facing text, but a provider may still return a
+  // structured JSON object despite the prompt. Emit one final replacement so
+  // the persisted report and the browser do not retain raw JSON/tool syntax.
+  yield {
+    type: 'report_complete',
+    runId,
+    seq: next(),
+    sectionType,
+    fullMarkdown: normalizeReportMarkdown(finalStream.text, fixedData),
+  };
 
   yield {
     type: 'structured_data',
@@ -338,6 +501,56 @@ export async function* streamDimension(
         ? { webSearchRequests: webSearchRequestsTotal }
         : {}),
       ...(webSearchErrorsCount > 0 ? { webSearchErrorsCount } : {}),
-    },
+      },
   };
+  cleanup();
+}
+
+function normalizeReportMarkdown(raw: string, structured: SectionResult): string {
+  const filter = new HallucinationFilter();
+  const cleaned = `${filter.feed(raw)}${filter.flush()}`;
+  const trimmed = cleaned.trim();
+  if (!/^(?:\{|\[|```(?:json)?\b)/i.test(trimmed)) return cleaned;
+
+  const candidate = parseJsonObject(trimmed);
+  if (candidate && typeof candidate.summary === 'string') {
+    return formatSectionMarkdown(candidate);
+  }
+  return formatSectionMarkdown(structured);
+}
+
+function parseJsonObject(value: string): Record<string, any> | null {
+  const unwrapped = value
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```\s*$/i, '')
+    .trim();
+  try {
+    const parsed: unknown = JSON.parse(unwrapped);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, any>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function formatSectionMarkdown(result: Record<string, any>): string {
+  const lines: string[] = [];
+  if (typeof result.summary === 'string' && result.summary.trim()) {
+    lines.push(result.summary.trim());
+  }
+  if (Array.isArray(result.findings) && result.findings.length > 0) {
+    lines.push('', '### 关键发现');
+    for (const finding of result.findings) {
+      if (!finding || typeof finding !== 'object') continue;
+      const title = typeof finding.title === 'string' ? finding.title : '发现';
+      const conclusion = typeof finding.conclusion === 'string' ? finding.conclusion : '';
+      lines.push(`- **${title}**${conclusion ? `：${conclusion}` : ''}`);
+    }
+  }
+  if (Array.isArray(result.limitations) && result.limitations.length > 0) {
+    lines.push('', '### 局限');
+    lines.push(...result.limitations.filter((item: unknown): item is string => typeof item === 'string').map((item) => `- ${item}`));
+  }
+  return lines.join('\n') || '本模块未生成可展示的正文。';
 }

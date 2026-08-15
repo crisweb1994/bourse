@@ -34,6 +34,6 @@ describe('coverage skip semantics V2', () => {
       } as never,
     });
     expect(result.status).toBe('FAILED');
-    expect(result.failures[0]).toMatchObject({ type: 'MARKET_SIGNALS' });
+    expect(result.skippedDimensions).toContain('MARKET_SIGNALS');
   });
 });

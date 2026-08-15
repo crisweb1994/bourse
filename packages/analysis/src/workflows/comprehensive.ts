@@ -1,14 +1,15 @@
 import { SectionResult } from '../contracts/analysis-result';
-import { OverallConclusion } from '../contracts/comprehensive-summary';
+import type { OverallConclusion } from '../contracts/comprehensive-summary';
 import type { Citation } from '../contracts/citation';
 import type { SseEvent } from '../contracts/sse-events';
 import type { AnalysisMode, SectionType } from '../contracts/enums';
+import type { PerDimensionTrace } from '../contracts/trace';
 import { DEFAULT_DISCLAIMER } from '../primitives/disclaimer';
 import {
   buildSectionReports,
-  buildSummaryJsonPrompts,
   buildSummaryPrompts,
   ComprehensiveSummaryLenient,
+  formatSummaryMarkdown,
   hydrateSummaryCitations,
   normalizeSummarySignal,
 } from '../primitives/summary-prompts';
@@ -24,6 +25,14 @@ const FACT_TYPES: readonly SectionType[] = [
   'COMPANY_QUALITY',
   'INDUSTRY_POSITION',
   'VALUATION_SCENARIOS',
+  'MARKET_SIGNALS',
+];
+
+// QUICK is a deliberately small scan. Industry and valuation stay in DEEP so
+// the first report does not pretend to be a complete investment memo.
+const QUICK_TYPES: readonly SectionType[] = [
+  'COMPANY_QUALITY',
+  'RISK_REGISTER',
   'MARKET_SIGNALS',
 ];
 
@@ -85,16 +94,27 @@ export async function* streamComprehensive(
   const todayDate = options.todayDate ?? new Date().toISOString().slice(0, 10);
   const mode = options.mode ?? 'QUICK';
   const preset = RESEARCH_PRESETS[mode];
-  const dimensions = (options.dimensions ?? ALL_DIMENSIONS).map((dimension) =>
+  const requestedDimensions = options.dimensions ?? ALL_DIMENSIONS;
+  const dimensions = requestedDimensions.map((dimension) =>
     applyModePreset(dimension, mode),
+  );
+  const runnableTypes = new Set(
+    options.dimensions
+      ? dimensions.map((dimension) => dimension.type)
+      : mode === 'QUICK'
+        ? QUICK_TYPES
+        : dimensions.map((dimension) => dimension.type),
   );
   const orderByType = new Map(dimensions.map((dimension, index) => [dimension.type, index]));
   const results = new Map<SectionType, DimensionRunResult>(
     (options.existingResults ?? []).map((result) => [result.type, result]),
   );
   const failures: DimensionFailure[] = [];
+  const skippedDimensions: SectionType[] = [];
+  const blockingSkippedDimensions: SectionType[] = [];
   const warnings: string[] = [];
   const allCitations: Citation[] = [];
+  const dimensionTraces = new Map<SectionType, PerDimensionTrace>();
   let tokensIn = 0;
   let tokensOut = 0;
   let llmCalls = 0;
@@ -107,6 +127,16 @@ export async function* streamComprehensive(
     seq: sequence++,
   });
 
+  // RFC-06: constrain provider web_search to the market's tiered hosts.
+  // The tier table only lists A|B|C|D entries (E is implicit absence), so
+  // filtering out E is a defensive no-op today and keeps a future market
+  // that lists E entries (e.g. as a denylist) safe.
+  const allowedDomains = options.marketProfile?.domainTiers
+    ? Object.entries(options.marketProfile.domainTiers)
+        .filter(([, tier]) => tier !== 'E')
+        .map(([host]) => host)
+    : undefined;
+
   if (options.evidencePack) {
     yield emit({
       type: 'evidence_pack_ready',
@@ -114,6 +144,21 @@ export async function* streamComprehensive(
       seq: 0,
       pack: options.evidencePack,
     });
+  }
+
+  // Explicitly persist modules omitted by QUICK. Otherwise the adapter would
+  // see their initial PENDING rows and classify them as interrupted failures.
+  for (const dimension of dimensions) {
+    if (runnableTypes.has(dimension.type) || results.has(dimension.type)) continue;
+    skippedDimensions.push(dimension.type);
+    for (const event of makeSkippedEvents(
+      dimension,
+      orderByType.get(dimension.type) ?? 0,
+      [],
+      'MODE_NOT_INCLUDED',
+    )) {
+      yield emit(event);
+    }
   }
 
   const runWave = (
@@ -128,6 +173,9 @@ export async function* streamComprehensive(
       evidencePack: options.evidencePack,
       marketProfile: options.marketProfile,
       maxToolCalls: preset.maxToolCallsPerSection,
+      maxOutputTokens: preset.maxOutputTokens,
+      maxStructuredTokens: preset.maxStructuredTokens,
+      timeoutMs: preset.timeoutMs,
       maxConcurrent:
         options.waveMode === 'sequential'
           ? 1
@@ -135,6 +183,9 @@ export async function* streamComprehensive(
       orderByType,
       results,
       failures,
+      skippedDimensions,
+      blockingSkippedDimensions,
+      ...(allowedDomains && allowedDomains.length > 0 ? { allowedDomains } : {}),
       emitCostUpdate: (usage) => {
         tokensIn += usage.tokensIn;
         tokensOut += usage.tokensOut;
@@ -144,11 +195,14 @@ export async function* streamComprehensive(
     });
 
   const factDimensions = dimensions.filter((dimension) =>
-    FACT_TYPES.includes(dimension.type) && !results.has(dimension.type),
+    FACT_TYPES.includes(dimension.type) &&
+    runnableTypes.has(dimension.type) &&
+    !results.has(dimension.type),
   );
   for await (const event of runWave(factDimensions, input)) {
     if (event.type === 'citation') allCitations.push(event.citation);
     if (event.type === 'section_complete' && event.usage) {
+      dimensionTraces.set(event.sectionType, toDimensionTrace(event.usage));
       yield emit({
         type: 'cost_update',
         runId,
@@ -162,7 +216,8 @@ export async function* streamComprehensive(
 
   if (options.signal?.aborted) {
     const result = buildResult(
-      'CANCELLED', results, failures, null, allCitations, warnings,
+      'CANCELLED', results, failures, skippedDimensions, null, allCitations, warnings,
+      dimensionTraces,
       tokensIn, tokensOut, llmCalls, toolCalls, startedAt,
     );
     yield emitDone(emit, result);
@@ -171,7 +226,9 @@ export async function* streamComprehensive(
 
   const risk = dimensions.find(
     (dimension) =>
-      dimension.type === 'RISK_REGISTER' && !results.has(dimension.type),
+      dimension.type === 'RISK_REGISTER' &&
+      runnableTypes.has(dimension.type) &&
+      !results.has(dimension.type),
   );
   if (risk) {
     if (results.size === 0) {
@@ -192,6 +249,7 @@ export async function* streamComprehensive(
       for await (const event of runWave([risk], { ...input, sectionContext: context })) {
         if (event.type === 'citation') allCitations.push(event.citation);
         if (event.type === 'section_complete' && event.usage) {
+          dimensionTraces.set(event.sectionType, toDimensionTrace(event.usage));
           yield emit({
             type: 'cost_update',
             runId,
@@ -207,7 +265,8 @@ export async function* streamComprehensive(
 
   if (options.signal?.aborted) {
     const result = buildResult(
-      'CANCELLED', results, failures, null, allCitations, warnings,
+      'CANCELLED', results, failures, skippedDimensions, null, allCitations, warnings,
+      dimensionTraces,
       tokensIn, tokensOut, llmCalls, toolCalls, startedAt,
     );
     yield emitDone(emit, result);
@@ -220,61 +279,62 @@ export async function* streamComprehensive(
       const result = results.get(type);
       return !result || result.structuredJson.assessment === 'UNASSESSABLE';
     });
+    const missingTypes = Array.from(new Set([
+      ...failures.map((failure) => failure.type),
+      ...skippedDimensions,
+    ]));
     const summaryPrompt = buildSummaryPrompts(
       buildSectionReports(results),
       todayDate,
       Array.from(results.keys()),
-      failures.map((failure) => failure.type),
+      missingTypes,
       input.question,
       missingRequired,
     );
     try {
-      const chunks: string[] = [];
-      const stream = await provider.stream(
-        summaryPrompt.system,
-        summaryPrompt.user,
-        (chunk) => {
-          if (chunk.type === 'text') chunks.push(chunk.text);
-          else allCitations.push(chunk.citation);
-        },
-        { signal: options.signal, disableTools: true },
-      );
-      const markdown = stream.text || chunks.join('');
-      for (const chunk of chunks) {
-        yield emit({
-          type: 'summary_chunk',
-          runId,
-          seq: 0,
-          deltaText: chunk,
-        });
-      }
-      tokensIn += stream.usage?.tokensIn ?? 0;
-      tokensOut += stream.usage?.tokensOut ?? 0;
-      llmCalls += 1;
-
-      const jsonPrompts = buildSummaryJsonPrompts(markdown);
       const parsed = await structuredOutputWithRepair(
         provider,
-        jsonPrompts.system,
-        jsonPrompts.user,
+        summaryPrompt.system,
+        summaryPrompt.user,
         ComprehensiveSummaryLenient,
-        { signal: options.signal },
+        { signal: options.signal, maxTokens: preset.maxSummaryTokens },
       );
       tokensIn += parsed.usage.tokensIn;
       tokensOut += parsed.usage.tokensOut;
       llmCalls += parsed.llmCalls;
 
       const hydrated = hydrateSummaryCitations(parsed.data, allCitations, todayDate);
-      const normalized = normalizeSummarySignal(hydrated, missingRequired);
+      const normalized = normalizeSummarySignal(
+        {
+          ...hydrated,
+          missingSections: Array.from(new Set([
+            ...hydrated.missingSections,
+            ...missingTypes,
+          ])),
+        },
+        missingRequired,
+      );
+      const usableSummary = ensureSummaryContent(normalized, results);
+      const displayMarkdown = formatSummaryMarkdown(usableSummary);
+      allCitations.push(
+        ...usableSummary.rationale.flatMap((item) => item.citations),
+        ...usableSummary.counterpoints.flatMap((item) => item.citations),
+      );
+      yield emit({
+        type: 'summary_chunk',
+        runId,
+        seq: 0,
+        deltaText: displayMarkdown,
+      });
       summary = {
-        markdown,
-        structured: { ...normalized, disclaimer: DEFAULT_DISCLAIMER },
+        markdown: displayMarkdown,
+        structured: { ...usableSummary, disclaimer: DEFAULT_DISCLAIMER },
       };
       yield emit({
         type: 'summary_complete',
         runId,
         seq: 0,
-        fullMarkdown: markdown,
+        fullMarkdown: displayMarkdown,
         json: summary.structured,
       });
     } catch (error) {
@@ -293,15 +353,49 @@ export async function* streamComprehensive(
   const status: ComprehensiveResult['status'] =
     results.size === 0
       ? 'FAILED'
-      : summary && failures.length === 0
+      : summary && failures.length === 0 && blockingSkippedDimensions.length === 0
         ? 'COMPLETED'
         : 'PARTIAL_FAILED';
   const result = buildResult(
-    status, results, failures, summary, allCitations, warnings,
+    status, results, failures, skippedDimensions, summary, allCitations, warnings,
+    dimensionTraces,
     tokensIn, tokensOut, llmCalls, toolCalls, startedAt,
   );
   yield emitDone(emit, result);
   return result;
+}
+
+/**
+ * A provider can satisfy the schema while returning an empty conclusion (a
+ * common legacy shape). Keep the run successful, but make the summary useful
+ * by exposing the already validated module summaries. No new facts are
+ * generated here and the normal signal gate remains unchanged.
+ */
+function ensureSummaryContent(
+  summary: OverallConclusion,
+  results: ReadonlyMap<SectionType, DimensionRunResult>,
+): OverallConclusion {
+  if (summary.rationale.length > 0 || summary.counterpoints.length > 0) {
+    return summary;
+  }
+
+  const rationale = Array.from(results.values()).flatMap((result) => {
+    const candidate = result.structuredJson as { summary?: unknown } | null;
+    if (typeof candidate?.summary !== 'string' || candidate.summary.trim().length === 0) {
+      return [];
+    }
+    return [{
+      claim: candidate.summary.trim(),
+      citations: result.citations.slice(0, 1),
+    }];
+  }).slice(0, 3);
+
+  if (rationale.length === 0) return summary;
+  return {
+    ...summary,
+    headline: summary.headline === '综合结论' ? '基于已完成模块的综合判断' : summary.headline,
+    rationale,
+  };
 }
 
 export async function runComprehensive(
@@ -323,11 +417,18 @@ interface WaveContext {
   signal?: AbortSignal;
   evidencePack?: ComprehensiveOptions['evidencePack'];
   marketProfile?: ComprehensiveOptions['marketProfile'];
+  /** RFC-06: hosts the provider's web_search tool may reach. */
+  allowedDomains?: readonly string[];
   maxToolCalls: number;
+  maxOutputTokens: number;
+  maxStructuredTokens: number;
+  timeoutMs: number;
   maxConcurrent: number;
   orderByType: ReadonlyMap<SectionType, number>;
   results: Map<SectionType, DimensionRunResult>;
   failures: DimensionFailure[];
+  skippedDimensions: SectionType[];
+  blockingSkippedDimensions: SectionType[];
   emitCostUpdate: (usage: {
     tokensIn: number;
     tokensOut: number;
@@ -385,7 +486,8 @@ async function runOneDimension(
     for (const event of makeSkippedEvents(dimension, ctx.order, skip.missingFields, skip.reason)) {
       ctx.emit(event);
     }
-    ctx.failures.push({ type: dimension.type, error: skip.reason });
+    ctx.skippedDimensions.push(dimension.type);
+    ctx.blockingSkippedDimensions.push(dimension.type);
     return;
   }
 
@@ -404,7 +506,13 @@ async function runOneDimension(
       ...(ctx.marketProfile?.domainTiers
         ? { domainTiers: ctx.marketProfile.domainTiers }
         : {}),
+      ...(ctx.allowedDomains && ctx.allowedDomains.length > 0
+        ? { allowedDomains: ctx.allowedDomains }
+        : {}),
       maxToolCalls: ctx.maxToolCalls,
+      maxOutputTokens: ctx.maxOutputTokens,
+      maxStructuredTokens: ctx.maxStructuredTokens,
+      timeoutMs: ctx.timeoutMs,
     })) {
       if (event.type === 'report_chunk') markdown += event.deltaText;
       if (event.type === 'report_complete') markdown = event.fullMarkdown;
@@ -463,6 +571,7 @@ async function runOneDimension(
       seq: 0,
       sectionType: dimension.type,
       status: 'FAILED',
+      error: message,
     });
   }
 }
@@ -500,7 +609,10 @@ function makeSkippedEvents(
   dimension: Dimension,
   order: number,
   missingFields: string[],
-  reason: 'DEGRADED_SOURCE_MISSING_PRIVATE_DATA' | 'INSUFFICIENT_REQUIRED_FACTS' = 'INSUFFICIENT_REQUIRED_FACTS',
+  reason:
+    | 'DEGRADED_SOURCE_MISSING_PRIVATE_DATA'
+    | 'INSUFFICIENT_REQUIRED_FACTS'
+    | 'MODE_NOT_INCLUDED' = 'INSUFFICIENT_REQUIRED_FACTS',
 ): SseEvent[] {
   return [
     {
@@ -544,9 +656,11 @@ function buildResult(
   status: ComprehensiveResult['status'],
   results: Map<SectionType, DimensionRunResult>,
   failures: DimensionFailure[],
+  skippedDimensions: SectionType[],
   summary: ComprehensiveResult['summary'],
   citations: Citation[],
   warnings: string[],
+  dimensionTraces: Map<SectionType, PerDimensionTrace>,
   tokensIn: number,
   tokensOut: number,
   llmCalls: number,
@@ -558,6 +672,7 @@ function buildResult(
     status,
     perDimension: results,
     failures,
+    skippedDimensions: [...new Set(skippedDimensions)],
     partialDimensions,
     summary,
     citations,
@@ -568,17 +683,31 @@ function buildResult(
       tokensIn,
       tokensOut,
       durationMs: Date.now() - startedAt,
-      perDimension: Object.fromEntries(
-        Array.from(results.entries()).map(([type, result]) => [type, {
-          durationMs: 0,
-          citationsCount: result.citations.length,
-          tokensIn: result.usage.tokensIn,
-          tokensOut: result.usage.tokensOut,
-          llmCalls: 0,
-          toolCalls: 0,
-        }]),
-      ),
+      perDimension: Object.fromEntries(dimensionTraces.entries()),
     },
+  };
+}
+
+function toDimensionTrace(usage: NonNullable<Extract<SseEvent, { type: 'section_complete' }>['usage']>): PerDimensionTrace {
+  return {
+    durationMs: usage.durationMs ?? 0,
+    citationsCount: usage.citationsCount ?? 0,
+    tokensIn: usage.tokensIn,
+    tokensOut: usage.tokensOut,
+    ...(usage.llmCalls !== undefined ? { llmCalls: usage.llmCalls } : {}),
+    ...(usage.toolCalls !== undefined ? { toolCalls: usage.toolCalls } : {}),
+    ...(usage.cacheReadInputTokens !== undefined
+      ? { cacheReadInputTokens: usage.cacheReadInputTokens }
+      : {}),
+    ...(usage.cacheCreationInputTokens !== undefined
+      ? { cacheCreationInputTokens: usage.cacheCreationInputTokens }
+      : {}),
+    ...(usage.webSearchRequests !== undefined
+      ? { webSearchRequests: usage.webSearchRequests }
+      : {}),
+    ...(usage.webSearchErrorsCount !== undefined
+      ? { webSearchErrorsCount: usage.webSearchErrorsCount }
+      : {}),
   };
 }
 
@@ -599,8 +728,8 @@ function emitDone(
       confidence: result.summary?.structured.confidence ?? 'LOW',
       trace: result.trace,
       warnings: result.warnings,
-      partialSections: result.partialDimensions.length > 0
-        ? result.partialDimensions
+      partialSections: result.partialDimensions.length > 0 || result.skippedDimensions.length > 0
+        ? [...new Set([...result.partialDimensions, ...result.skippedDimensions])]
         : undefined,
     },
   });

@@ -128,6 +128,7 @@ export class OpenAIResponsesRoute implements OpenAIRoute {
       const outcome = await this.runRound({
         model,
         messages,
+        maxTokens: options.maxTokens,
         disableTools,
         allowedDomains: options.allowedDomains,
         onText: (text) => {
@@ -180,6 +181,7 @@ export class OpenAIResponsesRoute implements OpenAIRoute {
   private async runRound(args: {
     model: string;
     messages: InputMessage[];
+    maxTokens?: number;
     disableTools: boolean;
     /** RFC-06: optional `filters.allowed_domains` for the web_search tool. */
     allowedDomains?: readonly string[];
@@ -193,6 +195,7 @@ export class OpenAIResponsesRoute implements OpenAIRoute {
     const params = {
       model: args.model,
       input: args.messages,
+      ...(args.maxTokens ? { max_output_tokens: args.maxTokens } : {}),
       ...(args.disableTools
         ? {}
         : {

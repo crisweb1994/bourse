@@ -74,4 +74,74 @@ describe('streamDimension V2', () => {
       json: { disclaimer: expect.stringContaining('不构成投资建议') },
     });
   });
+
+  it('does not stream a provider JSON object as report prose', async () => {
+    const complete = {
+      schemaVersion: SCHEMA_VERSION,
+      type: 'COMPANY_QUALITY',
+      assessment: 'MIXED',
+      confidence: 'MEDIUM',
+      summary: 'Structured summary',
+      findings: [],
+      limitations: [],
+      dataAsOf: '2026-01-15',
+      disclaimer: 'Model text',
+    };
+    const jsonProvider: AgentProvider = {
+      ...provider(),
+      stream: vi.fn(async (_system, _user, onChunk) => {
+        const raw = JSON.stringify(complete);
+        onChunk({ type: 'text', text: raw.slice(0, 8) });
+        onChunk({ type: 'text', text: raw.slice(8) });
+        return { text: raw, citations: [], usage: { tokensIn: 1, tokensOut: 1 } };
+      }),
+    };
+    const events = await collect(streamDimension(
+      jsonProvider,
+      getDimension('COMPANY_QUALITY'),
+      { symbol: 'AAPL', market: 'US', locale: 'zh-CN' },
+      { runId: 'json-report', todayDate: '2026-01-15' },
+    ));
+    expect(events.filter((event) => event.type === 'report_chunk')).toHaveLength(0);
+    expect(events.find((event) => event.type === 'report_complete')).toMatchObject({
+      fullMarkdown: expect.stringContaining('Structured summary'),
+    });
+  });
+
+  it('keeps Markdown links that start with a bracket in the report stream', async () => {
+    const markdownProvider: AgentProvider = {
+      ...provider(),
+      stream: vi.fn(async (_system, _user, onChunk) => {
+        onChunk({ type: 'text', text: '[来源](https://example.com/source)' });
+        return {
+          text: '[来源](https://example.com/source)',
+          citations: [],
+          usage: { tokensIn: 1, tokensOut: 1 },
+        };
+      }),
+    };
+    const events = await collect(streamDimension(
+      markdownProvider,
+      getDimension('COMPANY_QUALITY'),
+      { symbol: 'AAPL', market: 'US', locale: 'zh-CN' },
+      { runId: 'markdown-link', todayDate: '2026-01-15' },
+    ));
+    expect(events.find((event) => event.type === 'report_chunk')).toMatchObject({
+      deltaText: '[来源](https://example.com/source)',
+    });
+  });
+
+  it('fails a module that never settles within its wall-clock limit', async () => {
+    const hangingProvider: AgentProvider = {
+      ...provider(),
+      stream: vi.fn(() => new Promise<never>(() => {})),
+    };
+
+    await expect(collect(streamDimension(
+      hangingProvider,
+      getDimension('COMPANY_QUALITY'),
+      { symbol: 'AAPL', market: 'US', locale: 'zh-CN' },
+      { runId: 'timeout', timeoutMs: 10 },
+    ))).rejects.toThrow('timed out after 10ms');
+  });
 });

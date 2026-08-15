@@ -24,8 +24,7 @@ describe('Analysis V2 dimensions', () => {
     }
   });
 
-  it('keeps risk in the second wave and valuation private-data gating explicit', () => {
-    expect(ALL_DIMENSIONS.find((dimension) => dimension.type === 'RISK_REGISTER')?.wave).toBe(2);
+  it('keeps valuation private-data gating explicit', () => {
     expect(ALL_DIMENSIONS.find((dimension) => dimension.type === 'VALUATION_SCENARIOS')?.requiresPrivateData)
       .toEqual(['consensusEps']);
   });

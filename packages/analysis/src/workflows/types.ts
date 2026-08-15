@@ -45,6 +45,7 @@ export interface ComprehensiveResult {
     usage: { tokensIn: number; tokensOut: number };
   }>;
   failures: DimensionFailure[];
+  skippedDimensions: SectionType[];
   partialDimensions: SectionType[];
   summary: { markdown: string; structured: OverallConclusion } | null;
   citations: Citation[];

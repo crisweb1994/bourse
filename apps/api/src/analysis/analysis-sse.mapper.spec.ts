@@ -166,6 +166,7 @@ describe('analysis SSE mapper', () => {
         data: {
           message: 'provider failed',
           failedSections: ['MARKET_SIGNALS'],
+          sectionType: 'MARKET_SIGNALS',
         },
       },
     );

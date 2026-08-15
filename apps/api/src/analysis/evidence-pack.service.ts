@@ -1,9 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { EvidencePackV2 } from '@bourse/analysis';
+import type { EvidencePackV2, FocusWindow } from '@bourse/analysis';
 import { SnapshotV2Service } from './snapshot-v2.service';
 
 interface AnalysisForEvidencePack {
   id: string;
+  focusWindow?: FocusWindow;
   stock: {
     symbol: string;
     market: string;
@@ -32,7 +33,10 @@ export class EvidencePackService {
       const pack = await this.snapshotV2.fetchAsEvidencePack(
         analysis.stock.symbol,
         analysis.stock.market as 'US' | 'CN' | 'HK',
-        signal ? { signal } : undefined,
+        {
+          historyDays: historyDaysForFocusWindow(analysis.focusWindow),
+          ...(signal ? { signal } : {}),
+        },
       );
       return {
         pack,
@@ -81,5 +85,15 @@ export class EvidencePackService {
       fallbackUsed,
       missingPrivateFields,
     };
+  }
+}
+
+function historyDaysForFocusWindow(focusWindow?: FocusWindow): number {
+  switch (focusWindow) {
+    case '30D': return 30;
+    case '90D': return 90;
+    case '3Y': return 365 * 3;
+    case '1Y':
+    default: return 365;
   }
 }

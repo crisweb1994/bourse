@@ -81,6 +81,7 @@ export interface PersistRunDoneInput {
   degradedSourceMark: 'WEB_SEARCH_FALLBACK' | null;
   inputTokens: number | null;
   outputTokens: number | null;
+  errorMessage?: string | null;
   doneEvent: Extract<SseEvent, { type: 'done' }>;
 }
 
@@ -95,12 +96,18 @@ export class AnalysisPersistenceMapper {
     });
   }
 
-  async persistSectionSkipped(sectionId: string, reason = 'Section skipped') {
+  async persistSectionSkipped(
+    sectionId: string,
+    reason:
+      | 'INSUFFICIENT_REQUIRED_FACTS'
+      | 'DEGRADED_SOURCE_MISSING_PRIVATE_DATA'
+      | 'MODE_NOT_INCLUDED' = 'INSUFFICIENT_REQUIRED_FACTS',
+  ) {
     await this.prisma.analysisSection.updateMany({
       where: { id: sectionId, status: PrismaSectionStatus.IN_PROGRESS },
       data: {
         status: PrismaSectionStatus.SKIPPED,
-        errorCode: 'INSUFFICIENT_REQUIRED_FACTS',
+        errorCode: reason,
         errorMessage: reason,
         completedAt: new Date(),
       },
@@ -168,12 +175,12 @@ export class AnalysisPersistenceMapper {
       input.summaryJson && typeof input.summaryJson === 'object'
         ? (input.summaryJson as Record<string, unknown>)
         : null;
-    const result = input.doneEvent.result as { signal?: unknown; confidence?: unknown };
-    const overallSignal = toOverallSignal(summary?.signal ?? result.signal);
+    const result = input.doneEvent.result as { confidence?: unknown } | undefined;
+    const overallSignal = toOverallSignal(summary?.signal);
     const overallConfidence =
       typeof summary?.confidence === 'string'
         ? summary.confidence
-        : typeof result.confidence === 'string'
+        : typeof result?.confidence === 'string'
           ? result.confidence
           : null;
 
@@ -194,6 +201,12 @@ export class AnalysisPersistenceMapper {
           ? { overallConfidence: PrismaConfidence[overallConfidence] }
           : { overallConfidence: null }),
         dataAsOf: input.summaryDataAsOf ?? input.todayDate,
+        ...(input.errorMessage
+          ? {
+              errorCode: 'RUN_PARTIAL_FAILED',
+              errorMessage: input.errorMessage,
+            }
+          : {}),
         ...(input.inputTokens !== null ? { inputTokens: input.inputTokens } : {}),
         ...(input.outputTokens !== null ? { outputTokens: input.outputTokens } : {}),
       },

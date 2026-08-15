@@ -30,9 +30,5 @@ export type OverallSignal = z.infer<typeof OverallSignal>;
 export const Confidence = z.nativeEnum(SharedConfidence);
 export type Confidence = z.infer<typeof Confidence>;
 
-/** Directional language used only inside a module's private prompt context. */
-export const ModuleSignal = z.enum(['BULLISH', 'NEUTRAL', 'BEARISH']);
-export type ModuleSignal = z.infer<typeof ModuleSignal>;
-
 export const RunStatus = AnalysisStatus;
 export type RunStatus = AnalysisStatus;

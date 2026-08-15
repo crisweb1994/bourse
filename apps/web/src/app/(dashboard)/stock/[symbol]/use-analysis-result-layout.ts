@@ -88,7 +88,7 @@ export function useAnalysisResultLayout({
     effectiveActive,
     rightInsightsSummary: null,
     hasRightPanel: false,
-    failedSections: sectionList.filter((section) => section.status === 'failed' || section.status === 'skipped'),
+    failedSections: sectionList.filter((section) => section.status === 'failed'),
     handleNavClick,
   };
 }

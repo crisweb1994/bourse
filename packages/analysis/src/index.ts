@@ -1,12 +1,11 @@
 /**
- * @bourse/analysis — plan-v2 Wave 3 D14 unified package.
+ * @bourse/analysis — Analysis V2 workspace package.
  *
- * Absorbs the former @bourse/research-core (connectors / capability /
- * ports / contracts / util) AND @bourse/analysis (compute / dimensions /
- * personas / workflows / tools / primitives / markets / guardrails /
- * lifecycle / SSE event contracts) into a single workspace package.
+ * Owns the research contracts, evidence snapshot, deterministic compute,
+ * the five fixed research dimensions, the comprehensive workflow and its
+ * SSE event contracts, plus the tool/primitives layers under them.
  *
- * Dependency graph after merge: shared-types ← analysis ← apps/{api,mcp,web}.
+ * Dependency graph: shared-types ← analysis ← apps/{api,mcp,web}.
  */
 
 export const VERSION = '0.1.0' as const;

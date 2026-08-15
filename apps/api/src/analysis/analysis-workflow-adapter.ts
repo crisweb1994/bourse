@@ -27,6 +27,7 @@ import {
   mapErrorEvent,
   mapEvidencePackReadyEvent,
   mapReportChunkEvent,
+  mapReportCompleteEvent,
   mapSectionCompleteEvent,
   mapSectionSkippedEvent,
   mapSectionStartEvent,
@@ -84,7 +85,6 @@ interface AnalysisSectionLike {
 
 export interface AdapterResult {
   terminalStatus: AnalysisTerminalStatus;
-  factConflictCount: number;
   failedSectionTypes: string[];
 }
 
@@ -100,6 +100,8 @@ export async function runAnalysisWorkflowAdapter(
   );
   const sectionAccs = new Map<string, AnalysisSectionAccumulator>();
   const completedSectionTypes = new Set<string>();
+  const skippedSectionTypes = new Set<string>();
+  const cancelledSectionTypes = new Set<string>();
   const failedSectionTypes: string[] = [];
 
   let summaryMarkdown = '';
@@ -111,6 +113,7 @@ export async function runAnalysisWorkflowAdapter(
   let accumulatedInputTokens = 0;
   let accumulatedOutputTokens = 0;
   let terminalStatus: AdapterResult['terminalStatus'] = 'FAILED';
+  let runErrorMessage: string | null = null;
 
   const addFailed = (type: string) => {
     if (!failedSectionTypes.includes(type)) failedSectionTypes.push(type);
@@ -169,7 +172,9 @@ export async function runAnalysisWorkflowAdapter(
     if (row) {
       await persistence.persistSectionSkipped(row.id, event.reason);
     }
-    addFailed(event.sectionType);
+    // SKIPPED is an explicit data/mode outcome, not a provider failure. Keep
+    // it out of the orphan sweep so QUICK's excluded modules remain SKIPPED.
+    skippedSectionTypes.add(event.sectionType);
     sendFrame(ctx.send, mapSectionSkippedEvent(event));
   };
 
@@ -228,6 +233,8 @@ export async function runAnalysisWorkflowAdapter(
     }
     await persistence.persistSectionComplete(event, acc);
     if (event.status === 'COMPLETED') completedSectionTypes.add(event.sectionType);
+    else if (event.status === 'SKIPPED') skippedSectionTypes.add(event.sectionType);
+    else if (event.status === 'CANCELLED') cancelledSectionTypes.add(event.sectionType);
     else addFailed(event.sectionType);
     if (event.usage) {
       accumulatedInputTokens += event.usage.tokensIn;
@@ -254,6 +261,7 @@ export async function runAnalysisWorkflowAdapter(
   const onError = async (event: Extract<SseEvent, { type: 'error' }>) => {
     logger.error(`${tag} ${event.sectionType ?? 'run'} error: ${event.message}`);
     sendFrame(ctx.send, mapErrorEvent(event));
+    if (!event.sectionType) runErrorMessage = event.message;
     if (event.sectionType) {
       const acc = sectionAccs.get(event.sectionType);
       if (acc) {
@@ -277,10 +285,6 @@ export async function runAnalysisWorkflowAdapter(
   const todayDate = new Date().toISOString().slice(0, 10);
   const marketProfile =
     ctx.analysis.stock.market === 'CN' ? getMarket('CN') ?? undefined : undefined;
-  const marketDomainTiers = marketProfile?.domainTiers;
-  const marketAllowedDomains = marketDomainTiers
-    ? Object.keys(marketDomainTiers).filter((host) => marketDomainTiers[host] !== 'E')
-    : undefined;
   const dimInput: DimensionInput = {
     symbol: ctx.analysis.stock.symbol,
     market: ctx.analysis.stock.market,
@@ -296,15 +300,27 @@ export async function runAnalysisWorkflowAdapter(
   });
   const evidencePackResult = existingSnapshot
     ? null
-    : ctx.evidencePackService
+      : ctx.evidencePackService
       ? await ctx.evidencePackService.buildForAnalysis(ctx.analysis, ctx.signal)
       : null;
   capturedEvidencePack = (existingSnapshot?.payload ?? evidencePackResult?.pack) as
     | EvidencePackV2
     | undefined;
   snapshotPersisted = Boolean(existingSnapshot);
-  if (existingSnapshot?.degraded || evidencePackResult?.fallbackUsed) {
+  if (existingSnapshot?.degraded || evidencePackResult?.degraded) {
     degradedSourceMark = 'WEB_SEARCH_FALLBACK';
+  }
+  if (!existingSnapshot && evidencePackResult?.error) {
+    // The workflow can still fall back to provider web search, but the UI
+    // must show that the immutable code-verified snapshot was unavailable.
+    ctx.send('evidence_pack_ready', {
+      pack: {
+        capturedAt: null,
+        dataAsOf: null,
+        degraded: true,
+        missingFields: ['evidence_snapshot'],
+      },
+    });
   }
   if (capturedEvidencePack && !snapshotPersisted) {
     await persistEvidenceSnapshot(ctx.prisma, ctx.analysisId, capturedEvidencePack, {
@@ -315,6 +331,10 @@ export async function runAnalysisWorkflowAdapter(
   }
 
   const factory = ctx._streamFactory ?? defaultFactory;
+  // The workflow derives both the RFC-06 web_search host allowlist and the
+  // evidence-gate tier table from `marketProfile`, so no per-field options
+  // are threaded through here. Keep this object literal fully typed — the
+  // compiler's excess-property check is what catches stale options fields.
   const gen = factory(ctx.provider, dimInput, {
     runId: `analysis-${ctx.analysisId}`,
     todayDate,
@@ -326,12 +346,7 @@ export async function runAnalysisWorkflowAdapter(
     ...(marketProfile ? { marketProfile } : {}),
     ...(capturedEvidencePack ? { evidencePack: capturedEvidencePack } : {}),
     ...(existingResults.length > 0 ? { existingResults } : {}),
-    recoverMissingEvidence: true,
-    ...(marketAllowedDomains && marketAllowedDomains.length > 0
-      ? { allowedDomains: marketAllowedDomains }
-      : {}),
-    ...(marketDomainTiers ? { domainTiers: marketDomainTiers } : {}),
-  } as ComprehensiveOptions);
+  });
 
   try {
     while (true) {
@@ -343,8 +358,11 @@ export async function runAnalysisWorkflowAdapter(
         case 'section_skipped': await onSectionSkipped(event); break;
         case 'section_start': onSectionStart(event); break;
         case 'report_chunk': onReportChunk(event); break;
+        case 'report_complete':
+          onReportComplete(event);
+          sendFrame(ctx.send, mapReportCompleteEvent(event));
+          break;
         case 'citation': onCitation(event); break;
-        case 'report_complete': onReportComplete(event); break;
         case 'structured_data': onStructuredData(event); break;
         case 'web_search_warning': break;
         case 'section_complete': await onSectionComplete(event); break;
@@ -373,6 +391,7 @@ export async function runAnalysisWorkflowAdapter(
               typeof trace?.tokensOut === 'number'
                 ? trace.tokensOut
                 : accumulatedOutputTokens || null,
+            errorMessage: runErrorMessage,
             doneEvent: event,
           });
           sendFrame(ctx.send, mapDoneEvent(ctx.analysisId, terminalStatus));
@@ -405,7 +424,10 @@ export async function runAnalysisWorkflowAdapter(
     .map((section) => section.type)
     .filter(
       (type) =>
-        !completedSectionTypes.has(type) && !failedSectionTypes.includes(type),
+        !completedSectionTypes.has(type) &&
+        !skippedSectionTypes.has(type) &&
+        !cancelledSectionTypes.has(type) &&
+        !failedSectionTypes.includes(type),
     );
   if (orphanTypes.length > 0) {
     await persistence.sweepOrphanSections({
@@ -416,7 +438,7 @@ export async function runAnalysisWorkflowAdapter(
     for (const type of orphanTypes) addFailed(type);
   }
 
-  return { terminalStatus, factConflictCount: 0, failedSectionTypes };
+  return { terminalStatus, failedSectionTypes };
 }
 
 function sendFrame<T extends AnalysisSseEventName>(

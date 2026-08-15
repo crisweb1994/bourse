@@ -44,6 +44,7 @@ export interface AnalysisStreamEventPayloadMap {
     order: number;
   };
   report_chunk: { text: string; sectionType?: SectionType };
+  report_complete: { text: string; sectionType: SectionType };
   citation: {
     title: string;
     url: string;
@@ -72,6 +73,7 @@ const ANALYSIS_STREAM_EVENT_NAMES = [
   'section_skipped',
   'section_start',
   'report_chunk',
+  'report_complete',
   'citation',
   'structured_data',
   'section_complete',
@@ -227,9 +229,9 @@ export function applyAnalysisStreamEvent(
             type: sectionType,
             order: existing?.order ?? Object.keys(state.sections).length,
             status: 'skipped',
-            markdown: existing?.markdown ?? '',
-            structuredJson: existing?.structuredJson ?? null,
-            citations: existing?.citations ?? [],
+            markdown: '',
+            structuredJson: null,
+            citations: [],
             skipReason: data.reason,
             skipMissingFields: Array.isArray(data.missingFields) ? data.missingFields : [],
           },
@@ -268,6 +270,17 @@ export function applyAnalysisStreamEvent(
         },
       };
     }
+    case 'report_complete': {
+      const sectionType = parseSectionType(data.sectionType);
+      if (!sectionType || !state.sections[sectionType] || typeof data.text !== 'string') return state;
+      return {
+        ...state,
+        sections: {
+          ...state.sections,
+          [sectionType]: { ...state.sections[sectionType]!, markdown: data.text },
+        },
+      };
+    }
     case 'structured_data': {
       const sectionType = parseSectionType(data.sectionType);
       if (!sectionType || !state.sections[sectionType]) return state;
@@ -299,6 +312,7 @@ export function applyAnalysisStreamEvent(
     case 'section_complete': {
       const sectionType = parseSectionType(data.sectionType);
       if (!sectionType || !state.sections[sectionType]) return state;
+      const failed = data.status !== 'COMPLETED';
       return {
         ...state,
         sections: {
@@ -306,7 +320,10 @@ export function applyAnalysisStreamEvent(
           [sectionType]: {
             ...state.sections[sectionType]!,
             status: sectionStatusToUi(data.status),
-            errorMessage: data.error ?? null,
+            ...(failed
+              ? { markdown: '', structuredJson: null, citations: [] }
+              : {}),
+            errorMessage: data.error ?? state.sections[sectionType]!.errorMessage ?? null,
           },
         },
       };
@@ -322,11 +339,35 @@ export function applyAnalysisStreamEvent(
     case 'done': {
       const terminal = typeof data.status === 'string' ? data.status.toUpperCase() as AnalysisStatus : 'COMPLETED';
       if (terminal === 'CANCELLED') return { ...state, status: 'cancelled', terminalStatus: terminal, error: null, attachedElsewhere: false };
-      if (terminal === 'FAILED') return { ...state, status: 'error', terminalStatus: terminal, error: state.error ?? '研究失败', attachedElsewhere: false };
+      if (terminal === 'FAILED' || terminal === 'PARTIAL_FAILED') {
+        return {
+          ...state,
+          status: 'error',
+          terminalStatus: terminal,
+          error: state.error ?? (terminal === 'PARTIAL_FAILED' ? '研究部分完成' : '研究失败'),
+          attachedElsewhere: false,
+        };
+      }
       return { ...state, status: 'completed', terminalStatus: terminal, attachedElsewhere: false };
     }
-    case 'error':
-      return markStreamConnectionError(state, typeof data.message === 'string' ? data.message : '研究连接失败');
+    case 'error': {
+      const next = markStreamConnectionError(
+        state,
+        typeof data.message === 'string' ? data.message : '研究连接失败',
+      );
+      const sectionType = parseSectionType(data.sectionType);
+      if (!sectionType || !state.sections[sectionType]) return next;
+      return {
+        ...next,
+        sections: {
+          ...next.sections,
+          [sectionType]: {
+            ...next.sections[sectionType]!,
+            errorMessage: typeof data.message === 'string' ? data.message : '研究失败',
+          },
+        },
+      };
+    }
     default:
       return state;
   }

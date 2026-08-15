@@ -40,6 +40,17 @@ interface Props {
   onAskAnalysis: (sectionType?: string) => void;
 }
 
+/** Retrying reruns genuinely FAILED sections; a SKIPPED section is a
+ * deterministic outcome of the immutable snapshot and needs a new run. */
+function hasRetryableSections(meta: AnalysisHistoryItemDto | null): boolean {
+  const hasFailedSection = (meta?.sections ?? []).some((section) => section.status === 'FAILED');
+  const summaryFailed =
+    meta?.status === 'PARTIAL_FAILED' &&
+    !meta.summaryMarkdown &&
+    !meta.summaryJson;
+  return hasFailedSection || summaryFailed;
+}
+
 export function AnalysisStreamView({
   stream,
   currentAnalysisMeta,
@@ -84,11 +95,11 @@ export function AnalysisStreamView({
           <div className="flex items-start gap-3 p-4">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-danger)]" strokeWidth={1.5} />
             <div className="min-w-0 flex-1">
-              <h3 className="m-0 text-[13px] font-medium text-[var(--color-danger)]">{stream.status === 'error' ? '研究失败' : `${failedSections.length} 个模块未完成`}</h3>
+              <h3 className="m-0 text-[13px] font-medium text-[var(--color-danger)]">{stream.terminalStatus === 'PARTIAL_FAILED' ? '研究部分完成' : stream.status === 'error' ? '研究失败' : `${failedSections.length} 个模块未完成`}</h3>
               <p className="m-0 mt-1.5 text-[12.5px] leading-[1.6] text-[var(--color-fg)]">已完成的模块仍然可用，可以统一重试失败部分。</p>
               {failedSections.length > 0 && <p className="mt-2 text-[12px] text-[var(--color-fg-2)]">未完成：{failedSections.map((section) => SECTION_LABELS[section.type]).join('、')}</p>}
             </div>
-            {currentAnalysisMeta?.status === 'FAILED' || currentAnalysisMeta?.status === 'PARTIAL_FAILED' ? <Button size="sm" onClick={() => void onRetry()}><RotateCcw className="h-3 w-3" strokeWidth={1.5} />重试失败部分</Button> : null}
+              {(currentAnalysisMeta?.status === 'FAILED' || currentAnalysisMeta?.status === 'PARTIAL_FAILED') && hasRetryableSections(currentAnalysisMeta) ? <Button size="sm" onClick={() => void onRetry()}><RotateCcw className="h-3 w-3" strokeWidth={1.5} />重试</Button> : null}
           </div>
         </Card>
       )}

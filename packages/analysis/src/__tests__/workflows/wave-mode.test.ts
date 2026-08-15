@@ -7,10 +7,13 @@ function provider(): AgentProvider {
   return {
     name: 'fake',
     stream: async () => ({ text: 'report', citations: [], usage: { tokensIn: 1, tokensOut: 1 } }),
-    complete: async (_system, user) => {
-      // The summary JSON request includes section names from the report, so
-      // identify it before routing module prompts by name.
-      if (user.includes('ComprehensiveSummary')) {
+    complete: async (system, user) => {
+      // The summary prompt is now identified by its stable system role. The
+      // user prompt intentionally contains only completed module reports.
+      const systemText = typeof system === 'string'
+        ? system
+        : system.map((block) => block.text).join('\n');
+      if (systemText.includes('综合研究结论整理器')) {
         return {
           text: JSON.stringify({
             headline: 'headline',
@@ -51,7 +54,7 @@ function provider(): AgentProvider {
 describe('workflow wave semantics V2', () => {
   it('supports sequential execution for deterministic tests and constrained deployments', async () => {
     const result = await runComprehensive(provider(), { symbol: 'AAPL', market: 'US', locale: 'zh-CN' }, {
-      runId: 'sequential', waveMode: 'sequential', waveSemaphore: 1,
+      runId: 'sequential', mode: 'DEEP', waveMode: 'sequential', waveSemaphore: 1,
     });
     expect(result.status).toBe('COMPLETED');
     expect(result.perDimension.size).toBe(5);

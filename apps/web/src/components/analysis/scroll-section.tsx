@@ -64,7 +64,7 @@ export function ScrollSection({ section, onRetry, showCitations = true, onAsk }:
 
           {(section.structuredJson || (showCitations && section.citations.length > 0)) && (
             <div className="mt-6 space-y-4">
-              {section.structuredJson && <StructuredCard sectionType={section.type} data={section.structuredJson} />}
+              {section.structuredJson && section.status !== 'streaming' && <StructuredCard sectionType={section.type} data={section.structuredJson} />}
               {showCitations && section.citations.length > 0 && <CitationList citations={section.citations} />}
             </div>
           )}

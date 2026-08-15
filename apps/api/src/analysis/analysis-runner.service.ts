@@ -196,7 +196,10 @@ export class AnalysisRunnerService {
         aiModel,
         mode: analysis.mode,
         focusWindow: analysis.focusWindow,
-        waveSemaphore: 4,
+        // Keep independent modules bounded while allowing QUICK to overlap
+        // provider latency. Two concurrent calls fit the current gateway;
+        // sequential execution remains available to workflow tests.
+        waveSemaphore: 2,
         signal: abortController.signal,
       });
     } catch (error) {

@@ -110,22 +110,6 @@ export function isOverallSignal(value: string): value is OverallSignal {
   return OVERALL_SIGNAL_SET.has(value);
 }
 
-// Module-level provider output still uses a directional signal internally;
-// the persisted/report-level signal is OverallSignal above.
-export const Signal = {
-  BULLISH: 'BULLISH',
-  NEUTRAL: 'NEUTRAL',
-  BEARISH: 'BEARISH',
-} as const;
-
-export type Signal = (typeof Signal)[keyof typeof Signal];
-
-const SIGNAL_SET = new Set<string>(Object.values(Signal));
-
-export function isSignal(value: string): value is Signal {
-  return SIGNAL_SET.has(value);
-}
-
 export const Confidence = {
   HIGH: 'HIGH',
   MEDIUM: 'MEDIUM',

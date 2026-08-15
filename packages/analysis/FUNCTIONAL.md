@@ -22,7 +22,7 @@ Analysis V2 固定运行五个模块：
 | 4 | `RISK_REGISTER` 风险清单 | 会使当前判断失效的风险、机制、监测指标和失效条件 | 重新写完前序模块 |
 | 5 | `MARKET_SIGNALS` 市场信号 | 价格、波动、成交量和代码计算的技术指标 | 把价格走势当作公司质量证据、精确买卖点 |
 
-四个事实模块并行；风险模块在事实模块之后运行，因为它可以引用前序结果；最后生成一份综合结论。所有五个模块都会运行，`QUICK` 只减少每个模块的研究轮数和搜索量，不减少模块数量。
+事实模块并行；风险模块在事实模块之后运行，因为它可以引用前序结果；最后生成一份综合结论。`DEEP` 运行五个模块，`QUICK` 只运行公司质量、市场信号和风险清单三个高信号模块，行业与估值明确标记为 `SKIPPED`。
 
 明确不做：事件专项、自定义日期、单模块新建分析、跨股票比较、用户自定义 token/调用预算、自动交易和仓位建议。
 
@@ -41,18 +41,18 @@ Analysis V2 固定运行五个模块：
 }
 ```
 
-- `QUICK`：五个模块各进行一轮研究，控制搜索和 findings 数量，适合首次快速了解。
-- `DEEP`：允许第二轮交叉核验和更多搜索，输出结构与 QUICK 相同，便于比较两次报告。
+- `QUICK`：三个模块各进行一轮研究；每模块最多 1 次工具调用、3,500 个正文输出 token 和 1,800 个结构化输出 token，单模块最长 120 秒，适合首次快速了解。
+- `DEEP`：五个模块允许第二轮交叉核验；每模块最多 3 次工具调用、12,000 个正文输出 token 和 5,000 个结构化输出 token，单模块最长 300 秒。
 - `focusWindow` 主要约束价格、新闻、公告和近期事件。财务模块仍可读取最新财报及更长历史，避免 30D 把长期财务趋势截断。
 - 研究重点会传给各模块，只改变排序和解释角度，不改变模块职责，也不能覆盖系统规则。
 - 首版输出中文；来源标题和公司名称可以保留原文。用户输入作为普通研究问题处理，不作为系统指令。
 
 研究 preset 是代码常量，不做设置页和数据库配置：
 
-| 模式 | 轮数 | 每模块工具调用上限 | 每模块 findings 上限 |
-|---|---:|---:|---:|
-| `QUICK` | 1 | 2 | 3 |
-| `DEEP` | 2 | 5 | 6 |
+| 模式 | 运行模块 | 轮数 | 工具调用上限 | 正文 / 结构化 / 总结输出上限 |
+|---|---|---:|---:|---:|
+| `QUICK` | 公司质量、市场信号、风险清单 | 1 | 1 / 模块 | 3,500 / 1,800 / 1,600；120 秒 / 模块 |
+| `DEEP` | 五个模块 | 最多 2 | 3 / 模块 | 12,000 / 5,000 / 4,000；300 秒 / 模块 |
 
 这些上限只用于保护一次运行的可控性，不向用户暴露，也不会产生额外的产品状态。
 
@@ -66,7 +66,7 @@ flowchart LR
   FETCH --> COMPUTE["runComputeLayer()\n比率 / 技术指标 / 风险旗标 / 估值辅助"]
   COMPUTE --> PACK["snapshotToEvidencePack()"]
   PACK --> STORE["AnalysisEvidenceSnapshot\n捕获时间 + dataAsOf + 缺失字段"]
-  STORE --> FACTS["四个事实模块并行"]
+  STORE --> FACTS["事实模块并行（QUICK 三个 / DEEP 四个）"]
   FACTS --> RISK["风险清单第二波"]
   RISK --> SUMMARY["综合结论\n只整合已有结果"]
   SUMMARY --> SSE["SSE -> API -> Web"]
@@ -85,7 +85,7 @@ flowchart LR
 
 | 数据情况 | 行为 |
 |---|---|
-| Snapshot 完全无法建立 | Analysis 失败；保留错误信息，不能生成无依据报告 |
+| Snapshot 完全无法建立 | 标记为降级并回退网页搜索；页面显示数据不可用，不能把搜索结果伪装成代码核验事实 |
 | 模块的关键事实缺失 | 模块 `SKIPPED` 或输出 `UNASSESSABLE`，并列出缺失字段 |
 | 只有可选事实缺失或过期 | 继续生成，置信度上限降低并写入 limitations |
 | `quote` 或 `history` 缺失 | `MARKET_SIGNALS` 跳过 |
@@ -153,8 +153,8 @@ Analysis 状态：`PENDING`、`IN_PROGRESS`、`COMPLETED`、`PARTIAL_FAILED`、`
 
 Section 状态：`PENDING`、`IN_PROGRESS`、`COMPLETED`、`FAILED`、`SKIPPED`、`CANCELLED`。
 
-- 五个模块全部完成且综合结论完成：`COMPLETED`。
-- 至少有模块完成，但模块或综合结论失败/跳过：`PARTIAL_FAILED`。
+- 所选模式的模块全部完成且综合结论完成：`COMPLETED`；QUICK 中未纳入的模块保持 `SKIPPED`，不算运行失败。
+- 至少有模块完成，但模块失败、因数据不足跳过或综合结论失败：`PARTIAL_FAILED`；QUICK 因模式主动跳过的模块不触发部分失败。
 - Snapshot 致命失败或没有任何模块完成：`FAILED`。
 - 用户主动停止：`CANCELLED`；已经完成的内容保留，不支持继续执行。
 - 浏览器断开不影响服务端运行；服务重启会把进行中的 Analysis 标记为 `FAILED`。
@@ -163,7 +163,7 @@ Section 状态：`PENDING`、`IN_PROGRESS`、`COMPLETED`、`FAILED`、`SKIPPED`�
 
 ## 6. 重试、重跑与快照复用
 
-- **重试失败部分**：仅对失败/跳过模块重跑；如果事实模块重新完成，则连同风险清单和综合结论一起重建。复用原 Evidence Snapshot，不重新抓取数据，修改原 Analysis 记录。
+- **重试失败部分**：仅对真正 `FAILED` 的模块重跑；如果事实模块重新完成，则连同风险清单和综合结论一起重建。复用原 Evidence Snapshot，不重新抓取数据。`SKIPPED` 是同一快照下的确定性结果，需新建研究才能使用新数据。
 - **再跑一次**：创建新的 Analysis，复制原模式、时间窗和研究问题，重新抓取 Snapshot；原报告保留在历史中。
 - **取消**：只允许对运行中的 Analysis 操作。取消后是终态，不能 resume；可重新创建一份研究。
 - 同一用户同一股票最多一份 `PENDING`/`IN_PROGRESS` Analysis，避免重复消耗。
@@ -203,7 +203,7 @@ Section 状态：`PENDING`、`IN_PROGRESS`、`COMPLETED`、`FAILED`、`SKIPPED`�
 | `snapshot/` | 一次性抓取、数据可用性、模块事实投影和 EvidencePack |
 | `compute/` | 财务比率、技术指标、风险旗标、同行和估值辅助的纯函数 |
 | `dimensions/` | 五个固定模块的 prompt、输出 schema 和执行顺序 |
-| `workflows/` | 四个事实模块并行、风险第二波、综合结论和失败语义 |
+| `workflows/` | QUICK/DEEP 模块选择、事实模块并行、风险第二波、综合结论和失败语义 |
 | `primitives/` | Provider、结构化输出、模块流和综合结论提示词 |
 | `markets/` | US / CN / HK 数据源优先级与搜索域策略 |
 | `tools/` | 需要时提供的市场数据工具；不允许模块自行重算数字 |

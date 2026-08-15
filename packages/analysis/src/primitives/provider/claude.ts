@@ -207,6 +207,7 @@ export class ClaudeProvider implements AgentProvider {
         system: apiSystem,
         messages,
         maxToolUses: roundMaxToolUses,
+        maxTokens: options.maxTokens,
         disableTools,
         round: i + 1, // 1-indexed for telemetry / SSE warning events
         allowedDomains: options.allowedDomains,
@@ -288,6 +289,7 @@ export class ClaudeProvider implements AgentProvider {
     system: string | Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }>;
     messages: MessageParam[];
     maxToolUses: number;
+    maxTokens?: number;
     disableTools: boolean;
     /** 1-indexed round number, used to tag web_search errors for telemetry. */
     round: number;
@@ -301,7 +303,7 @@ export class ClaudeProvider implements AgentProvider {
 
     const streamParams: Parameters<typeof this.client.messages.stream>[0] = {
       model: args.model,
-      max_tokens: DEFAULT_MAX_TOKENS_STREAM,
+      max_tokens: args.maxTokens ?? DEFAULT_MAX_TOKENS_STREAM,
       system: args.system,
       messages: args.messages,
       ...(args.disableTools

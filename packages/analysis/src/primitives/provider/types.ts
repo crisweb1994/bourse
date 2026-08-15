@@ -122,6 +122,8 @@ export interface ProviderRound {
 export interface ProviderStreamOptions {
   model?: string;
   signal?: AbortSignal;
+  /** Hard output-token ceiling for streamed reports. */
+  maxTokens?: number;
   /**
    * Single-round path (backwards-compatible). When `rounds` is set, this is
    * used as the per-round default for any round that doesn't specify its own

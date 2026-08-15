@@ -46,6 +46,8 @@ export const SectionCompleteEvent = baseEvent.extend({
   type: z.literal('section_complete'),
   sectionType: SectionType,
   status: SectionStatus,
+  /** Human-readable failure reason, when a section did not complete. */
+  error: z.string().min(1).optional(),
   // Optional per-section usage, populated by streamDimension so callers can
   // accumulate run-wide totals without subscribing to every cost_update.
   usage: z
@@ -79,6 +81,7 @@ export const SectionSkippedEvent = baseEvent.extend({
   reason: z.enum([
     'DEGRADED_SOURCE_MISSING_PRIVATE_DATA',
     'INSUFFICIENT_REQUIRED_FACTS',
+    'MODE_NOT_INCLUDED',
   ]),
   /** Fields that made the section impossible to run safely. */
   missingFields: z.array(z.string()),

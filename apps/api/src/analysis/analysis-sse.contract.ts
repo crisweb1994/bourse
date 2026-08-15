@@ -23,6 +23,10 @@ export interface AnalysisSsePayloadMap {
     text: string;
     sectionType?: SectionType;
   };
+  report_complete: {
+    text: string;
+    sectionType: SectionType;
+  };
   citation: {
     title: string;
     url: string;
@@ -60,6 +64,7 @@ export interface AnalysisSsePayloadMap {
   error: {
     message: string;
     failedSections?: SectionType[];
+    sectionType?: SectionType;
   };
 }
 

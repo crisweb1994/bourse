@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { formatSummaryMarkdown, OverallConclusion } from '@bourse/analysis';
 import type { SectionStatus, SectionType, AnalysisStatus } from '@bourse/shared-types';
 import type { SseCallback } from './types';
 
@@ -51,7 +52,11 @@ export class AnalysisReplayService {
       this.replaySection(section, send, true);
     }
     if (analysis.summaryMarkdown) {
-      send('summary_chunk', { text: analysis.summaryMarkdown });
+      const summaryMarkdown = normalizedSummaryMarkdown(
+        analysis.summaryMarkdown,
+        analysis.summaryJson,
+      );
+      send('summary_chunk', { text: summaryMarkdown });
     }
     if (analysis.summaryJson) {
       send('summary_complete', { summaryJson: analysis.summaryJson });
@@ -87,6 +92,13 @@ export class AnalysisReplayService {
       sectionId: section.id,
       order: section.order,
     });
+    if (section.status === 'SKIPPED') {
+      send('section_skipped', {
+        sectionType: section.type,
+        reason: skippedReason(section.errorMessage),
+        missingFields: [],
+      });
+    }
     if (section.reportMarkdown) {
       send('report_chunk', {
         text: section.reportMarkdown,
@@ -131,4 +143,26 @@ export class AnalysisReplayService {
       });
     }
   }
+}
+
+function skippedReason(
+  value: string | null | undefined,
+): 'DEGRADED_SOURCE_MISSING_PRIVATE_DATA' | 'INSUFFICIENT_REQUIRED_FACTS' | 'MODE_NOT_INCLUDED' {
+  if (
+    value === 'DEGRADED_SOURCE_MISSING_PRIVATE_DATA' ||
+    value === 'INSUFFICIENT_REQUIRED_FACTS' ||
+    value === 'MODE_NOT_INCLUDED'
+  ) {
+    return value;
+  }
+  return 'INSUFFICIENT_REQUIRED_FACTS';
+}
+
+function normalizedSummaryMarkdown(raw: string, json: unknown): string {
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[') && !/^```json\b/i.test(trimmed)) {
+    return raw;
+  }
+  const parsed = OverallConclusion.safeParse(json);
+  return parsed.success ? formatSummaryMarkdown(parsed.data) : raw;
 }

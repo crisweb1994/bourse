@@ -32,7 +32,6 @@ export interface StandardDimensionConfig {
   requiresPrivateData?: ReadonlyArray<
     'northboundFlow' | 'lhb' | 'unlockCalendar' | 'consensusEps'
   >;
-  wave?: 1 | 2;
 }
 
 export function makeStandardDimension(
@@ -61,6 +60,5 @@ export function makeStandardDimension(
     ...(config.requiresPrivateData
       ? { requiresPrivateData: config.requiresPrivateData }
       : {}),
-    ...(config.wave ? { wave: config.wave } : {}),
   };
 }

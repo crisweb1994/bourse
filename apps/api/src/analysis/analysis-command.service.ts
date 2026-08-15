@@ -119,7 +119,6 @@ export class AnalysisCommandService {
       );
     }
 
-    this.runRegistry.abort(id);
     const now = new Date();
     await this.prisma.$transaction([
       this.prisma.analysisSection.updateMany({
@@ -156,6 +155,11 @@ export class AnalysisCommandService {
         },
       }),
     ]);
+    // Mark the database first. The workflow's terminal writes are guarded by
+    // `status = IN_PROGRESS`, so once cancellation wins the race they cannot
+    // turn the run back into PARTIAL_FAILED/COMPLETED. Abort the provider only
+    // after that durable state transition is visible.
+    this.runRegistry.abort(id);
 
     return { ok: true };
   }
@@ -179,20 +183,30 @@ export class AnalysisCommandService {
       'VALUATION_SCENARIOS',
       'MARKET_SIGNALS',
     ]);
-    const retryingFact = analysis.sections.some(
-      (section) =>
-        factTypes.has(section.type) &&
-        (section.status === PrismaSectionStatus.FAILED ||
-          section.status === PrismaSectionStatus.SKIPPED),
+    // A SKIPPED section is a deterministic data-availability outcome of the
+    // immutable snapshot: re-running it on the same snapshot skips again and
+    // only burns a summary regeneration. Retrying must target real failures.
+    const failedSections = analysis.sections.filter(
+      (section) => section.status === PrismaSectionStatus.FAILED,
+    );
+    const summaryFailed =
+      analysis.status === PrismaAnalysisStatus.PARTIAL_FAILED &&
+      !analysis.summaryMarkdown &&
+      analysis.summaryJson === null;
+    if (failedSections.length === 0 && !summaryFailed) {
+      throw new ConflictException(
+        'No failed sections to retry; skipped modules need a new analysis with a fresh evidence snapshot',
+      );
+    }
+    const retryingFact = failedSections.some((section) =>
+      factTypes.has(section.type),
     );
 
     await this.prisma.$transaction(async (tx) => {
       await tx.analysisSection.updateMany({
         where: {
           analysisId,
-          status: {
-            in: [PrismaSectionStatus.FAILED, PrismaSectionStatus.SKIPPED],
-          },
+          status: PrismaSectionStatus.FAILED,
         },
         data: {
           status: PrismaSectionStatus.PENDING,

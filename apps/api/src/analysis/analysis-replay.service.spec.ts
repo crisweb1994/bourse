@@ -203,6 +203,14 @@ describe('AnalysisReplayService', () => {
         { sectionType: 'RISK_REGISTER', status: 'CANCELLED', error: 'Cancelled by user' },
       ],
     );
+    assert.deepEqual(
+      frames.filter((frame) => frame.event === 'section_skipped').map((frame) => frame.data),
+      [{
+        sectionType: 'INDUSTRY_POSITION',
+        reason: 'INSUFFICIENT_REQUIRED_FACTS',
+        missingFields: [],
+      }],
+    );
     assert.deepEqual(frames.at(-3), {
       event: 'summary_chunk',
       data: { text: '总体判断' },
@@ -233,5 +241,37 @@ describe('AnalysisReplayService', () => {
     assert.deepEqual(frames, [
       { event: 'done', data: { analysisId: 'analysis-3', status: 'FAILED' } },
     ]);
+  });
+
+  it('normalizes a persisted JSON summary before replaying it', () => {
+    const service = new AnalysisReplayService();
+    const { frames, send } = collectFrames();
+    const summary = {
+      headline: '综合看法中性',
+      signal: null,
+      confidence: 'LOW',
+      rationale: [],
+      counterpoints: [],
+      changeConditions: [],
+      missingSections: [],
+      dataAsOf: '2026-01-15',
+      disclaimer: '免责声明',
+    };
+
+    service.replayTerminalRun(
+      {
+        id: 'analysis-4',
+        status: 'COMPLETED' as AnalysisStatus,
+        sections: [],
+        summaryMarkdown: JSON.stringify(summary),
+        summaryJson: summary,
+      },
+      send,
+    );
+
+    const summaryFrame = frames.find((frame) => frame.event === 'summary_chunk');
+    const summaryText = (summaryFrame?.data as { text?: unknown } | undefined)?.text;
+    assert.equal(typeof summaryText === 'string' && summaryText.startsWith('{'), false);
+    assert.equal(typeof summaryText === 'string' && summaryText.includes('综合看法中性'), true);
   });
 });

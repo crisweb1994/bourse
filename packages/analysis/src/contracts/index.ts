@@ -10,8 +10,6 @@ export {
   ResearchTrace,
   ResearchWarning,
   ResearchWarningCode,
-  Sensitivity,
-  SourceDocument,
   SourceType,
 } from '@bourse/market-data';
 export type {

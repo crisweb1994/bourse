@@ -1,21 +1,19 @@
-import type { AnalysisMode } from './contracts/enums';
-
 /** Code-owned research limits. They are deliberately not user configuration. */
 export const RESEARCH_PRESETS = {
   QUICK: {
-    maxRounds: 1,
-    maxToolCallsPerSection: 2,
-    maxFindingsPerSection: 3,
+    maxToolCallsPerSection: 1,
+    maxOutputTokens: 3_500,
+    maxStructuredTokens: 1_800,
+    maxSummaryTokens: 1_600,
+    // A provider/search call must not leave the first report in "researching"
+    // forever. This is code-owned policy, not user configuration.
+    timeoutMs: 120_000,
   },
   DEEP: {
-    maxRounds: 2,
-    maxToolCallsPerSection: 5,
-    maxFindingsPerSection: 6,
+    maxToolCallsPerSection: 3,
+    maxOutputTokens: 12_000,
+    maxStructuredTokens: 5_000,
+    maxSummaryTokens: 4_000,
+    timeoutMs: 300_000,
   },
 } as const;
-
-export type ResearchPreset = (typeof RESEARCH_PRESETS)[AnalysisMode];
-
-export function getResearchPreset(mode: AnalysisMode): ResearchPreset {
-  return RESEARCH_PRESETS[mode];
-}

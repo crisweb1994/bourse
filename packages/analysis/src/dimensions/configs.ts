@@ -6,7 +6,7 @@ const COMMON = `
 你必须使用中文回答。代码计算的数字必须直接引用，不得自行计算或编造。
 每个关键发现都要有至少一个来源；没有足够来源时写入 limitations 并降低 confidence。
 只输出本模块负责的问题，不把局部判断写成买入、卖出或仓位建议。
-输出必须符合要求的 JSON 结构，findings 只保留最重要的事实和解释。
+流式正文必须使用中文 Markdown，不要输出 JSON、代码块或字段名列表；findings 只保留最重要的事实和解释。
 `;
 
 export const DIMENSION_CONFIGS: readonly StandardDimensionConfig[] = [
@@ -18,7 +18,6 @@ assessment 只能是 STRONG、MIXED、WEAK、UNASSESSABLE。不要判断股价�
     userPromptTemplate: (input) =>
       `请研究 ${displayName(input)}（${input.symbol}，${input.market}）的公司质量。`,
     multiRoundPlan: { maxRounds: 2, roundPrompts: [round2CrossVerifOnly] },
-    wave: 1,
   },
   {
     type: 'INDUSTRY_POSITION',
@@ -28,7 +27,6 @@ assessment 只能是 LEADING、COMPETITIVE、CHALLENGED、UNASSESSABLE。不要�
     userPromptTemplate: (input) =>
       `请研究 ${displayName(input)}（${input.symbol}，${input.market}）所在行业及竞争位置。`,
     multiRoundPlan: { maxRounds: 2, roundPrompts: [round2CrossVerifOnly] },
-    wave: 1,
   },
   {
     type: 'VALUATION_SCENARIOS',
@@ -39,7 +37,6 @@ assessment 只能是 UNDERVALUED、FAIR、OVERVALUED、UNASSESSABLE。估值 met
       `请研究 ${displayName(input)}（${input.symbol}，${input.market}）的估值与情景，说明当前价格需要什么假设才能成立。`,
     multiRoundPlan: { maxRounds: 2, roundPrompts: [round2CrossVerifOnly] },
     requiresPrivateData: ['consensusEps'],
-    wave: 1,
   },
   {
     type: 'RISK_REGISTER',
@@ -53,7 +50,6 @@ assessment 只能是 UNDERVALUED、FAIR、OVERVALUED、UNASSESSABLE。估值 met
           : ''
       }`,
     multiRoundPlan: { maxRounds: 2, roundPrompts: [round2CrossVerifOnly] },
-    wave: 2,
   },
   {
     type: 'MARKET_SIGNALS',
@@ -62,7 +58,6 @@ assessment 只能是 UNDERVALUED、FAIR、OVERVALUED、UNASSESSABLE。估值 met
 assessment 只能是 POSITIVE、NEUTRAL、NEGATIVE、UNASSESSABLE。不得把价格走势当作公司质量证据，也不得输出精确买卖点。`,
     userPromptTemplate: (input) =>
       `请研究 ${displayName(input)}（${input.symbol}，${input.market}）的市场信号。`,
-    wave: 1,
   },
 ];
 

@@ -51,7 +51,6 @@ export interface Dimension<T extends SectionResult = SectionResult> {
   freshness: FreshnessPolicy;
   onFailure: 'skip';
   multiRoundPlan?: MultiRoundPlan;
-  wave?: 1 | 2;
   requiresPrivateData?: ReadonlyArray<
     'northboundFlow' | 'lhb' | 'unlockCalendar' | 'consensusEps'
   >;

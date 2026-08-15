@@ -4,10 +4,14 @@ import { RESEARCH_PRESETS } from '../../presets';
 
 describe('research presets', () => {
   it('keeps budgets code-owned and exposes only mode-level differences', () => {
-    expect(RESEARCH_PRESETS.QUICK.maxRounds).toBe(1);
-    expect(RESEARCH_PRESETS.DEEP.maxRounds).toBe(2);
-    expect(RESEARCH_PRESETS.QUICK.maxFindingsPerSection).toBeLessThan(
-      RESEARCH_PRESETS.DEEP.maxFindingsPerSection,
+    expect(RESEARCH_PRESETS.QUICK.maxToolCallsPerSection).toBeLessThan(
+      RESEARCH_PRESETS.DEEP.maxToolCallsPerSection,
+    );
+    expect(RESEARCH_PRESETS.QUICK.maxOutputTokens).toBeLessThan(
+      RESEARCH_PRESETS.DEEP.maxOutputTokens,
+    );
+    expect(RESEARCH_PRESETS.QUICK.maxStructuredTokens).toBeLessThan(
+      RESEARCH_PRESETS.DEEP.maxStructuredTokens,
     );
   });
 
