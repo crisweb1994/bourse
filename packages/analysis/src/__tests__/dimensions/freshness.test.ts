@@ -62,7 +62,13 @@ describe('dimensions/buildCommonSuffix', () => {
   });
 
   it('reproduces apps/api COMMON_SUFFIX byte-for-byte (parity gate)', () => {
-    const expected = `\n${buildFreshnessBlock(DEFAULT_FRESHNESS, FIXED_DATE)}\n\n## 输出要求\n- 使用中文撰写报告\n- 每个核心判断必须附带引用来源 URL\n- 明确标注"数据截至日期"\n- 结尾声明"免责声明：本报告由 AI 生成，不构成投资建议。投资有风险，入市需谨慎。"\n- 数据缺失时诚实报告，不编造数据\n`;
+    const expected = `\n${buildFreshnessBlock(DEFAULT_FRESHNESS, FIXED_DATE)}\n\n## 输出要求\n- 使用中文撰写报告\n- 每个核心判断必须注明来源，写来源名称（机构/文件/日期，如「来源：巨潮资讯 2026-04-01 定期报告」），不要在正文粘贴任何 URL 或链接；来源链接由系统引用卡统一展示\n- 明确标注"数据截至日期"\n- 结尾声明"免责声明：本报告由 AI 生成，不构成投资建议。投资有风险，入市需谨慎。"\n- 数据缺失时诚实报告，不编造数据\n`;
     expect(buildCommonSuffix(DEFAULT_FRESHNESS, FIXED_DATE)).toBe(expected);
+  });
+
+  it('forbids pasting raw URLs into report prose (2026-08-15 root fix)', () => {
+    const suffix = buildCommonSuffix(DEFAULT_FRESHNESS, FIXED_DATE);
+    expect(suffix).not.toContain('引用来源 URL');
+    expect(suffix).toContain('不要在正文粘贴任何 URL');
   });
 });
