@@ -100,3 +100,19 @@ test('history: market prefix composes the instrument id (F10)', async () => {
   await service.getChartHistory('600519', 'CN', 365).catch(() => undefined);
   assert.equal(seenInstrument, 'CN:600519');
 });
+
+test('history: suffixed URL symbols are normalized for CN/HK (bug fix — bare code for the router)', async () => {
+  const seen: string[] = [];
+  const marketData = {
+    getHistory: async (input: { instrumentId: string }) => {
+      seen.push(input.instrumentId);
+      return { data: [], citations: [], freshness: [], warnings: [], trace: {} };
+    },
+  };
+  const service = new StockService({} as never, marketData as never, {} as never);
+  await service.getChartHistory('600519.SS', 'CN', 365).catch(() => undefined);
+  await service.getChartHistory('000725.SZ', 'CN', 365).catch(() => undefined);
+  await service.getChartHistory('0700.HK', 'HK', 365).catch(() => undefined);
+  await service.getChartHistory('BRK.B', 'US', 365).catch(() => undefined);
+  assert.deepEqual(seen, ['CN:600519', 'CN:000725', 'HK:0700', 'US:BRK.B']);
+});

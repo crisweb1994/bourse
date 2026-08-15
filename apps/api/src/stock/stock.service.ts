@@ -160,7 +160,16 @@ export class StockService {
       );
     }
 
-    const instrumentId = `${normalizedMarket}:${symbol}`;
+    // URL symbols arrive suffixed for CN/HK (e.g. 600519.SS / 0700.HK) while
+    // the capability router expects the bare code (DB stores bare symbols;
+    // the detail endpoint works because it resolves through the DB row —
+    // this route stays DB-free by design R-7, so normalize here). US symbols
+    // are NOT stripped: dots are part of the ticker (BRK.B).
+    const providerSymbol =
+      normalizedMarket === 'US'
+        ? symbol
+        : symbol.split('.')[0]!;
+    const instrumentId = `${normalizedMarket}:${providerSymbol}`;
     const to = new Date().toISOString().slice(0, 10);
     const from = new Date(Date.now() - window * 86_400_000).toISOString().slice(0, 10);
     const result = await this.marketData.getHistory(
