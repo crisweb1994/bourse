@@ -76,8 +76,14 @@ export const ChartEvidenceResponseSchema = z.object({
     technical: z.unknown().nullable(),
     /** { periodTrends } subset of ComputedFinancialRatios. */
     ratios: z.object({ periodTrends: z.array(z.unknown()) }).nullable(),
-    /** peHistorySeries / pe5y* / impliedGrowthRate subset. */
+    /** peHistorySeries / pe5y* / impliedGrowthRate + dcfSensitivity subset. */
     valuation: z.unknown().nullable(),
+    /** C8: PeerComparison (subjectVsPeerMedian per metric). */
+    peerComparison: z.unknown().nullable(),
+    /** C10 (CN): northbound flow rows [{date,hgt,sgt,holdPctOfFloat…}]. */
+    northbound: z.unknown().nullable(),
+    /** C11 (CN): unlock calendar rows [{date,shares,marketValue,type}]. */
+    unlockCalendar: z.unknown().nullable(),
   }),
   provenance: chartProvenance,
 });

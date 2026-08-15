@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import type { WatchlistItemDto } from '@bourse/shared-types';
 import { removeFromWatchlist, updateWatchlistItem } from '@/lib/api';
+import { Sparkline } from '@/components/charts/primitives/sparkline';
+import { useWatchlistSparklines } from '@/components/charts/use-watchlist-sparklines';
 import { MARKET_LABELS } from '@/lib/constants';
 import { stockHref } from '@/lib/stock-href';
 import {
@@ -86,6 +88,11 @@ export function WatchlistTable({
     );
   }
 
+  // C13：行内 30 日走势（失败静默留空）
+  const sparklines = useWatchlistSparklines(
+    items.map((item) => ({ symbol: item.stock.symbol, market: item.stock.market })),
+  );
+
   return (
     <Card>
       <div className="hidden md:block">
@@ -93,6 +100,7 @@ export function WatchlistTable({
           <THead>
             <tr>
               <th>代码</th>
+              <th>走势</th>
               <th>名称</th>
               <th>市场</th>
               <th>币种</th>
@@ -111,6 +119,17 @@ export function WatchlistTable({
                   >
                     <Sym>{item.stock.symbol}</Sym>
                   </Link>
+                </td>
+                <td>
+                  {(() => {
+                    const key = `${item.stock.market}:${item.stock.symbol}`;
+                    const s = sparklines[key];
+                    return s?.status === 'ready' ? (
+                      <Sparkline closes={s.closes} width={96} height={24} />
+                    ) : s?.status === 'loading' ? (
+                      <span className="inline-block h-[24px] w-[96px] animate-pulse rounded bg-[var(--color-bg-subtle)]" />
+                    ) : null;
+                  })()}
                 </td>
                 <td className="max-w-[200px] truncate">
                   <Link

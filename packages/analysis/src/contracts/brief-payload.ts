@@ -76,6 +76,9 @@ export const IndexQuoteBrief = z.object({
   changePct: z.number(),
   vsSma50: z.number().nullable(), // 距 SMA50 %，null = 数据不足
   rsi14: z.number().nullable(),
+  /** C14（visualization §5.2）：近 30 个收盘（旧→新），供 Webhook 渠道渲染
+   *  unicode sparkline。additive optional — 旧 payload 无此字段。 */
+  closes30d: z.array(z.number()).max(30).optional(),
 });
 export type IndexQuoteBrief = z.infer<typeof IndexQuoteBrief>;
 

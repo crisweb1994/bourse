@@ -36,6 +36,8 @@ const modernPack = {
     quote: { value: 305.93, asOf: '2026-08-14', sourceTier: 'B', sourceUrl: 'https://y' },
     currency: { value: 'USD', sourceTier: 'B', sourceUrl: 'https://y' },
     financials: { value: { periods: [] }, sourceTier: 'A', sourceUrl: 'https://sec' },
+    northboundFlow: { value: [{ date: '2026-06-30', hgt: 1.2, sgt: 0.8, holdShares: 5371, holdMarketValue: 636.7, holdPctOfFloat: 0.043 }], sourceTier: 'A', sourceUrl: 'https://em' },
+    unlockCalendar: { value: [{ date: '2026-09-12', shares: 2.1e8, marketValue: 38, type: '首发原股东限售股份' }], sourceTier: 'A', sourceUrl: 'https://em' },
   },
   dataAvailability: {
     complete: ['quote', 'history'],
@@ -45,7 +47,8 @@ const modernPack = {
   computedFacts: {
     technical: { asOf: '2026-08-14T20:00:00.000Z', bars: 251, sma20: 300, series: { sma20: [{ t: '2026-01-15', v: 290 }] } },
     ratios: { periodTrends: [{ period: 'FY2025', revenue: 400 }] },
-    valuation: { pe5yMedian: 30, peHistorySeries: [{ period: 'FY2025', pe: 34 }] },
+    valuation: { pe5yMedian: 30, peHistorySeries: [{ period: 'FY2025', pe: 34 }], dcfSensitivity: { points: [{ growth: 0.05, fairValuePerShare: 246 }] } },
+    peerComparison: { subjectVsPeerMedian: { pe: { subject: 34.6, median: 29.4, rankPercentile: 62, peerCount: 7 } } },
   },
   priceSeries: {
     bars: [{ t: '2026-08-14', o: 300, h: 310, l: 299, c: 305.93, v: 28_000_000 }],
@@ -93,6 +96,10 @@ test('evidence: modern snapshot → available:true with full projection, schema-
   assert.equal(res.provenance.financials, 'A');
   assert.equal(res.provenance.history, 'B');
   assert.deepEqual(res.researchCoverage, { overallStatus: 'PASS' });
+  // C8/C10/C11 projections
+  assert.ok(res.chartFacts.peerComparison);
+  assert.ok((res.chartFacts.northbound as Array<unknown>).length === 1);
+  assert.ok((res.chartFacts.unlockCalendar as Array<unknown>).length === 1);
   const parsed = ChartEvidenceResponseSchema.safeParse(res);
   assert.equal(parsed.success, true, JSON.stringify(parsed.success ? '' : parsed.error.issues));
 });

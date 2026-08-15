@@ -1,15 +1,18 @@
 'use client';
 
 import { Fragment, useState } from 'react';
-import { BarChart3, ChevronRight, ExternalLink, Loader2, RotateCw } from 'lucide-react';
+import { BarChart3, ChevronRight, ExternalLink, Loader2, RotateCw, Table2 } from 'lucide-react';
 import type { EarningsTrendOptionDto } from '@bourse/shared-types';
 import { Button, Select, SelectOption } from '@/components/ui';
 import { useEarningsTrends } from '@/hooks/use-earnings-trends';
+import { MetricTrendChart } from '@/components/charts/primitives/metric-trend-chart';
 import { cn } from '@/lib/utils';
 
 export function EarningsTrendPanel({ stockId }: { stockId: string }) {
   const trend = useEarningsTrends(stockId);
   const [expanded, setExpanded] = useState<string | null>(null);
+  // C7（visualization §5.1）：图/表双视图，图优先（趋势一眼可读），表保留全部口径细节
+  const [view, setView] = useState<'chart' | 'table'>('chart');
   if (!trend.supported || trend.options.length === 0) return null;
   const selectedKey = trend.selected ? `${trend.selected.metricCode}:${trend.selected.fingerprint}` : undefined;
   const choose = (value: string) => {
@@ -34,6 +37,14 @@ export function EarningsTrendPanel({ stockId }: { stockId: string }) {
               </SelectOption>
             ))}
           </Select>
+          <div className="flex h-8 items-center rounded-[var(--radius-btn)] border border-[var(--color-border)] p-0.5" aria-label="视图切换">
+            {(['chart', 'table'] as const).map((mode) => (
+              <button key={mode} type="button" onClick={() => setView(mode)} className={cn('flex h-6 items-center gap-1 rounded-[5px] px-2 text-[11px] transition-colors', view === mode ? 'bg-[var(--color-fg)] text-[var(--color-bg)]' : 'text-[var(--color-fg-3)] hover:text-[var(--color-fg)]')}>
+                {mode === 'chart' ? <BarChart3 className="h-3 w-3" strokeWidth={1.5} /> : <Table2 className="h-3 w-3" strokeWidth={1.5} />}
+                {mode === 'chart' ? '图' : '表'}
+              </button>
+            ))}
+          </div>
           <div className="flex h-8 items-center rounded-[var(--radius-btn)] border border-[var(--color-border)] p-0.5" aria-label="趋势期间">
             {([4, 8, 12] as const).map((value) => (
               <button key={value} type="button" onClick={() => trend.setPeriods(value)} className={cn('h-6 min-w-8 rounded-[5px] px-2 font-mono text-[11px] transition-colors', trend.periods === value ? 'bg-[var(--color-fg)] text-[var(--color-bg)]' : 'text-[var(--color-fg-3)] hover:text-[var(--color-fg)]')}>
@@ -51,6 +62,24 @@ export function EarningsTrendPanel({ stockId }: { stockId: string }) {
           <Button type="button" variant="quiet" size="icon" onClick={() => void trend.reload()} title="重新加载趋势" aria-label="重新加载趋势"><RotateCw className="h-3.5 w-3.5" /></Button>
         </div>
       ) : trend.series?.points.length ? (
+        view === 'chart' ? (
+          <div>
+            <MetricTrendChart
+              points={trend.series.points.map((point) => ({
+                period: point.periodEndOn,
+                value: point.value.kind === 'scalar' ? Number(point.value.value) : null,
+                yoyPct: point.yoy?.percentDelta !== undefined && point.yoy?.percentDelta !== null ? Number(point.yoy.percentDelta) : null,
+                derived: point.derivationKind === 'YTD_DIFFERENCE',
+                conflict: point.reconcileStatus === 'conflicted',
+              }))}
+              valueLabel={trend.selected?.label ?? '指标'}
+              unit={trend.selected?.unit === 'currency' ? trend.selected.currency ?? '' : trend.selected?.unit?.startsWith('percent') ? '%' : undefined}
+            />
+            <p className="m-0 mt-1.5 text-[11px] text-[var(--color-fg-3)]">
+              纹理柱 = YTD 差分推导期 · 橙描边 = 对账冲突 · 悬停柱看数值与同比；切换到「表」视图查看口径与来源
+            </p>
+          </div>
+        ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] border-collapse text-left">
             <thead><tr className="border-b border-[var(--color-border-soft)] text-[10.5px] text-[var(--color-fg-3)]"><th className="py-2 font-medium">期间</th><th className="py-2 text-right font-medium">数值</th><th className="py-2 text-right font-medium">同比</th><th className="py-2 text-right font-medium">环比</th><th className="py-2 text-right font-medium">状态</th></tr></thead>
@@ -88,6 +117,7 @@ export function EarningsTrendPanel({ stockId }: { stockId: string }) {
             })}</tbody>
           </table>
         </div>
+        )
       ) : (
         <div className="py-8 text-center text-[12px] text-[var(--color-fg-3)]">暂无足够可比期间</div>
       )}

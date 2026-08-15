@@ -24,11 +24,14 @@
 import {
   computeFinancialRatios,
   computeHistoricalContext,
+  computePeerComparison,
   computeTechnicalIndicators,
   computeValuation,
   detectRedFlags,
+  findPeerGroup,
   type ComputeWarning,
   type HistoricalContext,
+  type PeerMetrics,
 } from '../compute';
 import type {
   ComputedFacts,
@@ -154,6 +157,12 @@ export async function fetchSnapshot(
 
   const rawFacts = assembleRawFacts(results);
   const dataAvailability = assembleAvailability(results);
+
+  // C8 (visualization §5.2): peer quotes for the relative-comparison block.
+  // Fail-soft, quotes-only metrics (pe/pb) — per-peer financials would add
+  // ~8 heavy upstream fetches per analysis; fundamental metrics stay null
+  // and the chart renders only what exists. Bounded to 8 peers.
+  const peerMetricsMap = await fetchPeerQuoteMetrics(rawFacts, options, config);
   if (rawFacts.financials && valuationDays > 0 && config.history && valuationHistory === null) {
     // Fail-soft: valuation compute falls back to the main window below.
     dataAvailability.warnings.push('valuation_history_unavailable');
@@ -165,6 +174,7 @@ export async function fetchSnapshot(
     options.market,
     dataAvailability,
     valuationHistory,
+    peerMetricsMap,
   );
 
   // 3. Preserve connector provenance. A source that did not produce a usable
@@ -533,6 +543,7 @@ function runComputeLayer(
   market: Market,
   availability: DataAvailability,
   valuationHistory: PriceBar[] | null = null,
+  peerMetricsMap: Map<string, PeerMetrics> | null = null,
 ): ComputedFacts {
   const warnings: ComputeWarning[] = [];
 
@@ -592,7 +603,7 @@ function runComputeLayer(
     technicalIndicators: techOut.indicators,
     redFlags,
     valuation: valuationOut.valuation,
-    peerComparison: null,
+    peerComparison: computePeerComparisonSafe(rawFacts, market, ratiosOut.ratios, peerMetricsMap),
     historicalContext,
   };
 }
@@ -623,4 +634,85 @@ function isoDaysAgo(days: number): string {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() - days);
   return d.toISOString().slice(0, 10);
+}
+
+// ============================================================================
+// C8 — peer relative comparison (quotes-only, fail-soft)
+// ============================================================================
+
+async function fetchPeerQuoteMetrics(
+  rawFacts: RawFacts,
+  options: FetchSnapshotOptions,
+  config: MarketConfig,
+): Promise<Map<string, PeerMetrics> | null> {
+  const sector = rawFacts.profile?.sector ?? null;
+  const subjectCode = options.symbol.split('.')[0]!;
+  const group = findPeerGroup(options.market, sector)
+    .filter((peer) => peer.symbol !== subjectCode)
+    .slice(0, 8);
+  if (group.length === 0) return null;
+
+  const rows = await Promise.all(
+    group.map(async (peer) => {
+      try {
+        const out = await config.quote(peer.symbol, {
+          signal: options.signal,
+          timeoutMs: 8_000,
+        });
+        const q = unwrapFetcherOutput(out);
+        if (!q || typeof q !== 'object') return null;
+        const quote = q as { peRatio?: unknown; pbRatio?: unknown };
+        const metrics: PeerMetrics = {
+          pe: numOrNull(quote.peRatio),
+          pb: numOrNull(quote.pbRatio),
+          roe: null,
+          netMargin: null,
+          revenueGrowthYoY: null,
+        };
+        if (metrics.pe === null && metrics.pb === null) return null;
+        return [peer.symbol, metrics] as const;
+      } catch {
+        return null; // fail-soft: one dead peer never breaks the snapshot
+      }
+    }),
+  );
+
+  const map = new Map<string, PeerMetrics>();
+  for (const row of rows) if (row) map.set(row[0], row[1]);
+  return map.size >= 2 ? map : null; // a median of one peer is noise
+}
+
+function computePeerComparisonSafe(
+  rawFacts: RawFacts,
+  market: Market,
+  subjectRatios: ReturnType<typeof computeFinancialRatios>['ratios'],
+  peerMetricsMap: Map<string, PeerMetrics> | null,
+) {
+  if (!peerMetricsMap || !rawFacts.quote) return null;
+  const subjectMetrics: PeerMetrics = {
+    pe: numOrNull(rawFacts.quote.peRatio),
+    pb: numOrNull(rawFacts.quote.pbRatio),
+    roe: subjectRatios?.roe ?? null,
+    netMargin: subjectRatios?.netMargin ?? null,
+    revenueGrowthYoY: subjectRatios?.revenueGrowthYoY ?? null,
+  };
+  return computePeerComparison({
+    subjectSymbol: rawFacts.quote.instrument?.symbol ?? '',
+    subjectMarket: market,
+    subjectSector: rawFacts.profile?.sector ?? null,
+    subjectMetrics,
+    peerMetrics: peerMetricsMap,
+  });
+}
+
+function numOrNull(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
+}
+
+function unwrapFetcherOutput<T>(out: unknown): T | null {
+  if (out === null || out === undefined) return null;
+  if (typeof out === 'object' && 'value' in (out as Record<string, unknown>)) {
+    return ((out as { value: T | null }).value) ?? null;
+  }
+  return out as T;
 }

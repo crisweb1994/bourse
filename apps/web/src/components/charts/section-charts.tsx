@@ -18,6 +18,8 @@ import { PercentileBand } from './primitives/percentile-band';
 import { ScenarioRangeBar, type ScenarioRange } from './primitives/range-bar';
 import { RiskMatrix, type RiskItem } from './primitives/risk-matrix';
 import { ComboBarLine, type PeriodTrend } from './primitives/combo-bar-line';
+import { PeerBulletBar } from './primitives/bullet-bar';
+import { SensitivityCurve, type SensitivityPoint } from './primitives/sensitivity-curve';
 
 interface ValuationShape {
   peHistorySeries?: Array<{ period: string; pe: number }> | null;
@@ -27,6 +29,15 @@ interface ValuationShape {
   pe5yPercentile?: number | null;
   impliedGrowthRate?: number | null;
   baseCurrency?: string | null;
+  dcfSensitivity?: { points: SensitivityPoint[] } | null;
+}
+
+interface PeerComparisonShape {
+  sector?: string;
+  subjectVsPeerMedian?: Record<
+    string,
+    { subject: number | null; median: number | null; rankPercentile: number | null; peerCount: number }
+  >;
 }
 
 export function SectionCharts({
@@ -40,6 +51,7 @@ export function SectionCharts({
 }) {
   const chartFacts = evidence?.status === 'ready' ? evidence.data?.chartFacts : undefined;
   const valuation = chartFacts?.valuation as ValuationShape | null | undefined;
+  const peerComparison = chartFacts?.peerComparison as PeerComparisonShape | null | undefined;
   const quote = chartFacts?.quote ?? null;
 
   if (sectionType === 'VALUATION_SCENARIOS') {
@@ -96,6 +108,34 @@ export function SectionCharts({
               currency={scenarios.find((s) => s.valueRange)?.valueRange?.currency ?? quote?.currency ?? ''}
               impliedGrowth={valuation?.impliedGrowthRate ?? null}
             />
+          </ChartFrame>
+        ) : null}
+
+        {/* C9 · 反向 DCF 敏感度曲线（确定性扫描，非预测） */}
+        {valuation?.dcfSensitivity?.points?.length ? (
+          <ChartFrame
+            title="反向 DCF 敏感度"
+            status="ready"
+            asOf={quote?.asOf ?? null}
+            ariaSummary={`公允价值随假设增长率变化；现价隐含 ${valuation.impliedGrowthRate != null ? (valuation.impliedGrowthRate * 100).toFixed(1) : '—'}% 增长`}
+          >
+            <SensitivityCurve
+              points={valuation.dcfSensitivity.points}
+              currentPrice={typeof price === 'number' ? price : null}
+              impliedGrowth={valuation.impliedGrowthRate ?? null}
+              currency={valuation.baseCurrency ?? quote?.currency ?? undefined}
+            />
+          </ChartFrame>
+        ) : null}
+
+        {/* C8 · 同行分位条（quotes-only 口径，基本面指标如实缺省） */}
+        {peerComparison?.subjectVsPeerMedian ? (
+          <ChartFrame
+            title={`同行对比${peerComparison.sector ? ` · ${peerComparison.sector}` : ''}`}
+            status="ready"
+            ariaSummary="本公司估值指标相对同行中位数的分位"
+          >
+            <PeerBulletBar subjectVsPeerMedian={peerComparison.subjectVsPeerMedian} />
           </ChartFrame>
         ) : null}
       </div>

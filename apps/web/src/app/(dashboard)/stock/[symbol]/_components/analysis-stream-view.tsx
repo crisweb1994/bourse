@@ -13,6 +13,7 @@ import { DataQualityNotice } from '@/components/analysis/data-quality-notice';
 import { useEvidence } from '@/components/charts/use-evidence';
 import { SignalMatrix } from '@/components/charts/primitives/signal-matrix';
 import { ChartFrame } from '@/components/charts/chart-frame';
+import { CnMarketPanel } from '@/components/charts/cn-market-panel';
 import { Button, Card, Pill, SectionTag } from '@/components/ui';
 import { FOCUS_WINDOW_LABELS, MODE_LABELS, SECTION_LABELS } from '@/lib/constants';
 import { formatAnalysisTime } from '../stock-page-ui';
@@ -147,6 +148,13 @@ export function AnalysisStreamView({
         <LeftSectionNav items={navItems} activeId={effectiveActive} onSelect={onNavClick} />
         <div className="min-w-0 space-y-6">
           {sectionList.map((section) => <ScrollSection key={section.type} section={section} onRetry={onRetry} showCitations onAsk={onAskAnalysis} evidence={evidence} />)}
+          {evidence.status === 'ready' ? (
+            <CnMarketPanel
+              market={market}
+              northbound={evidence.data?.chartFacts.northbound}
+              unlockCalendar={evidence.data?.chartFacts.unlockCalendar}
+            />
+          ) : null}
           {stream.summaryMarkdown && (
             <section id="section-SUMMARY" className="scroll-mt-4">
               <Card>

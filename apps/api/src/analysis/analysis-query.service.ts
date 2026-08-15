@@ -26,6 +26,7 @@ interface PackPayload {
     technical?: unknown;
     ratios?: { periodTrends?: unknown } | null;
     valuation?: unknown;
+    peerComparison?: unknown;
   } | null;
   priceSeries?: ChartEvidenceResponse['chartFacts']['priceSeries'];
   researchCoverage?: unknown;
@@ -241,6 +242,9 @@ export class AnalysisQueryService {
             ? { periodTrends: computed.ratios.periodTrends }
             : null,
         valuation: computed?.valuation ?? null,
+        peerComparison: computed?.peerComparison ?? null,
+        northbound: facts.northboundFlow?.value ?? null,
+        unlockCalendar: facts.unlockCalendar?.value ?? null,
       },
       provenance: {
         ...(typeof quoteFact?.sourceTier === 'string'

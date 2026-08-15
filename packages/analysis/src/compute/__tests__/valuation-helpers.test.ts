@@ -344,3 +344,53 @@ describe('computeValuation · null safety', () => {
     expect(valuation).toBeNull();
   });
 });
+
+// ============================================================================
+// C9 — dcfSensitivity (visualization §5.2)
+// ============================================================================
+
+describe('valuation-helpers · dcfSensitivity (C9)', () => {
+  const input = {
+    bundle: bundle([
+      ttm({ revenue: 400e9, netIncome: 100e9, freeCashFlow: 100e9 }),
+      fy('FY2024', '2024-09-30', { eps: 6.16, netIncome: 93.7e9, revenue: 391e9, freeCashFlow: 97e9 }),
+    ]),
+    quote: quote(230, 3.5e12),
+    history: null,
+    market: 'US' as const,
+  };
+
+  it('emits 21 monotonic points across −10%…+30% when DCF inputs are ready', () => {
+    const { valuation } = computeValuation(input);
+    expect(valuation?.dcfSensitivity).toBeDefined();
+    const pts = valuation!.dcfSensitivity!.points;
+    expect(pts).toHaveLength(21);
+    expect(pts[0]!.growth).toBeCloseTo(-0.1, 10);
+    expect(pts[20]!.growth).toBeCloseTo(0.3, 10);
+    for (let i = 1; i < pts.length; i++) {
+      expect(pts[i]!.fairValuePerShare).toBeGreaterThan(pts[i - 1]!.fairValuePerShare);
+    }
+  });
+
+  it('curve value at fairValueAssumedGrowth matches fairValuePerShare (same DCF)', () => {
+    const { valuation } = computeValuation(input);
+    const g = valuation!.fairValueAssumedGrowth!;
+    const pts = valuation!.dcfSensitivity!.points;
+    // g=5% is a grid point (index 7.5 → not exact); interpolate neighbor check instead:
+    // the two neighbors must bracket fairValuePerShare.
+    const below = [...pts].reverse().find((p) => p.growth <= g)!;
+    const above = pts.find((p) => p.growth >= g)!;
+    expect(valuation!.fairValuePerShare!).toBeGreaterThanOrEqual(below.fairValuePerShare - 1e-6);
+    expect(valuation!.fairValuePerShare!).toBeLessThanOrEqual(above.fairValuePerShare + 1e-6);
+  });
+
+  it('absent when ttmFcf/shares unavailable', () => {
+    const { valuation } = computeValuation({
+      bundle: bundle([fy('FY2024', '2024-09-30', { eps: 1 })]),
+      quote: quote(10, 1e9),
+      history: null,
+      market: 'US' as const,
+    });
+    expect(valuation?.dcfSensitivity).toBeUndefined();
+  });
+});
