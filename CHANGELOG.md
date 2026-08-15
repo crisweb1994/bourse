@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.0](https://github.com/crisweb1994/bourse/compare/v0.8.0...v0.9.0) (2026-08-15)
+
+
+### Features
+
+* **analysis:** replace legacy research with v2 five-module workflow ([4bcbaf2](https://github.com/crisweb1994/bourse/commit/4bcbaf273228b1a896fc7c242524c6bce85bdc9f))
+* **analysis:** 用五模块研究流程替换旧版九维分析 ([da3351e](https://github.com/crisweb1994/bourse/commit/da3351e5d3d27dfd46b5a1d8e29eb10ee0e21d13))
+
+
+### Bug Fixes
+
+* **analysis:** harden v2 streaming and recovery ([c992ade](https://github.com/crisweb1994/bourse/commit/c992ade63350a77a91bb8996dec0c994c7f32abe))
+
 ## [0.8.0](https://github.com/crisweb1994/bourse/compare/v0.7.0...v0.8.0) (2026-08-08)
 
 
