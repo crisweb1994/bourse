@@ -13,14 +13,13 @@ export class InvalidContractError extends Error {
 }
 
 /**
- * Signals that the run hit a budget cap. Caller should expect partial
- * result with status = BUDGET_EXHAUSTED.
+ * Signals that a tool invocation exceeded a code-owned safety cap. This is an
+ * internal error; Analysis exposes only its normal module/run failure states.
  *
  * Limits:
- *   - 'maxTokens'    — workflow-level token cap (BudgetLimits.maxTokens)
+ *   - 'maxTokens'    — provider/workflow safety cap
  *   - 'maxToolCalls' — ToolMiddlewareConfig per-tool / total call cap
- *   - 'toolBudget'   — RFC-09 P2: ToolPolicy.budgetCapUsd per-call USD
- *                      ceiling exceeded after a successful tool run
+ *   - 'toolBudget'   — optional provider-side cost guard
  */
 export class BudgetExhaustedError extends Error {
   constructor(

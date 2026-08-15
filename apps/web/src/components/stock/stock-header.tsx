@@ -32,24 +32,18 @@ import {
   type StockNewsItem,
 } from '@/lib/api';
 import { Button, Pill, SectionTag } from '@/components/ui';
-import { ANALYSIS_TYPE_LABELS } from '@/lib/constants';
+import { CONFIDENCE_LABELS, FOCUS_WINDOW_LABELS, MODE_LABELS, SIGNAL_LABELS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
-const SIGNAL_LABEL: Record<string, string> = {
-  BULLISH: '看多',
-  BEARISH: '看空',
-  NEUTRAL: '中性',
-};
-const CONF_LABEL: Record<string, string> = { HIGH: '高', MEDIUM: '中', LOW: '低' };
+const SIGNAL_LABEL = SIGNAL_LABELS;
+const CONF_LABEL = CONFIDENCE_LABELS;
 
 /**
- * Pull the one-line conclusion out of a COMPREHENSIVE analysis summaryJson.
- * Only COMPREHENSIVE analyses populate this shape; other types carry no
- * prose summary, so a safe runtime read degrades gracefully to undefined.
+ * Pull the headline out of a V2 analysis summary.
  */
 function readOneLiner(summaryJson: unknown): string | undefined {
   if (typeof summaryJson !== 'object' || summaryJson === null) return undefined;
-  const v = (summaryJson as { oneLiner?: unknown }).oneLiner;
+  const v = (summaryJson as { headline?: unknown }).headline;
   return typeof v === 'string' && v.trim() ? v.trim() : undefined;
 }
 
@@ -324,7 +318,7 @@ function ResearchPulse({
   const latest = recent[0];
   const oneLiner = readOneLiner(latest?.summaryJson);
   const typeLabel = latest
-    ? ANALYSIS_TYPE_LABELS[latest.analysisType] ?? latest.analysisType
+    ? `${MODE_LABELS[latest.mode]} · ${FOCUS_WINDOW_LABELS[latest.focusWindow]}`
     : null;
 
   return (
@@ -342,7 +336,7 @@ function ResearchPulse({
               <span className="font-medium text-[var(--color-fg)]">最近研究</span>
               {latest ? (
                 <span className="font-mono text-[10.5px] text-[var(--color-fg-3)]">
-                  {typeLabel} · {timeAgo(latest.generatedAt ?? latest.createdAt)}
+                  {typeLabel} · {timeAgo(latest.completedAt ?? latest.createdAt)}
                 </span>
               ) : (
                 <span className="font-mono text-[10.5px] text-[var(--color-fg-3)]">
@@ -380,8 +374,8 @@ function ResearchPulse({
 }
 
 function signalTone(signal: string | null | undefined): string {
-  if (signal === 'BULLISH') return 'text-[var(--color-accent-600)]';
-  if (signal === 'BEARISH') return 'text-[var(--color-danger)]';
+  if (signal === 'POSITIVE') return 'text-[var(--color-accent-600)]';
+  if (signal === 'CAUTIOUS') return 'text-[var(--color-danger)]';
   return 'text-[var(--color-fg-2)]';
 }
 
@@ -657,11 +651,11 @@ function LastAnalysisChip({
         }
       >
         <Clock className="w-3 h-3" strokeWidth={1.5} />
-        <span>上次分析 · {timeAgo(latest.generatedAt ?? latest.createdAt)}</span>
+        <span>上次研究 · {timeAgo(latest.completedAt ?? latest.createdAt)}</span>
         {latest.overallSignal && (
           <span className="text-[var(--color-accent-600)] font-medium whitespace-nowrap">
-            {ANALYSIS_TYPE_LABELS[latest.analysisType] ??
-              latest.analysisType}{' '}
+            {MODE_LABELS[latest.mode] ?? latest.mode}{' '}
+            · {FOCUS_WINDOW_LABELS[latest.focusWindow] ?? latest.focusWindow}{' '}
             ·{' '}
             {SIGNAL_LABEL[latest.overallSignal] ?? latest.overallSignal}
             {latest.overallConfidence
@@ -699,8 +693,7 @@ function LastAnalysisChip({
           <ul className="m-0 list-none">
             {recent.map((a) => {
               const isActive = a.id === activeId;
-              const typeLabel =
-                ANALYSIS_TYPE_LABELS[a.analysisType] ?? a.analysisType;
+              const typeLabel = `${MODE_LABELS[a.mode]} · ${FOCUS_WINDOW_LABELS[a.focusWindow]}`;
               const sigLabel = a.overallSignal
                 ? SIGNAL_LABEL[a.overallSignal] ?? a.overallSignal
                 : null;
@@ -740,7 +733,7 @@ function LastAnalysisChip({
                         )}
                       </div>
                       <div className="mt-0.5 font-mono text-[10.5px] text-[var(--color-fg-3)]">
-                        {timeAgo(a.generatedAt ?? a.createdAt)} · {a.aiModel ?? a.aiProvider ?? '—'}
+                        {timeAgo(a.completedAt ?? a.createdAt)} · {a.aiModel ?? a.aiProvider ?? '—'}
                       </div>
                       {oneLiner && (
                         <div className="mt-1 text-[11.5px] leading-snug text-[var(--color-fg-2)] line-clamp-2">

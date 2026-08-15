@@ -12,22 +12,15 @@ function enumObject<const T extends readonly string[]>(
   };
 }
 
-export const ANALYSIS_DIMENSIONS = [
-  'FUNDAMENTAL',
-  'GOVERNANCE',
-  'VALUATION',
-  'INDUSTRY',
-  'RISK',
-  'TECHNICAL',
-  'SENTIMENT',
-  'SCENARIO',
-  'PORTFOLIO',
+export const SECTION_TYPES = [
+  'COMPANY_QUALITY',
+  'INDUSTRY_POSITION',
+  'VALUATION_SCENARIOS',
+  'RISK_REGISTER',
+  'MARKET_SIGNALS',
 ] as const;
 
-export type AnalysisDimension = (typeof ANALYSIS_DIMENSIONS)[number];
-
-export const SECTION_TYPES = ANALYSIS_DIMENSIONS;
-export type SectionType = AnalysisDimension;
+export type SectionType = (typeof SECTION_TYPES)[number];
 
 const SECTION_TYPE_SET = new Set<string>(SECTION_TYPES);
 
@@ -35,46 +28,35 @@ export function isSectionType(value: string): value is SectionType {
   return SECTION_TYPE_SET.has(value);
 }
 
-export const COMPREHENSIVE_DIMENSIONS = ANALYSIS_DIMENSIONS;
+export const SectionStatus = {
+  PENDING: 'PENDING',
+  IN_PROGRESS: 'IN_PROGRESS',
+  COMPLETED: 'COMPLETED',
+  FAILED: 'FAILED',
+  SKIPPED: 'SKIPPED',
+  CANCELLED: 'CANCELLED',
+} as const;
 
-export const ACTIVE_ANALYSIS_TYPES = [
-  ...ANALYSIS_DIMENSIONS,
-  'COMPREHENSIVE',
-] as const;
+export type SectionStatus =
+  (typeof SectionStatus)[keyof typeof SectionStatus];
 
-export type ActiveAnalysisType = (typeof ACTIVE_ANALYSIS_TYPES)[number];
+export const ANALYSIS_MODES = ['QUICK', 'DEEP'] as const;
+export type AnalysisMode = (typeof ANALYSIS_MODES)[number];
+export const AnalysisMode = enumObject(ANALYSIS_MODES);
 
-const ACTIVE_ANALYSIS_TYPE_SET = new Set<string>(ACTIVE_ANALYSIS_TYPES);
+export const FOCUS_WINDOWS = ['30D', '90D', '1Y', '3Y'] as const;
+export type FocusWindow = (typeof FOCUS_WINDOWS)[number];
+export const FocusWindow = enumObject(FOCUS_WINDOWS);
 
-export function isActiveAnalysisType(
-  value: string,
-): value is ActiveAnalysisType {
-  return ACTIVE_ANALYSIS_TYPE_SET.has(value);
-}
-
-export const ALL_ANALYSIS_TYPES = ACTIVE_ANALYSIS_TYPES;
-
-export const AnalysisType = enumObject(ALL_ANALYSIS_TYPES);
-export type AnalysisType = (typeof ALL_ANALYSIS_TYPES)[number];
-
-const ANALYSIS_TYPE_SET = new Set<string>(ALL_ANALYSIS_TYPES);
-
-export function isAnalysisType(value: string): value is AnalysisType {
-  return ANALYSIS_TYPE_SET.has(value);
-}
-
-export const ANALYSIS_TYPE_LABELS: Record<AnalysisType, string> = {
-  FUNDAMENTAL: '基本面',
-  GOVERNANCE: '公司治理',
-  VALUATION: '估值',
-  INDUSTRY: '行业竞争',
-  RISK: '风险',
-  TECHNICAL: '技术面',
-  SENTIMENT: '情绪',
-  SCENARIO: '情景',
-  PORTFOLIO: '组合适配',
-  COMPREHENSIVE: '综合分析',
+export const SECTION_LABELS: Record<SectionType, string> = {
+  COMPANY_QUALITY: '公司质量',
+  INDUSTRY_POSITION: '行业与竞争',
+  VALUATION_SCENARIOS: '估值与情景',
+  RISK_REGISTER: '风险清单',
+  MARKET_SIGNALS: '市场信号',
 };
+
+export const SECTION_ORDER = SECTION_TYPES;
 
 export const AnalysisStatus = {
   PENDING: 'PENDING',
@@ -83,7 +65,6 @@ export const AnalysisStatus = {
   PARTIAL_FAILED: 'PARTIAL_FAILED',
   FAILED: 'FAILED',
   CANCELLED: 'CANCELLED',
-  BUDGET_EXHAUSTED: 'BUDGET_EXHAUSTED',
 } as const;
 
 export type AnalysisStatus =
@@ -100,7 +81,6 @@ export const TERMINAL_ANALYSIS_STATUSES = [
   AnalysisStatus.PARTIAL_FAILED,
   AnalysisStatus.FAILED,
   AnalysisStatus.CANCELLED,
-  AnalysisStatus.BUDGET_EXHAUSTED,
 ] as const;
 
 export type AnalysisTerminalStatus =
@@ -116,18 +96,18 @@ export function isTerminalAnalysisStatus(
   return TERMINAL_ANALYSIS_STATUS_SET.has(status);
 }
 
-export const Signal = {
-  BULLISH: 'BULLISH',
+export const OverallSignal = {
+  POSITIVE: 'POSITIVE',
   NEUTRAL: 'NEUTRAL',
-  BEARISH: 'BEARISH',
+  CAUTIOUS: 'CAUTIOUS',
 } as const;
 
-export type Signal = (typeof Signal)[keyof typeof Signal];
+export type OverallSignal = (typeof OverallSignal)[keyof typeof OverallSignal];
 
-const SIGNAL_SET = new Set<string>(Object.values(Signal));
+const OVERALL_SIGNAL_SET = new Set<string>(Object.values(OverallSignal));
 
-export function isSignal(value: string): value is Signal {
-  return SIGNAL_SET.has(value);
+export function isOverallSignal(value: string): value is OverallSignal {
+  return OVERALL_SIGNAL_SET.has(value);
 }
 
 export const Confidence = {

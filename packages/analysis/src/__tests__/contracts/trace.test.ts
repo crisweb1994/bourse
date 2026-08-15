@@ -1,61 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { PerDimensionTrace, Trace } from '../../contracts/trace';
+import { Trace } from '../../contracts/trace';
 
-const validTrace = {
-  llmCalls: 3,
-  toolCalls: 7,
-  tokensIn: 1500,
-  tokensOut: 800,
-  durationMs: 4321,
-};
-
-describe('contracts/Trace', () => {
-  it('parses a minimal trace without perDimension', () => {
-    expect(Trace.parse(validTrace)).toEqual(validTrace);
-  });
-
-  it('parses trace with perDimension breakdown', () => {
-    const withDims = {
-      ...validTrace,
+describe('Trace V2', () => {
+  it('accepts trace entries keyed by the five section types', () => {
+    const parsed = Trace.parse({
+      llmCalls: 2,
+      toolCalls: 1,
+      tokensIn: 10,
+      tokensOut: 20,
+      durationMs: 30,
       perDimension: {
-        FUNDAMENTAL: {
-          durationMs: 1000,
-          citationsCount: 5,
-          tokensIn: 500,
-          tokensOut: 200,
+        COMPANY_QUALITY: {
+          durationMs: 1, citationsCount: 1, tokensIn: 5, tokensOut: 5,
         },
       },
-    };
-    expect(Trace.parse(withDims).perDimension?.FUNDAMENTAL?.tokensIn).toBe(500);
+    });
+    expect(parsed.perDimension?.COMPANY_QUALITY?.tokensOut).toBe(5);
   });
 
-  it('rejects negative numbers', () => {
-    expect(() => Trace.parse({ ...validTrace, tokensIn: -1 })).toThrow();
-  });
-
-  it('rejects non-integer where int required', () => {
-    expect(() => Trace.parse({ ...validTrace, llmCalls: 3.5 })).toThrow();
-  });
-
-  it('rejects unknown dimension key in perDimension', () => {
-    expect(() =>
-      Trace.parse({
-        ...validTrace,
-        perDimension: {
-          NOT_A_DIMENSION: {
-            durationMs: 0,
-            citationsCount: 0,
-            tokensIn: 0,
-            tokensOut: 0,
-          },
-        },
-      }),
-    ).toThrow();
-  });
-});
-
-describe('contracts/PerDimensionTrace', () => {
-  it('requires all 4 metric fields', () => {
-    expect(() => PerDimensionTrace.parse({ durationMs: 100 })).toThrow();
+  it('rejects legacy dimension keys', () => {
+    expect(() => Trace.parse({
+      llmCalls: 0, toolCalls: 0, tokensIn: 0, tokensOut: 0, durationMs: 0,
+      perDimension: { FUNDAMENTAL: { durationMs: 0, citationsCount: 0, tokensIn: 0, tokensOut: 0 } },
+    })).toThrow();
   });
 });

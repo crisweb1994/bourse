@@ -13,9 +13,31 @@ export type ApiSseFrame<T extends AnalysisSseEventName = AnalysisSseEventName> =
 export function mapEvidencePackReadyEvent(
   event: Extract<SseEvent, { type: 'evidence_pack_ready' }>,
 ): ApiSseFrame<'evidence_pack_ready'> {
+  const pack = event.pack as {
+    capturedAt?: unknown;
+    dataAsOf?: unknown;
+    degraded?: unknown;
+    missingFields?: unknown[];
+    dataAvailability?: { missing?: unknown[]; degradedSource?: unknown };
+  };
+  const availability = pack.dataAvailability;
+  const missingFields = Array.isArray(pack.missingFields)
+    ? pack.missingFields
+    : Array.isArray(availability?.missing)
+      ? availability.missing
+      : [];
   return {
     event: 'evidence_pack_ready',
-    data: { pack: event.pack },
+    data: {
+      pack: {
+        capturedAt: typeof pack.capturedAt === 'string' ? pack.capturedAt : null,
+        dataAsOf: pack.dataAsOf ?? null,
+        degraded:
+          pack.degraded === true ||
+          availability?.degradedSource === 'WEB_SEARCH_FALLBACK',
+        missingFields,
+      },
+    },
   };
 }
 
@@ -58,6 +80,18 @@ export function mapReportChunkEvent(
   };
 }
 
+export function mapReportCompleteEvent(
+  event: Extract<SseEvent, { type: 'report_complete' }>,
+): ApiSseFrame<'report_complete'> {
+  return {
+    event: 'report_complete',
+    data: {
+      text: event.fullMarkdown,
+      sectionType: event.sectionType,
+    },
+  };
+}
+
 export function mapCitationEvent(
   event: Extract<SseEvent, { type: 'citation' }>,
 ): ApiSseFrame<'citation'> {
@@ -68,6 +102,8 @@ export function mapCitationEvent(
       url: event.citation.url,
       claim: '',
       sectionType: event.sectionType,
+      retrievedAt: event.citation.retrievedAt,
+      sourceType: event.citation.sourceType,
       ...(event.citation.searchAdapter
         ? { searchAdapter: event.citation.searchAdapter }
         : {}),
@@ -95,6 +131,7 @@ export function mapSectionCompleteEvent(
     data: {
       sectionType: event.sectionType,
       status: event.status,
+      ...(event.status !== 'COMPLETED' ? { error: event.error ?? null } : {}),
     },
   };
 }
@@ -147,6 +184,7 @@ export function mapErrorEvent(
     data: {
       message: event.message,
       ...(event.sectionType ? { failedSections: [event.sectionType] } : {}),
+      ...(event.sectionType ? { sectionType: event.sectionType } : {}),
     },
   };
 }

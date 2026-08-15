@@ -6,7 +6,6 @@ import {
   MinimalFacts,
   SourceTier,
 } from '../../contracts/evidence-pack-v2';
-import { EvidencePackAny } from '../../contracts/evidence-pack';
 import { z } from 'zod';
 
 // Helpers
@@ -213,65 +212,6 @@ describe('EvidencePackV2 envelope', () => {
     };
     const r = EvidencePackV2.safeParse(pack);
     expect(r.success).toBe(true);
-  });
-});
-
-describe('EvidencePackAny discriminated union', () => {
-  function v1Pack(): unknown {
-    return {
-      schemaVersion: 'evidence-pack-v1',
-      symbol: '600519.SS',
-      market: 'CN',
-      capturedAt: NOW,
-      financialSnapshot: {},
-      news: [],
-      valuation: {},
-      riskFacts: ['具体风险1'],
-      allowedUrls: ['https://example.com'],
-    };
-  }
-  function v2Pack(): unknown {
-    return {
-      schemaVersion: 'evidence-pack-v2',
-      symbol: '600519.SS',
-      market: 'CN',
-      capturedAt: NOW,
-      facts: {},
-      dataAvailability: { complete: [], missing: [], fallbacks: [] },
-      citations: [],
-      trace: { toolCalls: 0, durationMs: 0, costUsd: 0 },
-    };
-  }
-
-  it('accepts a valid v1 pack', () => {
-    expect(EvidencePackAny.safeParse(v1Pack()).success).toBe(true);
-  });
-
-  it('accepts a valid v2 pack', () => {
-    expect(EvidencePackAny.safeParse(v2Pack()).success).toBe(true);
-  });
-
-  it('rejects an unknown schemaVersion', () => {
-    const bogus = v2Pack() as Record<string, unknown>;
-    bogus.schemaVersion = 'evidence-pack-v3';
-    expect(EvidencePackAny.safeParse(bogus).success).toBe(false);
-  });
-
-  it('routes parse to the right variant by schemaVersion', () => {
-    const r1 = EvidencePackAny.safeParse(v1Pack());
-    expect(r1.success).toBe(true);
-    if (r1.success) {
-      expect(r1.data.schemaVersion).toBe('evidence-pack-v1');
-      // v1-specific field
-      expect('financialSnapshot' in r1.data).toBe(true);
-    }
-
-    const r2 = EvidencePackAny.safeParse(v2Pack());
-    expect(r2.success).toBe(true);
-    if (r2.success) {
-      expect(r2.data.schemaVersion).toBe('evidence-pack-v2');
-      expect('dataAvailability' in r2.data).toBe(true);
-    }
   });
 });
 

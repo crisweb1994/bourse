@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AnalysisType } from './enums';
+import { SectionType } from './enums';
 
 export const PerDimensionTrace = z.object({
   durationMs: z.number().nonnegative(),
@@ -20,7 +20,7 @@ export const PerDimensionTrace = z.object({
 export type PerDimensionTrace = z.infer<typeof PerDimensionTrace>;
 
 // Top-level run-wide trace. Populated by primitives/trace.ts at runtime.
-// `perDimension` is keyed by AnalysisType but stored as a plain record so
+// `perDimension` is keyed by SectionType but stored as a plain record so
 // failed dimensions just don't appear (no need to seed defaults).
 export const Trace = z.object({
   llmCalls: z.number().int().nonnegative(),
@@ -28,7 +28,7 @@ export const Trace = z.object({
   tokensIn: z.number().int().nonnegative(),
   tokensOut: z.number().int().nonnegative(),
   durationMs: z.number().nonnegative(),
-  perDimension: z.record(AnalysisType, PerDimensionTrace).optional(),
+  perDimension: z.record(SectionType, PerDimensionTrace).optional(),
   // RFC-01: run-wide aggregates. Optional for backwards compatibility with
   // older traces; sum of perDimension values when present.
   cacheReadInputTokens: z.number().int().nonnegative().optional(),

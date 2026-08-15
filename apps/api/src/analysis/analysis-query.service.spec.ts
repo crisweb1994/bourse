@@ -4,16 +4,20 @@ import { BadRequestException } from '@nestjs/common';
 import { AnalysisQueryService } from './analysis-query.service';
 
 describe('AnalysisQueryService', () => {
-  it('returns history rows without synthetic planner compatibility fields', async () => {
+  it('returns V2 history rows and maps Prisma focus-window names', async () => {
     const rows = [
       {
         id: 'analysis-1',
         userId: 'user-1',
         symbol: 'AAPL',
-        status: 'COMPLETED',
-        degradedSource: null,
+        mode: 'QUICK',
+        focusWindow: 'D90',
+        status: 'PARTIAL_FAILED',
         stock: { symbol: 'AAPL' },
-        sections: [{ type: 'FUNDAMENTAL', status: 'COMPLETED' }],
+        sections: [
+          { type: 'COMPANY_QUALITY', status: 'COMPLETED' },
+          { type: 'RISK_REGISTER', status: 'FAILED' },
+        ],
       },
     ];
     const calls: unknown[] = [];
@@ -25,33 +29,41 @@ describe('AnalysisQueryService', () => {
         },
         count: async () => rows.length,
       },
-    } as never);
+    } as any);
 
     const result = await service.getHistory('user-1', {
       page: 2,
       limit: 10,
-      degradedOnly: true,
+      mode: 'QUICK',
+      status: 'PARTIAL_FAILED',
+      symbol: 'app',
+      stockId: 'stock-1',
     });
 
     assert.equal(result.total, 1);
     assert.equal(result.page, 2);
     assert.equal(result.limit, 10);
-    assert.equal(result.items[0], rows[0]);
-    assert.equal('snapshotIds' in result.items[0], false);
-    assert.equal('research' in result.items[0], false);
+    assert.equal(result.items[0]!.focusWindow, '90D');
+    assert.equal(result.items[0]!.sections[0]!.type, 'COMPANY_QUALITY');
+    assert.equal(result.items[0]!.sections[1]!.status, 'FAILED');
 
     const findArgs = calls[0] as {
-      where: Record<string, unknown>;
+      where: Record<string, any>;
       skip: number;
       take: number;
     };
-    assert.equal(findArgs.where.userId, 'user-1');
-    assert.equal(findArgs.where.degradedSource, 'WEB_SEARCH_FALLBACK');
+    assert.deepEqual(findArgs.where, {
+      userId: 'user-1',
+      mode: 'QUICK',
+      status: 'PARTIAL_FAILED',
+      symbol: { contains: 'app', mode: 'insensitive' },
+      stockId: 'stock-1',
+    });
     assert.equal(findArgs.skip, 10);
     assert.equal(findArgs.take, 10);
   });
 
-  it('applies canonical analysis type and status filters', async () => {
+  it('accepts all V2 modes and terminal statuses as filters', async () => {
     const calls: unknown[] = [];
     const service = new AnalysisQueryService({
       analysis: {
@@ -61,19 +73,19 @@ describe('AnalysisQueryService', () => {
         },
         count: async () => 0,
       },
-    } as never);
+    } as any);
 
     await service.getHistory('user-1', {
-      analysisType: 'FUNDAMENTAL',
-      status: 'BUDGET_EXHAUSTED',
+      mode: 'DEEP',
+      status: 'CANCELLED',
     });
 
-    const findArgs = calls[0] as { where: Record<string, unknown> };
-    assert.equal(findArgs.where.analysisType, 'FUNDAMENTAL');
-    assert.equal(findArgs.where.status, 'BUDGET_EXHAUSTED');
+    const where = (calls[0] as any).where;
+    assert.equal(where.mode, 'DEEP');
+    assert.equal(where.status, 'CANCELLED');
   });
 
-  it('rejects invalid history filters before querying Prisma', async () => {
+  it('rejects invalid V2 history filters before querying Prisma', async () => {
     const service = new AnalysisQueryService({
       analysis: {
         findMany: async () => {
@@ -83,10 +95,10 @@ describe('AnalysisQueryService', () => {
           throw new Error('should not query');
         },
       },
-    } as never);
+    } as any);
 
     await assert.rejects(
-      () => service.getHistory('user-1', { analysisType: 'NOT_A_TYPE' }),
+      () => service.getHistory('user-1', { mode: 'NOT_A_MODE' }),
       BadRequestException,
     );
     await assert.rejects(

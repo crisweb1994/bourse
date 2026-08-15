@@ -77,7 +77,7 @@ export interface ClaudeProviderConfig {
   model?: string;
   /**
    * 次模型 (utility). Used for structured JSON extraction/repair,
-   * COMPREHENSIVE summary and search query rewriting. Falls back to `model`
+   * Analysis summary and search query rewriting. Falls back to `model`
    * when unset. web_search + evidence normalization still go through `model`.
    */
   utilityModel?: string;
@@ -131,11 +131,11 @@ export class ClaudeProvider implements AgentProvider {
   }
 
   /**
-   * Single-round (back-compat) when `options.rounds` is empty/absent.
-   * Multi-round (MVP doc §4.2.1) when `options.rounds` has entries: replays
+   * Single-round when `options.rounds` is empty/absent.
+   * Multi-round when `options.rounds` has entries: replays
    * each prior assistant turn into the next call's `messages`, letting the
-   * model deepen analysis with web_search across turns. Total budget is
-   * code-side: rounds × per-round maxToolUses.
+   * model deepen analysis with web_search across turns. The limits remain
+   * code-owned: rounds x per-round maxToolUses.
    */
   async stream(
     systemPrompt: SystemPromptInput,
@@ -207,6 +207,7 @@ export class ClaudeProvider implements AgentProvider {
         system: apiSystem,
         messages,
         maxToolUses: roundMaxToolUses,
+        maxTokens: options.maxTokens,
         disableTools,
         round: i + 1, // 1-indexed for telemetry / SSE warning events
         allowedDomains: options.allowedDomains,
@@ -288,6 +289,7 @@ export class ClaudeProvider implements AgentProvider {
     system: string | Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }>;
     messages: MessageParam[];
     maxToolUses: number;
+    maxTokens?: number;
     disableTools: boolean;
     /** 1-indexed round number, used to tag web_search errors for telemetry. */
     round: number;
@@ -301,7 +303,7 @@ export class ClaudeProvider implements AgentProvider {
 
     const streamParams: Parameters<typeof this.client.messages.stream>[0] = {
       model: args.model,
-      max_tokens: DEFAULT_MAX_TOKENS_STREAM,
+      max_tokens: args.maxTokens ?? DEFAULT_MAX_TOKENS_STREAM,
       system: args.system,
       messages: args.messages,
       ...(args.disableTools

@@ -1,94 +1,35 @@
 import { describe, expect, it } from 'vitest';
-import type { StructuredJson } from '../../contracts/analysis-result';
-import {
-  applyResearchCoverage,
-  buildResearchCoverage,
-  shouldSkipForCoverage,
-} from '../research-coverage';
+import { buildResearchCoverage, applyResearchCoverage, shouldSkipForCoverage } from '../research-coverage';
+import type { SectionResult } from '../../contracts/analysis-result';
 
-function result(): StructuredJson {
-  return {
-    schemaVersion: 'agent-result-v1',
-    conclusion: {
-      signal: 'BULLISH',
-      confidence: 'HIGH',
-      oneLiner: 'x',
-      evidence: [],
-    },
-    evidence: [],
-    dataAvailability: { missingFields: [], reason: '' },
-    dataAsOf: '2026-07-26',
-    disclaimer: 'd',
-    priceTarget: { base: 120, currency: 'USD', horizonDays: 365 },
-  };
-}
+const section: SectionResult = {
+  schemaVersion: 'analysis-section-v2',
+  type: 'VALUATION_SCENARIOS',
+  assessment: 'FAIR', confidence: 'HIGH', summary: 'summary', findings: [], limitations: [],
+  dataAsOf: '2026-01-15', disclaimer: 'D', methods: [], scenarios: [],
+};
 
-describe('research coverage', () => {
-  it('allows high confidence only when core source facts are present', () => {
-    const coverage = buildResearchCoverage(
-      new Set(['quote', 'history', 'financials', 'filings', 'macro', 'profile']),
-    );
+describe('research coverage V2', () => {
+  it('marks the fixed module requirements', () => {
+    const coverage = buildResearchCoverage(new Set(['quote', 'history', 'profile', 'financials', 'filings', 'macro']));
     expect(coverage.overallStatus).toBe('PASS');
-    expect(coverage.overallConfidenceCap).toBe('HIGH');
-    expect(coverage.dimensions.VALUATION!.minimumViable).toBe(true);
+    expect(coverage.dimensions.VALUATION_SCENARIOS!.minimumViable).toBe(true);
+    expect(coverage.dimensions.MARKET_SIGNALS!.skip).toBe(false);
   });
 
-  it('marks valuation and scenario insufficient when financials are absent', () => {
-    const coverage = buildResearchCoverage(new Set(['quote', 'history', 'profile']));
-    expect(coverage.overallStatus).toBe('INSUFFICIENT_EVIDENCE');
-    expect(coverage.dimensions.VALUATION!).toMatchObject({
+  it('skips market signals when quote or history is missing', () => {
+    const coverage = buildResearchCoverage(new Set(['financials', 'profile']));
+    expect(shouldSkipForCoverage(coverage, 'MARKET_SIGNALS')).toMatchObject({
+      missingCriticalFacts: ['quote', 'history'],
       status: 'INSUFFICIENT_EVIDENCE',
-      confidenceCap: 'LOW',
-      missingCriticalFacts: ['financials'],
     });
-    expect(coverage.dimensions.SCENARIO!.missingCriticalFacts).toEqual([
-      'financials',
-      'macro',
-    ]);
   });
 
-  it('skips technical only when quote or history is unavailable', () => {
-    const coverage = buildResearchCoverage(new Set(['quote', 'financials']));
-    const technical = shouldSkipForCoverage(coverage, 'TECHNICAL');
-    expect(technical?.missingCriticalFacts).toEqual(['history']);
-    expect(shouldSkipForCoverage(coverage, 'VALUATION')).toBeUndefined();
-  });
-
-  it('caps confidence, carries missing facts, and removes blocked target prices', () => {
-    const coverage = buildResearchCoverage(new Set(['quote', 'history', 'profile']));
-    const modelResult = result();
-    modelResult.dataAvailability.missingFields = [
-      'optional peer metric',
-      'personalized portfolio input',
-    ];
-    const gated = applyResearchCoverage(modelResult, coverage.dimensions.VALUATION);
-    expect(gated.conclusion.confidence).toBe('LOW');
-    expect(gated.priceTarget).toBeUndefined();
-    expect(gated.dataAvailability.missingFields).toEqual(['financials']);
-    expect(gated.dataAvailability.reason).toContain('INSUFFICIENT_EVIDENCE');
-  });
-
-  it('clears model-invented optional gaps when required coverage passes', () => {
-    const coverage = buildResearchCoverage(new Set(['filings']));
-    const modelResult = result();
-    modelResult.dataAvailability.missingFields = [
-      'five-year ROIC series',
-      'institutional ownership split',
-    ];
-
-    const gated = applyResearchCoverage(modelResult, coverage.dimensions.GOVERNANCE);
-
-    expect(gated.dataAvailability.missingFields).toEqual([]);
-  });
-
-  it('downgrades a complete but stale core fact set instead of treating it as fresh', () => {
-    const coverage = buildResearchCoverage(
-      new Set(['quote', 'history', 'financials', 'filings', 'macro', 'profile']),
-      new Set(['macro']),
-    );
-    expect(coverage.overallStatus).toBe('DEGRADED');
-    expect(coverage.overallConfidenceCap).toBe('MEDIUM');
-    expect(coverage.dimensions.SCENARIO!.staleFacts).toEqual(['macro']);
-    expect(coverage.dimensions.SCENARIO!.confidenceCap).toBe('MEDIUM');
+  it('caps an otherwise overconfident result when required facts are missing', () => {
+    const coverage = buildResearchCoverage(new Set(['quote']));
+    const gated = applyResearchCoverage(section, coverage.dimensions.VALUATION_SCENARIOS!);
+    expect(gated.assessment).toBe('UNASSESSABLE');
+    expect(gated.confidence).toBe('LOW');
+    expect(gated.limitations.join('\n')).toContain('financials');
   });
 });

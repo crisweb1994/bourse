@@ -3,7 +3,10 @@ import {
   Logger,
   OnModuleInit,
 } from '@nestjs/common';
-import { AnalysisStatus as PrismaAnalysisStatus } from '@prisma/client';
+import {
+  AnalysisStatus as PrismaAnalysisStatus,
+  SectionStatus as PrismaSectionStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -27,15 +30,17 @@ export class AnalysisLifecycleService implements OnModuleInit {
       where: {
         status: {
           in: [
-            PrismaAnalysisStatus.IN_PROGRESS,
-            PrismaAnalysisStatus.PENDING,
+            PrismaSectionStatus.IN_PROGRESS,
+            PrismaSectionStatus.PENDING,
           ],
         },
         analysis: { status: PrismaAnalysisStatus.FAILED },
       },
       data: {
-        status: PrismaAnalysisStatus.FAILED,
+        status: PrismaSectionStatus.FAILED,
+        errorCode: 'PROCESS_INTERRUPTED',
         errorMessage: 'Server restarted while running',
+        completedAt: new Date(),
       },
     });
     if (orphanAnalyses.count > 0 || orphanSections.count > 0) {

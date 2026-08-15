@@ -6,13 +6,13 @@
 
 ---
 
-## 产品定位（v1.1）
+## 产品定位（Analysis V2）
 
 **Bourse 是一个全球股票研究助手**，帮助个人投资者在"研究 → 决策 → 跟踪 → 复盘"全周期获得专业级辅助。
 
-核心价值主张：零数据仓库、9 维度深度分析、代码计算保证数字准确、强制引用可验证、全球市场覆盖（US / HK / CN / JP / UK）。
+核心价值主张：零数据仓库、五模块股票研究、代码计算保证数字准确、强制引用可验证、全球市场覆盖（当前研究入口为 US / HK / CN）。
 
-### v1.1 要解决的核心问题
+### 当前要解决的核心问题
 
 | # | 问题 | 用户感受 |
 |---|---|---|
@@ -22,18 +22,18 @@
 | 4 | 不可追溯 | "你上个月让我买的，现在跌了" |
 | 5 | 一次性体验 | 报告生成完就结束，无法追问 |
 
-### v1.1 六大模块
+### 当前产品模块
 
 | 模块 | 内容 | 阶段 |
 |---|---|---|
-| 1. 单股深度分析 | v1.0 加固：数字准确度、数据时点透明 | v1.1-α |
+| 1. 股票研究 | 五个固定研究模块、模式和时间窗 | 已落地 |
 | 2. 可信数据与证据 | 数字来源标注、引用内容验证、降级提示 | v1.1-α |
 | 3. 时间与事件感知 | 事件日历（财报/股息/解禁）、宏观事件影响 | v1.1-β |
 | 4. 关联与组合视角 | 同行对照、与自选股相关性、自选股聚合面板 | v1.1-β |
-| 5. 历史追溯与自我校准 | 分析时间线、Diff 视图、置信度校准面板 | v1.1-α→GA |
+| 5. 历史追溯与自我校准 | 分析时间线、状态和证据时点 | v1.1-α→GA |
 | 6. 持续跟踪 | 追问（动态推荐问题）、挑战 evidence、告警 | v1.1-GA |
 
-### 不在 v1.1 范围（明确边界）
+### 不在当前范围（明确边界）
 
 加密货币 / 商品 / 外汇、毫秒级实时行情、App 推送 / 移动客户端、自动交易、量化回测、社区 UGC。
 
@@ -63,12 +63,6 @@
   - 触发：有用户烧 key 烧出问题、或推出付费版前必备。
   - 注意：v1 只记 token 数不记 USD；这条做的时候要重新引入价格表。
 
-- **每日 LLM 费用上限与预算预占**
-  - 状态：2026-07-24 从财报速读和投关记录当前实现移除；开源单实例版本暂不需要数据库锁、费用预占、结算和过期回收。
-  - 价值：自动轮询大量公告时限制每日模型 API 支出，避免自托管用户意外消耗过多额度。
-  - 触发：出现真实用户的意外账单反馈，或自动任务规模明显增长。
-  - 实现边界：优先做一个全局可选上限和调用前累计检查，不恢复分模块预算、并发预占或多节点租约。
-
 - **模型能力自动探测**
   - 价值：替代手动勾选 `supportsWebSearch / supportsTools`，调用一次探测请求自动推断。
   - 触发：用户反馈手动配置易错。
@@ -97,34 +91,37 @@
 
 ## Analysis 模块
 
-### 已确认方向：多视角投资合议（Persona + Debate）
+### 当前已落地：Analysis V2
 
-> 目标是让用户看到“同一组证据在不同投资方法下如何得出不同判断”，不是恢复旧版各 agent 独立抓数据、独立计算的 Debate runtime。
+Analysis V2 的报告模型收敛为五个固定模块：公司质量、行业与竞争、估值与情景、风险清单、市场信号。`DEEP` 一次运行五个模块；`QUICK` 只运行公司质量、市场信号、风险清单，其余模块明确标记为 `SKIPPED`。事实模块并行，风险清单使用前序结果，最后生成一次综合结论。上线按空库处理，不迁移或兼容旧报告。
 
-#### 投资 Persona
+用户输入只有四个产品选项：
 
-- Persona 只定义研究方法、关注重点和证据审查规则，不改变事实、计算结果和引用要求。
-- 首版内置少量方法论 Persona：价值、质量成长、逆向、宏观、风险优先；界面以方法论命名，不模仿名人语气。
-- Persona 复用同一份 EvidencePack 和 compute 结果，禁止自行推导财务数字。
-- 首版 Persona 只用于 Debate 的 Bull / Bear 视角，不注入现有单维度和综合分析，避免扩大 9 个维度的回归矩阵。
-- 自定义 Persona 编辑器放到后续版本，首版不增加任意 prompt 输入和分享市场。
+| 选项 | 值 | 说明 |
+|---|---|---|
+| 模式 | `QUICK` / `DEEP` | `QUICK` 运行三个高信号模块并各做一轮；`DEEP` 运行五个模块并允许第二轮交叉核验 |
+| 时间窗 | `30D` / `90D` / `1Y` / `3Y` | 主要约束价格、新闻、公告和近期事件；财务历史可使用更长上下文 |
+| 研究重点 | 可选文本，最多 500 字 | 只改变排序和解释角度，不改变模块职责 |
+| 语言 | 默认 `zh-CN` | 首版中文输出 |
 
-#### 多 Agent Debate
+数据先抓取为一份不可变 Evidence Snapshot，再由代码计算比率、技术指标、风险旗标和估值辅助值。五个模块共享该快照，所有数字必须回链到来源；结构化数据缺失时明确降低置信度或跳过，不让模型自行补数字。
 
-- Debate 从一份已完成的 Analysis 发起，不重新运行 9 个维度，也不建立第二套数据管线。
-- 固定三角色：Bull、Bear、Judge。Bull / Bear 可选择不同 Persona，并行生成；Judge 最后汇总。
-- 三个角色共享原 Analysis 的不可变 Evidence Snapshot、结构化结论和引用；默认禁止额外 web search。
-- Judge 只输出共识、核心分歧、证据缺口和需要复研的问题，不覆盖原 Analysis 的 signal/confidence，也不提供个性化买卖或仓位指令。
-- 复用现有 Provider 设置、真实取消、token 统计和历史回放；正常运行只有 2 个观点调用 + 1 个 Judge 调用，结构化输出不合法时每阶段最多修复一次。
+状态和操作保持简单：
 
-#### 分阶段范围
+- 模块可以 `COMPLETED`、`FAILED`、`SKIPPED` 或 `CANCELLED`；研究可以 `COMPLETED`、`PARTIAL_FAILED`、`FAILED` 或 `CANCELLED`。
+- 取消是终态，保留已经完成的内容，不支持继续执行。
+- 重试修改原研究，复用原 Snapshot，只重跑真正失败的模块及其依赖的风险和综合结论；确定性 `SKIPPED` 需要新建研究。
+- “再跑一次”创建新研究并重新抓取 Snapshot；原记录保留。
+- 浏览器断开不影响服务端；服务重启将进行中的研究标记为失败。
 
-1. 领域基础：定义 Persona registry、Debate 结构化输出和有界共享上下文，并完成 prompt / 引用约束回归测试。
-2. Debate 后端：从已完成的综合 Analysis 发起，完成 Bull/Bear/Judge 三阶段执行、持久化、取消、重试和历史回放。
-3. Debate 前端：增加发起入口和独立结果页，展示观点对照、分歧摘要、引用回链和复研问题。
-4. 后续评估：根据 Debate 的真实使用反馈，再决定是否把 Persona 接入普通单维度或综合分析。
+### 明确暂不做
 
-明确不做：任意数量 agent、agent 自主选工具、循环互相对话、每角色独立抓取数据、自动交易、自定义 Persona 市场。
+- 事件专项（财报/公告/投关专项）；后续如有需求另写 RFC，不在当前五模块流程中增加第三种模式。
+- 自定义日期；当前只支持四个固定时间窗。
+- 单模块新建研究或静默覆盖旧综合结论；需要新结论时重新生成整份研究。
+- 跨股票比较、组合适配和多股票批处理。
+- 用户配置 token、工具调用次数、并发数或其他资源参数；研究上限是代码内固定常量。
+- Persona、Bull/Bear/Judge、多 Agent 辩论和可编辑 prompt；它们会增加状态和回归矩阵，暂不进入开源首版。
 
 ### 竞品吸收候选（2026-07-19 登记，来源：review ZhuLinsen/daily_stock_analysis）
 
@@ -135,20 +132,11 @@
 
 ### 竞品吸收候选（2026-07-19 二轮登记，来源：全景竞品 web 调研）
 
-- **财报 / 电话会解读**（fiscal.ai Earnings Hub、蚂小财 5 秒财报解读、Perplexity 实时 transcript + 要点提取）→ 已展开为 PRD：`docs/earnings-prd.md`（2026-07-19）：海外/国内头部产品的共同重心，Bourse 9 维里 FUNDAMENTAL 只有 ratio 层，财报事件驱动的"这季度发生了什么、管理层怎么说"是空白。可作为独立 dimension 或 chat 工具切入。
+- **财报 / 电话会解读**（fiscal.ai Earnings Hub、蚂小财 5 秒财报解读、Perplexity 实时 transcript + 要点提取）→ 作为独立方向记录在 [`docs/earnings-phase3-abc-technical-design.md`](earnings-phase3-abc-technical-design.md)。它回答"这季度发生了什么、管理层怎么说"，不并入五模块研究流程。
 - **自然语言 Screener**（Perplexity Finance、同花顺问财的核心心智）："帮我找 XX 条件的股票"是问股场景的自然延伸；Bourse 明确 v1.1 不做，但 chat 落地后用户必然会问，需要至少有礼貌降级话术 + backlog 定位。
 - **Watchlist 简报 / 组合层视角**（Perplexity watchlist briefings、Robinhood Portfolio Digests）：Daily Brief 已定档自选股聚合，竞品验证了"组合层 AI 摘要"（而非逐股）是留存抓手，Phase B 优先级可上调。
-- **可解释评分卡**（Danelfin 1-10 分 + 三维子分 + 归因指标；TipRanks Smart Score）：Bourse 有 9 维结论但无顶层量化锚点。若做，评分必须 compute 层可复现（如 checklist 通过率），不能让 LLM 拍分数——与"代码计算"不变式一致。
+- **可解释评分卡**（Danelfin 1-10 分 + 三维子分 + 归因指标；TipRanks Smart Score）：Bourse 当前只有模块结论，没有顶层量化锚点。若做，评分必须由 compute 层复现，不能让 LLM 拍分数。
 - **准确率公开追踪**（Danelfin 公布 alpha 曲线、TipRanks 追踪每个分析师历史命中率）：与一轮登记的 signal outcome tracking 同源，竞品证明"敢公布准确率"本身就是营销资产。
-
-- **快速 / 深度 preset**
-  - 价值：综合分析 9 维 + summary 耗时较长，有用户只想要 60s 内拿到主要结论。
-  - 设计方向：preset 映射到 dimensions 子集 + token budget（快速 = 砍 SOCIAL/SCENARIO，深度 = 全量 + LLM utility 走 primary 同档）
-  - 触发：用户反馈"等太久"密度增加时。
-
-- **时间窗 / period 输入**
-  - 价值：现在分析按 dimension default freshness（多数 90d）；用户想问"过去 3 年"或"最近 30 天"无法表达。
-  - 触发：财报季 / 长期跟踪场景请求出现时。
 
 ---
 
@@ -162,7 +150,7 @@
 - **投关记录改为懒生成**：股票页首次打开时生成，失败可显式重试；独立 `InvestorRelationsDetectionScheduler` 和第二套 DetectionCursor 已删除。
 - **财报和共识调度改为单实例模型**：保留 `running` 防重入、固定保守并发和失败退避；多副本 advisory lock、DB lease/续租和 scheduler claim 已删除。
 - **配置项已收敛为零**：财报、港股、趋势和投关默认可用；检测周期、共识周期、最大快照年龄、抽取超时、批次和并发均为代码内保守常量，不再暴露财报/投关环境变量。
-- **每日预算体系已删除**：财报/投关不再维护预算预占、结算、释放和过期回收；只记录实际 token/cost。
+- **费用预占体系已删除**：财报/投关只记录实际 token/cost，不维护预占、结算、释放和过期回收。
 
 ### 必须保留
 
@@ -213,7 +201,7 @@
   - 设计方向：顶 banner 唯一主结论；右侧栏改"各维度信号 + 最大风险"；summary section 删除 OverallConclusion 重复，只保留 markdown + bull/bear case + 风险卡。
 
 - **杂项修补（P0）**
-  - 删开发用 `console.log`；`document.title = "${symbol} · ${name}"`；`LeftSectionNav` 增加 `skipped` 状态颗粒度；失败 banner 中"失败维度"按钮在 single-section 时无效，删守卫；`formatAnalysisTime` 加年份字段避免跨年混淆。
+  - 删开发用 `console.log`；`document.title = "${symbol} · ${name}"`；`LeftSectionNav` 增加 `skipped` 状态颗粒度；失败 banner 统一显示失败模块；`formatAnalysisTime` 加年份字段避免跨年混淆。
 
 - **股票头条 header（P1，需新增后端 endpoint）**
   - 价值：首屏除"开始分析"外完全不展示股票即时事实，被迫先跑分析才能看到任何数据。
@@ -234,10 +222,10 @@
 
 - **报告底部 actions bar**
   - 价值：跑完综合分析底部无任何 actions，用户走到末尾就没下文。
-  - 设计方向：复制 markdown / 导出 / "再跑一次（同 type 同 model）" / 加入自选（如未加）。
+  - 设计方向：复制 markdown / 导出 / "再跑一次（复制模式和时间窗）" / 加入自选（如未加）。
 
 - **citation 跨维度归并视图**
-  - 价值：综合分析每个 section 自己列 citations，9 个维度引用同一篇 SEC 10-K 时用户看到 9 次，削弱可信感。
+  - 价值：综合分析每个 section 自己列 citations，多个模块引用同一篇 SEC 10-K 时用户看到多次，削弱可信感。
   - 设计方向：综合分析底部新增"参考资料"section，所有 sections.citations 去重 + 按 domain/source 分组。
 
 - **"返回"语义修复**
@@ -251,7 +239,6 @@
 
 ### Sprint 4+ / 待评估
 
-- 快速/深度 preset / 时间窗 —— 见 "Analysis 模块"
 - `?dev=1` debug drawer 完整化：snapshot / SSE event 原始 view，给开发者用
 - 导出 PDF（vs 当前 markdown 复制）—— 按用户反馈决定
 - 跑完后"上一次 vs 这次"diff 视图 —— 长期
@@ -268,7 +255,7 @@
 
 - **HK financials connector — 解决 HK 基本面数据零结构化覆盖**
   - **状态**：US (SEC EDGAR XBRL) + CN (Eastmoney datacenter-web) 已交付（见 ARCHITECTURE.md §13）；HK 待启动。
-  - 价值：当前 HK 股票（如 00700 腾讯）VALUATION / FUNDAMENTAL 维度没结构化财报，靠 LLM `webSearch` 抓 seekingalpha / stockanalysis；引用质量不稳定、token 成本高。开源后是被反问"为啥跟 ChatGPT 直接问没差"的弱点。
+  - 价值：当前 HK 股票（如 00700 腾讯）估值与情景、公司质量模块的结构化财报仍不完整，靠 LLM `webSearch` 抓 seekingalpha / stockanalysis；引用质量不稳定、token 成本高。开源后是被反问"为啥跟 ChatGPT 直接问没差"的弱点。
   - 设计方向：HKEX 官方 `https://www1.hkexnews.hk/` 有免费 disclosure search（XML/JSON 公开），按 stock code 查近 X 年 announcements。两条路：
     - **轻量**：~2 天，Tavily site-restricted search 当 HK filings 临时方案，tier=C
     - **完整**：~1.5-2 周，自写 `hkex-disclosure` connector，tier=A，与 SEC EDGAR 对齐
@@ -276,7 +263,7 @@
   - 注意：HKEX 部分披露是 PDF 不是结构化数据，需 scrape 或 LLM 抽取兜底；EAV 格式与 SEC XBRL 不一致，concept-mapping 要重写。
 
 - **Summary phase citation schema 加固**
-  - 价值：跑全栈 smoke（AAPL Comprehensive 9 维 + summary）时偶发 summary phase LLM 输出的 `evidence[]` 末尾几项 citations 缺 `title / url / sourceType / retrievedAt` 必填字段，schema 拒后 `structuredOutputWithRepair` repair 一次后仍坏，抛错退出。生产场景下用户看到的是 analysis 落 FAILED 状态。
+  - 价值：跑全栈 smoke（AAPL 五模块 + summary）时偶发 summary phase LLM 输出的 `evidence[]` 末尾几项 citations 缺 `title / url / sourceType / retrievedAt` 必填字段，schema 拒后 `structuredOutputWithRepair` repair 一次后仍坏，抛错退出。生产场景下用户看到的是 analysis 落 FAILED 状态。
   - 设计方向：
     1. summary system prompt 强化：明确"每个 evidence.citations[i] 必须 4 字段齐全，缺任一字段视为该 evidence 无效"
     2. structured-output repair 提示加 zod error diff（拼具体 path 让 LLM 知道修哪里）
@@ -290,40 +277,22 @@
 
 > 暂无登记。
 
----
-
-## Settings / 通用
-
-### 移除已废弃的 `allowWebSearchFallback` 用户开关（2026-05-31 登记）
-
-- 背景：web_search 兜底已改为「结构化数据不可用(无 pack / 缺 financials)时无条件恢复」,
-  apps/api 对每次 run 恒开(`analysis.service` 硬编码 `allowWebSearchFallback = true`)。
-  原 per-user opt-in 因此失效。
-- 待清理:`User.allowWebSearchFallback` 列(+ Prisma migration)、`auth.controller`
-  的 GET `/auth/me` 响应字段 + PATCH body、AI-Settings 前端 toggle UI。
-- 注意:`AdapterContext.allowWebSearchFallback` + `ComprehensiveOptions.allowWebSearchFallback`
-  **不删** —— 它们仍是 workflow 的「recovery-enabled」开关(生产恒开、测试显式开),
-  只是不再来自 User 设置。
-- 触发:做用户设置面板下一轮清理时一并处理;或确认产品上不再需要该 toggle 后即可移除。
-
----
-
 ## 基础设施 / 监控
 
 ### 技术债 + 第三方 review 沉淀（2026-05-26 登记）
 
-- **INDUSTRY 维度 web search 单点故障**
-  - 现状：INDUSTRY 维度唯一数据源是 Tavily。Tavily 挂 → INDUSTRY 整段空白
+- **行业与竞争模块 web search 单点故障**
+  - 现状：行业与竞争模块的外部行业资料主要来自 Tavily。Tavily 挂 → 行业背景段落可能为空
   - 触发：Tavily 出故障，或用户配的 Anthropic/OpenAI 不带 web search
   - 已部分缓解（2026-05-28 §17.4.4）：用户可在 settings 自配 Tavily/SearXNG key，避免依赖运维侧单一 env；prompt 降级也已落地（`freshness.ts:30-40` 的 `webSearchAvailable=false` 分支）
-  - 仍待办：SnapshotV2 加 industry overview connector（SEC 10-K item 1 + 同行 yahoo sector），把 INDUSTRY 从纯 web-search 改为「web-search + connector」双轨
+  - 仍待办：SnapshotV2 加 industry overview connector（SEC 10-K item 1 + 同行 yahoo sector），把行业资料改为「web-search + connector」双轨
 
 - **peer 表静态化**
   - 现状：`packages/analysis/src/compute/peer-table.ts` 用静态 sector→top peers 映射；新上市 / 换赛道的票就空
   - 方向：connector 动态拉同 sector top-N 市值股票，静态表降级为 fallback
 
 - **HK 财务数据缺失 prompt 提示**
-  - 现状：HK 票（如 00700）没接 financials connector，VALUATION / FUNDAMENTAL 维度 prompt 没主动告知 LLM
+  - 现状：HK 票（如 00700）没接 financials connector，估值与情景、公司质量模块 prompt 没主动告知 LLM
   - 风险：LLM 凭空编造或用 quote 推导 PE/PB
   - 方向：dimension prompt 检测 `facts.financials` 缺失时注入"HK 财务数据 v1 不可用，仅基于 quote / news 分析"
   - 关联：HK financials connector backlog（见上 v1 段）
@@ -341,11 +310,6 @@
 - **CN 数据源地理受限**
   - 现状：Eastmoney / tencent 在境外 IP 偶发 429 / 拒连
   - 方向：换 sina/akshare 镜像 或加 sg/jp proxy
-
-- **comparison（多股对比）功能彻底无入口**
-  - 现状：comparison runtime 已移除；当前只能跑单股
-  - 用户场景："茅台 vs 五粮液 / SaaS 三家对比" 高频
-  - 方向：v1.1 单独 RFC，可选实现：前端串行跑两次 single 后拼装 / 后端复活 batch endpoint + 单 stock workflow 并行
 
 ---
 

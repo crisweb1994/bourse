@@ -28,10 +28,10 @@ export { extractUrlsFromText };
  * The factory itself is called lazily ONCE per provider instance (see
  * `getWebSearchExecutor`); the OpenAIProvider is constructed once per
  * analysis run, so the executor — and therefore the per-run search cap +
- * LRU cache — correctly spans all dimensions, summary, and judge phases
- * of a single analysis. Returning a fresh executor on every call would
- * reset the cap to its default for each LLM stream and let one analysis
- * burn `cap × (9 dims + summary + judge)` searches.
+ * LRU cache — correctly spans all modules and the summary phase of a single
+ * analysis. Returning a fresh executor on every call would reset the cap to
+ * its default for each LLM stream and let one analysis bypass the per-run
+ * search limit.
  */
 function defaultWebSearchExecutorFactory(): WebSearchExecutor | null {
   const built = buildAdapterFromEnv();
@@ -54,7 +54,7 @@ export interface OpenAIProviderConfig {
   model?: string;
   /**
    * 次模型 (utility). Used for structured JSON extraction/repair,
-   * COMPREHENSIVE summary and search query rewriting. Falls back to `model`
+   * Analysis summary and search query rewriting. Falls back to `model`
    * when unset. web_search + evidence normalization still go through `model`.
    */
   utilityModel?: string;
@@ -95,8 +95,8 @@ export class OpenAIProvider implements AgentProvider {
   /**
    * Factory for the pluggable web-search executor. Memoized per provider
    * instance (and a provider instance spans one analysis run), so the
-   * per-run search cap + LRU cache correctly cover every dimension,
-   * summary, and judge phase instead of resetting per LLM stream.
+   * per-run search cap + LRU cache correctly cover every module and the
+   * summary phase instead of resetting per LLM stream.
    */
   private readonly webSearchExecutorFactory: () => WebSearchExecutor | null;
   /** Per-instance override of the chat.completions routing decision. See OpenAIProviderConfig.forceChatCompletions. */

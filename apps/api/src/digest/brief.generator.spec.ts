@@ -365,7 +365,7 @@ describe('DigestGeneratorService · 异动深入', () => {
       },
       analysesByStock: {
         s1: {
-          overallSignal: 'BULLISH',
+          overallSignal: 'CAUTIOUS',
           createdAt: new Date(),
           dataAsOf: '2026-06-20',
         },
@@ -407,7 +407,7 @@ describe('DigestGeneratorService · 距上次分析漂移', () => {
       },
       analysesByStock: {
         s1: {
-          overallSignal: 'BULLISH',
+          overallSignal: 'CAUTIOUS',
           createdAt: new Date('2026-06-20'),
           dataAsOf: '2026-06-20',
         },

@@ -1,144 +1,34 @@
 import assert from 'node:assert/strict';
-import {
-  applyAnalysisStreamEvent,
-  INITIAL_ANALYSIS_STREAM_STATE,
-  isAlreadyRunningStreamError,
-  isAnalysisStreamEventName,
-  markAttachedElsewhere,
-  markStreamConnectionError,
-  startStreamState,
-  stopWatchingStreamState,
-} from './analysis-stream-state';
+import { applyAnalysisStreamEvent, INITIAL_ANALYSIS_STREAM_STATE, isAnalysisStreamEventName, startStreamState } from './analysis-stream-state';
 
 assert.equal(isAnalysisStreamEventName('section_start'), true);
 assert.equal(isAnalysisStreamEventName('judge_start'), false);
-
 let state = startStreamState(INITIAL_ANALYSIS_STREAM_STATE, 'analysis-1');
-state = applyAnalysisStreamEvent(state, 'section_start', {
-  sectionType: 'FUNDAMENTAL',
-  sectionId: 'section-1',
-  order: 0,
+state = applyAnalysisStreamEvent(state, 'section_start', { sectionType: 'COMPANY_QUALITY', sectionId: 'section-1', order: 0 });
+state = applyAnalysisStreamEvent(state, 'report_chunk', { sectionType: 'COMPANY_QUALITY', text: 'hello' });
+state = applyAnalysisStreamEvent(state, 'structured_data', { sectionType: 'COMPANY_QUALITY', json: { assessment: 'STRONG' } });
+state = applyAnalysisStreamEvent(state, 'section_complete', { sectionType: 'COMPANY_QUALITY', status: 'COMPLETED' });
+assert.equal(state.sections.COMPANY_QUALITY?.markdown, 'hello');
+assert.equal(state.sections.COMPANY_QUALITY?.status, 'completed');
+assert.equal(state.sections.COMPANY_QUALITY?.structuredJson.assessment, 'STRONG');
+state = applyAnalysisStreamEvent(state, 'report_complete', {
+  sectionType: 'COMPANY_QUALITY',
+  text: 'clean final report',
 });
-state = applyAnalysisStreamEvent(state, 'report_chunk', {
-  sectionType: 'FUNDAMENTAL',
-  text: 'hello ',
-});
-state = applyAnalysisStreamEvent(state, 'report_chunk', {
-  text: 'world',
-});
-state = applyAnalysisStreamEvent(state, 'structured_data', {
-  sectionType: 'FUNDAMENTAL',
-  json: { conclusion: { signal: 'BULLISH' } },
-});
-state = applyAnalysisStreamEvent(state, 'citation', {
-  sectionType: 'FUNDAMENTAL',
-  title: '10-K',
-  url: 'https://example.com',
-  claim: '',
-  searchAdapter: 'native',
-});
-state = applyAnalysisStreamEvent(state, 'section_complete', {
-  sectionType: 'FUNDAMENTAL',
-  status: 'COMPLETED',
-});
-
-assert.equal(state.sections.FUNDAMENTAL?.markdown, 'hello world');
-assert.equal(state.sections.FUNDAMENTAL?.status, 'completed');
-assert.deepEqual(state.sections.FUNDAMENTAL?.structuredJson, {
-  conclusion: { signal: 'BULLISH' },
-});
-assert.equal(state.sections.FUNDAMENTAL?.citations[0]?.searchAdapter, 'native');
-
-const beforeInvalidSection = state;
-state = applyAnalysisStreamEvent(state, 'section_start', {
-  sectionType: 'COMPREHENSIVE',
-  sectionId: 'section-summary',
-  order: 99,
-});
-assert.equal(state, beforeInvalidSection);
-assert.equal('COMPREHENSIVE' in state.sections, false);
-
-state = applyAnalysisStreamEvent(state, 'report_chunk', {
-  sectionType: 'NOT_A_SECTION',
-  text: 'ignored',
-});
-assert.equal(state, beforeInvalidSection);
-
-state = applyAnalysisStreamEvent(state, 'evidence_pack_ready', {
-  pack: {
-    dataAvailability: {
-      degradedSource: 'WEB_SEARCH_FALLBACK',
-      fallbackReason: {
-        kind: 'NETWORK',
-        failedTools: ['quote'],
-        message: 'quote unavailable',
-      },
-    },
-  },
-});
-assert.deepEqual(state.degraded, {
-  kind: 'NETWORK',
-  failedTools: ['quote'],
-  message: 'quote unavailable',
-});
-
-state = applyAnalysisStreamEvent(state, 'summary_chunk', { text: 'overall' });
-state = applyAnalysisStreamEvent(state, 'summary_complete', {
-  summaryJson: { overallSignal: 'BULLISH' },
-});
-assert.equal(state.summaryMarkdown, 'overall');
-assert.deepEqual(state.summaryJson, { overallSignal: 'BULLISH' });
-
-// cost_update carries cumulative token totals → state.usage.
-assert.equal(state.usage, null);
-state = applyAnalysisStreamEvent(state, 'cost_update', {
-  totalTokens: 1234,
-  toolCalls: 3,
-});
-assert.deepEqual(state.usage, { totalTokens: 1234, toolCalls: 3 });
-// A later cost_update overrides (cumulative totals).
-state = applyAnalysisStreamEvent(state, 'cost_update', {
-  totalTokens: 5678,
-  toolCalls: 4,
-});
-assert.deepEqual(state.usage, { totalTokens: 5678, toolCalls: 4 });
-
-state = applyAnalysisStreamEvent(state, 'done', {
-  analysisId: 'analysis-1',
-  status: 'BUDGET_EXHAUSTED',
-});
-assert.equal(state.status, 'error');
-assert.equal(state.error, 'Run ended in BUDGET_EXHAUSTED');
-assert.equal(state.attachedElsewhere, false);
-
-// Regression: CANCELLED is a user-initiated stop, NOT a failure. Previously
-// it was bucketed with FAILED/BUDGET_EXHAUSTED, so the UI flashed an error
-// banner and — worse — if SSE done/CANCELLED arrived before the abort POST
-// resolved, stopWatchingStreamState() no-op'd (state was no longer
-// 'streaming') and the page stuck on "Run ended in CANCELLED".
-const cancelledState = startStreamState(
-  INITIAL_ANALYSIS_STREAM_STATE,
-  'analysis-cancel',
-);
-const afterCancel = applyAnalysisStreamEvent(cancelledState, 'done', {
-  analysisId: 'analysis-cancel',
-  status: 'CANCELLED',
-});
-assert.equal(afterCancel.status, 'completed');
-assert.equal(afterCancel.error, null);
-
-let attached = markAttachedElsewhere(
-  startStreamState(INITIAL_ANALYSIS_STREAM_STATE, 'analysis-2'),
-);
-assert.equal(attached.attachedElsewhere, true);
-assert.equal(isAlreadyRunningStreamError('Analysis is already running'), true);
-assert.equal(
-  markStreamConnectionError(attached, 'network').status,
-  'streaming',
-);
-
-attached = startStreamState(attached, 'analysis-2');
-assert.equal(attached.attachedElsewhere, true);
-assert.equal(stopWatchingStreamState(attached).status, 'completed');
-
+assert.equal(state.sections.COMPANY_QUALITY?.markdown, 'clean final report');
+state = applyAnalysisStreamEvent(state, 'section_start', { sectionType: 'MARKET_SIGNALS', sectionId: 'section-2', order: 4 });
+state = applyAnalysisStreamEvent(state, 'report_chunk', { sectionType: 'MARKET_SIGNALS', text: '{"legacy":true}' });
+state = applyAnalysisStreamEvent(state, 'citation', { sectionType: 'MARKET_SIGNALS', title: 'Source', url: 'https://example.com/source', claim: 'claim' });
+state = applyAnalysisStreamEvent(state, 'error', { sectionType: 'MARKET_SIGNALS', message: '结构化结果不符合格式' });
+state = applyAnalysisStreamEvent(state, 'section_complete', { sectionType: 'MARKET_SIGNALS', status: 'FAILED', error: '结构化结果不符合格式' });
+assert.equal(state.sections.MARKET_SIGNALS?.status, 'failed');
+assert.equal(state.sections.MARKET_SIGNALS?.markdown, '');
+assert.equal(state.sections.MARKET_SIGNALS?.structuredJson, null);
+assert.deepEqual(state.sections.MARKET_SIGNALS?.citations, []);
+assert.equal(state.sections.MARKET_SIGNALS?.errorMessage, '结构化结果不符合格式');
+state = applyAnalysisStreamEvent(state, 'summary_complete', { summaryJson: { headline: '测试', signal: null, confidence: 'LOW' } });
+assert.equal(state.summaryJson.headline, '测试');
+state = applyAnalysisStreamEvent(state, 'done', { analysisId: 'analysis-1', status: 'CANCELLED' });
+assert.equal(state.status, 'cancelled');
+assert.equal(state.error, null);
 console.log('analysis-stream-state assertions passed');

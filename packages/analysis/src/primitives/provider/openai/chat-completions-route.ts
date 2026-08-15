@@ -98,6 +98,11 @@ export class OpenAIChatCompletionsRoute implements OpenAIRoute {
     const citations: Citation[] = [];
     const seenUrls = new Set<string>();
     const toolUseCounts: Record<string, number> = {};
+    const maxToolUses = options.maxToolUses === undefined
+      ? Number.POSITIVE_INFINITY
+      : Math.max(0, Math.floor(options.maxToolUses));
+    let webSearchUses = 0;
+    let budgetNoticeAdded = false;
 
     const pushCitation = (c: Citation): void => {
       if (seenUrls.has(c.url)) return;
@@ -134,10 +139,18 @@ export class OpenAIChatCompletionsRoute implements OpenAIRoute {
         model,
         messages,
         stream: true,
+        ...(options.maxTokens ? { max_tokens: options.maxTokens } : {}),
       };
-      if (executor && !isLastRound) {
+      if (executor && !isLastRound && webSearchUses < maxToolUses) {
         params.tools = [WEB_SEARCH_FUNCTION_SCHEMA];
         params.tool_choice = 'auto';
+      } else if (executor && !isLastRound && !budgetNoticeAdded) {
+        messages.push({
+          role: 'user',
+          content:
+            '(系统提示) 网络搜索次数已用尽，请基于已有信息直接给出完整的最终分析答案，不要再请求 web_search。',
+        });
+        budgetNoticeAdded = true;
       }
       if (process.env?.OPENAI_CHAT_STREAM_USAGE === 'true') {
         params.stream_options = { include_usage: true };
@@ -252,6 +265,15 @@ export class OpenAIChatCompletionsRoute implements OpenAIRoute {
           continue;
         }
 
+        if (webSearchUses >= maxToolUses) {
+          messages.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            content: JSON.stringify({ error: 'web_search budget exhausted', items: [] }),
+          });
+          continue;
+        }
+
         let parsed: { query?: unknown; freshnessDays?: unknown } = {};
         try {
           parsed = JSON.parse(call.arguments || '{}');
@@ -280,6 +302,7 @@ export class OpenAIChatCompletionsRoute implements OpenAIRoute {
             ? parsed.freshnessDays
             : undefined;
         const searchStartedAt = Date.now();
+        webSearchUses += 1;
         try {
           const result = await executor.execute(
             { query: queryStr, freshnessDays },
@@ -319,6 +342,7 @@ export class OpenAIChatCompletionsRoute implements OpenAIRoute {
               content:
                 '(系统提示) 网络搜索次数已用尽，请基于现有信息完成分析，不要再请求 web_search。',
             });
+            budgetNoticeAdded = true;
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);

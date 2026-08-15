@@ -6,11 +6,10 @@ export function statusPillVariant(status: string): PillProps['variant'] {
     case 'COMPLETED':
       return 'emerald';
     case 'PARTIAL_FAILED':
-    case 'BUDGET_EXHAUSTED':
       return 'warn';
     case 'FAILED':
     case 'CANCELLED':
-      return 'danger';
+      return 'neutral';
     case 'IN_PROGRESS':
       return 'blue';
     default:
@@ -23,7 +22,7 @@ export function signalPillVariant(
   signal: string | null | undefined,
 ): PillProps['variant'] | null {
   if (!signal) return null;
-  if (signal === 'BULLISH') return 'solid';
-  if (signal === 'BEARISH') return 'warn';
+  if (signal === 'POSITIVE') return 'solid';
+  if (signal === 'CAUTIOUS') return 'warn';
   return 'neutral';
 }

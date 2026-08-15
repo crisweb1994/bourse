@@ -17,7 +17,7 @@ import {
  * api digest module 从 @bourse/analysis 消费这些类型。
  *
  * Market / DigestSession / ChannelType 通过 z.nativeEnum 复用 @bourse/shared-types
- * 的 const-object（与 enums.ts 的 AnalysisType/Signal 同款桥接），单一来源。
+ * 的 const-object（与 enums.ts 的 AnalysisMode/Signal 同款桥接），单一来源。
  */
 
 // ============================================================================

@@ -1,537 +1,294 @@
-import { describe, expect, it, vi } from 'vitest';
-import { SCHEMA_VERSION } from '../../contracts/analysis-result';
-import type { SseEvent } from '../../contracts/sse-events';
-import { ALL_DIMENSIONS, getDimension } from '../../dimensions';
-const FUNDAMENTAL = getDimension('FUNDAMENTAL');
-const TECHNICAL = getDimension('TECHNICAL');
-import type { Dimension } from '../../dimensions/types';
+import { describe, expect, it } from 'vitest';
 import type {
   AgentProvider,
+  ProviderStreamOptions,
   ProviderStreamResult,
 } from '../../primitives/provider';
-import {
-  runComprehensive,
-  streamComprehensive,
-} from '../../workflows/comprehensive';
+import { ALL_DIMENSIONS } from '../../dimensions';
+import { runComprehensive, streamComprehensive } from '../../workflows/comprehensive';
+import type { SseEvent } from '../../contracts/sse-events';
 
-const TODAY = '2026-05-10';
-const URL = 'https://example.com/source';
+const input = {
+  symbol: 'AAPL',
+  market: 'US',
+  locale: 'zh-CN',
+  focusWindow: '90D' as const,
+};
 
-const validDimJson = (): string =>
-  JSON.stringify({
-    schemaVersion: SCHEMA_VERSION,
-    conclusion: {
-      signal: 'BULLISH',
-      confidence: 'HIGH',
-      oneLiner: '基本面健康。',
-      evidence: [],
-    },
-    evidence: [
-      {
-        claim: '收入增长',
-        citations: [
-          {
-            title: 'S',
-            url: URL,
-            sourceType: 'NEWS',
-            retrievedAt: '2026-05-10T00:00:00Z',
-          },
-        ],
-      },
-    ],
-    dataAvailability: { missingFields: [], reason: '' },
-    dataAsOf: TODAY,
-    disclaimer: 'd',
-  });
+const summaryJson = {
+  headline: '综合看法中性',
+  signal: null,
+  confidence: 'MEDIUM',
+  rationale: [],
+  counterpoints: [],
+  changeConditions: [],
+  missingSections: [],
+  dataAsOf: '2026-01-15',
+  disclaimer: '免责声明',
+};
 
-const validSummaryJson = (sectionTypes: string[]): string =>
-  JSON.stringify({
-    overallSignal: 'BULLISH',
-    overallConfidence: 'HIGH',
-    oneLiner: '综合看好。',
-    bullCase: ['理由 A', '理由 B'],
-    bearCase: ['风险 X'],
-    biggestRisk: '宏观下行',
-    valuationConclusion: '估值合理',
-    suitableInvestorType: '稳健型',
-    watchlistWorthy: true,
-    sectionSignals: sectionTypes.map((t) => ({
-      type: t,
-      signal: 'BULLISH',
-      confidence: 'HIGH',
-      oneLiner: 'oneLiner',
-    })),
-    evidence: [],
-    dataAsOf: TODAY,
-    disclaimer: '免责',
-  });
-
-// RFC-04: provider.stream now accepts SystemPromptInput = string | TextBlock[].
-// Tests written before RFC-04 assumed string; this helper normalizes to keep
-// `sys.startsWith(...)` style detection working against both shapes.
-function normalizeSystemPrompt(input: unknown): string {
-  if (typeof input === 'string') return input;
-  if (Array.isArray(input)) {
-    return input
-      .map((b) => (b && typeof b === 'object' && 'text' in b ? (b as { text: string }).text : ''))
-      .join('\n');
-  }
-  return '';
-}
-
-function buildProvider(opts: {
-  failOn?: string[]; // dimension types where stream() should throw
-  streamCalls?: { type: string; sys: string }[];
-}): AgentProvider {
+function sectionJson(type: string): Record<string, unknown> {
+  const assessment: Record<string, string> = {
+    COMPANY_QUALITY: 'MIXED',
+    INDUSTRY_POSITION: 'COMPETITIVE',
+    VALUATION_SCENARIOS: 'FAIR',
+    RISK_REGISTER: 'MEDIUM',
+    MARKET_SIGNALS: 'NEUTRAL',
+  };
   return {
-    name: 'fake',
-    stream: vi.fn(async (sysRaw: unknown, _user: string, onChunk) => {
-      const sys = normalizeSystemPrompt(sysRaw);
-      // Detect which dimension by inspecting the system prompt for one of
-      // the per-dim header phrases.
-      let detected = 'SUMMARY';
-      for (const d of ALL_DIMENSIONS) {
-        const dimSys = d.buildPrompts(
-          { symbol: 'AAPL', market: 'US', locale: 'zh-CN' },
-          { todayDate: TODAY },
-        ).system;
-        if (sys.startsWith(dimSys)) {
-          detected = d.type;
-          break;
-        }
-      }
-      opts.streamCalls?.push({ type: detected, sys });
-      if (opts.failOn?.includes(detected)) {
-        throw new Error(`synthetic failure: ${detected}`);
-      }
-      const text = `# ${detected} markdown body`;
-      onChunk({ type: 'text', text });
-      onChunk({
-        type: 'citation',
-        citation: {
-          title: 'Source',
-          url: URL,
-          sourceType: 'OTHER',
-          retrievedAt: '2026-05-10T00:00:00Z',
-        },
-      });
-      const result: ProviderStreamResult = {
-        text,
-        citations: [
-          {
-            title: 'Source',
-            url: URL,
-            sourceType: 'OTHER',
-            retrievedAt: '2026-05-10T00:00:00Z',
-          },
-        ],
-        usage: { tokensIn: 100, tokensOut: 50 },
-      };
-      return result;
-    }),
-    complete: vi.fn(async (sys: string) => {
-      // Dispatch by which JSON the prompt asks for.
-      const isSummary = sys.includes('ComprehensiveSummary JSON');
-      if (isSummary) {
-        const types = ALL_DIMENSIONS.map((d) => d.type);
-        return {
-          text: validSummaryJson(types),
-          usage: { tokensIn: 80, tokensOut: 40 },
-        };
-      }
-      return {
-        text: validDimJson(),
-        usage: { tokensIn: 80, tokensOut: 40 },
-      };
-    }),
-    getModel: () => 'm',
-    getUtilityModel: () => 'jm',
+    schemaVersion: 'analysis-section-v2',
+    type,
+    assessment: assessment[type],
+    confidence: 'MEDIUM',
+    summary: `${type} summary`,
+    findings: [],
+    limitations: [],
+    dataAsOf: '2026-01-15',
+    disclaimer: '免责声明',
   };
 }
 
-const minimalInput = { symbol: 'AAPL', market: 'US', locale: 'zh-CN' as const };
-const runId = 'run_comprehensive_test';
-
-async function collect(
-  gen: AsyncGenerator<SseEvent, unknown, undefined>,
-): Promise<{ events: SseEvent[]; result: unknown }> {
-  const events: SseEvent[] = [];
-  while (true) {
-    const next = await gen.next();
-    if (next.done) return { events, result: next.value };
-    events.push(next.value);
-  }
+function sectionTypeFromPrompt(prompt: string): string | null {
+  return ALL_DIMENSIONS.find((dimension) => prompt.includes(dimension.type))?.type ??
+    (prompt.includes('公司质量') ? 'COMPANY_QUALITY' :
+      prompt.includes('行业与竞争') ? 'INDUSTRY_POSITION' :
+        prompt.includes('估值与情景') ? 'VALUATION_SCENARIOS' :
+          prompt.includes('风险清单') ? 'RISK_REGISTER' :
+            prompt.includes('市场信号') ? 'MARKET_SIGNALS' : null);
 }
 
-describe('workflows/streamComprehensive — happy path', () => {
-  it('runs all 9 dimensions then summary, returns COMPLETED', async () => {
-    const calls: { type: string; sys: string }[] = [];
-    const { events, result } = await collect(
-      streamComprehensive(buildProvider({ streamCalls: calls }), minimalInput, {
-        runId,
-        todayDate: TODAY,
-      }),
-    );
+function sectionTypeFromUserPrompt(prompt: string): string | null {
+  return prompt.match(/模块：([A-Z_]+)/)?.[1] ??
+    (prompt.includes('行业与竞争') ? 'INDUSTRY_POSITION' :
+      prompt.includes('估值与情景') ? 'VALUATION_SCENARIOS' :
+        prompt.includes('风险清单') ? 'RISK_REGISTER' :
+          prompt.includes('市场信号') ? 'MARKET_SIGNALS' :
+            prompt.includes('公司质量') ? 'COMPANY_QUALITY' : null);
+}
 
-    // 9 dim stream() calls + 1 summary stream() call
-    expect(calls).toHaveLength(10);
-    expect(calls[9]?.type).toBe('SUMMARY');
-
-    const r = result as { status: string; perDimension: Map<string, unknown> };
-    expect(r.status).toBe('COMPLETED');
-    expect(r.perDimension.size).toBe(9);
-    expect(events.find((e) => e.type === 'summary_complete')).toBeDefined();
-  });
-
-  it('emits 9 section_start events with order 0..8', async () => {
-    const { events } = await collect(
-      streamComprehensive(buildProvider({}), minimalInput, {
-        runId,
-        todayDate: TODAY,
-      }),
-    );
-    const starts = events.filter((e) => e.type === 'section_start');
-    expect(starts).toHaveLength(9);
-    starts.forEach((e, i) => {
-      if (e.type === 'section_start') expect(e.order).toBe(i);
-    });
-  });
-
-  it('seq monotonically increases across all events', async () => {
-    const { events } = await collect(
-      streamComprehensive(buildProvider({}), minimalInput, {
-        runId,
-        todayDate: TODAY,
-      }),
-    );
-    for (let i = 1; i < events.length; i++) {
-      expect(events[i]!.seq).toBe((events[i - 1]?.seq ?? -1) + 1);
-    }
-  });
-
-  it('summary_complete carries fullMarkdown and parsed json', async () => {
-    const { events } = await collect(
-      streamComprehensive(buildProvider({}), minimalInput, {
-        runId,
-        todayDate: TODAY,
-      }),
-    );
-    const sc = events.find((e) => e.type === 'summary_complete');
-    expect(sc).toBeDefined();
-    if (sc?.type === 'summary_complete') {
-      expect(sc.fullMarkdown).toContain('SUMMARY markdown');
-      expect((sc.json as { overallSignal: string }).overallSignal).toBe(
-        'BULLISH',
-      );
-    }
-  });
-
-  it('aggregates per-dim citations into result.citations', async () => {
-    const { result } = await collect(
-      streamComprehensive(buildProvider({}), minimalInput, {
-        runId,
-        todayDate: TODAY,
-      }),
-    );
-    const r = result as { citations: { url: string }[] };
-    // 8 dims each produce one citation for URL → dedup not done at workflow level
-    expect(r.citations.length).toBeGreaterThanOrEqual(8);
-  });
-});
-
-describe('workflows/streamComprehensive — partial failure (retry-once exhausted)', () => {
-  it('records failure after both retry-once attempts fail, still summarizes', async () => {
-    const { events, result } = await collect(
-      streamComprehensive(
-        buildProvider({ failOn: ['INDUSTRY'] }),
-        minimalInput,
-        { runId, todayDate: TODAY },
-      ),
-    );
-    const r = result as {
-      status: string;
-      perDimension: Map<string, unknown>;
-      failures: { type: string; error: string }[];
-      partialDimensions: string[];
-    };
-    expect(r.status).toBe('PARTIAL_FAILED');
-    expect(r.perDimension.size).toBe(8);
-    expect(r.failures).toEqual([
-      expect.objectContaining({ type: 'INDUSTRY' }),
-    ]);
-    expect(r.partialDimensions).toEqual(['INDUSTRY']);
-    // retry-once means TWO error events for that dim (attempt 1 + attempt 2)
-    const industryErrors = events.filter(
-      (e) => e.type === 'error' && (e as { sectionType?: string }).sectionType === 'INDUSTRY',
-    );
-    expect(industryErrors.length).toBe(2);
-    // summary still generated
-    expect(events.find((e) => e.type === 'summary_complete')).toBeDefined();
-  });
-});
-
-describe('workflows/streamComprehensive — retry-once recovers on second attempt', () => {
-  it('treats dim as COMPLETED when first attempt fails but retry succeeds', async () => {
-    // Custom provider: fail FUNDAMENTAL on first stream() call, succeed thereafter
-    let fundamentalCallCount = 0;
-    const baseProvider = buildProvider({});
-    const wrapped: typeof baseProvider = {
-      ...baseProvider,
-      stream: vi.fn(async (sysRaw: unknown, user: string, onChunk) => {
-        const sys = normalizeSystemPrompt(sysRaw);
-        const isFundamental = sys.startsWith(
-          FUNDAMENTAL.buildPrompts(
-            { symbol: 'AAPL', market: 'US', locale: 'zh-CN' },
-            { todayDate: TODAY },
-          ).system,
-        );
-        if (isFundamental) {
-          fundamentalCallCount++;
-          if (fundamentalCallCount === 1) {
-            throw new Error('transient flake');
-          }
+function fakeProvider(options: {
+  failTypes?: readonly string[];
+  failSummary?: boolean;
+  summaryStreamText?: string;
+  streamOptions?: ProviderStreamOptions[];
+} = {}): AgentProvider {
+  const streamOptions = options.streamOptions ?? [];
+  return {
+    name: 'fake',
+    stream: async (system, user, _onChunk, streamOption) => {
+      const systemText = typeof system === 'string' ? system : system.map((block) => block.text).join('\n');
+      const isSummary = systemText.includes('综合研究结论整理器');
+      if (isSummary && options.failSummary) throw new Error('summary stream failed');
+      // The user prompt names the module directly. Prefer it over the system
+      // prompt because cross-module guardrails can mention another module.
+      const type = sectionTypeFromUserPrompt(user) ?? sectionTypeFromPrompt(`${systemText}\n${user}`);
+      streamOptions.push(streamOption ?? {});
+      if (type && options.failTypes?.includes(type)) throw new Error(`${type} failed`);
+      return {
+        text: isSummary
+          ? options.summaryStreamText ?? 'summary markdown'
+          : type
+            ? `report for ${type}`
+            : 'summary markdown',
+        citations: [],
+        usage: { tokensIn: 10, tokensOut: 5 },
+      } satisfies ProviderStreamResult;
+    },
+    complete: async (system, user) => {
+      const systemText = typeof system === 'string' ? system : system.map((block) => block.text).join('\n');
+      if (systemText.includes('综合研究结论整理器')) {
+        if (options.failSummary) {
+          throw new Error('summary complete failed');
         }
-        return baseProvider.stream(sys, user, onChunk);
-      }),
+        return {
+          text: JSON.stringify(summaryJson),
+          usage: { tokensIn: 4, tokensOut: 3 },
+        };
+      }
+      const type = sectionTypeFromUserPrompt(user) ?? sectionTypeFromPrompt(`${systemText}\n${user}`);
+      return {
+        text: JSON.stringify(type ? sectionJson(type) : summaryJson),
+        usage: { tokensIn: 4, tokensOut: 3 },
+      };
+    },
+    getModel: () => 'model',
+    getUtilityModel: () => 'utility',
+  };
+}
+
+async function collect(gen: AsyncGenerator<SseEvent, unknown, undefined>) {
+  const events: SseEvent[] = [];
+  let result: unknown;
+  while (true) {
+    const next = await gen.next();
+    if (next.done) {
+      result = next.value;
+      break;
+    }
+    events.push(next.value);
+  }
+  return { events, result: result as any };
+}
+
+describe('streamComprehensive V2', () => {
+  it('runs the three QUICK modules, then risk, then one summary', async () => {
+    const { events, result } = await collect(streamComprehensive(
+      fakeProvider(), input, { runId: 'run-1', mode: 'QUICK', focusWindow: '90D' },
+    ));
+    expect(result.status).toBe('COMPLETED');
+    expect([...result.perDimension.keys()]).toEqual([
+      'COMPANY_QUALITY', 'MARKET_SIGNALS', 'RISK_REGISTER',
+    ]);
+    expect(events.filter((event) => event.type === 'section_start')).toHaveLength(5);
+    expect(events.at(-1)).toMatchObject({ type: 'done', status: 'COMPLETED' });
+    expect(result.summary?.structured.headline).toBe('综合看法中性');
+    expect(result.summary?.structured.rationale.length).toBeGreaterThan(0);
+  });
+
+  it('uses one round for QUICK and follow-up rounds for DEEP', async () => {
+    const quickOptions: ProviderStreamOptions[] = [];
+    await runComprehensive(fakeProvider({ streamOptions: quickOptions }), input, {
+      runId: 'quick', mode: 'QUICK', dimensions: [ALL_DIMENSIONS[0]!],
+    });
+    expect(quickOptions.some((option) => option.rounds?.length)).toBe(false);
+
+    const deepOptions: ProviderStreamOptions[] = [];
+    await runComprehensive(fakeProvider({ streamOptions: deepOptions }), input, {
+      runId: 'deep', mode: 'DEEP', dimensions: [ALL_DIMENSIONS[0]!],
+    });
+    expect(deepOptions.some((option) => option.rounds?.length === 1)).toBe(true);
+  });
+
+  it('does not rerun completed results supplied by a retry', async () => {
+    const existing = {
+      type: 'COMPANY_QUALITY' as const,
+      reportMarkdown: 'prior company quality report',
+      structuredJson: sectionJson('COMPANY_QUALITY') as never,
+      citations: [],
+      confidence: 'MEDIUM' as const,
+      status: 'COMPLETED' as const,
+      warnings: [],
+      usage: { tokensIn: 0, tokensOut: 0 },
     };
-    const result = await runComprehensive(wrapped, minimalInput, {
-      runId,
-      todayDate: TODAY,
-      dimensions: [FUNDAMENTAL, TECHNICAL],
-    });
-    expect(result.status).toBe('COMPLETED');
-    expect(result.failures).toEqual([]);
-    expect(result.perDimension.size).toBe(2);
-    expect(fundamentalCallCount).toBe(2); // failed once, succeeded on retry
-  });
-});
+    const { events, result } = await collect(streamComprehensive(
+      fakeProvider(),
+      input,
+      { runId: 'retry', mode: 'QUICK', existingResults: [existing] },
+    ));
 
-describe('workflows/streamComprehensive — budget enforcement', () => {
-  it('halts with BUDGET_EXHAUSTED when maxTokens cap is reached', async () => {
-    // Per-dim: stream usage 100+50 = 150, complete usage 80+40 = 120 → 270/dim.
-    // maxTokens: 200 → after dim 1 (270 > 200) check trips before dim 2.
-    const { events, result } = await collect(
-      streamComprehensive(buildProvider({}), minimalInput, {
-        runId,
-        todayDate: TODAY,
-        budget: { maxTokens: 200 },
-      }),
-    );
-    const r = result as { status: string; perDimension: Map<string, unknown>; summary: unknown };
-    expect(r.status).toBe('BUDGET_EXHAUSTED');
-    expect(r.perDimension.size).toBe(1); // only first dim completed
-    expect(r.summary).toBeNull();
-    // done event emitted with BUDGET_EXHAUSTED
-    const done = events.find((e) => e.type === 'done');
-    expect(done).toMatchObject({ type: 'done', status: 'BUDGET_EXHAUSTED' });
-  });
-
-  it('completes normally when budget is generous', async () => {
-    const result = await runComprehensive(buildProvider({}), minimalInput, {
-      runId,
-      todayDate: TODAY,
-      budget: { maxTokens: 100_000 },
-    });
+    expect(events.filter((event) => event.type === 'section_start'))
+      .not.toContainEqual(expect.objectContaining({ sectionType: 'COMPANY_QUALITY' }));
+    expect(result.perDimension.has('COMPANY_QUALITY')).toBe(true);
     expect(result.status).toBe('COMPLETED');
   });
 
-  it('returns CANCELLED when the abort signal is already set', async () => {
-    const result = await runComprehensive(buildProvider({}), minimalInput, {
-      runId,
-      todayDate: TODAY,
-      // Pre-aborted signal mirrors what happens when the runner's registry
-      // aborts before wave 1 starts. Wave loop detects signal.aborted at the
-      // top and emits the CANCELLED terminal done — never COMPLETED/FAILED.
-      signal: AbortSignal.abort(),
+  it('continues with a partial report when one QUICK module fails', async () => {
+    const { result } = await runAndResult({ failTypes: ['MARKET_SIGNALS'] });
+    expect(result.status).toBe('PARTIAL_FAILED');
+    expect(result.perDimension.has('COMPANY_QUALITY')).toBe(true);
+    expect(result.perDimension.has('MARKET_SIGNALS')).toBe(false);
+    expect(result.perDimension.has('RISK_REGISTER')).toBe(true);
+    expect(result.failures).toEqual([expect.objectContaining({ type: 'MARKET_SIGNALS' })]);
+  });
+
+  it('does not create a summary when every fact module fails', async () => {
+    const { result } = await runAndResult({
+      failTypes: ['COMPANY_QUALITY', 'INDUSTRY_POSITION', 'VALUATION_SCENARIOS', 'MARKET_SIGNALS'],
     });
+    expect(result.status).toBe('FAILED');
+    expect(result.summary).toBeNull();
+    expect(result.failures.map((failure: { type: string }) => failure.type)).toContain('RISK_REGISTER');
+  });
+
+  it('keeps completed modules when summary generation fails', async () => {
+    const { result } = await runAndResult({ failSummary: true });
+    expect(result.status).toBe('PARTIAL_FAILED');
+    expect(result.perDimension.size).toBe(3);
+    expect(result.summary).toBeNull();
+    expect(result.warnings[0]).toContain('综合结论生成失败');
+  });
+
+  it('does not expose JSON returned by the summary prose pass', async () => {
+    const { result, events } = await collect(streamComprehensive(
+      fakeProvider({ summaryStreamText: JSON.stringify(summaryJson) }),
+      input,
+      { runId: 'json-summary', mode: 'QUICK' },
+    ));
+    const summaryChunks = events.filter((event) => event.type === 'summary_chunk');
+    expect(summaryChunks).toHaveLength(1);
+    expect(summaryChunks[0]).toMatchObject({
+      deltaText: expect.stringContaining('综合看法中性'),
+    });
+    expect(summaryChunks[0]).not.toMatchObject({ deltaText: expect.stringMatching(/^\s*\{/) });
+    expect(result.summary?.markdown).toContain('综合看法中性');
+  });
+
+  it('returns CANCELLED before starting modules when aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const { result, events } = await collect(streamComprehensive(
+      fakeProvider(), input, { runId: 'cancelled', signal: controller.signal },
+    ));
     expect(result.status).toBe('CANCELLED');
+    expect(events.at(-1)).toMatchObject({ type: 'done', status: 'CANCELLED' });
   });
 
-  it('halts with BUDGET_EXHAUSTED when maxToolCalls cap is reached', async () => {
-    // Custom provider that emits toolUseCounts: { webSearch: 5 } per stream.
-    const baseProvider = buildProvider({});
-    const wrapped: typeof baseProvider = {
-      ...baseProvider,
-      stream: vi.fn(async (sys: any, user: string, onChunk: any) => {
-        const r = await baseProvider.stream(sys, user, onChunk);
-        return { ...r, toolUseCounts: { webSearch: 5 } };
-      }),
+  it('skips a module when the immutable pack marks its required facts missing', async () => {
+    const { result, events } = await collect(streamComprehensive(
+      fakeProvider(), input, {
+        runId: 'skip',
+        dimensions: [ALL_DIMENSIONS.find((d) => d.type === 'MARKET_SIGNALS')!],
+        evidencePack: {
+          schemaVersion: 'evidence-pack-v2',
+          researchCoverage: {
+            dimensions: {
+              MARKET_SIGNALS: { skip: true, missingCriticalFacts: ['history'] },
+            },
+          },
+        } as never,
+      },
+    ));
+    expect(result.status).toBe('FAILED');
+    expect(events.find((event) => event.type === 'section_skipped')).toMatchObject({
+      sectionType: 'MARKET_SIGNALS',
+      missingFields: ['history'],
+    });
+  });
+
+  it('forwards the RFC-06 host allowlist derived from the market profile to every provider call', async () => {
+    const streamOptions: ProviderStreamOptions[] = [];
+    const cnProfile = {
+      code: 'CN',
+      validateSymbol: () => true,
+      normalizeSymbol: (symbol: string) => symbol,
+      domainTiers: {
+        'csrc.gov.cn': 'A' as const,
+        'eastmoney.com': 'B' as const,
+        'spammy.example': 'E' as const,
+      },
     };
-    const result = await runComprehensive(wrapped, minimalInput, {
-      runId,
-      todayDate: TODAY,
-      budget: { maxToolCalls: 8 },
+    await runComprehensive(fakeProvider({ streamOptions }), input, {
+      runId: 'cn',
+      mode: 'QUICK',
+      dimensions: [ALL_DIMENSIONS[0]!],
+      marketProfile: cnProfile as never,
     });
-    expect(result.status).toBe('BUDGET_EXHAUSTED');
-    // First dim contributes 5 tool calls; check before dim 2 sees 5 < 8 →
-    // continue. Dim 2 adds 5 → 10 > 8 → check before dim 3 trips.
-    expect(result.perDimension.size).toBe(2);
-    expect(result.trace.toolCalls).toBe(10);
-  });
-});
-
-describe('workflows/streamComprehensive — done event contract', () => {
-  it('emits done with comprehensive payload on success', async () => {
-    const { events } = await collect(
-      streamComprehensive(buildProvider({}), minimalInput, {
-        runId,
-        todayDate: TODAY,
-      }),
-    );
-    const done = events.find((e) => e.type === 'done');
-    expect(done).toBeDefined();
-    if (done?.type === 'done') {
-      expect(done.status).toBe('COMPLETED');
-      expect(done.result).toBeDefined();
-      expect(done.result.structuredJson).not.toBeNull();
-      expect(done.result.partialDimensions).toBeUndefined();
-    }
-  });
-
-  it('emits done with FAILED status when fail-run dim fails', async () => {
-    const failRunDim: Dimension = { ...FUNDAMENTAL, onFailure: 'fail-run' };
-    const { events } = await collect(
-      streamComprehensive(
-        buildProvider({ failOn: ['FUNDAMENTAL'] }),
-        minimalInput,
-        { runId, todayDate: TODAY, dimensions: [failRunDim] },
-      ),
-    );
-    const done = events.find((e) => e.type === 'done');
-    expect(done).toMatchObject({ type: 'done', status: 'FAILED' });
-    if (done?.type === 'done') {
-      expect(done.result.structuredJson).toBeNull();
-    }
-  });
-});
-
-describe('workflows/streamComprehensive — budget and cost updates', () => {
-  it('BUDGET_EXHAUSTED partialDimensions includes unrun dims (P1 #4)', async () => {
-    const result = await runComprehensive(buildProvider({}), minimalInput, {
-      runId,
-      todayDate: TODAY,
-      budget: { maxTokens: 200 }, // halts after dim 1 (~270 tokens)
-    });
-    expect(result.status).toBe('BUDGET_EXHAUSTED');
-    expect(result.partialDimensions.length).toBeGreaterThan(0);
-    expect(result.partialDimensions).toContain('VALUATION');
-    expect(result.partialDimensions).toContain('PORTFOLIO');
-  });
-
-  it('emits cost_update per section with cumulative totals (P1 #2)', async () => {
-    const events: Array<{ type: string; totalTokens?: number }> = [];
-    const gen = streamComprehensive(buildProvider({}), minimalInput, {
-      runId,
-      todayDate: TODAY,
-    });
-    while (true) {
-      const next = await gen.next();
-      if (next.done) break;
-      events.push(next.value as { type: string; totalTokens?: number });
-    }
-    const costs = events.filter((e) => e.type === 'cost_update');
-    // 8 per-dim + 2 summary cost_updates ≥ 10
-    expect(costs.length).toBeGreaterThanOrEqual(10);
-    let prev = 0;
-    for (const c of costs) {
-      expect(c.totalTokens).toBeGreaterThanOrEqual(prev);
-      prev = c.totalTokens ?? 0;
-    }
-    expect(costs[costs.length - 1]?.totalTokens).toBeGreaterThan(0);
-  });
-});
-
-describe('workflows/streamComprehensive — trace metrics (Day 11d)', () => {
-  it('aggregates llmCalls / toolCalls / durationMs / perDimension', async () => {
-    const result = await runComprehensive(buildProvider({}), minimalInput, {
-      runId,
-      todayDate: TODAY,
-    });
-    // Each dim: 1 stream + 1 complete = 2 llm calls (no repair); 9 dims = 18
-    // Summary: 1 stream + 1 complete = 2 → grand total = 20
-    expect(result.trace.llmCalls).toBe(20);
-    // Tool calls: 0 because fake provider doesn't emit toolUseCounts
-    expect(result.trace.toolCalls).toBe(0);
-    expect(result.trace.durationMs).toBeGreaterThanOrEqual(0);
-    expect(result.trace.perDimension).toBeDefined();
-    expect(Object.keys(result.trace.perDimension ?? {})).toHaveLength(9);
-    const fund = result.trace.perDimension?.FUNDAMENTAL;
-    expect(fund?.llmCalls).toBe(2);
-    expect(fund?.tokensIn).toBeGreaterThan(0);
-    expect(fund?.citationsCount).toBeGreaterThanOrEqual(0);
-  });
-});
-
-describe('workflows/streamComprehensive — disclaimer override', () => {
-  it('replaces summary disclaimer with DEFAULT_DISCLAIMER even if LLM returns custom text', async () => {
-    // buildProvider's complete returns validSummaryJson which sets disclaimer to '免责'
-    // After applyFixedDisclaimerToSummary it should be DEFAULT_DISCLAIMER instead.
-    const { events } = await collect(
-      streamComprehensive(buildProvider({}), minimalInput, {
-        runId,
-        todayDate: TODAY,
-      }),
-    );
-    const sc = events.find((e) => e.type === 'summary_complete');
-    if (sc?.type === 'summary_complete') {
-      const json = sc.json as { disclaimer: string };
-      expect(json.disclaimer).toBe(
-        '免责声明：本报告由 AI 生成，不构成投资建议。投资有风险，入市需谨慎。',
+    expect(streamOptions.length).toBeGreaterThan(0);
+    // Tool-enabled calls (module report streams) must carry the allowlist;
+    // the summary stream disables tools and is exempt.
+    const toolEnabled = streamOptions.filter((option) => !option.disableTools);
+    expect(toolEnabled.length).toBeGreaterThan(0);
+    for (const option of toolEnabled) {
+      expect([...(option.allowedDomains ?? [])].sort()).toEqual(
+        ['csrc.gov.cn', 'eastmoney.com'],
       );
     }
   });
 });
 
-describe('workflows/streamComprehensive — fail-run dim', () => {
-  it('halts on first failure when dim.onFailure==fail-run', async () => {
-    // Wrap FUNDAMENTAL to fail-run
-    const failRunFundamental: Dimension = {
-      ...FUNDAMENTAL,
-      onFailure: 'fail-run',
-    };
-    const { events, result } = await collect(
-      streamComprehensive(
-        buildProvider({ failOn: ['FUNDAMENTAL'] }),
-        minimalInput,
-        {
-          runId,
-          todayDate: TODAY,
-          dimensions: [failRunFundamental, TECHNICAL],
-        },
-      ),
-    );
-    const r = result as { status: string; summary: unknown; failures: { type: string }[] };
-    expect(r.status).toBe('FAILED');
-    expect(r.summary).toBeNull();
-    expect(r.failures).toEqual([expect.objectContaining({ type: 'FUNDAMENTAL' })]);
-    expect(events.find((e) => e.type === 'summary_complete')).toBeUndefined();
-  });
-});
-
-describe('workflows/streamComprehensive — empty / all-fail', () => {
-  it('returns FAILED when no dimensions survive', async () => {
-    const { result } = await collect(
-      streamComprehensive(
-        buildProvider({ failOn: ['FUNDAMENTAL'] }),
-        minimalInput,
-        { runId, todayDate: TODAY, dimensions: [FUNDAMENTAL] },
-      ),
-    );
-    const r = result as { status: string; summary: unknown };
-    expect(r.status).toBe('FAILED');
-    expect(r.summary).toBeNull();
-  });
-});
-
-describe('workflows/runComprehensive', () => {
-  it('drains the generator and returns ComprehensiveResult', async () => {
-    const result = await runComprehensive(buildProvider({}), minimalInput, {
-      runId,
-      todayDate: TODAY,
-    });
-    expect(result.status).toBe('COMPLETED');
-    expect(result.summary).not.toBeNull();
-    expect(result.perDimension.size).toBe(9);
-  });
-});
-
+async function runAndResult(options: Parameters<typeof fakeProvider>[0]) {
+  return runComprehensive(fakeProvider(options), input, {
+    runId: 'run-test',
+    mode: 'QUICK',
+  }).then((result) => ({ result }));
+}

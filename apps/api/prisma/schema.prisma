@@ -193,51 +193,58 @@ model Analysis {
   stockId             String
   symbol              String
   market              Market
-  analysisType        AnalysisType
+  mode                AnalysisMode
+  focusWindow         FocusWindow
   question            String?
   status              AnalysisStatus @default(PENDING)
   aiProvider          String?
   aiModel             String?
   aiProviderSettingId String?
   dataAsOf            String?
-  generatedAt         DateTime?
   summaryMarkdown     String?
   summaryJson         Json?
-  overallSignal       Signal?
+  overallSignal       OverallSignal?
   overallConfidence   Confidence?
-  // null = 正常运行；'WEB_SEARCH_FALLBACK' = EvidencePack v2 失败后降级到 v1 web_search。
-  degradedSource      String?
-  // 本次分析累计的 LLM 输入/输出 token 数；done 时从 workflow trace 落库。
-  // null = 未跑完或失败时未采集到。
   inputTokens         Int?
   outputTokens        Int?
+  errorCode           String?
+  errorMessage        String?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  startedAt   DateTime?
+  completedAt DateTime?
 
   user             User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
   stock            Stock                     @relation(fields: [stockId], references: [id], onDelete: Cascade)
   sections         AnalysisSection[]
   evidenceSnapshot AnalysisEvidenceSnapshot?
 
-  @@index([userId, degradedSource])
+  @@index([userId, createdAt])
+  @@index([userId, stockId, createdAt])
+  @@index([userId, status, createdAt])
 }
 
 model AnalysisSection {
-  id             String         @id @default(cuid())
+  id             String        @id @default(cuid())
   analysisId     String
   type           SectionType
-  status         AnalysisStatus @default(PENDING)
+  status         SectionStatus @default(PENDING)
   reportMarkdown String?
   structuredJson Json?
-  citations      Json?
+  errorCode      String?
   errorMessage   String?
   order          Int
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  startedAt   DateTime?
+  completedAt DateTime?
 
   analysis Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  @@unique([analysisId, type])
+  @@index([analysisId, order])
 }
 
 // Chat Phase 1 owns conversation records. AnalysisEvidenceSnapshot is written
@@ -878,29 +885,24 @@ enum EarningsDeliveryKind {
   CORRECTION
 }
 
-enum AnalysisType {
-  FUNDAMENTAL
-  VALUATION
-  INDUSTRY
-  RISK
-  TECHNICAL
-  SENTIMENT
-  SCENARIO
-  PORTFOLIO
-  GOVERNANCE
-  COMPREHENSIVE
+enum AnalysisMode {
+  QUICK
+  DEEP
 }
 
 enum SectionType {
-  FUNDAMENTAL
-  VALUATION
-  INDUSTRY
-  RISK
-  TECHNICAL
-  SENTIMENT
-  SCENARIO
-  PORTFOLIO
-  GOVERNANCE
+  COMPANY_QUALITY
+  INDUSTRY_POSITION
+  VALUATION_SCENARIOS
+  RISK_REGISTER
+  MARKET_SIGNALS
+}
+
+enum FocusWindow {
+  D30 @map("30D")
+  D90 @map("90D")
+  Y1  @map("1Y")
+  Y3  @map("3Y")
 }
 
 enum AnalysisStatus {
@@ -910,13 +912,21 @@ enum AnalysisStatus {
   PARTIAL_FAILED
   FAILED
   CANCELLED
-  BUDGET_EXHAUSTED
 }
 
-enum Signal {
-  BULLISH
+enum SectionStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  SKIPPED
+  CANCELLED
+}
+
+enum OverallSignal {
+  POSITIVE
   NEUTRAL
-  BEARISH
+  CAUTIOUS
 }
 
 enum Confidence {

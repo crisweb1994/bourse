@@ -10,8 +10,6 @@ export {
   ResearchTrace,
   ResearchWarning,
   ResearchWarningCode,
-  Sensitivity,
-  SourceDocument,
   SourceType,
 } from '@bourse/market-data';
 export type {
@@ -32,10 +30,7 @@ export * from './trace';
 export * from './analysis-request';
 export * from './analysis-result';
 export * from './comprehensive-summary';
-export * from './cross-dim-validator';
-export * from './evidence-pack';
 export * from './evidence-pack-v2';
-export * from './judge-result';
 export * from './sse-events';
 
 // Daily Brief (docs/prd-daily-brief.md) — 定时行情简报契约

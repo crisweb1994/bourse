@@ -19,7 +19,7 @@ import { Confidence } from './enums';
 import { ResearchCoverageSchema } from '../snapshot/research-coverage';
 
 /**
- * RFC-02 Phase 1 + 1.x · A 股 EvidencePack v2.
+ * Immutable EvidencePack used by Analysis V2.
  *
  * Schema design notes:
  * - `Fact<T>` carries provenance for every reusable value (CLAUDE.md §4.26):
@@ -28,10 +28,9 @@ import { ResearchCoverageSchema } from '../snapshot/research-coverage';
  *   and currency where applicable.
  * - All `facts` fields are optional. Missing fields are publicly disclosed
  *   via `dataAvailability.missing` so dimension prompts know not to hallucinate.
- * - `market: 'CN'` is a literal — v2 only supports A-share in this RFC. US/HK/
- *   JP/UK continue to use the v1 LLM-based builder for now.
- * - `schemaVersion: 'evidence-pack-v2'` makes the type a discriminated-union
- *   member with v1, so consumers can route on a single field.
+ * - The market is intentionally a closed set matching the snapshot connectors.
+ * - `schemaVersion` makes stored snapshots self-describing for replay and
+ *   debugging; the current application accepts this version only.
  */
 
 // ===== Fact<T> with provenance =====
@@ -48,10 +47,10 @@ export type SourceTier = z.infer<typeof SourceTier>;
  * schemas are structurally identical and zod's safeParse caches internally.
  */
 /**
- * v0.6 PRD §10.1 — `origin` marks which collection path produced this fact:
+ * `origin` marks which collection path produced this fact:
  *  - 'from_snapshot' (snapshot-backed wrapper path);
- *  - 'provider_native' (legacy v2 builder or wrapper augmentation).
- * Optional for backwards compat: pre-v0.6 facts omit this field.
+ *  - 'provider_native' (provider-specific augmentation).
+ * Optional because not every connector needs to expose its collection path.
  */
 export const FactOrigin = z.enum(['from_snapshot', 'provider_native']);
 export type FactOrigin = z.infer<typeof FactOrigin>;
@@ -311,66 +310,9 @@ export const EvidencePackV2Trace = z.object({
 });
 export type EvidencePackV2Trace = z.infer<typeof EvidencePackV2Trace>;
 
-/**
- * v0.6 — `market` widened from the CN-only literal to a closed enum so the
- * v0.6 snapshot-backed wrapper can produce v2 packs for US (and later HK/JP/
- * UK) under the planner-driven path. CN consumers continue to pass 'CN' and
- * see no behavioural change. The wire literal `schemaVersion: 'evidence-pack-v2'`
- * is intentionally retained — debate/legacy consumers route on it unchanged.
- */
+/** Closed market set supported by the snapshot connectors. */
 export const EvidencePackMarket = z.enum(['CN', 'US', 'HK', 'JP', 'UK']);
 export type EvidencePackMarket = z.infer<typeof EvidencePackMarket>;
-
-/**
- * v0.7 C2 — normalized cross-subject comparison facts (PRD §9.5 follow-up).
- *
- * The normalized shape transposes facts to "by fact key → per subject";
- * cross-subject diffs (numeric delta or count tally) are pre-computed by
- * the wrapper so prompts can render a single sentence.
- *
- * - `bySubject`: stable subject order (mirrors snapshot.subjectBundles order)
- *   so section prompts can name subjects consistently.
- * - `facts.<key>`: per-fact-key Map(subjectId → FactOf<value>). Map is used
- *   over Record so consumers can iterate insertion order.
- * - `crossSubjectDiff`: pre-computed comparison sentences keyed by factKey;
- *   `diffNote` is the rendered string (e.g. "腾讯 PE 25 vs 阿里 PE 18，差异 7 点").
- *
- * Always emitted by the comparison wrapper.
- */
-export const InstrumentRefLite = z.object({
-  instrumentId: z.string().min(1),
-  market: EvidencePackMarket,
-  symbol: z.string().min(1),
-});
-export type InstrumentRefLite = z.infer<typeof InstrumentRefLite>;
-
-export const CrossSubjectDiff = z.object({
-  factKey: z.string().min(1),
-  values: z.array(
-    z.object({
-      subjectId: z.string().min(1),
-      value: z.unknown(),
-    }),
-  ),
-  /** Pre-rendered comparison sentence (Chinese), optional when not derivable. */
-  diffNote: z.string().optional(),
-});
-export type CrossSubjectDiff = z.infer<typeof CrossSubjectDiff>;
-
-/**
- * Normalized comparison facts. `facts.<key>` is a `Record<subjectId, FactOf>`
- * (zod-friendly substitute for Map; insertion order is preserved by JS
- * objects for string keys since ES2015).
- */
-export const NormalizedComparisonFacts = z.object({
-  bySubject: z.array(InstrumentRefLite),
-  facts: z.record(
-    z.string().min(1),
-    z.record(z.string().min(1), z.unknown()),
-  ),
-  crossSubjectDiff: z.array(CrossSubjectDiff).optional(),
-});
-export type NormalizedComparisonFacts = z.infer<typeof NormalizedComparisonFacts>;
 
 // plan-v2 Wave 1 — pre-computed deterministic block (ratios + tech + flags + valuation)
 export const ComputedFactsBlock = z.object({
@@ -402,11 +344,6 @@ export const EvidencePackV2 = z.object({
   market: EvidencePackMarket,
   capturedAt: z.string().datetime(),
   facts: MinimalFacts.merge(AShareSpecificFacts),
-  /**
-   * v0.7 C2 — normalized cross-subject facts for comparison-mode packs.
-   * Wrapper always populates this for comparison runs.
-   */
-  normalizedComparisonFacts: NormalizedComparisonFacts.optional(),
   dataAvailability: EvidencePackDataAvailability,
   citations: z.array(Citation),
   trace: EvidencePackV2Trace,

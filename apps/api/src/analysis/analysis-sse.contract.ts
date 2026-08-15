@@ -1,8 +1,13 @@
-import type { AnalysisStatus, SectionType } from '@bourse/shared-types';
+import type { AnalysisStatus, SectionStatus, SectionType } from '@bourse/shared-types';
 
 export interface AnalysisSsePayloadMap {
   evidence_pack_ready: {
-    pack: unknown;
+    pack: {
+      capturedAt: string | null;
+      dataAsOf: unknown;
+      degraded: boolean;
+      missingFields: unknown[];
+    };
   };
   section_skipped: {
     sectionType: SectionType;
@@ -18,12 +23,18 @@ export interface AnalysisSsePayloadMap {
     text: string;
     sectionType?: SectionType;
   };
+  report_complete: {
+    text: string;
+    sectionType: SectionType;
+  };
   citation: {
     title: string;
     url: string;
     claim: string;
     sectionType?: SectionType;
     searchAdapter?: string;
+    sourceType?: string;
+    retrievedAt?: string;
   };
   structured_data: {
     json: unknown;
@@ -31,7 +42,7 @@ export interface AnalysisSsePayloadMap {
   };
   section_complete: {
     sectionType: SectionType;
-    status: AnalysisStatus;
+    status: SectionStatus;
     error?: string | null;
   };
   summary_chunk: {
@@ -53,6 +64,7 @@ export interface AnalysisSsePayloadMap {
   error: {
     message: string;
     failedSections?: SectionType[];
+    sectionType?: SectionType;
   };
 }
 

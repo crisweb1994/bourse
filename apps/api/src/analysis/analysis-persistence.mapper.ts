@@ -2,16 +2,19 @@ import type { SseEvent } from '@bourse/analysis';
 import {
   isAnalysisStatus,
   isConfidence,
+  isOverallSignal,
   isSectionType,
-  isSignal,
+  type AnalysisMode,
   type AnalysisTerminalStatus,
+  type OverallSignal,
 } from '@bourse/shared-types';
 import {
   AnalysisStatus as PrismaAnalysisStatus,
   Confidence as PrismaConfidence,
-  type Prisma,
+  OverallSignal as PrismaOverallSignal,
+  SectionStatus as PrismaSectionStatus,
   SectionType as PrismaSectionType,
-  Signal as PrismaSignal,
+  type Prisma,
 } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
 
@@ -29,18 +32,11 @@ function toPrismaSectionType(sectionType: string): PrismaSectionType {
   return PrismaSectionType[sectionType];
 }
 
-function toPrismaSignal(signal: string): PrismaSignal {
-  if (!isSignal(signal)) {
-    throw new Error(`Unknown signal: ${signal}`);
-  }
-  return PrismaSignal[signal];
-}
-
-function toPrismaConfidence(confidence: string): PrismaConfidence {
-  if (!isConfidence(confidence)) {
-    throw new Error(`Unknown confidence: ${confidence}`);
-  }
-  return PrismaConfidence[confidence];
+function toPrismaSectionStatus(status: string): PrismaSectionStatus {
+  if (status === 'COMPLETED') return PrismaSectionStatus.COMPLETED;
+  if (status === 'CANCELLED') return PrismaSectionStatus.CANCELLED;
+  if (status === 'SKIPPED') return PrismaSectionStatus.SKIPPED;
+  return PrismaSectionStatus.FAILED;
 }
 
 function toPrismaJson(value: unknown): Prisma.InputJsonValue {
@@ -54,9 +50,16 @@ function optionalPrismaJson(
   return toPrismaJson(value);
 }
 
+function toOverallSignal(value: unknown): OverallSignal | null {
+  if (typeof value !== 'string') return null;
+  if (isOverallSignal(value)) return value;
+  return null;
+}
+
 export interface AnalysisSectionAccumulator {
   sectionId: string;
   markdown: string;
+  /** Kept in memory for snapshot provenance; not stored as a second DB fact. */
   citations: Array<{
     title: string;
     url: string;
@@ -68,7 +71,7 @@ export interface AnalysisSectionAccumulator {
 
 export interface PersistRunDoneInput {
   analysisId: string;
-  mode?: 'comprehensive' | 'single';
+  mode: AnalysisMode;
   aiModel: string;
   terminalStatus: AnalysisTerminalStatus;
   summaryMarkdown: string;
@@ -76,10 +79,9 @@ export interface PersistRunDoneInput {
   summaryDataAsOf: string | null;
   todayDate: string;
   degradedSourceMark: 'WEB_SEARCH_FALLBACK' | null;
-  /** Final cumulative input tokens from the terminal trace; null when unknown. */
   inputTokens: number | null;
-  /** Final cumulative output tokens from the terminal trace; null when unknown. */
   outputTokens: number | null;
+  errorMessage?: string | null;
   doneEvent: Extract<SseEvent, { type: 'done' }>;
 }
 
@@ -89,15 +91,26 @@ export class AnalysisPersistenceMapper {
   async markQueuedSectionsInProgress(sectionIds: string[]) {
     if (sectionIds.length === 0) return;
     await this.prisma.analysisSection.updateMany({
-      where: { id: { in: sectionIds } },
-      data: { status: PrismaAnalysisStatus.IN_PROGRESS },
+      where: { id: { in: sectionIds }, status: PrismaSectionStatus.PENDING },
+      data: { status: PrismaSectionStatus.IN_PROGRESS, startedAt: new Date() },
     });
   }
 
-  async persistSectionSkipped(sectionId: string) {
-    await this.prisma.analysisSection.update({
-      where: { id: sectionId },
-      data: { status: PrismaAnalysisStatus.FAILED },
+  async persistSectionSkipped(
+    sectionId: string,
+    reason:
+      | 'INSUFFICIENT_REQUIRED_FACTS'
+      | 'DEGRADED_SOURCE_MISSING_PRIVATE_DATA'
+      | 'MODE_NOT_INCLUDED' = 'INSUFFICIENT_REQUIRED_FACTS',
+  ) {
+    await this.prisma.analysisSection.updateMany({
+      where: { id: sectionId, status: PrismaSectionStatus.IN_PROGRESS },
+      data: {
+        status: PrismaSectionStatus.SKIPPED,
+        errorCode: reason,
+        errorMessage: reason,
+        completedAt: new Date(),
+      },
     });
   }
 
@@ -105,61 +118,31 @@ export class AnalysisPersistenceMapper {
     event: Extract<SseEvent, { type: 'section_complete' }>,
     accumulator: AnalysisSectionAccumulator,
   ) {
-    await this.prisma.analysisSection.update({
-      where: { id: accumulator.sectionId },
-      data: {
-        status: toPrismaAnalysisStatus(event.status),
-        reportMarkdown: accumulator.markdown,
-        structuredJson: optionalPrismaJson(accumulator.structuredJson),
-        citations:
-          accumulator.citations.length > 0
-            ? toPrismaJson(accumulator.citations)
-            : undefined,
-      },
-    });
-  }
-
-  async persistJudgeResult(
-    analysisId: string,
-    event: Extract<SseEvent, { type: 'judge_complete' }>,
-    accumulator: AnalysisSectionAccumulator,
-  ) {
-    if (
-      !accumulator.structuredJson ||
-      typeof accumulator.structuredJson !== 'object'
-    ) {
-      return;
-    }
-
-    const json = accumulator.structuredJson as Record<string, unknown>;
-    json.judgeResult = event.result;
-    if (
-      event.result.confidenceAdjustment === 'DOWNGRADE_TO_MEDIUM' ||
-      event.result.confidenceAdjustment === 'DOWNGRADE_TO_LOW'
-    ) {
-      const target =
-        event.result.confidenceAdjustment === 'DOWNGRADE_TO_LOW'
-          ? 'LOW'
-          : 'MEDIUM';
-      const conclusion = json.conclusion as { confidence?: string } | undefined;
-      if (conclusion) conclusion.confidence = target;
-    }
-
     await this.prisma.analysisSection.updateMany({
-      where: {
-        analysisId,
-        type: toPrismaSectionType(event.sectionType),
+      where: { id: accumulator.sectionId, status: PrismaSectionStatus.IN_PROGRESS },
+      data: {
+        status: toPrismaSectionStatus(event.status),
+        reportMarkdown: accumulator.markdown || null,
+        structuredJson: optionalPrismaJson(accumulator.structuredJson),
+        completedAt: new Date(),
+        errorCode: null,
+        errorMessage: null,
       },
-      data: { structuredJson: toPrismaJson(accumulator.structuredJson) },
     });
   }
 
-  async persistSectionErrorById(sectionId: string, message: string) {
-    await this.prisma.analysisSection.update({
-      where: { id: sectionId },
+  async persistSectionErrorById(
+    sectionId: string,
+    message: string,
+    errorCode = 'SECTION_FAILED',
+  ) {
+    await this.prisma.analysisSection.updateMany({
+      where: { id: sectionId, status: PrismaSectionStatus.IN_PROGRESS },
       data: {
-        status: PrismaAnalysisStatus.FAILED,
+        status: PrismaSectionStatus.FAILED,
+        errorCode,
         errorMessage: message,
+        completedAt: new Date(),
       },
     });
   }
@@ -168,50 +151,61 @@ export class AnalysisPersistenceMapper {
     analysisId: string,
     sectionType: string,
     message: string,
+    errorCode = 'SECTION_FAILED',
   ) {
     await this.prisma.analysisSection.updateMany({
       where: {
         analysisId,
         type: toPrismaSectionType(sectionType),
         status: {
-          in: [
-            PrismaAnalysisStatus.PENDING,
-            PrismaAnalysisStatus.IN_PROGRESS,
-          ],
+          in: [PrismaSectionStatus.PENDING, PrismaSectionStatus.IN_PROGRESS],
         },
       },
       data: {
-        status: PrismaAnalysisStatus.FAILED,
+        status: PrismaSectionStatus.FAILED,
+        errorCode,
         errorMessage: message,
+        completedAt: new Date(),
       },
     });
   }
 
   async persistRunDone(input: PersistRunDoneInput) {
-    const { overallSignal, overallConfidence, dataAsOf } =
-      this.pickOverallFields(input);
+    const summary =
+      input.summaryJson && typeof input.summaryJson === 'object'
+        ? (input.summaryJson as Record<string, unknown>)
+        : null;
+    const result = input.doneEvent.result as { confidence?: unknown } | undefined;
+    const overallSignal = toOverallSignal(summary?.signal);
+    const overallConfidence =
+      typeof summary?.confidence === 'string'
+        ? summary.confidence
+        : typeof result?.confidence === 'string'
+          ? result.confidence
+          : null;
 
-    await this.prisma.analysis.update({
-      where: { id: input.analysisId },
+    await this.prisma.analysis.updateMany({
+      where: { id: input.analysisId, status: PrismaAnalysisStatus.IN_PROGRESS },
       data: {
         status: toPrismaAnalysisStatus(input.terminalStatus),
         aiModel: input.aiModel,
-        generatedAt: new Date(),
-        ...(input.mode !== 'single' && input.summaryMarkdown
-          ? { summaryMarkdown: input.summaryMarkdown }
-          : {}),
-        ...(input.mode !== 'single' && input.summaryJson !== null
+        completedAt: new Date(),
+        ...(input.summaryMarkdown ? { summaryMarkdown: input.summaryMarkdown } : {}),
+        ...(input.summaryJson !== null
           ? { summaryJson: toPrismaJson(input.summaryJson) }
           : {}),
-        ...(overallSignal && isSignal(overallSignal)
-          ? { overallSignal: toPrismaSignal(overallSignal) }
-          : {}),
+        ...(overallSignal
+          ? { overallSignal: PrismaOverallSignal[overallSignal] }
+          : { overallSignal: null }),
         ...(overallConfidence && isConfidence(overallConfidence)
-          ? { overallConfidence: toPrismaConfidence(overallConfidence) }
-          : {}),
-        ...(dataAsOf ? { dataAsOf } : {}),
-        ...(input.degradedSourceMark
-          ? { degradedSource: input.degradedSourceMark }
+          ? { overallConfidence: PrismaConfidence[overallConfidence] }
+          : { overallConfidence: null }),
+        dataAsOf: input.summaryDataAsOf ?? input.todayDate,
+        ...(input.errorMessage
+          ? {
+              errorCode: 'RUN_PARTIAL_FAILED',
+              errorMessage: input.errorMessage,
+            }
           : {}),
         ...(input.inputTokens !== null ? { inputTokens: input.inputTokens } : {}),
         ...(input.outputTokens !== null ? { outputTokens: input.outputTokens } : {}),
@@ -219,28 +213,33 @@ export class AnalysisPersistenceMapper {
     });
   }
 
-  async persistRunFailed(analysisId: string) {
-    await this.prisma.analysis.update({
-      where: { id: analysisId },
-      data: { status: PrismaAnalysisStatus.FAILED },
+  async persistRunFailed(analysisId: string, message?: string, errorCode = 'RUN_FAILED') {
+    await this.prisma.analysis.updateMany({
+      where: { id: analysisId, status: PrismaAnalysisStatus.IN_PROGRESS },
+      data: {
+        status: PrismaAnalysisStatus.FAILED,
+        errorCode,
+        errorMessage: message ?? null,
+        completedAt: new Date(),
+      },
     });
   }
 
-  /**
-   * Abort path: mark CANCELLED without overwriting generatedAt (the run did
-   * NOT complete) or summary/signal fields (those stay as whatever earlier
-   * sections produced). Token totals captured so far are still worth keeping
-   * for the history view.
-   */
   async persistRunCancelled(input: {
     analysisId: string;
     inputTokens: number | null;
     outputTokens: number | null;
   }) {
-    await this.prisma.analysis.update({
-      where: { id: input.analysisId },
+    await this.prisma.analysis.updateMany({
+      where: {
+        id: input.analysisId,
+        status: { in: [PrismaAnalysisStatus.PENDING, PrismaAnalysisStatus.IN_PROGRESS] },
+      },
       data: {
         status: PrismaAnalysisStatus.CANCELLED,
+        errorCode: 'CANCELLED_BY_USER',
+        errorMessage: 'Cancelled by user',
+        completedAt: new Date(),
         ...(input.inputTokens !== null ? { inputTokens: input.inputTokens } : {}),
         ...(input.outputTokens !== null ? { outputTokens: input.outputTokens } : {}),
       },
@@ -253,77 +252,21 @@ export class AnalysisPersistenceMapper {
     terminalStatus: AnalysisTerminalStatus;
   }) {
     if (input.orphanTypes.length === 0) return;
-
-    const orphanStatus = this.orphanStatusFor(input.terminalStatus);
-    const orphanMsg = this.orphanMessageFor(input.terminalStatus);
-
+    const cancelled = input.terminalStatus === 'CANCELLED';
     await this.prisma.analysisSection.updateMany({
       where: {
         analysisId: input.analysisId,
-        type: {
-          in: input.orphanTypes.map((type) => toPrismaSectionType(type)),
-        },
-        status: {
-          in: [
-            PrismaAnalysisStatus.PENDING,
-            PrismaAnalysisStatus.IN_PROGRESS,
-          ],
-        },
+        type: { in: input.orphanTypes.map(toPrismaSectionType) },
+        status: { in: [PrismaSectionStatus.PENDING, PrismaSectionStatus.IN_PROGRESS] },
       },
       data: {
-        status: orphanStatus,
-        errorMessage: orphanMsg,
+        status: cancelled ? PrismaSectionStatus.CANCELLED : PrismaSectionStatus.FAILED,
+        errorCode: cancelled ? 'CANCELLED_BY_USER' : 'RUN_INTERRUPTED',
+        errorMessage: cancelled
+          ? 'Cancelled before this section completed'
+          : 'Run ended before this section completed',
+        completedAt: new Date(),
       },
     });
-  }
-
-  private pickOverallFields(input: PersistRunDoneInput): {
-    overallSignal?: string;
-    overallConfidence?: string;
-    dataAsOf?: string;
-  } {
-    if (input.mode === 'single') {
-      const result = input.doneEvent.result as {
-        signal?: string;
-        confidence?: string;
-        structuredJson?: { dataAsOf?: string } | null;
-      };
-      return {
-        overallSignal: result.signal,
-        overallConfidence: result.confidence,
-        dataAsOf: result.structuredJson?.dataAsOf ?? input.todayDate,
-      };
-    }
-
-    const summaryRow =
-      input.summaryJson !== null
-        ? (input.summaryJson as {
-            overallSignal?: string;
-            overallConfidence?: string;
-          })
-        : null;
-    return {
-      overallSignal: summaryRow?.overallSignal,
-      overallConfidence: summaryRow?.overallConfidence,
-      dataAsOf: input.summaryDataAsOf ?? undefined,
-    };
-  }
-
-  private orphanStatusFor(status: AnalysisTerminalStatus): PrismaAnalysisStatus {
-    if (status === 'CANCELLED') return PrismaAnalysisStatus.CANCELLED;
-    if (status === 'BUDGET_EXHAUSTED') {
-      return PrismaAnalysisStatus.BUDGET_EXHAUSTED;
-    }
-    return PrismaAnalysisStatus.FAILED;
-  }
-
-  private orphanMessageFor(status: AnalysisTerminalStatus) {
-    if (status === 'CANCELLED') {
-      return 'Run cancelled before this section completed';
-    }
-    if (status === 'BUDGET_EXHAUSTED') {
-      return 'Run budget exhausted before this section completed';
-    }
-    return 'Run failed before this section completed';
   }
 }

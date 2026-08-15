@@ -1,10 +1,8 @@
 import { z } from 'zod';
 import { AnalysisResult } from './analysis-result';
 import { Citation } from './citation';
-import { RunStatus, SectionType } from './enums';
-import { EvidencePack } from './evidence-pack';
+import { AnalysisStatus, SectionStatus, SectionType } from './enums';
 import { EvidencePackV2 } from './evidence-pack-v2';
-import { JudgeResult } from './judge-result';
 
 // All SSE events carry runId + monotonic seq, enabling resume(runId, afterSeq).
 // MVP doc §1.1 defines payload + replay semantics for each.
@@ -47,7 +45,9 @@ export const CitationEvent = baseEvent.extend({
 export const SectionCompleteEvent = baseEvent.extend({
   type: z.literal('section_complete'),
   sectionType: SectionType,
-  status: RunStatus,
+  status: SectionStatus,
+  /** Human-readable failure reason, when a section did not complete. */
+  error: z.string().min(1).optional(),
   // Optional per-section usage, populated by streamDimension so callers can
   // accumulate run-wide totals without subscribing to every cost_update.
   usage: z
@@ -81,6 +81,7 @@ export const SectionSkippedEvent = baseEvent.extend({
   reason: z.enum([
     'DEGRADED_SOURCE_MISSING_PRIVATE_DATA',
     'INSUFFICIENT_REQUIRED_FACTS',
+    'MODE_NOT_INCLUDED',
   ]),
   /** Fields that made the section impossible to run safely. */
   missingFields: z.array(z.string()),
@@ -128,12 +129,8 @@ export const WebSearchWarningEvent = baseEvent.extend({
 
 export const DoneEvent = baseEvent.extend({
   type: z.literal('done'),
-  status: RunStatus,
-  /**
-   * Always present (MVP doc §1.1). For workflows that terminated before
-   * structured output (FAILED / CANCELLED / BUDGET_EXHAUSTED),
-   * `result.structuredJson` is null but the rest of the shape is intact.
-   */
+  status: AnalysisStatus,
+  /** Always present, including runs that end before a summary is produced. */
   result: AnalysisResult,
 });
 
@@ -144,20 +141,10 @@ export const ErrorEvent = baseEvent.extend({
   recoverable: z.boolean(),
 });
 
-/**
- * v0.6 PRD §11.1 — `evidence_pack_ready` carries either a v2 or v1 pack
- * (discriminated on `pack.schemaVersion`). v1 packs lack the field entirely;
- * v2 packs carry `schemaVersion: 'evidence-pack-v2'`. Planner-driven analysis
- * additionally emits `planId / snapshotId / originCounts` for observability.
- *
- * zod's `discriminatedUnion` requires a literal discriminator on every member.
- * v1 EvidencePack has no `schemaVersion`, so we use `z.union` (v2 first, v1
- * fallback). The catchall is exercised in
- * `__tests__/evidence-pack-ready-discriminator.test.ts`.
- */
+/** Immutable V2 evidence captured before module execution. */
 export const EvidencePackReadyEvent = baseEvent.extend({
   type: z.literal('evidence_pack_ready'),
-  pack: z.union([EvidencePackV2, EvidencePack]),
+  pack: EvidencePackV2,
   planId: z.string().optional(),
   snapshotId: z.string().optional(),
   originCounts: z
@@ -166,31 +153,6 @@ export const EvidencePackReadyEvent = baseEvent.extend({
       providerNative: z.number().int().nonnegative(),
     })
     .optional(),
-});
-
-/**
- * RFC-10 §8.1: emitted by streamComprehensive's selective-judge phase.
- *
- * Flow per dim that `shouldJudge` selects:
- *   judge_start { sectionType } → runJudge() → judge_complete { sectionType, result, trace* }
- *
- * apps/api keeps these domain events internal and folds `result` into
- * `Section.structuredJson.judgeResult` for replay. Comprehensive judge uses
- * `provider.complete` and emits one start+complete pair per audited dim.
- */
-export const JudgeStartEvent = baseEvent.extend({
-  type: z.literal('judge_start'),
-  sectionType: SectionType,
-});
-
-export const JudgeCompleteEvent = baseEvent.extend({
-  type: z.literal('judge_complete'),
-  sectionType: SectionType,
-  result: JudgeResult,
-  /** Token breakdown for telemetry attribution. */
-  traceTokensIn: z.number().int().nonnegative(),
-  traceTokensOut: z.number().int().nonnegative(),
-  traceDurationMs: z.number().nonnegative(),
 });
 
 export const SseEvent = z.discriminatedUnion('type', [
@@ -208,7 +170,5 @@ export const SseEvent = z.discriminatedUnion('type', [
   ErrorEvent,
   EvidencePackReadyEvent,
   WebSearchWarningEvent,
-  JudgeStartEvent,
-  JudgeCompleteEvent,
 ]);
 export type SseEvent = z.infer<typeof SseEvent>;

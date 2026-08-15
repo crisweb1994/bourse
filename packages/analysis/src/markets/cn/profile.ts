@@ -1,4 +1,3 @@
-import { DEFAULT_CROSS_DIM_TOLERANCE } from '../../contracts/cross-dim-validator';
 import type { MarketProfile } from '../types';
 import { CN_DOMAIN_TIERS, CN_ENDPOINTS, CN_SOURCE_PRIORITIES } from './sources';
 
@@ -53,8 +52,4 @@ export const CN: MarketProfile = {
   domainTiers: CN_DOMAIN_TIERS,
   endpoints: CN_ENDPOINTS,
   sourcePriorities: CN_SOURCE_PRIORITIES,
-  // RFC-03: per-market cross-dim deviation thresholds. CN starts with
-  // the validator's documented defaults; tune from telemetry once we
-  // accumulate a few weeks of conflict-rate data per dim.
-  crossDimTolerance: DEFAULT_CROSS_DIM_TOLERANCE,
 };

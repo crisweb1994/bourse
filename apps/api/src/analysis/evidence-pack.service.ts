@@ -1,9 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { EvidencePackAny } from '@bourse/analysis';
+import type { EvidencePackV2, FocusWindow } from '@bourse/analysis';
 import { SnapshotV2Service } from './snapshot-v2.service';
 
 interface AnalysisForEvidencePack {
   id: string;
+  focusWindow?: FocusWindow;
   stock: {
     symbol: string;
     market: string;
@@ -11,7 +12,7 @@ interface AnalysisForEvidencePack {
 }
 
 export interface EvidencePackBuildResult {
-  pack?: EvidencePackAny;
+  pack?: EvidencePackV2;
   degraded: boolean;
   fallbackUsed: boolean;
   missingPrivateFields: string[];
@@ -26,11 +27,16 @@ export class EvidencePackService {
 
   async buildForAnalysis(
     analysis: AnalysisForEvidencePack,
+    signal?: AbortSignal,
   ): Promise<EvidencePackBuildResult> {
     try {
       const pack = await this.snapshotV2.fetchAsEvidencePack(
         analysis.stock.symbol,
         analysis.stock.market as 'US' | 'CN' | 'HK',
+        {
+          historyDays: historyDaysForFocusWindow(analysis.focusWindow),
+          ...(signal ? { signal } : {}),
+        },
       );
       return {
         pack,
@@ -51,7 +57,7 @@ export class EvidencePackService {
   }
 
   private describePackAvailability(
-    pack: EvidencePackAny,
+    pack: EvidencePackV2,
   ): Omit<EvidencePackBuildResult, 'pack' | 'error'> {
     const availability = (
       pack as {
@@ -79,5 +85,15 @@ export class EvidencePackService {
       fallbackUsed,
       missingPrivateFields,
     };
+  }
+}
+
+function historyDaysForFocusWindow(focusWindow?: FocusWindow): number {
+  switch (focusWindow) {
+    case '30D': return 30;
+    case '90D': return 90;
+    case '3Y': return 365 * 3;
+    case '1Y':
+    default: return 365;
   }
 }

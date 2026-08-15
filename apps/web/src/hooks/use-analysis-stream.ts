@@ -29,6 +29,8 @@ export function useAnalysisStream() {
   );
   const abortRef = useRef<AbortController | null>(null);
   const attachPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const progressQueueRef = useRef<Array<[string, unknown]>>([]);
+  const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Monotonic counter incremented on each startStream call. onmessage /
   // onerror closures capture the request id at attach time and ignore
   // events whose id no longer matches the current one — protects against
@@ -43,9 +45,33 @@ export function useAnalysisStream() {
     }
   };
 
+  const flushProgress = useCallback(() => {
+    if (progressTimerRef.current) {
+      clearTimeout(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+    const queued = progressQueueRef.current;
+    progressQueueRef.current = [];
+    if (queued.length === 0) return;
+    setState((s) => queued.reduce(
+      (next, [event, data]) => applyAnalysisStreamEvent(next, event, data),
+      s,
+    ));
+  }, []);
+
+  const queueProgress = useCallback((event: string, data: unknown) => {
+    progressQueueRef.current.push([event, data]);
+    if (progressTimerRef.current) return;
+    // Markdown parsing is substantially more expensive than receiving an SSE
+    // frame. Flush a small batch so fast token streams do not re-render the
+    // entire report for every provider chunk.
+    progressTimerRef.current = setTimeout(flushProgress, 50);
+  }, [flushProgress]);
+
   const startStream = useCallback(async (analysisId: string) => {
     abortRef.current?.abort();
     clearAttachPoll();
+    flushProgress();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     const myReqId = ++reqIdRef.current;
@@ -76,6 +102,11 @@ export function useAnalysisStream() {
             }, ATTACH_RETRY_MS);
             return;
           }
+          if (ev.event === 'report_chunk' || ev.event === 'summary_chunk') {
+            queueProgress(ev.event, data);
+            return;
+          }
+          flushProgress();
           setState((s) => applyAnalysisStreamEvent(s, ev.event, data));
         },
         onerror(err) {
@@ -113,21 +144,23 @@ export function useAnalysisStream() {
     }
   }, []);
 
-  const stopStream = useCallback(() => {
+  const stopStream = useCallback((terminalStatus: 'COMPLETED' | 'CANCELLED' = 'COMPLETED') => {
     abortRef.current?.abort();
     clearAttachPoll();
+    flushProgress();
     // User pressed "停止" — they want to stop watching, not declare the
     // run failed. Bail out of the streaming UI cleanly: flip status to
     // 'completed' so the failure banner stays hidden and the page shows
     // whatever sections were collected. The backend may still be running;
     // re-attach by reloading or navigating back.
     reqIdRef.current++;
-    setState(stopWatchingStreamState);
+    setState((s) => stopWatchingStreamState(s, terminalStatus));
   }, []);
 
   const reset = useCallback(() => {
     abortRef.current?.abort();
     clearAttachPoll();
+    flushProgress();
     reqIdRef.current++;
     setState(INITIAL_ANALYSIS_STREAM_STATE);
   }, []);
