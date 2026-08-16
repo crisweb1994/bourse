@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import type { WatchlistItemDto } from '@bourse/shared-types';
 import { removeFromWatchlist, updateWatchlistItem } from '@/lib/api';
+import { Sparkline } from '@/components/charts/primitives/sparkline';
+import { useWatchlistSparklines, type SparklineState } from '@/components/charts/use-watchlist-sparklines';
 import { MARKET_LABELS } from '@/lib/constants';
 import { stockHref } from '@/lib/stock-href';
 import {
@@ -76,6 +78,11 @@ export function WatchlistTable({
     }
   };
 
+  // C13 hook 必须在早退 return 之前调用（review P1-5：hooks 顺序违规）
+  const sparklines = useWatchlistSparklines(
+    items.map((item) => ({ symbol: item.stock.symbol, market: item.stock.market })),
+  );
+
   if (items.length === 0) {
     return (
       <Card>
@@ -93,6 +100,7 @@ export function WatchlistTable({
           <THead>
             <tr>
               <th>代码</th>
+              <th>走势</th>
               <th>名称</th>
               <th>市场</th>
               <th>币种</th>
@@ -111,6 +119,9 @@ export function WatchlistTable({
                   >
                     <Sym>{item.stock.symbol}</Sym>
                   </Link>
+                </td>
+                <td>
+                  <WatchlistSparklineCell state={sparklines[`${item.stock.market}:${item.stock.symbol}`]} market={item.stock.market} />
                 </td>
                 <td className="max-w-[200px] truncate">
                   <Link
@@ -264,22 +275,53 @@ export function WatchlistTable({
                 </p>
               )}
             </div>
-            <Button
-              size="icon"
-              variant="secondary"
-              onClick={() => handleRemove(item.id, item.stock.symbol)}
-              disabled={removing === item.id}
-              aria-label="Remove"
-            >
-              {removing === item.id ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.5} />
-              ) : (
-                <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} />
-              )}
-            </Button>
+            <div className="flex shrink-0 items-center gap-2">
+              <WatchlistSparklineCell state={sparklines[`${item.stock.market}:${item.stock.symbol}`]} market={item.stock.market} width={72} height={22} />
+              <Button
+                size="icon"
+                variant="secondary"
+                onClick={() => handleRemove(item.id, item.stock.symbol)}
+                disabled={removing === item.id}
+                aria-label="Remove"
+              >
+                {removing === item.id ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={1.5} />
+                ) : (
+                  <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} />
+                )}
+              </Button>
+            </div>
           </div>
         ))}
       </div>
     </Card>
   );
+}
+
+function WatchlistSparklineCell({
+  state,
+  market,
+  width = 96,
+  height = 24,
+}: {
+  state?: SparklineState;
+  market: string;
+  width?: number;
+  height?: number;
+}) {
+  if (state?.status === 'ready') {
+    return (
+      <Sparkline
+        closes={state.closes}
+        anomalyIndex={state.anomalyIndex ?? undefined}
+        width={width}
+        height={height}
+        upColor={market === 'CN' || market === 'HK' ? 'var(--color-signal-bearish)' : undefined}
+        downColor={market === 'CN' || market === 'HK' ? 'var(--color-signal-bullish)' : undefined}
+      />
+    );
+  }
+  return state?.status === 'loading'
+    ? <span className="inline-block animate-pulse rounded bg-[var(--color-bg-subtle)]" style={{ width, height }} />
+    : null;
 }

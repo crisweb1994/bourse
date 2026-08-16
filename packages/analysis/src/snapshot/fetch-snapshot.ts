@@ -24,11 +24,14 @@
 import {
   computeFinancialRatios,
   computeHistoricalContext,
+  computePeerComparison,
   computeTechnicalIndicators,
   computeValuation,
   detectRedFlags,
+  findPeerGroup,
   type ComputeWarning,
   type HistoricalContext,
+  type PeerMetrics,
 } from '../compute';
 import type {
   ComputedFacts,
@@ -46,7 +49,7 @@ import type {
   MarketConfigMap,
   SnapshotFetcherEnvelope,
 } from './market-config';
-import type { ConnectorRunContext } from '@bourse/market-data';
+import type { ConnectorRunContext, PriceBar } from '@bourse/market-data';
 
 // ----------------------------------------------------------------------------
 // Options
@@ -58,8 +61,14 @@ export interface FetchSnapshotOptions {
   configs: MarketConfigMap;
   /** Per-connector timeout (ms). Default 8000. */
   perConnectorTimeoutMs?: number;
-  /** History window in days back. Default 365. */
+  /** History window in days back. Default 365.
+   *  Visualization design D1: this is the fixed chart window — FocusWindow no
+   *  longer feeds it (focus is a prompt-narrative concern only). */
   historyDays?: number;
+  /** Valuation-only long history in days back. Default 1825 (5y, feeds
+   *  peHistorySeries). 0 disables the extra fetch. Fail-soft: falls back to
+   *  the main history window when the fetch fails. */
+  valuationHistoryDays?: number;
   /** Filings limit. Default 10. */
   filingsLimit?: number;
   /** External abort signal (caller cancellation). */
@@ -67,6 +76,8 @@ export interface FetchSnapshotOptions {
 }
 
 const DEFAULT_TIMEOUT_MS = 8_000;
+/** Visualization §四.③ — fixed 5-year window for valuation history. */
+export const DEFAULT_VALUATION_HISTORY_DAYS = 1825;
 const DEFAULT_HISTORY_DAYS = 365;
 const DEFAULT_FILINGS_LIMIT = 10;
 
@@ -91,14 +102,21 @@ export async function fetchSnapshot(
 
   // 1. Build & run fetcher list in parallel ----------------------------------
   const today = capturedAt.slice(0, 10);
-  const fromDate = isoDaysAgo(historyDays);
-
   const tasks: FetcherTask[] = [
     task('quote', config.quote ? (ctx) => config.quote(options.symbol, ctx) : null),
+    // Review P1-3（终版）：一次拉 max(chart, valuation) 窗口，结果切两个视图 —
+    // 并发双请求会与其它 capability 抢同源限流额度（concurrent 键控按
+    // source:capability），单请求把 history 请求数降回 1，延迟与限流双赢。
     task(
       'history',
       config.history
-        ? (ctx) => config.history!(options.symbol, fromDate, today, ctx)
+        ? (ctx) =>
+            config.history!(
+              options.symbol,
+              isoDaysAgo(Math.max(historyDays, valuationHistoryDays(options))),
+              today,
+              ctx,
+            )
         : null,
     ),
     task('profile', config.profile ? (ctx) => config.profile!(options.symbol, ctx) : null),
@@ -126,11 +144,46 @@ export async function fetchSnapshot(
   const rawFacts = assembleRawFacts(results);
   const dataAvailability = assembleAvailability(results);
 
+  // 单请求双窗口切分：chartHistory（≤ historyDays 天，供指标/priceSeries）
+  // + valuationHistory（全量，供 PE 历史）。切分容忍"日期不在近窗口"的
+  // 数据（测试 fixture 的旧 K 线 / 数据源忽略 from 参数）：日历截断不足
+  // 20 根时退化为按比例取尾部。
+  let valuationHistory: PriceBar[] | null = null;
+  const vDays = valuationHistoryDays(options);
+  if (Array.isArray(rawFacts.history) && vDays > historyDays) {
+    const all = rawFacts.history as PriceBar[];
+    const cutoff = isoDaysAgo(historyDays);
+    const recent = all.filter(
+      (b) => typeof b.timestamp === 'string' && b.timestamp.slice(0, 10) >= cutoff,
+    );
+    if (recent.length >= 20) {
+      rawFacts.history = recent;
+    } else {
+      // 数据源忽略 from 参数（或测试 fixture 日期较旧）：全量保留，
+      // 指标窗口稍宽无害 —— 绝不因切分把历史清空。
+      rawFacts.history = all;
+    }
+    valuationHistory = all;
+  }
+
+  // C8 (visualization §5.2): peer quotes for the relative-comparison block.
+  // Fail-soft, quotes-only metrics (pe/pb) — per-peer financials would add
+  // ~8 heavy upstream fetches per analysis; fundamental metrics stay null
+  // and the chart renders only what exists. Bounded to 8 peers.
+  const peerMetricsMap = await fetchPeerQuoteMetrics(rawFacts, options, config);
+
   // 2. Compute layer ---------------------------------------------------------
-  const computedFacts = runComputeLayer(rawFacts, options.market, dataAvailability);
+  const computedFacts = runComputeLayer(
+    rawFacts,
+    options.market,
+    dataAvailability,
+    valuationHistory,
+    peerMetricsMap,
+  );
 
   // 3. Preserve connector provenance. A source that did not produce a usable
-  // fact cannot become a citation for the run.
+  // fact cannot become a citation for the run. (Valuation history rides the
+  // single history request now, so its citations are already in results.)
   const citations = dedupeCitations(results.flatMap((result) => result.citations));
   const sourceMetadata = Object.fromEntries(
     results.flatMap((result) =>
@@ -242,15 +295,25 @@ async function runWithTimeout(
 
     const usability = factUsability(t.field, value);
     if (usability !== 'valid') {
+      const authoritativeEmptyUnlock =
+        t.field === 'unlockCalendar' && usability === 'no_data' && Array.isArray(value);
       return {
         field: t.field,
-        value: null,
+        // An empty unlock response is a valid, source-backed "no upcoming
+        // events" signal. Keep the empty array so the evidence projection can
+        // distinguish it from a missing/failed connector.
+        value: authoritativeEmptyUnlock ? value : null,
         missing: {
           field: t.field,
           reason: usability,
           detail: invalidFactDetail(t.field, value),
         },
-        citations: [],
+        // An empty unlock list is still a source-backed answer when the
+        // connector supplied citations. Keep that provenance so the pack can
+        // distinguish "no upcoming events" from an unavailable connector.
+        citations: authoritativeEmptyUnlock && envelope
+          ? citationsFromEnvelope(t.field, envelope)
+          : [],
         ...(metadata ? { metadata } : {}),
         warnings,
       };
@@ -494,6 +557,8 @@ function runComputeLayer(
   rawFacts: RawFacts,
   market: Market,
   availability: DataAvailability,
+  valuationHistory: PriceBar[] | null = null,
+  peerMetricsMap: Map<string, PeerMetrics> | null = null,
 ): ComputedFacts {
   const warnings: ComputeWarning[] = [];
 
@@ -517,7 +582,10 @@ function runComputeLayer(
   const valuationOut = computeValuation({
     bundle: rawFacts.financials,
     quote: rawFacts.quote,
-    history: rawFacts.history,
+    // §四.③: PE history needs FY-end closes across ~5 years; the main
+    // chart-history window (365d) starves it. Fail-soft fallback keeps the
+    // current behavior when the long fetch is unavailable.
+    history: valuationHistory ?? rawFacts.history,
     market,
     consensusEpsGrowth: deriveConsensusEpsGrowth(rawFacts.consensusEps),
   });
@@ -550,7 +618,7 @@ function runComputeLayer(
     technicalIndicators: techOut.indicators,
     redFlags,
     valuation: valuationOut.valuation,
-    peerComparison: null,
+    peerComparison: computePeerComparisonSafe(rawFacts, market, ratiosOut.ratios, peerMetricsMap),
     historicalContext,
   };
 }
@@ -577,8 +645,99 @@ function deriveConsensusEpsGrowth(raw: RawFacts['consensusEps']): number | null 
   return (y1.value - y0.value) / y0.value;
 }
 
+/** §四.③：估值历史天数（0 = 关闭，回落图表窗口）。 */
+function valuationHistoryDays(options: FetchSnapshotOptions): number {
+  return options.valuationHistoryDays ?? DEFAULT_VALUATION_HISTORY_DAYS;
+}
+
 function isoDaysAgo(days: number): string {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() - days);
   return d.toISOString().slice(0, 10);
+}
+
+// ============================================================================
+// C8 — peer relative comparison (quotes-only, fail-soft)
+// ============================================================================
+
+async function fetchPeerQuoteMetrics(
+  rawFacts: RawFacts,
+  options: FetchSnapshotOptions,
+  config: MarketConfig,
+): Promise<Map<string, PeerMetrics> | null> {
+  const sector = rawFacts.profile?.sector ?? null;
+  const subjectCode = options.symbol.split('.')[0]!;
+  const group = findPeerGroup(options.market, sector)
+    .filter((peer) => peer.symbol !== subjectCode)
+    .slice(0, 8);
+  if (group.length === 0) return null;
+
+  const rows = await Promise.all(
+    group.map(async (peer) => {
+      try {
+        const result = await runWithTimeout(
+          {
+            field: 'quote',
+            fn: (ctx) => config.quote!(peer.symbol, ctx),
+          },
+          8_000,
+          options.signal,
+        );
+        if (result.missing) return null;
+        const q = unwrapFetcherOutput(result.value);
+        if (!q || typeof q !== 'object') return null;
+        const quote = q as { peRatio?: unknown; pbRatio?: unknown };
+        const metrics: PeerMetrics = {
+          pe: numOrNull(quote.peRatio),
+          pb: numOrNull(quote.pbRatio),
+          roe: null,
+          netMargin: null,
+          revenueGrowthYoY: null,
+        };
+        if (metrics.pe === null && metrics.pb === null) return null;
+        return [peer.symbol, metrics] as const;
+      } catch {
+        return null; // fail-soft: one dead peer never breaks the snapshot
+      }
+    }),
+  );
+
+  const map = new Map<string, PeerMetrics>();
+  for (const row of rows) if (row) map.set(row[0], row[1]);
+  return map.size >= 2 ? map : null; // a median of one peer is noise
+}
+
+function computePeerComparisonSafe(
+  rawFacts: RawFacts,
+  market: Market,
+  subjectRatios: ReturnType<typeof computeFinancialRatios>['ratios'],
+  peerMetricsMap: Map<string, PeerMetrics> | null,
+) {
+  if (!peerMetricsMap || !rawFacts.quote) return null;
+  const subjectMetrics: PeerMetrics = {
+    pe: numOrNull(rawFacts.quote.peRatio),
+    pb: numOrNull(rawFacts.quote.pbRatio),
+    roe: subjectRatios?.roe ?? null,
+    netMargin: subjectRatios?.netMargin ?? null,
+    revenueGrowthYoY: subjectRatios?.revenueGrowthYoY ?? null,
+  };
+  return computePeerComparison({
+    subjectSymbol: rawFacts.quote.instrument?.symbol ?? '',
+    subjectMarket: market,
+    subjectSector: rawFacts.profile?.sector ?? null,
+    subjectMetrics,
+    peerMetrics: peerMetricsMap,
+  });
+}
+
+function numOrNull(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
+}
+
+function unwrapFetcherOutput<T>(out: unknown): T | null {
+  if (out === null || out === undefined) return null;
+  if (typeof out === 'object' && 'value' in (out as Record<string, unknown>)) {
+    return ((out as { value: T | null }).value) ?? null;
+  }
+  return out as T;
 }

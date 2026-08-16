@@ -152,6 +152,11 @@ export class DigestGeneratorService {
             : null;
 
         const lastClose = tech?.lastClose ?? quote.price;
+        // C14：近 30 个收盘（旧→新）供 Webhook 渠道渲染 sparkline。
+        const closes30d =
+          history && history.length > 0
+            ? history.slice(-30).map((b) => b.adjustedClose ?? b.close)
+            : undefined;
         briefs.push({
           symbol: quote.symbol,
           name: quote.name,
@@ -161,6 +166,7 @@ export class DigestGeneratorService {
               ? ((lastClose - tech.sma50) / tech.sma50) * 100
               : null,
           rsi14: tech?.rsi14 ?? null,
+          ...(closes30d && closes30d.length >= 10 ? { closes30d } : {}),
         });
         timestamps.push(quote.timestamp);
       } catch (err) {
@@ -352,6 +358,10 @@ export class DigestGeneratorService {
 
     const drift = this.computeDrift(snapshot, lastAnalysis);
     const events = this.extractEvents(snapshot, now);
+    const closes30d = snapshot.rawFacts.history
+      ?.slice(-30)
+      .map((bar) => bar.adjustedClose ?? bar.close)
+      .filter((value): value is number => Number.isFinite(value));
     if (earnings) {
       events.push({ kind: 'EARNINGS', date: earnings.filing.publishedAt.slice(0, 10) });
     }
@@ -369,6 +379,7 @@ export class DigestGeneratorService {
         tech?.sma200 != null && lastClose != null
           ? ((lastClose - tech.sma200) / tech.sma200) * 100
           : null,
+      ...(closes30d && closes30d.length >= 2 ? { closes30d } : {}),
       events,
       earnings: earnings ? summarizeEarnings(earnings) : null,
       deepDive: null, // 异动触发后回填

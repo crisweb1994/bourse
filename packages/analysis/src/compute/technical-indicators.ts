@@ -23,15 +23,28 @@
 import { z } from 'zod';
 import type { PriceBar } from '@bourse/market-data';
 import type { ComputeWarning } from './types';
+import { smaPoints, toPriceBasis, type ChartPricePoint } from './chart-series';
 
 // ============================================================================
 // Schema
 // ============================================================================
 
+/** Chart-facing moving-average series as {t, v} points (design §四.②).
+ *  Self-describing alignment: every t is a bar date; first sma{w} point is
+ *  bars[w-1].t. Optional/additive — absent when bars are insufficient. */
+const TechnicalSeriesSchema = z.object({
+  sma20: z.array(z.object({ t: z.string(), v: z.number() })),
+  sma50: z.array(z.object({ t: z.string(), v: z.number() })),
+  sma200: z.array(z.object({ t: z.string(), v: z.number() })),
+});
+
 export const ComputedTechnicalIndicatorsSchema = z.object({
   asOf: z.string().datetime(),
   bars: z.number().int().nonnegative(),
   lastClose: z.number().nullable(),
+
+  // Chart series (additive, visualization §四.②)
+  series: TechnicalSeriesSchema.optional(),
 
   // Trend
   sma20: z.number().nullable(),
@@ -103,7 +116,7 @@ export function computeTechnicalIndicators(
     return { indicators: null, warnings };
   }
 
-  const closes = bars.map((b) => b.adjustedClose ?? b.close);
+  const closes = bars.map((b) => toPriceBasis(b).close);
   const lastClose = closes[closes.length - 1] ?? null;
 
   // SMAs
@@ -152,6 +165,14 @@ export function computeTechnicalIndicators(
   const trendLabel = labelTrend(lastClose, sma20, sma50, sma200);
   const momentumLabel = labelMomentum(rsi14);
 
+  // Chart series (visualization §四.②) — smaPoints derives from the SAME
+  // closes basis as the scalars above (adjustedClose ?? close, invariant I4).
+  const series: { sma20: ChartPricePoint[]; sma50: ChartPricePoint[]; sma200: ChartPricePoint[] } = {
+    sma20: smaPoints(bars, 20),
+    sma50: smaPoints(bars, 50),
+    sma200: smaPoints(bars, 200),
+  };
+
   const indicators: ComputedTechnicalIndicators = {
     // Connectors often emit date-only (`YYYY-MM-DD`) for daily bars; the
     // schema requires full ISO datetime. Coerce `YYYY-MM-DD` → midnight
@@ -179,6 +200,7 @@ export function computeTechnicalIndicators(
     obvTrend: obvTrendLabel,
     trend: trendLabel,
     momentum: momentumLabel,
+    series,
   };
 
   return { indicators, warnings };
@@ -336,10 +358,12 @@ function atr(bars: readonly PriceBar[], window: number): number | null {
   for (let i = 1; i < bars.length; i++) {
     const cur = bars[i]!;
     const prev = bars[i - 1]!;
+    const curBasis = toPriceBasis(cur);
+    const prevBasis = toPriceBasis(prev);
     const tr = Math.max(
-      cur.high - cur.low,
-      Math.abs(cur.high - prev.close),
-      Math.abs(cur.low - prev.close),
+      curBasis.high - curBasis.low,
+      Math.abs(curBasis.high - prevBasis.close),
+      Math.abs(curBasis.low - prevBasis.close),
     );
     trs.push(tr);
   }
@@ -363,11 +387,12 @@ function supportResistance(
   let support: number | null = null;
   let resistance: number | null = null;
   for (const bar of slice) {
-    if (bar.low < lastClose) {
-      if (support === null || bar.low > support) support = bar.low;
+    const basis = toPriceBasis(bar);
+    if (basis.low < lastClose) {
+      if (support === null || basis.low > support) support = basis.low;
     }
-    if (bar.high > lastClose) {
-      if (resistance === null || bar.high < resistance) resistance = bar.high;
+    if (basis.high > lastClose) {
+      if (resistance === null || basis.high < resistance) resistance = basis.high;
     }
   }
   return { support, resistance };
@@ -403,8 +428,8 @@ function obvTrend(
     const cur = bars[i]!;
     const prev = bars[i - 1]!;
     const v = cur.volume ?? 0;
-    const closeCur = cur.adjustedClose ?? cur.close;
-    const closePrev = prev.adjustedClose ?? prev.close;
+    const closeCur = toPriceBasis(cur).close;
+    const closePrev = toPriceBasis(prev).close;
     const last = obv[obv.length - 1]!;
     if (closeCur > closePrev) obv.push(last + v);
     else if (closeCur < closePrev) obv.push(last - v);

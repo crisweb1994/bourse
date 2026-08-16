@@ -87,9 +87,37 @@ export async function structuredOutputWithRepair<T>(
   };
 }
 
+/** Sum two ProviderUsage ledgers (tokens + cache + webSearch telemetry).
+ *  Missing optional fields default to 0 so callers can merge safely. */
+export function mergeProviderUsage(
+  a: ProviderUsage,
+  b?: ProviderUsage,
+): ProviderUsage {
+  if (!b) return a;
+  return {
+    tokensIn: (a.tokensIn ?? 0) + (b.tokensIn ?? 0),
+    tokensOut: (a.tokensOut ?? 0) + (b.tokensOut ?? 0),
+    ...((a.cacheReadInputTokens ?? 0) + (b.cacheReadInputTokens ?? 0) > 0
+      ? { cacheReadInputTokens: (a.cacheReadInputTokens ?? 0) + (b.cacheReadInputTokens ?? 0) }
+      : {}),
+    ...((a.cacheCreationInputTokens ?? 0) + (b.cacheCreationInputTokens ?? 0) > 0
+      ? { cacheCreationInputTokens: (a.cacheCreationInputTokens ?? 0) + (b.cacheCreationInputTokens ?? 0) }
+      : {}),
+    ...((a.webSearchRequests ?? 0) + (b.webSearchRequests ?? 0) > 0
+      ? { webSearchRequests: (a.webSearchRequests ?? 0) + (b.webSearchRequests ?? 0) }
+      : {}),
+  };
+}
+
 type ParseOutcome<T> =
   | { success: true; data: T }
   | { success: false; error: string };
+
+/** Parse raw LLM text against a zod schema (strips code fences first).
+ *  Exported for the post-chain semantic repair path (visualization §四.④). */
+export function parseStructured<T>(raw: string, schema: ZodSchema<T>): ParseOutcome<T> {
+  return tryParse(raw, schema);
+}
 
 function tryParse<T>(raw: string, schema: ZodSchema<T>): ParseOutcome<T> {
   const cleaned = stripJsonFences(raw);

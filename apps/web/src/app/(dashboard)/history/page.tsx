@@ -78,14 +78,13 @@ export default function HistoryPage() {
     </div></section>
     <Card>
       {loading ? <div className="grid place-items-center py-14"><Loader2 className="h-4 w-4 animate-spin text-[var(--color-fg-3)]" strokeWidth={1.5} /></div> : items.length === 0 ? <div className="py-14 text-center text-[13px] text-[var(--color-fg-3)]">没有符合条件的研究记录。</div> : <>
-        <Table><THead><tr><th>代码</th><th>名称</th><th>模式 / 时间</th><th>状态</th><th>结论</th><th>模型</th><th>日期</th><th /></tr></THead><TBody>{items.map((item) => {
+        <Table><THead><tr><th>代码</th><th>名称</th><th>模式 / 时间</th><th>状态</th><th>结论</th><th>日期</th><th /></tr></THead><TBody>{items.map((item) => {
           const signalVariant = signalPillVariant(item.overallSignal);
           return <tr key={item.id}>
             <td><Sym>{item.symbol}</Sym></td><td className="max-w-[180px] truncate">{item.stock.name}</td>
             <td><Pill variant="flat">{MODE_LABELS[item.mode]} · {FOCUS_WINDOW_LABELS[item.focusWindow]}</Pill></td>
             <td><Pill variant={statusPillVariant(item.status)} dot>{STATUS_LABELS[item.status] ?? item.status}</Pill></td>
             <td>{signalVariant ? <Pill variant={signalVariant}>{SIGNAL_LABELS[item.overallSignal!] ?? item.overallSignal} · {item.overallConfidence ? CONFIDENCE_LABELS[item.overallConfidence] : ''}</Pill> : <span className="text-[var(--color-fg-3)]">信息不足</span>}</td>
-            <td><span className="font-mono text-[12px] text-[var(--color-fg-2)]">{item.aiModel ?? item.aiProvider ?? '—'}</span></td>
             <td><span className="font-mono text-[12px] text-[var(--color-fg-3)]">{new Date(item.createdAt).toLocaleDateString('zh-CN')}</span></td>
             <td><div className="flex justify-end gap-1.5"><Link href={stockHref(item.stock, { analysisId: item.id })}><Button size="icon" aria-label="打开研究"><ArrowUpRight className="h-3.5 w-3.5" strokeWidth={1.5} /></Button></Link><Button size="icon" aria-label="删除研究" onClick={() => void handleDelete(item.id)} disabled={deleting === item.id}>{deleting === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.5} /> : <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />}</Button></div></td>
           </tr>;

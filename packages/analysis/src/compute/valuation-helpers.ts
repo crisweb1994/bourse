@@ -20,6 +20,7 @@
 import { z } from 'zod';
 import type { FinancialsBundle, PriceBar, Quote } from '@bourse/market-data';
 import type { ComputeWarning } from './types';
+import { toPriceBasis } from './chart-series';
 import { normalizeCurrency, currencyForMarket } from './units';
 import {
   computeEnterpriseValue,
@@ -64,6 +65,17 @@ export const ComputedValuationSchema = z.object({
   fairValueAssumedGrowth: z.number().nullable(),
   upside: z.number().nullable(), // (fair - current) / current
 
+  /** C9 (visualization §5.2): fair value per share across an assumed-growth
+   *  grid, deterministic scan of the SAME forward DCF above. Optional —
+   *  absent when ttmFcf/shares are unavailable. Chart marks where the
+   *  current price line crosses the curve (= impliedGrowthRate). */
+  dcfSensitivity: z.object({
+    points: z.array(z.object({
+      growth: z.number(), // decimal, e.g. 0.02
+      fairValuePerShare: z.number().positive(),
+    })).max(21),
+  }).optional(),
+
   baseCurrency: z.enum(['USD', 'CNY', 'HKD']),
   computedAt: z.string().datetime(),
 });
@@ -98,6 +110,12 @@ const DEFAULT_DCF = {
   terminalGrowth: 0.03,
   forecastYears: 10,
 };
+
+/** C9 sensitivity grid: −10% … +30% step 2% (21 points, schema max). */
+const DCF_SENSITIVITY_GRID: readonly number[] = Array.from(
+  { length: 21 },
+  (_, i) => -0.1 + i * 0.02,
+);
 
 export function computeValuation(
   input: ComputeValuationInput,
@@ -147,10 +165,19 @@ export function computeValuation(
   // ---- Forward DCF: fair value per share -----------------------------------
   const shares = sharesOutstanding(input.quote, marketCap);
   const assumedGrowth = pickAssumedGrowth(input.consensusEpsGrowth);
-  const fairValuePerShare =
-    ttmFcf !== null && ttmFcf > 0 && shares !== null && shares > 0
-      ? forwardDcfFairValue(ttmFcf, shares, dcf, assumedGrowth)
-      : null;
+  const dcfInputsReady = ttmFcf !== null && ttmFcf > 0 && shares !== null && shares > 0;
+  const fairValuePerShare = dcfInputsReady
+    ? forwardDcfFairValue(ttmFcf, shares, dcf, assumedGrowth)
+    : null;
+  // C9: same DCF scanned across a growth grid (pure, cheap, additive).
+  const dcfSensitivity = dcfInputsReady
+    ? {
+        points: DCF_SENSITIVITY_GRID.map((growth) => ({
+          growth,
+          fairValuePerShare: forwardDcfFairValue(ttmFcf, shares, dcf, growth),
+        })),
+      }
+    : undefined;
   const upside =
     fairValuePerShare !== null && input.quote?.price && input.quote.price > 0
       ? (fairValuePerShare - input.quote.price) / input.quote.price
@@ -179,6 +206,7 @@ export function computeValuation(
       impliedGrowthRate: impliedGrowth,
       impliedGrowthAssumptions: dcf,
       fairValuePerShare,
+      ...(dcfSensitivity ? { dcfSensitivity } : {}),
       fairValueAssumedGrowth: fairValuePerShare !== null ? assumedGrowth : null,
       upside,
       baseCurrency,
@@ -245,7 +273,7 @@ function priceOnOrBefore(
   for (const bar of history) {
     const ts = bar.timestamp.slice(0, 10);
     if (ts <= isoDate) {
-      result = bar.adjustedClose ?? bar.close;
+      result = toPriceBasis(bar).close;
     } else {
       break;
     }

@@ -58,14 +58,25 @@ export function buildStructuredOutputPrompts(
     RISK_REGISTER: 'LOW、MEDIUM、HIGH、UNASSESSABLE',
     MARKET_SIGNALS: 'POSITIVE、NEUTRAL、NEGATIVE、UNASSESSABLE',
   };
-  const sectionRule = sectionType === 'VALUATION_SCENARIOS'
-    ? `估值模块必须包含 methods 和 scenarios。每个 method 必须是 {"name":"...","rationale":"...","inputs":[]}；每个 scenario 必须是 {"case":"BEAR|BASE|BULL","assumptions":[],"valueRange":null,"invalidators":[]}。没有代码计算结果时，valueRange 必须是 null，不要填写 null 数字。每个数组最多保留 4 项。`
+  const isValuation = sectionType === 'VALUATION_SCENARIOS';
+  const sectionRule = isValuation
+    ? `估值模块必须包含 methods 和 scenarios（顶层字段，与 findings 平级，不允许省略为空数组）。
+每个 method 必须是 {"name":"...","rationale":"...","inputs":[]}，inputs 每项是 {"name":"...","value":数字,"unit":"...","dataAsOf":"...","evidence":[]}。
+每个 scenario 必须是 {"case":"BEAR|BASE|BULL","assumptions":["具体假设"],"valueRange":{"low":数字,"high":数字,"currency":"..."}或null,"invalidators":["失效条件"]}。
+必须至少 2 个不同 case（必须含 BASE），case 不得重复；methods 至少 1 项。每个数组最多保留 4 项。
+快照提供了代码计算的估值结果时，至少 1 个 scenario 的 valueRange 必须引用该数值区间（非 null）；没有代码计算结果时 valueRange 用 null，不要编造数字。
+结构填充示例（仅展示字段形状；所有数字、日期、币种必须逐字来自【代码核验事实】，不得复制占位符）：
+methods:[{name:"代码事实对应的估值方法",rationale:"基于报告中的事实",inputs:[{name:"代码事实名称",value:<fact-number>,unit:"<fact-unit>",dataAsOf:"<fact-date>",evidence:[]}]}]
+scenarios:[{case:"BASE",assumptions:["来自报告的明确假设"],valueRange:{low:<code-range-low>,high:<code-range-high>,currency:"<fact-currency>"},invalidators:["可验证的失效条件"]}]`
     : sectionType === 'RISK_REGISTER'
       ? `风险模块必须包含 risks 和 basedOnIncompleteSections。最多保留 6 项风险；每个 risk 必须包含 title、mechanism、likelihood、impact、indicators、invalidates、evidence，且每个数组最多 4 项。不要重复前序模块全文。`
       : '其他模块不要添加不属于本模块的字段。';
+  const topLevelFields = isValuation
+    ? 'schemaVersion、type、assessment、confidence、summary、findings、limitations、dataAsOf、disclaimer，以及 methods 和 scenarios'
+    : 'schemaVersion、type、assessment、confidence、summary、findings、limitations、dataAsOf、disclaimer';
   const system = `你是结构化结果提取器。只输出纯 JSON，不要 markdown、代码块或解释文字。
 结果必须符合 schemaVersion="analysis-section-v2"，且 type 必须固定为 "${sectionType}"。
-顶层必须包含 schemaVersion、type、assessment、confidence、summary、findings、limitations、dataAsOf、disclaimer。
+顶层必须包含：${topLevelFields}。
 assessment 只能使用：${assessmentRules[sectionType] ?? '该模块定义的枚举'}；confidence 只能使用 HIGH、MEDIUM、LOW；数据不足时 assessment 使用 UNASSESSABLE，confidence 使用 LOW。
 findings 最多 6 项，每项必须是 {"title":"...","conclusion":"...","evidence":[],"caveats":[]}。每条 evidence 最多 2 个 citation，且必须是 {"claim":"...","citations":[]}。
 每个 citation 必须是对象 {"title":"...","url":"https://...","sourceType":"NEWS|FILING|RESEARCH|DATA_PROVIDER|SOCIAL|OTHER","retrievedAt":"YYYY-MM-DDTHH:mm:ss.sssZ"}，绝对不能写成 URL 字符串。citation 的 url 只能使用允许的 URL。

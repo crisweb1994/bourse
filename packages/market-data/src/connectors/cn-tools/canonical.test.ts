@@ -65,13 +65,18 @@ describe('CN canonical connector adapters', () => {
       limit: 20,
     });
 
-    expect(result.data).toEqual([expect.objectContaining({
+    expect(result.data).toEqual(expect.arrayContaining([expect.objectContaining({
       kind: 'STOCK_CONNECT',
       asOf: '2026-07-29',
       shanghaiNetFlow: '1.25',
       shenzhenNetFlow: '-0.5',
       flowUnit: 'CNY_100M',
-    })]);
+    }), expect.objectContaining({
+      kind: 'STOCK_CONNECT_HOLDING',
+      asOf: '2026-07-29',
+      holdingShares: '12.5',
+      holdingPercentOfFloat: '0.02',
+    })]));
     expect(result.citations[0]).toEqual(expect.objectContaining({ provider: 'fixture' }));
     expect(result.freshness[0]).toEqual(expect.objectContaining({ asOf: '2026-07-29T00:00:00.000Z' }));
   });

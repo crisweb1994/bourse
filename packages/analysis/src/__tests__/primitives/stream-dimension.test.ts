@@ -145,3 +145,132 @@ describe('streamDimension V2', () => {
     ))).rejects.toThrow('timed out after 10ms');
   });
 });
+
+describe('streamDimension — valuation semantic repair (visualization §四.④)', () => {
+  const emptyScenariosJson = JSON.stringify({
+    schemaVersion: SCHEMA_VERSION,
+    type: 'VALUATION_SCENARIOS',
+    assessment: 'FAIR',
+    confidence: 'MEDIUM',
+    summary: 'Summary',
+    findings: [],
+    limitations: [],
+    dataAsOf: '2026-01-15',
+    disclaimer: 'Model text',
+    methods: [],
+    scenarios: [],
+  });
+  const goodScenariosJson = JSON.stringify({
+    schemaVersion: SCHEMA_VERSION,
+    type: 'VALUATION_SCENARIOS',
+    assessment: 'FAIR',
+    confidence: 'MEDIUM',
+    summary: 'Summary',
+    findings: [],
+    limitations: [],
+    dataAsOf: '2026-01-15',
+    disclaimer: 'Model text',
+    methods: [{ name: 'PE 分位', rationale: 'r', inputs: [] }],
+    scenarios: [
+      { case: 'BASE', assumptions: ['a'], valueRange: { low: 205, high: 280, currency: 'USD' }, invalidators: [] },
+      { case: 'BEAR', assumptions: ['a'], valueRange: null, invalidators: [] },
+    ],
+  });
+  const packWithValuation = {
+    schemaVersion: 'evidence-pack-v2',
+    symbol: 'AAPL',
+    market: 'US',
+    capturedAt: '2026-01-15T00:00:00.000Z',
+    facts: {},
+    dataAvailability: { complete: [], missing: [], fallbacks: [] },
+    citations: [],
+    trace: { toolCalls: 0, durationMs: 0, costUsd: 0 },
+    computedFacts: { valuation: { pe5yMedian: 30, fairValuePerShare: 246.2, baseCurrency: 'USD' } },
+  };
+
+  function valuationProvider(
+    completeTexts: string[],
+  ): AgentProvider {
+    let call = 0;
+    return {
+      ...provider(),
+      stream: vi.fn(async (_system, _user, onChunk) => {
+        onChunk({ type: 'text', text: '报告正文' });
+        return { text: '报告正文', citations: [], usage: { tokensIn: 1, tokensOut: 1 } };
+      }),
+      complete: vi.fn(async () => {
+        const text = completeTexts[Math.min(call++, completeTexts.length - 1)]!;
+        return { text, usage: { tokensIn: 3, tokensOut: 4 } };
+      }),
+    };
+  }
+
+  it('repairs empty scenarios via one semantic retry and merges usage', async () => {
+    const p = valuationProvider([emptyScenariosJson, goodScenariosJson]);
+    const events = await collect(streamDimension(
+      p,
+      getDimension('VALUATION_SCENARIOS'),
+      { symbol: 'AAPL', market: 'US', locale: 'zh-CN' },
+      {
+        runId: 'semantic-repair',
+        todayDate: '2026-01-15',
+        evidencePack: packWithValuation as never,
+      },
+    ));
+    const structured = events.find((e) => e.type === 'structured_data');
+    expect(structured).toMatchObject({
+      json: {
+        type: 'VALUATION_SCENARIOS',
+        scenarios: [
+          { case: 'BASE', valueRange: { low: 205, high: 280 } },
+          { case: 'BEAR' },
+        ],
+      },
+    });
+    // section usage = 1 stream call + extraction(1) + semantic repair(1)
+    const done = events.find((e) => e.type === 'section_complete');
+    expect((done as unknown as { usage: { llmCalls?: number; tokensIn?: number } }).usage).toMatchObject({
+      llmCalls: 3,
+      tokensIn: 7,
+    });
+  });
+
+  it('degrades with a recorded limitation when the retry still fails semantically', async () => {
+    const p = valuationProvider([emptyScenariosJson, emptyScenariosJson]);
+    const events = await collect(streamDimension(
+      p,
+      getDimension('VALUATION_SCENARIOS'),
+      { symbol: 'AAPL', market: 'US', locale: 'zh-CN' },
+      {
+        runId: 'semantic-degrade',
+        todayDate: '2026-01-15',
+        evidencePack: packWithValuation as never,
+      },
+    ));
+    const structured = events.find((e) => e.type === 'structured_data');
+    const json = (structured as unknown as { json: { scenarios: unknown[]; limitations: string[] } }).json;
+    expect(json.scenarios).toHaveLength(0);
+    expect(json.limitations.at(-1)).toContain('情景区间不完整');
+  });
+
+  it('skips the semantic pass for non-valuation sections', async () => {
+    const p = valuationProvider([JSON.stringify({
+      schemaVersion: SCHEMA_VERSION,
+      type: 'COMPANY_QUALITY',
+      assessment: 'MIXED',
+      confidence: 'MEDIUM',
+      summary: 'S',
+      findings: [],
+      limitations: [],
+      dataAsOf: '2026-01-15',
+      disclaimer: 'd',
+    })]);
+    await collect(streamDimension(
+      p,
+      getDimension('COMPANY_QUALITY'),
+      { symbol: 'AAPL', market: 'US', locale: 'zh-CN' },
+      { runId: 'non-valuation', todayDate: '2026-01-15', evidencePack: packWithValuation as never },
+    ));
+    expect(p.complete).toHaveBeenCalledTimes(1);
+  });
+});

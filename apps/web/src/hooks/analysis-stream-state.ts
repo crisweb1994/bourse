@@ -106,6 +106,8 @@ export interface AnalysisStreamState {
   error: string | null;
   analysisId: string | null;
   degraded: DegradedInfo | null;
+  /** Monotonic refresh signal for the snapshot-backed chart evidence hook. */
+  evidenceVersion: number;
   usage: { totalTokens: number; toolCalls: number } | null;
   attachedElsewhere: boolean;
 }
@@ -120,6 +122,7 @@ export const INITIAL_ANALYSIS_STREAM_STATE: AnalysisStreamState = {
   error: null,
   analysisId: null,
   degraded: null,
+  evidenceVersion: 0,
   usage: null,
   attachedElsewhere: false,
 };
@@ -214,7 +217,11 @@ export function applyAnalysisStreamEvent(
   switch (event) {
     case 'evidence_pack_ready': {
       const degraded = parseDegradedInfo(data.pack);
-      return degraded && !state.degraded ? { ...state, degraded } : state;
+      return {
+        ...state,
+        evidenceVersion: state.evidenceVersion + 1,
+        ...(degraded && !state.degraded ? { degraded } : {}),
+      };
     }
     case 'section_skipped': {
       const sectionType = parseSectionType(data.sectionType);

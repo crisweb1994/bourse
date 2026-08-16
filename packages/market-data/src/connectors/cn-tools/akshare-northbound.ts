@@ -10,17 +10,17 @@ import type { CnToolFetchLike } from './_fetch-headers';
 import { cnBrowserHeaders } from './_fetch-headers';
 
 /**
- * plan-v2 Wave 1.7 — A-share northbound flow via akshare-compatible
+ * plan-v2 Wave 1.7 — A-share northbound holdings via akshare-compatible
  * endpoints (2026-05-25 decision).
  *
  * Replaces the previous `RPT_MUTUAL_STOCK_HOLDRANKS_DETAILS` connector
  * which was silently returning empty since Eastmoney deprecated that
  * endpoint (data.md flagged).
  *
- * Strategy: try a small ordered list of public endpoints akshare is
- * known to wrap, in stability-descending order. Each endpoint is
- * deliberately tried with a tight timeout and minimal retries — falling
- * forward fast keeps p95 latency bounded when one mirror is down.
+ * Strategy: use the Eastmoney stock-connect holding-detail endpoint. The
+ * public per-stock `fflow/daykline` endpoint is generic fund flow, not
+ * northbound flow, so it is deliberately not used as a fallback. Showing it
+ * as northbound would be worse than an explicit missing-flow state.
  *
  * IMPORTANT: when ALL endpoints fail (rate limit / endpoint moved /
  * network), the connector throws with an explicit
@@ -28,15 +28,16 @@ import { cnBrowserHeaders } from './_fetch-headers';
  * data-integrity stance plan-v2 §5.3 calls for ("not implemented"
  * surfaces in dataAvailability; silent empty is treated as a regression).
  *
- * Output schema is byte-compatible with the legacy
- * `NorthboundFlowOutput` so dimension prompts and EvidencePack
- * consumers do not need to change.
+ * The row shape remains additive-compatible with existing consumers; rows
+ * carrying holding fields are classified as holdings by the canonical
+ * adapter, while genuine flow fields are never fabricated from market-cap
+ * deltas.
  */
 
 export const AkshareNorthboundInputSchema = z.object({
   symbol: z.string().min(1),
   market: z.literal('CN'),
-  /** Days back of daily net-flow rows. Default 20, hard cap 60. */
+  /** Number of holding snapshots to request. Default 20, hard cap 60. */
   daysBack: z.number().int().positive().max(60).optional(),
 });
 export type AkshareNorthboundInput = z.infer<typeof AkshareNorthboundInputSchema>;
@@ -45,8 +46,8 @@ export const AkshareNorthboundOutputSchema = z.object({
   rows: z.array(
     z.object({
       date: z.string(),
-      hgt: z.number(), // 沪股通 per-stock net inflow (亿元)
-      sgt: z.number(), // 深股通 per-stock net inflow (亿元)
+      hgt: z.number(), // genuine 沪股通 flow when the source provides it
+      sgt: z.number(), // genuine 深股通 flow when the source provides it
       holdShares: z.number().nullable(), // 当日持股股数 (万股, null if endpoint omits)
       holdMarketValue: z.number().nullable(), // 持股市值 (亿元)
       holdPctOfFloat: z.number().nullable(), // 持股占流通股比 (decimal, e.g. 0.05)
@@ -75,40 +76,27 @@ const NORTHBOUND_MIRRORS: ReadonlyArray<{
   buildUrl: (code: string, exchange: 'SS' | 'SZ', daysBack: number) => string;
   parse: (body: unknown) => AkshareNorthboundOutput['rows'];
 }> = [
-  // Mirror 1: Eastmoney datacenter HSGT holding detail per stock (working
-  // as of 2026-05; same backend akshare's `stock_hsgt_hold_stock_em` uses).
+  // Eastmoney datacenter HSGT holding detail per stock (same
+  // backend akshare's `stock_hsgt_hold_stock_em` uses).
+  // 2026-08-15: Eastmoney renamed the sort/date column HOLD_DATE → TRADE_DATE
+  // and reshaped the payload (HOLD_SHARES_NUM → HOLD_SHARES in raw shares,
+  // ratios under *_SHARES_RATIO, daily delta via HOLD_MARKETCAP_CHG1). The
+  // daily per-stock disclosure itself has stopped (quarter-end snapshots
+  // only), so this mirror now primarily serves the latest holding snapshot.
   {
     name: 'eastmoney-datacenter',
     buildUrl: (code, _exchange, daysBack) => {
-      // RPT_MUTUAL_HOLDSTOCKNORTH_STA returns per-stock daily north-bound
-      // holding with computed net inflow when MUTUAL_TYPE is filtered.
+      // RPT_MUTUAL_HOLDSTOCKNORTH_STA returns per-stock north-bound holding.
       return (
         `https://datacenter.eastmoney.com/securities/api/data/v1/get?` +
         `reportName=RPT_MUTUAL_HOLDSTOCKNORTH_STA` +
         `&columns=ALL&source=WEB` +
-        `&sortColumns=HOLD_DATE&sortTypes=-1` +
+        `&sortColumns=TRADE_DATE&sortTypes=-1` +
         `&pageNumber=1&pageSize=${daysBack}` +
         `&filter=(SECURITY_CODE%3D%22${code}%22)`
       );
     },
     parse: (body) => parseEastmoneyHoldDetail(body),
-  },
-  // Mirror 2: push2 north-net-flow endpoint via individual symbol (akshare's
-  // `stock_hsgt_north_net_flow_in_em` family). Yields daily aggregate flow
-  // when the per-stock endpoint is down.
-  {
-    name: 'eastmoney-push2-flow',
-    buildUrl: (code, exchange, _daysBack) => {
-      const market = exchange === 'SS' ? '1' : '0';
-      return (
-        `https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get?` +
-        `secid=${market}.${code}` +
-        `&fields1=f1,f2,f3,f7` +
-        `&fields2=f51,f52,f53,f54,f55,f56,f57,f58` +
-        `&klt=101&fqt=0&beg=0&end=20500101`
-      );
-    },
-    parse: (body) => parseEastmoneyFflow(body),
   },
 ];
 
@@ -121,7 +109,7 @@ export function makeAkshareNorthboundCN(opts?: {
   const mirrors = opts?.mirrors ?? NORTHBOUND_MIRRORS;
   return {
     name: 'akshareNorthbound',
-    description: 'A-share northbound flow via akshare-compatible mirrors.',
+    description: 'A-share northbound holding snapshots via Eastmoney.',
     providerInternal: false,
     market: 'CN',
     factField: 'northboundFlow',
@@ -162,7 +150,7 @@ export function makeAkshareNorthboundCN(opts?: {
             data: { rows, sourceMirror: mirror.name },
             citations: [
               {
-                title: `北向资金 ${input.symbol} (via ${mirror.name})`,
+                title: `北向持股 ${input.symbol} (via ${mirror.name})`,
                 url,
                 sourceType: 'OTHER',
                 retrievedAt: new Date().toISOString(),
@@ -207,49 +195,50 @@ function parseEastmoneyHoldDetail(body: unknown): AkshareNorthboundOutput['rows'
   for (const r of rows) {
     if (!r || typeof r !== 'object') continue;
     const o = r as Record<string, unknown>;
-    const date = typeof o.HOLD_DATE === 'string' ? o.HOLD_DATE.split(' ')[0] : null;
+    // 2026-08 schema: date lives in TRADE_DATE (HOLD_DATE no longer exists).
+    const date =
+      typeof o.TRADE_DATE === 'string'
+        ? o.TRADE_DATE.split(' ')[0]!
+        : typeof o.HOLD_DATE === 'string'
+          ? o.HOLD_DATE.split(' ')[0]!
+          : null;
     if (!date) continue;
+    // HOLD_MARKETCAP_CHG1 is a marked-to-market holding-value delta. It mixes
+    // price movement with trading, so it is intentionally NOT exposed as
+    // northbound net flow.
     const net = pickFloat(o.ADD_MARKET_CAP) ?? pickFloat(o.NET_BUY_AMT);
-    if (net === null) continue;
-    // 沪股通 / 深股通 split: Eastmoney encodes via MUTUAL_TYPE (1=hgt, 3=sgt)
-    const isHgt = String(o.MUTUAL_TYPE ?? '').includes('1');
-    const isSgt = String(o.MUTUAL_TYPE ?? '').includes('3');
+    // HOLD_SHARES_NUM was already 万股 (legacy); HOLD_SHARES is raw shares (2026-08 schema).
+    const legacyShares = pickFloat(o.HOLD_SHARES_NUM);
+    const sharesNew = pickFloat(o.HOLD_SHARES);
+    const holdShares =
+      legacyShares !== null
+        ? legacyShares
+        : sharesNew !== null
+          ? sharesNew / 1e4
+          : null;
+    // HOLD_MARKET_CAP kept its name but switched 亿元 → 元 in the 2026-08
+    // schema. Any real holding in 元 is ≥ ~1e8; in 亿元 it is ≤ ~1e5 — a
+    // magnitude split cleanly separates the two without extra round-trips.
+    const capRaw = pickFloat(o.HOLD_MARKET_CAP);
+    const holdMarketValue = capRaw !== null ? (capRaw >= 1e6 ? capRaw / 1e8 : capRaw) : null;
+    const holdPctOfFloat =
+      pickDecimalFromPct(o.SHARES_HOLDRATIO) ??
+      pickDecimalFromPct(o.FREE_SHARES_RATIO) ??
+      pickDecimalFromPct(o.TOTAL_SHARES_RATIO);
+    // A row is useful if it carries either an explicitly labelled flow or a
+    // holding observation. Zero flow values are retained for compatibility,
+    // but the canonical adapter will separate holding-only rows.
+    if (net === null && holdShares === null && holdMarketValue === null) continue;
+    // 沪股通 / 深股通 split: Eastmoney encodes via MUTUAL_TYPE (001=hgt, 003=sgt)
+    const isHgt = String(o.MUTUAL_TYPE ?? '').endsWith('1');
+    const isSgt = String(o.MUTUAL_TYPE ?? '').endsWith('3');
     out.push({
       date,
-      hgt: isHgt ? net : 0,
-      sgt: isSgt ? net : 0,
-      holdShares: pickFloat(o.HOLD_SHARES_NUM),
-      holdMarketValue: pickFloat(o.HOLD_MARKET_CAP),
-      holdPctOfFloat: pickDecimalFromPct(o.SHARES_HOLDRATIO),
-    });
-  }
-  return out;
-}
-
-function parseEastmoneyFflow(body: unknown): AkshareNorthboundOutput['rows'] {
-  // klines format: { data: { klines: ["date,f51,f52,f53,f54,f55,f56,f57,f58", ...] } }
-  // f51=主力净流入, but for north-bound this endpoint actually returns
-  // generic fund-flow not strictly north-bound; treat as fallback only.
-  // We expose net as `hgt` so downstream sees a number, but mark sgt=0
-  // until we get a dedicated north-bound flow endpoint working.
-  const data = (body as { data?: { klines?: unknown } })?.data;
-  const klines = data?.klines;
-  if (!Array.isArray(klines)) return [];
-  const out: AkshareNorthboundOutput['rows'] = [];
-  for (const line of klines) {
-    if (typeof line !== 'string') continue;
-    const parts = line.split(',');
-    if (parts.length < 6) continue;
-    const date = parts[0]!;
-    const net = parseFloat(parts[1] ?? '0');
-    if (!Number.isFinite(net)) continue;
-    out.push({
-      date,
-      hgt: net / 1e8, // 元 → 亿元
-      sgt: 0,
-      holdShares: null,
-      holdMarketValue: null,
-      holdPctOfFloat: null,
+      hgt: net !== null && isHgt ? net : 0,
+      sgt: net !== null && isSgt ? net : 0,
+      holdShares,
+      holdMarketValue,
+      holdPctOfFloat,
     });
   }
   return out;

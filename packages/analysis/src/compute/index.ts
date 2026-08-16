@@ -23,6 +23,21 @@ export {
   type ComputeTechnicalResult,
 } from './technical-indicators';
 
+export {
+  derivePriceSeries,
+  smaPoints,
+  ChartPricePointSchema,
+  PriceSeriesBarSchema,
+  PriceSeriesBlockSchema,
+  PriceSeriesBasis,
+  MAX_PRICE_SERIES_BARS,
+  MIN_BARS_FOR_WEEK52,
+  type ChartPricePoint,
+  type PriceSeriesBar,
+  type PriceSeriesBlock,
+  type PriceSeriesBasis as PriceSeriesBasisType,
+} from './chart-series';
+
 export { detectRedFlags, type DetectRedFlagsInput } from './red-flags';
 
 export {

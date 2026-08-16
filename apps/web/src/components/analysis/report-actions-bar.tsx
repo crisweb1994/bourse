@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { SectionData } from '@/hooks/use-analysis-stream';
 import { Button, SectionTag, toast } from '@/components/ui';
+import { cleanAnalysisMarkdown } from './analysis-markdown';
 import {
   SECTION_LABELS as SECTION_LABEL,
   SIGNAL_LABELS,
@@ -177,7 +178,7 @@ function buildFullMarkdown(p: SectionsForExport): string {
     if (s.status !== 'completed' || !s.markdown) continue;
     dimBlocks.push(`## ${SECTION_LABEL[s.type] ?? s.type}`);
     dimBlocks.push('');
-    dimBlocks.push(s.markdown.trim());
+    dimBlocks.push(cleanAnalysisMarkdown(s.markdown, s.type));
     dimBlocks.push('');
     if (s.citations.length > 0) {
       dimBlocks.push('### 参考资料');

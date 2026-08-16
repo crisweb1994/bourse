@@ -101,6 +101,7 @@ describe('fetchSnapshot · orchestration', () => {
     expect(snap.market).toBe('US');
     expect(snap.rawFacts.quote?.price).toBe(200);
     expect(snap.rawFacts.financials?.periods).toHaveLength(1);
+    // 单请求双窗口：旧日期 fixture 走全量保留分支
     expect(snap.rawFacts.history?.length).toBe(250);
   });
 
@@ -136,6 +137,53 @@ describe('fetchSnapshot · orchestration', () => {
     });
     const profileMiss = snap.dataAvailability.missing.find((m) => m.field === 'profile');
     expect(profileMiss?.reason).toBe('not_configured');
+  });
+
+  it('preserves an empty unlock response so the snapshot can say "no upcoming events"', async () => {
+    const snap = await fetchSnapshot({
+      symbol: 'AAPL',
+      market: 'US',
+      configs: buildConfigs({
+        unlockCalendar: async () => ({
+          data: [],
+          citations: [{
+            title: 'Unlock calendar',
+            url: 'https://example.com/unlocks/AAPL',
+            sourceType: 'OTHER',
+            provider: 'test',
+            retrievedAt: '2025-05-25T15:00:00.000Z',
+            qualityTier: 'B',
+          }],
+          freshness: [],
+        }),
+      }),
+    });
+    expect(snap.rawFacts.unlockCalendar).toEqual([]);
+    expect(snap.dataAvailability.missing.find((m) => m.field === 'unlockCalendar')?.reason).toBe('no_data');
+    expect(snap.citations).toContainEqual(expect.objectContaining({
+      factKey: 'unlockCalendar',
+      url: 'https://example.com/unlocks/AAPL',
+    }));
+  });
+
+  it('single wide history request keeps provenance for chart + valuation views', async () => {
+    const configs = buildConfigs({
+      history: async (_symbol, from) => ({
+        data: fakeHistory(250),
+        citations: [{
+          title: 'History',
+          url: `https://example.com/history?from=${from}`,
+          sourceType: 'PRICE',
+          provider: 'test',
+          retrievedAt: '2025-05-25T15:00:00.000Z',
+          qualityTier: 'B',
+        }],
+        freshness: [],
+      }),
+    });
+    const snap = await fetchSnapshot({ symbol: 'AAPL', market: 'US', configs });
+    // 单请求双窗口（review P1-3 终版）：一次宽抓取服务两个视图，citation 恰 1 条
+    expect(snap.citations.filter((citation) => citation.factKey === 'history')).toHaveLength(1);
   });
 
   it('classifies connector throws as `connector_error`', async () => {
@@ -405,5 +453,77 @@ describe('fetchSnapshot · compute integration', () => {
     });
     // Forward DCF requires FCF; we have it in fixture. Assumed growth=0.16 (0.2*0.8)
     expect(snap.computedFacts.valuation?.fairValueAssumedGrowth).toBeCloseTo(0.16, 4);
+  });
+});
+
+// ============================================================================
+// C8 — peer relative comparison wiring (visualization §5.2)
+// ============================================================================
+
+describe('fetchSnapshot · C8 peer comparison wiring', () => {
+  function peerQuote(symbol: string, pe: number): Quote {
+    return {
+      instrument: { instrumentId: `US:${symbol}`, market: 'US', symbol },
+      price: 100 * pe,
+      currency: 'USD',
+      timestamp: '2025-05-25T00:00:00.000Z',
+      marketCap: 1e12,
+      peRatio: pe,
+    };
+  }
+
+  it('fills computedFacts.peerComparison from peer quotes when the sector matches', async () => {
+    let quoteCalls: string[] = [];
+    const snap = await fetchSnapshot({
+      symbol: 'AAPL',
+      market: 'US',
+      configs: buildConfigs({
+        quote: async (symbol: string) => {
+          quoteCalls.push(symbol);
+          // Subject + 3 peers from the technology group
+          const pe: Record<string, number> = { AAPL: 30, MSFT: 32, GOOGL: 24, META: 22 };
+          return peerQuote(symbol, pe[symbol] ?? 25);
+        },
+        profile: async () => ({
+          instrument: { instrumentId: 'US:AAPL', market: 'US', symbol: 'AAPL' },
+          sector: 'Technology',
+          currency: 'USD',
+        }),
+      }),
+    });
+    expect(snap.computedFacts.peerComparison).not.toBeNull();
+    const pc = snap.computedFacts.peerComparison!;
+    expect(pc.subjectVsPeerMedian.pe.subject).toBeCloseTo(30, 5);
+    expect(pc.subjectVsPeerMedian.pe.median).toBeCloseTo(25, 5); // median(32,24,22)=24? no: sorted 22,24,32 → 24
+    expect(pc.peers.length).toBeGreaterThanOrEqual(2);
+    // peers exclude the subject itself
+    expect(pc.peers.map((p) => p.symbol)).not.toContain('AAPL');
+    // fail-soft: subject quote fetched for peers too (bounded)
+    expect(quoteCalls.length).toBeGreaterThan(2);
+    quoteCalls = [];
+  });
+
+  it('stays null (fail-soft) when peer quotes all fail', async () => {
+    const snap = await fetchSnapshot({
+      symbol: 'AAPL',
+      market: 'US',
+      configs: buildConfigs({
+        quote: async (symbol: string) => {
+          if (symbol === 'AAPL') return aaplQuote();
+          throw new Error('peer source down');
+        },
+        profile: async () => ({
+          instrument: { instrumentId: 'US:AAPL', market: 'US', symbol: 'AAPL' },
+          sector: 'Technology',
+          currency: 'USD',
+        }),
+      }),
+    });
+    expect(snap.computedFacts.peerComparison).toBeNull();
+  });
+
+  it('stays null when no sector → no peer group', async () => {
+    const snap = await fetchSnapshot({ symbol: 'AAPL', market: 'US', configs: buildConfigs() });
+    expect(snap.computedFacts.peerComparison).toBeNull();
   });
 });

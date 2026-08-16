@@ -64,6 +64,7 @@ export default function ChatPage() {
   const requestedDraft = searchParams.get('draft') === '1';
   const requestedEarnings = searchParams.get('earnings') === '1';
   const requestedInvestorRelationsEvent = searchParams.get('ir') ?? '';
+  const requestedQuestion = searchParams.get('question') ?? '';
 
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<StockSearchResult[]>([]);
@@ -89,12 +90,14 @@ export default function ChatPage() {
   }, [requestedAnalysisId]);
 
   useEffect(() => {
-    if (requestedInvestorRelationsEvent && requestedDraft && symbol && !thread && !draft) {
+    if (requestedQuestion && requestedDraft && symbol && !thread && !draft) {
+      setDraft(requestedQuestion);
+    } else if (requestedInvestorRelationsEvent && requestedDraft && symbol && !thread && !draft) {
       setDraft('请基于这次投关记录，说明机构主要关注的问题和管理层的明确回应。');
     } else if (requestedEarnings && requestedDraft && symbol && !thread && !draft) {
       setDraft('请基于最新财报速读卡，说明本期最重要的数字变化和仍待核对的地方。');
     }
-  }, [draft, requestedDraft, requestedEarnings, requestedInvestorRelationsEvent, symbol, thread]);
+  }, [draft, requestedDraft, requestedEarnings, requestedInvestorRelationsEvent, requestedQuestion, symbol, thread]);
 
   useEffect(() => {
     if (!search.trim()) {

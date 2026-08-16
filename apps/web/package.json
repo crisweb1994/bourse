@@ -6,20 +6,21 @@
     "dev": "node --env-file-if-exists=../../.env node_modules/next/dist/bin/next dev --port 3000",
     "build": "node --env-file-if-exists=../../.env node_modules/next/dist/bin/next build",
     "start": "node --env-file-if-exists=../../.env node_modules/next/dist/bin/next start",
-    "test": "echo 'no tests configured'",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "next lint"
   },
   "dependencies": {
+    "@bourse/shared-types": "workspace:*",
     "@microsoft/fetch-event-source": "^2.0.1",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-switch": "^1.2.6",
-    "@bourse/shared-types": "workspace:*",
     "@tailwindcss/typography": "^0.5.19",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "lightweight-charts": "^5.2.1",
     "lucide-react": "^0.468.0",
     "next": "^15.2.0",
     "next-themes": "^0.4.4",
@@ -34,11 +35,15 @@
   "devDependencies": {
     "@bourse/tsconfig": "workspace:*",
     "@tailwindcss/postcss": "^4.0.0",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "jsdom": "^30.0.1",
     "postcss": "^8.5.0",
     "tailwindcss": "^4.0.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
   }
 }

@@ -47,18 +47,38 @@ export function createCnPublicOwnershipConnector(
           }, ctx);
           return researchResult(
             result,
-            result.data.rows.map((row): OwnershipObservation => ({
-              id: `${input.instrumentId}:stock-connect:${row.date}`,
-              instrumentId: input.instrumentId,
-              kind: 'STOCK_CONNECT',
-              asOf: row.date,
-              shanghaiNetFlow: decimal(row.hgt),
-              shenzhenNetFlow: decimal(row.sgt),
-              flowUnit: 'CNY_100M',
-              holdingShares: nullableDecimal(row.holdShares),
-              holdingMarketValue: nullableDecimal(row.holdMarketValue),
-              holdingPercentOfFloat: nullableDecimal(row.holdPctOfFloat),
-            })),
+            result.data.rows.flatMap((row): OwnershipObservation[] => {
+              const holdingShares = row.holdShares;
+              const hasHolding = holdingShares !== null;
+              const hasFlow = row.hgt !== 0 || row.sgt !== 0 || !hasHolding;
+              const observations: OwnershipObservation[] = [];
+              if (hasFlow) {
+                observations.push({
+                  id: `${input.instrumentId}:stock-connect-flow:${row.date}`,
+                  instrumentId: input.instrumentId,
+                  kind: 'STOCK_CONNECT',
+                  asOf: row.date,
+                  shanghaiNetFlow: decimal(row.hgt),
+                  shenzhenNetFlow: decimal(row.sgt),
+                  flowUnit: 'CNY_100M',
+                });
+              }
+              if (hasHolding) {
+                observations.push({
+                  id: `${input.instrumentId}:stock-connect-holding:${row.date}`,
+                  instrumentId: input.instrumentId,
+                  kind: 'STOCK_CONNECT_HOLDING',
+                  asOf: row.date,
+                  holdingShares: decimal(holdingShares),
+                  ...(row.holdPctOfFloat === null
+                    ? {}
+                    : { holdingPercentOfFloat: decimal(row.holdPctOfFloat) }),
+                  ...(row.hgt !== 0 && row.sgt === 0 ? { exchange: 'SH' } : {}),
+                  ...(row.sgt !== 0 && row.hgt === 0 ? { exchange: 'SZ' } : {}),
+                });
+              }
+              return observations;
+            }),
           );
         }
         case 'shareholder-count': {

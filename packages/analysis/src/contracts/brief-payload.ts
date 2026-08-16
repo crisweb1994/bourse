@@ -76,6 +76,13 @@ export const IndexQuoteBrief = z.object({
   changePct: z.number(),
   vsSma50: z.number().nullable(), // 距 SMA50 %，null = 数据不足
   rsi14: z.number().nullable(),
+  /** C14（visualization §5.2）：近 30 个收盘（旧→新），供 Webhook 渠道渲染
+   *  unicode sparkline。additive optional — 旧 payload 无此字段。 */
+  closes30d: z.array(z.number()).max(30).optional(),
+  /** C14：unicode sparkline（▁▂▃…），WebhookAdapter 出站时注入。 */
+  sparkline: z.string().optional(),
+  /** C14：Webhook 接收方可直接插入的 inline SVG（无外部资源）。 */
+  sparklineHtml: z.string().optional(),
 });
 export type IndexQuoteBrief = z.infer<typeof IndexQuoteBrief>;
 
@@ -87,6 +94,10 @@ export const WatchlistItemBrief = z.object({
   rsi14: z.number().nullable(),
   vsSma50: z.number().nullable(),
   vsSma200: z.number().nullable(),
+  /** C14：近 30 个收盘（旧→新），供 Webhook 渠道渲染 inline sparkline。 */
+  closes30d: z.array(z.number()).max(30).optional(),
+  sparkline: z.string().optional(),
+  sparklineHtml: z.string().optional(),
   events: z.array(z.object({ kind: z.string(), date: z.string() })).default([]),
   /** Latest completed earnings revision, when one exists for this stock. */
   earnings: z.object({
