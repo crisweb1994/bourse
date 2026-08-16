@@ -7,6 +7,7 @@
  */
 
 import type { SectionType } from '@bourse/shared-types';
+import { humanizeAnalysisText } from '@/components/analysis/analysis-markdown';
 
 const SECTION_LABELS: Record<string, string> = {
   COMPANY_QUALITY: '公司质量',
@@ -40,6 +41,8 @@ const ASSESSMENT_TEXT: Record<string, string> = {
   UNASSESSABLE: '无法评估', LOW: '低风险', HIGH: '高风险',
 };
 
+const CONFIDENCE_TEXT: Record<string, string> = { HIGH: '高', MEDIUM: '中', LOW: '低' };
+
 export interface SignalMatrixRow {
   type: SectionType;
   assessment?: string;
@@ -63,7 +66,7 @@ function ConfidenceBar({ confidence, coverage }: { confidence?: string; coverage
   return (
     <span
       className="inline-flex gap-[3px]"
-      aria-label={`置信 ${confidence ?? '—'}`}
+      aria-label={`置信 ${CONFIDENCE_TEXT[confidence ?? ''] ?? confidence ?? '—'}`}
       title={coverage?.confidenceCap && coverage.confidenceCap !== confidence
         ? `数据覆盖度封顶为${coverage.confidenceCap}：${coverage.missingCriticalFacts?.join('、') || coverage.status || '来源质量受限'}`
         : undefined}
@@ -129,7 +132,7 @@ export function SignalMatrix({
               </span>
               <ConfidenceBar confidence={row.confidence} coverage={row.coverage} />
               <span className="m-0 hidden truncate text-[12px] text-[var(--color-fg-2)] sm:block">
-                {row.summary ?? (row.assessment === 'UNASSESSABLE'
+                {row.summary ? humanizeAnalysisText(row.summary) : (row.assessment === 'UNASSESSABLE'
                   ? `无法评估：${row.coverage?.missingCriticalFacts?.join('、') || '缺少满足最低证据要求的事实'}`
                   : '')}
               </span>

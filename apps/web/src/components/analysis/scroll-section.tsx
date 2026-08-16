@@ -7,6 +7,7 @@ import type { ChartEvidenceResponse, FocusWindow } from '@bourse/shared-types';
 import { MarkdownRenderer } from '@/components/shared/markdown-renderer';
 import { Button, Card, Pill, SectionTag } from '@/components/ui';
 import { SECTION_LABELS, ASSESSMENT_LABELS } from '@/lib/constants';
+import { cleanAnalysisMarkdown } from './analysis-markdown';
 import { StructuredCard } from './structured-card';
 import { CitationList } from './citation-list';
 import { SectionCharts } from '@/components/charts/section-charts';
@@ -49,6 +50,11 @@ export function ScrollSection({ section, onRetry, showCitations = true, onAsk, e
   }, []);
   const label = SECTION_LABELS[section.type] ?? section.type;
   const assessment = section.structuredJson?.assessment as string | undefined;
+  const hasMarkdown = Boolean(section.markdown?.trim());
+  const hasValuationScenarios = section.type === 'VALUATION_SCENARIOS'
+    && Array.isArray(section.structuredJson?.scenarios)
+    && section.structuredJson.scenarios.length > 0;
+  const showStructuredCard = Boolean(section.structuredJson) && (!hasMarkdown || hasValuationScenarios);
   return (
     <section ref={sectionRef} id={`section-${section.type}`} className="scroll-mt-4">
       <Card>
@@ -85,7 +91,7 @@ export function ScrollSection({ section, onRetry, showCitations = true, onAsk, e
             </div>
           )}
 
-          {section.markdown ? <MarkdownRenderer content={section.markdown} /> : section.status === 'streaming' ? (
+          {section.markdown ? <MarkdownRenderer content={cleanAnalysisMarkdown(section.markdown, section.type)} /> : section.status === 'streaming' ? (
             <div className="flex items-center gap-2 text-[13px] text-[var(--color-fg-2)]"><Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.5} />正在研究{label}…</div>
           ) : section.status === 'pending' ? (
             <div className="flex items-center gap-2 text-[13px] text-[var(--color-fg-2)]"><Clock className="h-3.5 w-3.5" strokeWidth={1.5} />等待开始…</div>
@@ -93,9 +99,9 @@ export function ScrollSection({ section, onRetry, showCitations = true, onAsk, e
 
           {section.status === 'streaming' && section.markdown && <div className="mt-4 flex items-center gap-2 font-mono text-[11.5px] text-[var(--color-fg-3)]"><span className="stream-dot" />生成中…</div>}
 
-          {(section.structuredJson || (showCitations && section.citations.length > 0)) && (
+          {(showStructuredCard || (showCitations && section.citations.length > 0)) && (
             <div className="mt-6 space-y-4">
-              {section.structuredJson && section.status !== 'streaming' && <StructuredCard sectionType={section.type} data={section.structuredJson} />}
+              {showStructuredCard && section.status !== 'streaming' && <StructuredCard sectionType={section.type} data={section.structuredJson} compact={hasMarkdown} />}
               {showCitations && section.citations.length > 0 && <CitationList citations={section.citations} />}
             </div>
           )}

@@ -733,7 +733,7 @@ function LastAnalysisChip({
                         )}
                       </div>
                       <div className="mt-0.5 font-mono text-[10.5px] text-[var(--color-fg-3)]">
-                        {timeAgo(a.completedAt ?? a.createdAt)} · {a.aiModel ?? a.aiProvider ?? '—'}
+                        {timeAgo(a.completedAt ?? a.createdAt)}
                       </div>
                       {oneLiner && (
                         <div className="mt-1 text-[11.5px] leading-snug text-[var(--color-fg-2)] line-clamp-2">
