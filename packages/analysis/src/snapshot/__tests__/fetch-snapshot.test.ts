@@ -101,6 +101,7 @@ describe('fetchSnapshot · orchestration', () => {
     expect(snap.market).toBe('US');
     expect(snap.rawFacts.quote?.price).toBe(200);
     expect(snap.rawFacts.financials?.periods).toHaveLength(1);
+    // 单请求双窗口：旧日期 fixture 走全量保留分支
     expect(snap.rawFacts.history?.length).toBe(250);
   });
 
@@ -165,7 +166,7 @@ describe('fetchSnapshot · orchestration', () => {
     }));
   });
 
-  it('keeps provenance for the separate long valuation-history request', async () => {
+  it('single wide history request keeps provenance for chart + valuation views', async () => {
     const configs = buildConfigs({
       history: async (_symbol, from) => ({
         data: fakeHistory(250),
@@ -181,7 +182,8 @@ describe('fetchSnapshot · orchestration', () => {
       }),
     });
     const snap = await fetchSnapshot({ symbol: 'AAPL', market: 'US', configs });
-    expect(snap.citations.filter((citation) => citation.factKey === 'history')).toHaveLength(2);
+    // 单请求双窗口（review P1-3 终版）：一次宽抓取服务两个视图，citation 恰 1 条
+    expect(snap.citations.filter((citation) => citation.factKey === 'history')).toHaveLength(1);
   });
 
   it('classifies connector throws as `connector_error`', async () => {

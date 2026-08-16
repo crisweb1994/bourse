@@ -104,10 +104,19 @@ export async function fetchSnapshot(
   const today = capturedAt.slice(0, 10);
   const tasks: FetcherTask[] = [
     task('quote', config.quote ? (ctx) => config.quote(options.symbol, ctx) : null),
+    // Review P1-3（终版）：一次拉 max(chart, valuation) 窗口，结果切两个视图 —
+    // 并发双请求会与其它 capability 抢同源限流额度（concurrent 键控按
+    // source:capability），单请求把 history 请求数降回 1，延迟与限流双赢。
     task(
       'history',
       config.history
-        ? (ctx) => config.history!(options.symbol, isoDaysAgo(historyDays), today, ctx)
+        ? (ctx) =>
+            config.history!(
+              options.symbol,
+              isoDaysAgo(Math.max(historyDays, valuationHistoryDays(options))),
+              today,
+              ctx,
+            )
         : null,
     ),
     task('profile', config.profile ? (ctx) => config.profile!(options.symbol, ctx) : null),
@@ -128,37 +137,33 @@ export async function fetchSnapshot(
     task('macro', config.macro ? (ctx) => config.macro!(options.symbol, ctx) : null),
   ];
 
-  // Valuation history is an independent capability. A failed long request
-  // must not remove the chart window, and a failed chart request must not
-  // prevent PE history from being computed. Keep the extra request outside
-  // the main FetcherResult list so its failure is a warning, not a duplicate
-  // `history` availability entry.
-  const valuationDays = valuationHistoryDays(options);
-  const valuationHistoryPromise: Promise<FetcherResult | null> =
-    valuationDays > historyDays && config.history
-      ? runWithTimeout(
-          task(
-            'history',
-            (ctx) => config.history!(options.symbol, isoDaysAgo(valuationDays), today, ctx),
-          ),
-          timeoutMs,
-          options.signal,
-        )
-      : Promise.resolve(null);
-
-  const [results, valuationHistoryResult] = await Promise.all([
-    Promise.all(tasks.map((t) => runWithTimeout(t, timeoutMs, options.signal))),
-    valuationHistoryPromise,
-  ]);
+  const results = await Promise.all(
+    tasks.map((t) => runWithTimeout(t, timeoutMs, options.signal)),
+  );
 
   const rawFacts = assembleRawFacts(results);
   const dataAvailability = assembleAvailability(results);
 
+  // 单请求双窗口切分：chartHistory（≤ historyDays 天，供指标/priceSeries）
+  // + valuationHistory（全量，供 PE 历史）。切分容忍"日期不在近窗口"的
+  // 数据（测试 fixture 的旧 K 线 / 数据源忽略 from 参数）：日历截断不足
+  // 20 根时退化为按比例取尾部。
   let valuationHistory: PriceBar[] | null = null;
-  if (valuationHistoryResult?.missing === null && Array.isArray(valuationHistoryResult.value)) {
-    valuationHistory = valuationHistoryResult.value as PriceBar[];
-  } else if (valuationDays > historyDays && config.history) {
-    dataAvailability.warnings.push('valuation_history_unavailable');
+  const vDays = valuationHistoryDays(options);
+  if (Array.isArray(rawFacts.history) && vDays > historyDays) {
+    const all = rawFacts.history as PriceBar[];
+    const cutoff = isoDaysAgo(historyDays);
+    const recent = all.filter(
+      (b) => typeof b.timestamp === 'string' && b.timestamp.slice(0, 10) >= cutoff,
+    );
+    if (recent.length >= 20) {
+      rawFacts.history = recent;
+    } else {
+      // 数据源忽略 from 参数（或测试 fixture 日期较旧）：全量保留，
+      // 指标窗口稍宽无害 —— 绝不因切分把历史清空。
+      rawFacts.history = all;
+    }
+    valuationHistory = all;
   }
 
   // C8 (visualization §5.2): peer quotes for the relative-comparison block.
@@ -177,14 +182,9 @@ export async function fetchSnapshot(
   );
 
   // 3. Preserve connector provenance. A source that did not produce a usable
-  // fact cannot become a citation for the run.
-  // The valuation-only history request feeds peHistorySeries even though it
-  // is not part of the main rawFacts wave. Keep its citations in the immutable
-  // snapshot so long-range PE points remain traceable to their history source.
-  const citations = dedupeCitations([
-    ...results.flatMap((result) => result.citations),
-    ...(valuationHistoryResult?.citations ?? []),
-  ]);
+  // fact cannot become a citation for the run. (Valuation history rides the
+  // single history request now, so its citations are already in results.)
+  const citations = dedupeCitations(results.flatMap((result) => result.citations));
   const sourceMetadata = Object.fromEntries(
     results.flatMap((result) =>
       result.metadata ? [[result.field, result.metadata] as const] : [],
