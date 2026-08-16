@@ -15,6 +15,11 @@ function jsonResponse(payload: unknown): Response {
 const fakeFetch = (payload: unknown): CnToolFetchLike => (_url, _init) =>
   Promise.resolve(jsonResponse(payload));
 
+function getToolRun(tool: ReturnType<typeof makeAkshareNorthboundCN>) {
+  if (!tool.run) throw new Error('akshareNorthbound test tool has no run implementation');
+  return tool.run;
+}
+
 describe('akshare-northbound — 2026-08 Eastmoney schema (TRADE_DATE)', () => {
   it('buildUrl sorts by TRADE_DATE (HOLD_DATE was retired)', () => {
     const seenUrls: string[] = [];
@@ -26,7 +31,7 @@ describe('akshare-northbound — 2026-08 Eastmoney schema (TRADE_DATE)', () => {
     };
     const tool = makeAkshareNorthboundCN({ fetchImpl });
     // All mirrors fail → tool throws; we only care about mirror 1's URL.
-    const run = tool.run!;
+    const run = getToolRun(tool);
     return run(
         { symbol: '600519.SS', market: 'CN' },
         { market: 'CN', todayDate: '2026-08-15' } as never,
@@ -55,7 +60,7 @@ describe('akshare-northbound — 2026-08 Eastmoney schema (TRADE_DATE)', () => {
         },
       }),
     });
-    const result = await tool.run!(
+    const result = await getToolRun(tool)(
       { symbol: '600519.SS', market: 'CN' },
       { market: 'CN', todayDate: '2026-08-15' } as never,
     );
@@ -91,7 +96,7 @@ describe('akshare-northbound — 2026-08 Eastmoney schema (TRADE_DATE)', () => {
         },
       }),
     });
-    const result = await tool.run!(
+    const result = await getToolRun(tool)(
       { symbol: '600519.SS', market: 'CN' },
       { market: 'CN', todayDate: '2026-08-15' } as never,
     );
@@ -121,7 +126,7 @@ describe('akshare-northbound — 2026-08 Eastmoney schema (TRADE_DATE)', () => {
       mirrors: undefined,
     });
     await expect(
-      tool.run!({ symbol: '600519.SS', market: 'CN' }, { market: 'CN', todayDate: '2026-08-15' } as never),
+      getToolRun(tool)({ symbol: '600519.SS', market: 'CN' }, { market: 'CN', todayDate: '2026-08-15' } as never),
     ).rejects.toThrow(/all mirrors failed/);
   });
 
@@ -148,7 +153,7 @@ describe('akshare-northbound — source semantics', () => {
       }));
     };
     const tool = makeAkshareNorthboundCN({ fetchImpl });
-    const result = await tool.run!(
+    const result = await getToolRun(tool)(
       { symbol: '600519.SS', market: 'CN' },
       { market: 'CN', todayDate: '2026-08-15' } as never,
     );
