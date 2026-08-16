@@ -20,6 +20,7 @@
 import { z } from 'zod';
 import type { FinancialsBundle, PriceBar, Quote } from '@bourse/market-data';
 import type { ComputeWarning } from './types';
+import { toPriceBasis } from './chart-series';
 import { normalizeCurrency, currencyForMarket } from './units';
 import {
   computeEnterpriseValue,
@@ -272,7 +273,7 @@ function priceOnOrBefore(
   for (const bar of history) {
     const ts = bar.timestamp.slice(0, 10);
     if (ts <= isoDate) {
-      result = bar.adjustedClose ?? bar.close;
+      result = toPriceBasis(bar).close;
     } else {
       break;
     }

@@ -19,6 +19,8 @@ export function EarningsTrendPanel({ stockId }: { stockId: string }) {
     const next = trend.options.find((option) => `${option.metricCode}:${option.fingerprint}` === value);
     if (next) trend.setSelected(next);
   };
+  const derivedCount = trend.series?.points.filter((point) => point.derivationKind === 'YTD_DIFFERENCE').length ?? 0;
+  const derivedMostly = Boolean(trend.series?.points.length && derivedCount / trend.series.points.length > 0.5);
   return (
     <section className="mb-7 border-y border-[var(--color-border-soft)] py-4" aria-labelledby="earnings-trend-title">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -64,6 +66,11 @@ export function EarningsTrendPanel({ stockId }: { stockId: string }) {
       ) : trend.series?.points.length ? (
         view === 'chart' ? (
           <div>
+            {derivedMostly ? (
+              <p className="m-0 mb-2 rounded-[6px] border border-[var(--color-warn-line)] bg-[var(--color-warn-soft)] px-2.5 py-1.5 text-[11.5px] text-[var(--color-warn)]">
+                当前期间超过一半为累计值差分推导，跨期比较的可比性受限；点击柱查看每期口径与来源。
+              </p>
+            ) : null}
             <MetricTrendChart
               points={trend.series.points.map((point) => ({
                 period: point.periodEndOn,
@@ -74,6 +81,13 @@ export function EarningsTrendPanel({ stockId }: { stockId: string }) {
               }))}
               valueLabel={trend.selected?.label ?? '指标'}
               unit={trend.selected?.unit === 'currency' ? trend.selected.currency ?? '' : trend.selected?.unit?.startsWith('percent') ? '%' : undefined}
+              onPointClick={(period) => {
+                const point = trend.series?.points.find((item) => item.periodEndOn === period);
+                if (point) {
+                  setView('table');
+                  setExpanded(`${point.revisionId}:${point.periodType}`);
+                }
+              }}
             />
             <p className="m-0 mt-1.5 text-[11px] text-[var(--color-fg-3)]">
               纹理柱 = YTD 差分推导期 · 橙描边 = 对账冲突 · 悬停柱看数值与同比；切换到「表」视图查看口径与来源

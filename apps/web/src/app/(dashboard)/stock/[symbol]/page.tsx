@@ -182,6 +182,17 @@ export default function StockAnalysisPage({
     router.push(`/chat?${search.toString()}`);
   };
 
+  const openPriceChartChat = () => {
+    if (!symbol) return;
+    const search = new URLSearchParams({
+      stock: symbol,
+      market,
+      draft: '1',
+      question: '请解释这张价格与技术结构图中的均线、支撑和阻力依据。',
+    });
+    router.push(`/chat?${search.toString()}`);
+  };
+
   const openEarningsChat = () => {
     if (!symbol) return;
     const search = new URLSearchParams({ stock: symbol, market, draft: '1', earnings: '1' });
@@ -225,7 +236,7 @@ export default function StockAnalysisPage({
       )}
 
       {/* Visualization D3 - L1 resident price chart (fixed 365d window D1) */}
-      {symbol && <StockPriceChart symbol={symbol} market={market} />}
+      {symbol && <StockPriceChart symbol={symbol} market={market} onAsk={openPriceChartChat} />}
 
       <StockResolutionStatus
         requestedStockId={stockId}

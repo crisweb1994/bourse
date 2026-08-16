@@ -42,6 +42,11 @@ const chartProvenance = z.object({
   quote: qualityTier.optional(),
   history: qualityTier.optional(),
   financials: qualityTier.optional(),
+  /** C10 北向 fact 的来源等级。 */
+  northbound: qualityTier.optional(),
+  /** C11 解禁公告 fact 的来源等级，不能复用北向来源。 */
+  unlockCalendar: qualityTier.optional(),
+  corporateActions: qualityTier.optional(),
 });
 
 /**
@@ -70,6 +75,8 @@ export const ChartEvidenceResponseSchema = z.object({
       changePct: z.number().nullable(),
       currency: z.string().nullable(),
       asOf: z.string().nullable(),
+      /** TTM PE（pack facts.pe）；C2 当前分位标记用。 */
+      pe: z.number().nullable(),
     }).nullable(),
     priceSeries: ChartPriceSeriesSchema.nullable(),
     /** ComputedTechnicalIndicators subset (incl. optional {t,v} series). */
@@ -80,10 +87,14 @@ export const ChartEvidenceResponseSchema = z.object({
     valuation: z.unknown().nullable(),
     /** C8: PeerComparison (subjectVsPeerMedian per metric). */
     peerComparison: z.unknown().nullable(),
-    /** C10 (CN): northbound flow rows [{date,hgt,sgt,holdPctOfFloat…}]. */
+    /** C10 (CN): genuine northbound flow rows [{date,hgt,sgt}]. */
     northbound: z.unknown().nullable(),
+    /** C10 (CN): stock-connect holding snapshots, kept separate from flow. */
+    northboundHoldings: z.unknown().nullable().optional(),
     /** C11 (CN): unlock calendar rows [{date,shares,marketValue,type}]. */
     unlockCalendar: z.unknown().nullable(),
+    /** Corporate-action dates used as optional C1 event markers. */
+    corporateActions: z.unknown().nullable().optional(),
   }),
   provenance: chartProvenance,
 });
@@ -97,9 +108,22 @@ export type ChartEvidenceResponse = z.infer<typeof ChartEvidenceResponseSchema>;
 export const StockHistoryResponseSchema = z.object({
   priceSeries: ChartPriceSeriesSchema,
   technical: z.unknown(),
+  /** Server-computed marker used by C13; null when no move crosses the threshold. */
+  anomalyIndex: z.number().int().nonnegative().nullable().optional(),
   provenance: chartProvenance,
 });
 export type StockHistoryResponse = z.infer<typeof StockHistoryResponseSchema>;
+
+export const StockHistoryBatchItemSchema = z.object({
+  key: z.string().min(1),
+  response: StockHistoryResponseSchema,
+});
+
+export const StockHistoryBatchResponseSchema = z.object({
+  items: z.array(StockHistoryBatchItemSchema),
+  missing: z.array(z.object({ key: z.string().min(1), reason: z.string().min(1) })),
+});
+export type StockHistoryBatchResponse = z.infer<typeof StockHistoryBatchResponseSchema>;
 
 /** Whitelisted windows (design ⑦); default 365 = the fixed chart window D1. */
 export const STOCK_HISTORY_DAYS_WHITELIST = [30, 90, 365, 1095] as const;

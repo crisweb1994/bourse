@@ -138,6 +138,52 @@ describe('fetchSnapshot · orchestration', () => {
     expect(profileMiss?.reason).toBe('not_configured');
   });
 
+  it('preserves an empty unlock response so the snapshot can say "no upcoming events"', async () => {
+    const snap = await fetchSnapshot({
+      symbol: 'AAPL',
+      market: 'US',
+      configs: buildConfigs({
+        unlockCalendar: async () => ({
+          data: [],
+          citations: [{
+            title: 'Unlock calendar',
+            url: 'https://example.com/unlocks/AAPL',
+            sourceType: 'OTHER',
+            provider: 'test',
+            retrievedAt: '2025-05-25T15:00:00.000Z',
+            qualityTier: 'B',
+          }],
+          freshness: [],
+        }),
+      }),
+    });
+    expect(snap.rawFacts.unlockCalendar).toEqual([]);
+    expect(snap.dataAvailability.missing.find((m) => m.field === 'unlockCalendar')?.reason).toBe('no_data');
+    expect(snap.citations).toContainEqual(expect.objectContaining({
+      factKey: 'unlockCalendar',
+      url: 'https://example.com/unlocks/AAPL',
+    }));
+  });
+
+  it('keeps provenance for the separate long valuation-history request', async () => {
+    const configs = buildConfigs({
+      history: async (_symbol, from) => ({
+        data: fakeHistory(250),
+        citations: [{
+          title: 'History',
+          url: `https://example.com/history?from=${from}`,
+          sourceType: 'PRICE',
+          provider: 'test',
+          retrievedAt: '2025-05-25T15:00:00.000Z',
+          qualityTier: 'B',
+        }],
+        freshness: [],
+      }),
+    });
+    const snap = await fetchSnapshot({ symbol: 'AAPL', market: 'US', configs });
+    expect(snap.citations.filter((citation) => citation.factKey === 'history')).toHaveLength(2);
+  });
+
   it('classifies connector throws as `connector_error`', async () => {
     const configs = buildConfigs({
       quote: async () => {

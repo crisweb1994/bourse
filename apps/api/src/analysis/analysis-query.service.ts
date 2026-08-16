@@ -1,5 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { isAnalysisStatus, type AnalysisStatus, type ChartEvidenceResponse } from '@bourse/shared-types';
+import {
+  ChartEvidenceResponseSchema,
+  ChartPriceSeriesSchema,
+  isAnalysisStatus,
+  isTerminalAnalysisStatus,
+  type AnalysisStatus,
+  type ChartEvidenceResponse,
+} from '@bourse/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface AnalysisHistoryOptions {
@@ -159,6 +166,7 @@ export class AnalysisQueryService {
     const row = await this.prisma.analysis.findFirst({
       where: { id, userId },
       select: {
+        status: true,
         evidenceSnapshot: {
           select: { capturedAt: true, degraded: true, payload: true },
         },
@@ -166,9 +174,9 @@ export class AnalysisQueryService {
     });
     if (!row) throw new NotFoundException('Analysis not found');
 
-    const unavailable: ChartEvidenceResponse = {
+    const unavailable = (reason: 'no_snapshot' | 'not_terminal'): ChartEvidenceResponse => ({
       available: false,
-      reason: 'no_snapshot',
+      reason,
       capturedAt: new Date().toISOString(),
       degraded: false,
       dataAvailability: { complete: [], missing: [], fallbacks: [] },
@@ -178,28 +186,50 @@ export class AnalysisQueryService {
         technical: null,
         ratios: null,
         valuation: null,
+        peerComparison: null,
+        northbound: null,
+        northboundHoldings: null,
+        unlockCalendar: null,
+        corporateActions: null,
       },
       provenance: {},
-    };
+    });
     const snapshot = row.evidenceSnapshot;
-    if (!snapshot) return unavailable;
+    if (!snapshot) {
+      const status = typeof row.status === 'string' ? row.status : undefined;
+      return ChartEvidenceResponseSchema.parse(
+        unavailable(status && !isTerminalAnalysisStatus(status) ? 'not_terminal' : 'no_snapshot'),
+      );
+    }
 
     const pack = snapshot.payload as PackPayload | null;
-    if (!pack || typeof pack !== 'object') return unavailable;
+    if (!pack || typeof pack !== 'object') {
+      return ChartEvidenceResponseSchema.parse(unavailable('no_snapshot'));
+    }
 
     const facts = (pack.facts ?? {}) as Record<string, FactShape | undefined>;
     const computed = pack.computedFacts;
     const quoteFact = facts.quote;
     const currencyFact = facts.currency;
-    const priceSeries = pack.priceSeries ?? null;
+    const peFact = facts.pe;
+    const parsedPriceSeries = ChartPriceSeriesSchema.safeParse(pack.priceSeries);
+    const priceSeries = parsedPriceSeries.success ? parsedPriceSeries.data : null;
     const availability = pack.dataAvailability;
+    const legacyNorthbound = Array.isArray(facts.northboundFlow?.value)
+      ? facts.northboundFlow.value
+      : [];
+    const northboundFlow = projectNorthboundFlow(legacyNorthbound);
+    const northboundHoldings = [
+      ...(Array.isArray(facts.northboundHoldings?.value) ? facts.northboundHoldings.value : []),
+      ...projectLegacyNorthboundHoldings(legacyNorthbound),
+    ];
 
     const capturedAt =
       snapshot.capturedAt instanceof Date
         ? snapshot.capturedAt.toISOString()
         : String(snapshot.capturedAt);
 
-    return {
+    const response: ChartEvidenceResponse = {
       available: true,
       capturedAt,
       degraded: snapshot.degraded,
@@ -233,6 +263,10 @@ export class AnalysisQueryService {
                     ? currencyFact.value
                     : null,
                 asOf: typeof quoteFact.asOf === 'string' ? quoteFact.asOf : null,
+                pe:
+                  peFact && typeof peFact.value === 'number' && Number.isFinite(peFact.value)
+                    ? peFact.value
+                    : null,
               }
             : null,
         priceSeries,
@@ -243,21 +277,71 @@ export class AnalysisQueryService {
             : null,
         valuation: computed?.valuation ?? null,
         peerComparison: computed?.peerComparison ?? null,
-        northbound: facts.northboundFlow?.value ?? null,
+        northbound: northboundFlow.length > 0 ? northboundFlow : null,
+        northboundHoldings: northboundHoldings.length > 0 ? northboundHoldings : null,
         unlockCalendar: facts.unlockCalendar?.value ?? null,
+        corporateActions: facts.corporateActions?.value ?? null,
       },
       provenance: {
-        ...(typeof quoteFact?.sourceTier === 'string'
-          ? { quote: quoteFact.sourceTier as 'A' | 'B' | 'C' | 'D' | 'E' }
-          : {}),
-        ...(typeof facts.financials?.sourceTier === 'string'
-          ? { financials: facts.financials.sourceTier as 'A' | 'B' | 'C' | 'D' | 'E' }
-          : {}),
+        ...(sourceTierOf(quoteFact?.sourceTier) ? { quote: sourceTierOf(quoteFact?.sourceTier) } : {}),
+        ...(sourceTierOf(facts.financials?.sourceTier) ? { financials: sourceTierOf(facts.financials?.sourceTier) } : {}),
         ...(priceSeries
-          ? { history: priceSeries.sourceTier as 'A' | 'B' | 'C' | 'D' | 'E' }
+          ? { history: priceSeries.sourceTier }
+          : {}),
+        ...(sourceTierOf(facts.northboundHoldings?.sourceTier ?? facts.northboundFlow?.sourceTier)
+          ? { northbound: sourceTierOf(facts.northboundHoldings?.sourceTier ?? facts.northboundFlow?.sourceTier) }
+          : {}),
+        ...(sourceTierOf(facts.unlockCalendar?.sourceTier)
+          ? { unlockCalendar: sourceTierOf(facts.unlockCalendar?.sourceTier) }
+          : {}),
+        ...(sourceTierOf(facts.corporateActions?.sourceTier)
+          ? { corporateActions: sourceTierOf(facts.corporateActions?.sourceTier) }
           : {}),
       },
     };
+    return ChartEvidenceResponseSchema.parse(response);
   }
+}
 
+function sourceTierOf(value: unknown): 'A' | 'B' | 'C' | 'D' | 'E' | undefined {
+  return value === 'A' || value === 'B' || value === 'C' || value === 'D' || value === 'E'
+    ? value
+    : undefined;
+}
+
+function projectNorthboundFlow(value: unknown): Array<{ date: string; hgt: number; sgt: number }> {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const row = item as Record<string, unknown>;
+    const date = typeof row.date === 'string' ? row.date : null;
+    const hgt = typeof row.hgt === 'number' && Number.isFinite(row.hgt) ? row.hgt : null;
+    const sgt = typeof row.sgt === 'number' && Number.isFinite(row.sgt) ? row.sgt : null;
+    const hasHolding = Number.isFinite(Number(row.holdingShares ?? row.holdShares));
+    // Legacy snapshots mixed holding fields into flow rows. A zero/zero row
+    // with holdings is a holding snapshot, not a zero-flow observation.
+    return date && hgt !== null && sgt !== null && (hgt !== 0 || sgt !== 0 || !hasHolding)
+      ? [{ date, hgt, sgt }]
+      : [];
+  });
+}
+
+function projectLegacyNorthboundHoldings(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const row = item as Record<string, unknown>;
+    const date = typeof row.date === 'string' ? row.date : null;
+    const holdingShares = Number(row.holdingShares ?? row.holdShares);
+    if (!date || !Number.isFinite(holdingShares)) return [];
+    const pctRaw = row.holdingPercentOfFloat ?? row.holdPctOfFloat;
+    const pct = Number(pctRaw);
+    const marketValue = Number(row.holdingMarketValue ?? row.holdMarketValue);
+    return [{
+      date,
+      holdingShares,
+      ...(Number.isFinite(pct) ? { holdingPercentOfFloat: pct } : {}),
+      ...(Number.isFinite(marketValue) ? { holdingMarketValue: marketValue } : {}),
+    }];
+  });
 }

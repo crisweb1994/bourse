@@ -34,9 +34,15 @@ const modernPack = {
   capturedAt: '2026-08-15T02:00:00.000Z',
   facts: {
     quote: { value: 305.93, asOf: '2026-08-14', sourceTier: 'B', sourceUrl: 'https://y' },
+    pe: { value: 34.6, asOf: '2026-08-14', sourceTier: 'B', sourceUrl: 'https://y' },
     currency: { value: 'USD', sourceTier: 'B', sourceUrl: 'https://y' },
     financials: { value: { periods: [] }, sourceTier: 'A', sourceUrl: 'https://sec' },
-    northboundFlow: { value: [{ date: '2026-06-30', hgt: 1.2, sgt: 0.8, holdShares: 5371, holdMarketValue: 636.7, holdPctOfFloat: 0.043 }], sourceTier: 'A', sourceUrl: 'https://em' },
+    northboundFlow: { value: [
+      { date: '2026-08-14', hgt: 0.8, sgt: 0 },
+    ], sourceTier: 'B', sourceUrl: 'https://em' },
+    northboundHoldings: { value: [
+      { date: '2026-06-30', holdingShares: 5371, holdingPercentOfFloat: 0.043 },
+    ], sourceTier: 'B', sourceUrl: 'https://em' },
     unlockCalendar: { value: [{ date: '2026-09-12', shares: 2.1e8, marketValue: 38, type: '首发原股东限售股份' }], sourceTier: 'A', sourceUrl: 'https://em' },
   },
   dataAvailability: {
@@ -99,6 +105,9 @@ test('evidence: modern snapshot → available:true with full projection, schema-
   // C8/C10/C11 projections
   assert.ok(res.chartFacts.peerComparison);
   assert.ok((res.chartFacts.northbound as Array<unknown>).length === 1);
+  assert.ok((res.chartFacts.northboundHoldings as Array<unknown>).length === 1);
+  assert.equal(res.chartFacts.quote?.pe, 34.6);
+  assert.equal(res.provenance.northbound, 'B');
   assert.ok((res.chartFacts.unlockCalendar as Array<unknown>).length === 1);
   const parsed = ChartEvidenceResponseSchema.safeParse(res);
   assert.equal(parsed.success, true, JSON.stringify(parsed.success ? '' : parsed.error.issues));

@@ -10,6 +10,7 @@
  */
 
 import type { ReactNode } from 'react';
+import { RefreshCcw, RotateCcw } from 'lucide-react';
 
 export type ChartTier = 'A' | 'B' | 'C' | 'D' | 'E';
 
@@ -21,6 +22,12 @@ export interface ChartFrameProps {
   sourceTier?: ChartTier | null;
   emptyReason?: { code?: string; message: string };
   degradedNote?: string;
+  /** Optional header actions such as "询问此图". */
+  actions?: ReactNode;
+  /** Retry a transient evidence request failure. */
+  onRetry?: () => void;
+  /** Start a new analysis when this chart belongs to an old snapshot. */
+  onRerun?: () => void;
   /** Text summary for screen readers (P7) — the plot itself is role="img". */
   ariaSummary?: string;
   className?: string;
@@ -42,6 +49,9 @@ export function ChartFrame({
   sourceTier,
   emptyReason,
   degradedNote,
+  actions,
+  onRetry,
+  onRerun,
   ariaSummary,
   className,
   children,
@@ -55,6 +65,7 @@ export function ChartFrame({
       <div className="mb-2.5 flex flex-wrap items-center gap-2">
         <span className="text-[12.5px] font-semibold">{title}</span>
         <span className="flex-1" />
+        {actions}
         {asOf ? (
           <span className="font-mono text-[10.5px] text-[var(--color-fg-3)]">
             dataAsOf {asOf.slice(0, 10)}
@@ -85,6 +96,30 @@ export function ChartFrame({
             <span className="font-mono text-[10.5px] text-[var(--color-fg-3)]">
               {emptyReason.code}
             </span>
+          ) : null}
+          {(onRetry || onRerun) ? (
+            <div className="mt-1.5 flex flex-wrap justify-center gap-2">
+              {onRetry ? (
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className="inline-flex items-center gap-1 rounded-[5px] border border-[var(--color-border)] px-2 py-1 text-[11px] text-[var(--color-fg-2)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                >
+                  <RotateCcw className="h-3 w-3" aria-hidden />
+                  重试
+                </button>
+              ) : null}
+              {onRerun ? (
+                <button
+                  type="button"
+                  onClick={onRerun}
+                  className="inline-flex items-center gap-1 rounded-[5px] border border-[var(--color-accent)] px-2 py-1 text-[11px] text-[var(--color-accent)] hover:bg-[var(--color-accent-soft)]"
+                >
+                  <RefreshCcw className="h-3 w-3" aria-hidden />
+                  重新分析
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
       ) : null}

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { AlertCircle, Bot, Clock, Loader2, MessageSquareText, RotateCcw, Sparkles, Square } from 'lucide-react';
 import type { AnalysisHistoryItemDto } from '@/lib/api';
 import type { useAnalysisStream } from '@/hooks/use-analysis-stream';
@@ -79,10 +80,39 @@ export function AnalysisStreamView({
   onAskAnalysis,
 }: Props) {
   const summary = stream.summaryJson;
-  const isTerminal = stream.status === 'completed' || stream.status === 'error' || stream.status === 'cancelled';
+  // A replayed terminal analysis can briefly have an idle/streaming client
+  // state while its metadata is loading. Use both sources so old snapshots
+  // still get the rerun affordance and live evidence races can self-heal.
+  const isTerminal =
+    stream.status === 'completed' ||
+    stream.status === 'error' ||
+    stream.status === 'cancelled' ||
+    currentAnalysisMeta?.status === 'COMPLETED' ||
+    currentAnalysisMeta?.status === 'PARTIAL_FAILED' ||
+    currentAnalysisMeta?.status === 'FAILED' ||
+    currentAnalysisMeta?.status === 'CANCELLED';
   // Visualization §六 (P6): mount-fetch keyed by analysis id; SSE events are
   // only a refresh signal, never the sole trigger.
   const evidence = useEvidence(currentAnalysisMeta?.id ?? null);
+  const evidenceReason = evidence.status === 'unavailable' ? evidence.reason : undefined;
+  const lastEvidenceVersion = useRef(0);
+  useEffect(() => {
+    lastEvidenceVersion.current = 0;
+  }, [currentAnalysisMeta?.id]);
+
+  // 新建分析时快照尚未持久化，首次 evidence 请求会拿到
+  // available:false（terminal）。每个 evidence_pack_ready 都递增
+  // evidenceVersion，触发一次重取；图表在直播中自动出现，无需刷新页面。
+  useEffect(() => {
+    if (stream.evidenceVersion <= lastEvidenceVersion.current) return;
+    lastEvidenceVersion.current = stream.evidenceVersion;
+    // Only a terminal analysis with no snapshot is final. A live analysis can
+    // briefly return `no_snapshot` while persistence catches up, so the next
+    // evidence event must still be allowed to refresh it.
+    if (isTerminal && evidence.status === 'unavailable' && evidenceReason === 'no_snapshot') return;
+    evidence.refetch();
+  }, [stream.evidenceVersion, evidence.status, evidenceReason, evidence.refetch, isTerminal]);
+
   return (
     <div className="space-y-4">
       {showMetaBar && currentAnalysisMeta && (
@@ -120,7 +150,9 @@ export function AnalysisStreamView({
         <ChartFrame
           title="模块信号矩阵"
           status="ready"
-          asOf={evidence.status === 'ready' ? evidence.data.capturedAt : null}
+          // C6 combines independent module outputs; capturedAt is fetch time,
+          // not a data date, so do not present it as dataAsOf (F11).
+          asOf={null}
           ariaSummary="五个研究模块各自的方向评估、置信度与一句话结论，附分歧度汇总"
         >
           <SignalMatrix
@@ -130,6 +162,16 @@ export function AnalysisStreamView({
               confidence: section.structuredJson?.confidence as string | undefined,
               summary: section.structuredJson?.summary as string | undefined,
               status: section.status,
+              coverage: (evidence.status === 'ready'
+                ? (evidence.data.researchCoverage as {
+                    dimensions?: Record<string, {
+                      status?: string;
+                      confidenceCap?: string;
+                      missingCriticalFacts?: string[];
+                      blockedClaims?: string[];
+                    }>;
+                  } | null | undefined)?.dimensions?.[section.type]
+                : undefined),
             }))}
             onJump={(type) => onNavClick(`section-${type}`)}
           />
@@ -147,12 +189,16 @@ export function AnalysisStreamView({
       <div className="grid gap-6 lg:grid-cols-[200px_minmax(0,1fr)]">
         <LeftSectionNav items={navItems} activeId={effectiveActive} onSelect={onNavClick} />
         <div className="min-w-0 space-y-6">
-          {sectionList.map((section) => <ScrollSection key={section.type} section={section} onRetry={onRetry} showCitations onAsk={onAskAnalysis} evidence={evidence} />)}
+          {sectionList.map((section) => <ScrollSection key={section.type} section={section} onRetry={onRetry} showCitations onAsk={onAskAnalysis} evidence={evidence} market={market} focusWindow={currentAnalysisMeta?.focusWindow} analysisTerminal={isTerminal} onEvidenceRetry={evidence.refetch} onRerun={onRerun} onJump={(type) => onNavClick(`section-${type}`)} />)}
           {evidence.status === 'ready' ? (
             <CnMarketPanel
               market={market}
               northbound={evidence.data?.chartFacts.northbound}
+              northboundHoldings={evidence.data?.chartFacts.northboundHoldings}
               unlockCalendar={evidence.data?.chartFacts.unlockCalendar}
+              northboundTier={evidence.data?.provenance.northbound}
+              unlockTier={evidence.data?.provenance.unlockCalendar}
+              degraded={evidence.data?.degraded}
             />
           ) : null}
           {stream.summaryMarkdown && (

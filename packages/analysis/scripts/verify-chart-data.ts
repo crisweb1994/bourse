@@ -8,6 +8,7 @@
  */
 import {
   createMarketData,
+  derivePriceSeries,
   computeTechnicalIndicators,
   computeValuation,
   computeFinancialRatios,
@@ -64,7 +65,9 @@ async function main() {
     const last = bars[bars.length - 1]!;
     console.log(ok(`history.bars=${bars.length} 根 (${bars[0]!.timestamp} → ${last.timestamp}) lastClose=${n(last.close)} lastVolume=${last.volume ?? 'null'}`));
     console.log(`   来源: ${providerOf(histRes!)}`);
-    console.log(`   ▸ PRD §6.1 实证：该序列当前不会进入 EvidencePack（demo 需新增 priceSeries）— fetch 成功，仅持久化缺口`);
+    const sourceTier = histRes?.citations?.find((citation) => citation.qualityTier)?.qualityTier ?? 'B';
+    const priceSeries = derivePriceSeries(bars, sourceTier);
+    console.log(ok(`priceSeries=${priceSeries?.bars.length ?? 0} 根 basis=${priceSeries?.basis ?? 'null'} asOf=${priceSeries?.asOf ?? 'null'} — 可持久化到 EvidencePack`));
   } else console.log(bad('history 获取失败'));
 
   console.log('');

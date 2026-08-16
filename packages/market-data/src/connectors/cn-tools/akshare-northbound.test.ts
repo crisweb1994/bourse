@@ -26,10 +26,10 @@ describe('akshare-northbound — 2026-08 Eastmoney schema (TRADE_DATE)', () => {
     };
     const tool = makeAkshareNorthboundCN({ fetchImpl });
     // All mirrors fail → tool throws; we only care about mirror 1's URL.
-    return tool
-      .run(
+    const run = tool.run!;
+    return run(
         { symbol: '600519.SS', market: 'CN' },
-        { signal: undefined as never },
+        { market: 'CN', todayDate: '2026-08-15' } as never,
       )
       .catch(() => undefined)
       .then(() => {
@@ -55,10 +55,11 @@ describe('akshare-northbound — 2026-08 Eastmoney schema (TRADE_DATE)', () => {
         },
       }),
     });
-    const result = await tool.run(
+    const result = await tool.run!(
       { symbol: '600519.SS', market: 'CN' },
-      { signal: undefined as never },
+      { market: 'CN', todayDate: '2026-08-15' } as never,
     );
+    // 稀疏持股行如实保留；普通个股资金流不是北向流，不能混入。
     expect(result.data.sourceMirror).toBe('eastmoney-datacenter');
     expect(result.data.rows).toHaveLength(1);
     const row = result.data.rows[0]!;
@@ -90,9 +91,9 @@ describe('akshare-northbound — 2026-08 Eastmoney schema (TRADE_DATE)', () => {
         },
       }),
     });
-    const result = await tool.run(
+    const result = await tool.run!(
       { symbol: '600519.SS', market: 'CN' },
-      { signal: undefined as never },
+      { market: 'CN', todayDate: '2026-08-15' } as never,
     );
     const row = result.data.rows[0]!;
     expect(row.date).toBe('2026-05-02');
@@ -120,11 +121,40 @@ describe('akshare-northbound — 2026-08 Eastmoney schema (TRADE_DATE)', () => {
       mirrors: undefined,
     });
     await expect(
-      tool.run({ symbol: '600519.SS', market: 'CN' }, { signal: undefined as never }),
+      tool.run!({ symbol: '600519.SS', market: 'CN' }, { market: 'CN', todayDate: '2026-08-15' } as never),
     ).rejects.toThrow(/all mirrors failed/);
   });
 
   it('default export remains wired', () => {
     expect(akshareNorthboundCN.name).toBe('akshareNorthbound');
+  });
+});
+
+describe('akshare-northbound — source semantics', () => {
+  it('does not fall back to generic individual-stock fund flow', async () => {
+    let calls = 0;
+    const fetchImpl: CnToolFetchLike = () => {
+      calls += 1;
+      return Promise.resolve(jsonResponse({
+        result: {
+          data: [{
+            TRADE_DATE: '2026-06-30 00:00:00',
+            MUTUAL_TYPE: '001',
+            HOLD_SHARES: 53711656,
+            HOLD_MARKET_CAP: 63674631071.44,
+            FREE_SHARES_RATIO: 4.2967,
+          }],
+        },
+      }));
+    };
+    const tool = makeAkshareNorthboundCN({ fetchImpl });
+    const result = await tool.run!(
+      { symbol: '600519.SS', market: 'CN' },
+      { market: 'CN', todayDate: '2026-08-15' } as never,
+    );
+    expect(calls).toBe(1);
+    expect(result.data.sourceMirror).toBe('eastmoney-datacenter');
+    expect(result.data.rows).toHaveLength(1);
+    expect(result.data.rows[0]!.holdPctOfFloat).toBeCloseTo(0.042967, 6);
   });
 });

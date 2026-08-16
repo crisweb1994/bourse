@@ -65,9 +65,9 @@ export function buildStructuredOutputPrompts(
 每个 scenario 必须是 {"case":"BEAR|BASE|BULL","assumptions":["具体假设"],"valueRange":{"low":数字,"high":数字,"currency":"..."}或null,"invalidators":["失效条件"]}。
 必须至少 2 个不同 case（必须含 BASE），case 不得重复；methods 至少 1 项。每个数组最多保留 4 项。
 快照提供了代码计算的估值结果时，至少 1 个 scenario 的 valueRange 必须引用该数值区间（非 null）；没有代码计算结果时 valueRange 用 null，不要编造数字。
-结构填充示例（数字必须来自报告与允许引用的数据）：
-"methods":[{"name":"PE 分位","rationale":"当前 PE 高于 5 年中位","inputs":[{"name":"PE TTM","value":34.6,"unit":"倍","dataAsOf":"2026-08-14","evidence":[]}]}],
-"scenarios":[{"case":"BASE","assumptions":["营收维持 5-8% 增长"],"valueRange":{"low":205,"high":235,"currency":"USD"},"invalidators":["连续两季营收低于指引 5%"]}]`
+结构填充示例（仅展示字段形状；所有数字、日期、币种必须逐字来自【代码核验事实】，不得复制占位符）：
+methods:[{name:"代码事实对应的估值方法",rationale:"基于报告中的事实",inputs:[{name:"代码事实名称",value:<fact-number>,unit:"<fact-unit>",dataAsOf:"<fact-date>",evidence:[]}]}]
+scenarios:[{case:"BASE",assumptions:["来自报告的明确假设"],valueRange:{low:<code-range-low>,high:<code-range-high>,currency:"<fact-currency>"},invalidators:["可验证的失效条件"]}]`
     : sectionType === 'RISK_REGISTER'
       ? `风险模块必须包含 risks 和 basedOnIncompleteSections。最多保留 6 项风险；每个 risk 必须包含 title、mechanism、likelihood、impact、indicators、invalidates、evidence，且每个数组最多 4 项。不要重复前序模块全文。`
       : '其他模块不要添加不属于本模块的字段。';

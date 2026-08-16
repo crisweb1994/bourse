@@ -46,16 +46,28 @@ export interface SignalMatrixRow {
   confidence?: string;
   summary?: string;
   status?: string;
+  coverage?: {
+    status?: string;
+    confidenceCap?: string;
+    missingCriticalFacts?: string[];
+    blockedClaims?: string[];
+  };
 }
 
-function ConfidenceBar({ confidence }: { confidence?: string }) {
+function ConfidenceBar({ confidence, coverage }: { confidence?: string; coverage?: SignalMatrixRow['coverage'] }) {
   const filled = confidence === 'HIGH' ? 3 : confidence === 'MEDIUM' ? 2 : confidence === 'LOW' ? 1 : 0;
   const color =
     confidence === 'HIGH' ? 'var(--color-signal-bullish)'
     : confidence === 'MEDIUM' ? 'var(--color-warn)'
     : 'var(--color-signal-bearish)';
   return (
-    <span className="inline-flex gap-[3px]" aria-label={`置信 ${confidence ?? '—'}`}>
+    <span
+      className="inline-flex gap-[3px]"
+      aria-label={`置信 ${confidence ?? '—'}`}
+      title={coverage?.confidenceCap && coverage.confidenceCap !== confidence
+        ? `数据覆盖度封顶为${coverage.confidenceCap}：${coverage.missingCriticalFacts?.join('、') || coverage.status || '来源质量受限'}`
+        : undefined}
+    >
       {[1, 2, 3].map((i) => (
         <i
           key={i}
@@ -115,9 +127,11 @@ export function SignalMatrix({
               >
                 {pending ? '…' : ASSESSMENT_TEXT[row.assessment!] ?? row.assessment}
               </span>
-              <ConfidenceBar confidence={row.confidence} />
+              <ConfidenceBar confidence={row.confidence} coverage={row.coverage} />
               <span className="m-0 hidden truncate text-[12px] text-[var(--color-fg-2)] sm:block">
-                {row.summary ?? ''}
+                {row.summary ?? (row.assessment === 'UNASSESSABLE'
+                  ? `无法评估：${row.coverage?.missingCriticalFacts?.join('、') || '缺少满足最低证据要求的事实'}`
+                  : '')}
               </span>
             </button>
           );

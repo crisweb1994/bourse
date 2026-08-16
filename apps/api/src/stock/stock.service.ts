@@ -1,7 +1,10 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import {
   Market,
+  StockHistoryResponseSchema,
+  StockHistoryBatchResponseSchema,
   type StockHistoryResponse,
+  type StockHistoryBatchResponse,
   type StockSearchResult,
   STOCK_HISTORY_DAYS_WHITELIST,
 } from '@bourse/shared-types';
@@ -181,19 +184,65 @@ export class StockService {
       throw new NotFoundException('暂无行情历史数据');
     }
 
-    const historyTier = (result.citations[0] as { qualityTier?: string } | undefined)
+    const historyTier = (result.citations[0] as { qualityTier?: unknown } | undefined)
       ?.qualityTier;
-    const priceSeries = derivePriceSeries(bars, (historyTier ?? 'B') as 'A' | 'B' | 'C' | 'D' | 'E');
+    const sourceTier = isSourceTier(historyTier) ? historyTier : 'B';
+    const priceSeries = derivePriceSeries(bars, sourceTier);
     if (!priceSeries) {
       throw new NotFoundException('行情历史数据不可用');
     }
     const technical = computeTechnicalIndicators({ bars });
 
-    return {
+    const response: StockHistoryResponse = {
       priceSeries,
       technical: technical.indicators,
+      // Compute against the exact clipped/filtered series rendered by C13 so
+      // the marker index remains aligned with the browser's close array.
+      anomalyIndex: findAnomalyIndex(priceSeries.bars),
       provenance: { history: priceSeries.sourceTier },
     };
+    return StockHistoryResponseSchema.parse(response);
+  }
+
+  /** C13: one browser request for a bounded watchlist batch. */
+  async getChartHistoryBatch(
+    items: string[],
+    days?: number,
+  ): Promise<StockHistoryBatchResponse> {
+    const unique = [...new Set(items.map((item) => item.trim()).filter(Boolean))];
+    if (unique.length === 0) throw new BadRequestException('items is required');
+    if (unique.length > 50) throw new BadRequestException('items must contain <= 50 instruments');
+
+    const result: StockHistoryBatchResponse = { items: [], missing: [] };
+    // Keep upstream pressure bounded. A single browser request may contain up
+    // to 50 symbols, but the router should never fan out all 50 at once.
+    const concurrency = 5;
+    for (let offset = 0; offset < unique.length; offset += concurrency) {
+      const batch = unique.slice(offset, offset + concurrency);
+      const settled = await Promise.allSettled(
+        batch.map(async (key) => {
+          const separator = key.indexOf(':');
+          if (separator <= 0 || separator === key.length - 1) {
+            throw new BadRequestException(`invalid instrument: ${key}`);
+          }
+          const market = key.slice(0, separator).toUpperCase();
+          const symbol = key.slice(separator + 1);
+          return { key, response: await this.getChartHistory(symbol, market, days) };
+        }),
+      );
+      settled.forEach((entry, index) => {
+        const key = batch[index]!;
+        if (entry.status === 'fulfilled') result.items.push(entry.value);
+        else result.missing.push({
+          key,
+          reason:
+            entry.reason instanceof Error && entry.reason.message
+              ? entry.reason.message
+              : 'history unavailable',
+        });
+      });
+    }
+    return StockHistoryBatchResponseSchema.parse(result);
   }
 
   async getDetail(symbol: string, market: string) {
@@ -251,8 +300,11 @@ export class StockService {
     }
 
     const change = q.change ?? 0;
-    const prevClose = q.previousClose ?? q.price - change;
-    const changePct = q.changePct ?? (prevClose ? (change / prevClose) * 100 : 0);
+    const previousCloseCandidate = q.previousClose ?? q.price - change;
+    const previousClose = Number.isFinite(previousCloseCandidate)
+      ? previousCloseCandidate
+      : q.price;
+    const changePct = q.changePct ?? (previousClose !== 0 ? (change / previousClose) * 100 : 0);
     const quote: QuoteDto = {
       degraded: false,
       price: q.price,
@@ -346,6 +398,29 @@ export class StockService {
       });
     return upcoming[0]?.periodEndOn?.slice(0, 10);
   }
+}
+
+/** Server-side anomaly marker for C13; the web layer only renders it. */
+function findAnomalyIndex(bars: Array<{ c: number }>): number | null {
+  let bestIndex: number | null = null;
+  let bestMove = 0.03;
+  for (let i = 1; i < bars.length; i += 1) {
+    const previous = bars[i - 1]!;
+    const current = bars[i]!;
+    const previousClose = previous.c;
+    const currentClose = current.c;
+    if (!Number.isFinite(previousClose) || !Number.isFinite(currentClose) || previousClose <= 0) continue;
+    const move = Math.abs((currentClose - previousClose) / previousClose);
+    if (move >= bestMove) {
+      bestMove = move;
+      bestIndex = i;
+    }
+  }
+  return bestIndex;
+}
+
+function isSourceTier(value: unknown): value is 'A' | 'B' | 'C' | 'D' | 'E' {
+  return value === 'A' || value === 'B' || value === 'C' || value === 'D' || value === 'E';
 }
 
 function normalizeDetailSearchSymbol(symbol: string, market: string): string {

@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 /**
  * C5 · 财务趋势柱线组合（visualization PRD §5.1）。
  * 营收柱（左轴）+ 净利率线（右轴）。数据来自 computedFacts.ratios.periodTrends
@@ -39,16 +41,7 @@ function shortPeriod(p: string): string {
   return p.length > 6 ? `${p.slice(0, 6)}…` : p;
 }
 
-/** 期次口径：季度 / 年度 / TTM / 月。跨口径相邻比较（季度 vs 年度）会产出
- *  ±300% 式的假变化，只有同口径相邻期才显示变化标注（诚实原则）。 */
-function periodKind(p: string): string {
-  if (p.startsWith('Q')) return 'quarter';
-  if (p.startsWith('FY')) return 'annual';
-  if (p.startsWith('TTM')) return 'ttm';
-  if (/^\d{4}-\d{2}$/.test(p)) return 'month';
-  return 'other';
-}
-
+/** 期次口径：季度 / 年度 / TTM / 月。 */
 const W = 460;
 const H = 210;
 const PL = 8;
@@ -57,23 +50,47 @@ const PT = 10;
 const PB = 22;
 const MAX_TICKS = 7;
 
-export function ComboBarLine({ trends }: { trends: PeriodTrend[] }) {
+function previousYearPeriod(period: string): string | null {
+  let match = /^Q([1-4])-FY(\d{4})$/.exec(period);
+  if (match) return `Q${match[1]}-FY${Number(match[2]) - 1}`;
+  match = /^FY(\d{4})$/.exec(period);
+  if (match) return `FY${Number(match[1]) - 1}`;
+  match = /^(\d{4})-(\d{2})$/.exec(period);
+  if (match) return `${Number(match[1]) - 1}-${match[2]}`;
+  return null;
+}
+
+export function ComboBarLine({
+  trends,
+  onPeriodClick,
+}: {
+  trends: PeriodTrend[];
+  onPeriodClick?: (period: string) => void;
+}) {
+  const [lineMetric, setLineMetric] = useState<'netMargin' | 'grossMargin'>('netMargin');
   // periodTrends 按最新在前持久化（bundle 约定）；趋势图时间向右，先反转。
   // 反转同时保证 YoY 的"上一期"取到更早的期次（原顺序下方向相反）。
   const rows = trends
     .filter(
-      (t) => Number.isFinite(t.revenue ?? NaN) || Number.isFinite(t.netMargin ?? NaN),
+      (t) => Number.isFinite(t.revenue ?? NaN) || Number.isFinite(t.netMargin ?? NaN) || Number.isFinite(t.grossMargin ?? NaN),
     )
     .slice()
     .reverse();
   if (rows.length === 0) return null;
 
+
   const revs = rows.map((t) => t.revenue).filter((v): v is number => Number.isFinite(v));
-  const margins = rows.map((t) => (t.netMargin != null ? t.netMargin * 100 : null));
+  const margins = rows.map((t) => {
+    const value = lineMetric === 'netMargin' ? t.netMargin : t.grossMargin;
+    return value != null ? value * 100 : null;
+  });
   const revMax = revs.length ? Math.max(...revs) * 1.12 : 1;
   const mVals = margins.filter((v): v is number => v != null);
-  const mMin = mVals.length ? Math.min(...mVals) * 0.8 : 0;
-  const mMax = mVals.length ? Math.max(...mVals) * 1.2 : 1;
+  const rawMMin = mVals.length ? Math.min(...mVals) : 0;
+  const rawMMax = mVals.length ? Math.max(...mVals) : 1;
+  const marginPad = Math.max((rawMMax - rawMMin) * 0.2, 1);
+  const mMin = rawMMin - marginPad;
+  const mMax = rawMMax + marginPad;
 
   const slot = (W - PL - PR) / rows.length;
   const cx = (i: number) => PL + slot * i + slot / 2;
@@ -101,14 +118,27 @@ export function ComboBarLine({ trends }: { trends: PeriodTrend[] }) {
         </span>
         <span className="inline-flex items-center gap-1.5">
           <i className="block h-[2px] w-[14px] rounded bg-[var(--color-warn)]" aria-hidden />
-          净利率（{mMin.toFixed(0)}–{mMax.toFixed(0)}%）
+          {lineMetric === 'netMargin' ? '净利率' : '毛利率'}（{mMin.toFixed(0)}–{mMax.toFixed(0)}%）
+        </span>
+        <span className="ml-auto inline-flex items-center gap-1 rounded-[5px] border border-[var(--color-border)] p-0.5" role="group" aria-label="利润率指标">
+          {(['netMargin', 'grossMargin'] as const).map((metric) => (
+            <button
+              key={metric}
+              type="button"
+              aria-pressed={lineMetric === metric}
+              onClick={() => setLineMetric(metric)}
+              className={`rounded-[4px] px-1.5 py-0.5 text-[10px] ${lineMetric === metric ? 'bg-[var(--color-fg)] text-[var(--color-bg)]' : 'text-[var(--color-fg-3)] hover:text-[var(--color-fg)]'}`}
+            >
+              {metric === 'netMargin' ? '净利率' : '毛利率'}
+            </button>
+          ))}
         </span>
         {rows.length > MAX_TICKS ? (
           <span className="ml-auto font-mono text-[10px]">共 {rows.length} 期</span>
         ) : null}
       </div>
 
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="营收柱状图与净利率折线组合图">
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="营收柱状图与利润率折线组合图">
         {[0.25, 0.5, 0.75, 1].map((f) => (
           <line
             key={f}
@@ -124,13 +154,10 @@ export function ComboBarLine({ trends }: { trends: PeriodTrend[] }) {
         {rows.map((t, i) => {
           if (!Number.isFinite(t.revenue ?? NaN)) return null;
           const v = t.revenue!;
-          const prevRow = i > 0 ? rows[i - 1] : undefined;
-          const prev =
-            prevRow?.period !== undefined &&
-            periodKind(prevRow.period) === periodKind(t.period) &&
-            periodKind(t.period) !== 'other'
-              ? prevRow.revenue
-              : undefined;
+          const priorPeriod = previousYearPeriod(t.period);
+          const prev = priorPeriod
+            ? rows.find((row) => row.period === priorPeriod)?.revenue
+            : undefined;
           const change = prev && Number.isFinite(prev) ? (v / prev - 1) * 100 : null;
           const bw = Math.min(slot * 0.56, 34);
           const last = i === rows.length - 1;
@@ -145,6 +172,23 @@ export function ComboBarLine({ trends }: { trends: PeriodTrend[] }) {
                 fill="var(--color-accent)"
                 opacity={last ? 0.95 : 0.72}
               />
+              <rect
+                x={cx(i) - bw / 2 - 3}
+                y={PT}
+                width={bw + 6}
+                height={H - PT - PB}
+                fill="transparent"
+                role="button"
+                tabIndex={0}
+                aria-label={`${t.period} 营收 ${fmtRevenue(v)}${onPeriodClick ? '，点击跳转引用' : ''}`}
+                onClick={() => onPeriodClick?.(t.period)}
+                onKeyDown={(event) => {
+                  if (onPeriodClick && (event.key === 'Enter' || event.key === ' ')) {
+                    event.preventDefault();
+                    onPeriodClick(t.period);
+                  }
+                }}
+              />
               {change !== null && showYoy(i) ? (
                 <text
                   x={cx(i)}
@@ -158,7 +202,7 @@ export function ComboBarLine({ trends }: { trends: PeriodTrend[] }) {
                   {change.toFixed(0)}%
                 </text>
               ) : null}
-              <title>{`${t.period}：营收 ${fmtRevenue(v)}${t.netMargin != null ? `，净利率 ${(t.netMargin * 100).toFixed(1)}%` : ''}${change !== null ? `，较上一${periodKind(t.period) === 'annual' ? '年度' : '期'} ${change >= 0 ? '+' : ''}${change.toFixed(1)}%` : ''}`}</title>
+              <title>{`${t.period}：营收 ${fmtRevenue(v)}${t.netMargin != null ? `，净利率 ${(t.netMargin * 100).toFixed(1)}%` : ''}${change !== null ? `，同比 ${change >= 0 ? '+' : ''}${change.toFixed(1)}%` : ''}`}</title>
             </g>
           );
         })}

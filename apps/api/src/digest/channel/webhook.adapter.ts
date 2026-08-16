@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { BriefPayload } from '@bourse/analysis';
 import { postJson } from '../../common/http';
+import { inlineSparklineSvg, unicodeSparkline } from './sparkline';
 import { ChannelAdapter } from './types';
 
 /**
@@ -20,6 +21,36 @@ export class WebhookAdapter implements ChannelAdapter {
     payload: BriefPayload,
     channel: { type: 'WEBHOOK'; url: string; secret: string },
   ): Promise<{ httpStatus: number }> {
-    return { httpStatus: await postJson(channel.url, payload, { hmacSecret: channel.secret }) };
+    // C14：为指数附上可直接打印的 unicode sparkline（接收方零渲染成本）。
+    const enriched: BriefPayload = {
+      ...payload,
+      marketOverview: payload.marketOverview
+        ? {
+            ...payload.marketOverview,
+            indices: payload.marketOverview.indices.map((index) =>
+              index.closes30d
+                ? {
+                    ...index,
+                    sparkline: unicodeSparkline(index.closes30d),
+                    sparklineHtml: inlineSparklineSvg(index.closes30d),
+                  }
+                : index,
+            ),
+          }
+        : payload.marketOverview,
+      watchlist: {
+        ...payload.watchlist,
+        items: payload.watchlist.items.map((item) =>
+          item.closes30d
+            ? {
+                ...item,
+                sparkline: unicodeSparkline(item.closes30d),
+                sparklineHtml: inlineSparklineSvg(item.closes30d),
+              }
+            : item,
+        ),
+      },
+    };
+    return { httpStatus: await postJson(channel.url, enriched, { hmacSecret: channel.secret }) };
   }
 }

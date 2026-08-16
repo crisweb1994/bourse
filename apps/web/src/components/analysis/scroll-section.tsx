@@ -1,8 +1,9 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import { Clock, Loader2, MessageSquareText, RotateCcw, XCircle } from 'lucide-react';
 import type { SectionData } from '@/hooks/use-analysis-stream';
-import type { ChartEvidenceResponse } from '@bourse/shared-types';
+import type { ChartEvidenceResponse, FocusWindow } from '@bourse/shared-types';
 import { MarkdownRenderer } from '@/components/shared/markdown-renderer';
 import { Button, Card, Pill, SectionTag } from '@/components/ui';
 import { SECTION_LABELS, ASSESSMENT_LABELS } from '@/lib/constants';
@@ -17,13 +18,39 @@ interface Props {
   onAsk?: (sectionType: string) => void;
   /** Chart evidence (visualization §六): ready state renders module charts. */
   evidence?: { status: string; data?: ChartEvidenceResponse } | null;
+  market?: string;
+  focusWindow?: FocusWindow;
+  analysisTerminal?: boolean;
+  onEvidenceRetry?: () => void;
+  onRerun?: () => void;
+  onJump?: (sectionType: string) => void;
 }
 
-export function ScrollSection({ section, onRetry, showCitations = true, onAsk, evidence }: Props) {
+export function ScrollSection({ section, onRetry, showCitations = true, onAsk, evidence, market, focusWindow, analysisTerminal, onEvidenceRetry, onRerun, onJump }: Props) {
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const [chartVisible, setChartVisible] = useState(false);
+  useEffect(() => {
+    const node = sectionRef.current;
+    if (!node || typeof IntersectionObserver === 'undefined') {
+      setChartVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setChartVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '320px 0px' },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
   const label = SECTION_LABELS[section.type] ?? section.type;
   const assessment = section.structuredJson?.assessment as string | undefined;
   return (
-    <section id={`section-${section.type}`} className="scroll-mt-4">
+    <section ref={sectionRef} id={`section-${section.type}`} className="scroll-mt-4">
       <Card>
         <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border-soft)] px-5 py-3">
           <SectionTag>{label}</SectionTag>
@@ -75,12 +102,20 @@ export function ScrollSection({ section, onRetry, showCitations = true, onAsk, e
 
           {/* Visualization §六: module charts (C2–C5). D2 — renders whenever
              data exists (evidence-driven), including SKIPPED VALUATION in QUICK. */}
-          {section.status !== 'streaming' && section.status !== 'pending' ? (
+          {section.status !== 'streaming' && section.status !== 'pending' && chartVisible ? (
             <div className="mt-4">
               <SectionCharts
                 sectionType={section.type}
                 structuredJson={section.structuredJson as Record<string, unknown> | null | undefined}
                 evidence={evidence}
+                sectionStatus={section.status}
+                market={market}
+                focusWindow={focusWindow}
+                analysisTerminal={analysisTerminal}
+                onEvidenceRetry={onEvidenceRetry}
+                onRerun={onRerun}
+                onAsk={onAsk}
+                onJump={onJump}
               />
             </div>
           ) : null}

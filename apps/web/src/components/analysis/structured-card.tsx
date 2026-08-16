@@ -19,7 +19,7 @@ export function StructuredCard({ sectionType, data, className }: { sectionType: 
       {findings.length > 0 && (
         <div className="space-y-3">
           {findings.map((finding: any, index: number) => (
-            <Box key={`${finding.title ?? 'finding'}-${index}`} title={finding.title ?? `重点发现 ${index + 1}`}>
+            <Box key={`${finding.title ?? 'finding'}-${index}`} title={finding.title ?? `重点发现 ${index + 1}`} dataFinding>
               <p className="m-0 text-[13.5px] leading-[1.7]">{finding.conclusion ?? '—'}</p>
               {Array.isArray(finding.caveats) && finding.caveats.length > 0 && <ul className="mt-2 list-disc space-y-1 pl-5 text-[12px] text-[var(--color-fg-2)]">{finding.caveats.map((item: string, i: number) => <li key={i}>{item}</li>)}</ul>}
               <EvidenceList evidence={finding.evidence} />
@@ -33,8 +33,8 @@ export function StructuredCard({ sectionType, data, className }: { sectionType: 
   );
 }
 
-function Box({ title, children }: { title: string; children: React.ReactNode }) {
-  return <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-bg)]"><div className="border-b border-[var(--color-border-soft)] px-4 py-2.5"><SectionTag>{title}</SectionTag></div><div className="px-4 py-3">{children}</div></div>;
+function Box({ title, children, dataFinding }: { title: string; children: React.ReactNode; dataFinding?: boolean }) {
+  return <div {...(dataFinding ? { 'data-finding': 'true' } : {})} className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-bg)]"><div className="border-b border-[var(--color-border-soft)] px-4 py-2.5"><SectionTag>{title}</SectionTag></div><div className="px-4 py-3">{children}</div></div>;
 }
 
 function EvidenceList({ evidence }: { evidence: unknown }) {

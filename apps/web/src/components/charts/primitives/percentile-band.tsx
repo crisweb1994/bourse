@@ -22,6 +22,7 @@ export interface PercentileBandProps {
   median?: number | null;
   low?: number | null;
   currency?: string;
+  onCurrentClick?: () => void;
 }
 
 const W = 460;
@@ -38,11 +39,16 @@ export function PercentileBand({
   high,
   median,
   low,
+  onCurrentClick,
 }: PercentileBandProps) {
   const points = series.filter((p) => Number.isFinite(p.pe));
   if (points.length === 0) return null;
-  const lo = Math.min(...points.map((p) => p.pe), low ?? Infinity);
-  const hi = Math.max(...points.map((p) => p.pe), high ?? -Infinity);
+  const values = points.map((p) => p.pe).sort((a, b) => a - b);
+  const p30 = percentileOf(values, 0.3);
+  const p70 = percentileOf(values, 0.7);
+  const current = typeof currentPe === 'number' && Number.isFinite(currentPe) ? currentPe : null;
+  const lo = Math.min(...values, low ?? Infinity, p30, p70, current ?? Infinity);
+  const hi = Math.max(...values, high ?? -Infinity, p30, p70, current ?? -Infinity);
   const pad = (hi - lo) * 0.08 || 1;
   const yMin = lo - pad;
   const yMax = hi + pad;
@@ -50,19 +56,29 @@ export function PercentileBand({
   const x = (i: number) => PL + (i * (W - PL - PR)) / Math.max(points.length - 1, 1);
   const y = (v: number) => PT + ((yMax - v) / (yMax - yMin)) * (H - PT - PB);
 
-  const zone = (from: number, to: number, color: string) => (
-    <rect x={PL} y={y(to)} width={W - PL - PR} height={Math.max(0, y(from) - y(to))} fill={color} />
-  );
-  const span = yMax - yMin;
-  const pctOf = (p: number) => yMin + (span * p) / 100;
-  zone(pctOf(0), pctOf(30), 'rgba(62,207,142,0.06)');
-  zone(pctOf(30), pctOf(70), 'rgba(139,150,171,0.05)');
-  zone(pctOf(70), pctOf(100), 'rgba(239,91,91,0.07)');
+  // Zones use the actual PE distribution, not an arbitrary 0–100% slice of
+  // the y-axis. This keeps the visual meaning aligned with the percentile
+  // label even when the historical range is skewed.
+  const zones: Array<{ from: number; to: number; color: string }> = [
+    { from: yMin, to: p30, color: 'rgba(62,207,142,0.06)' },
+    { from: p30, to: p70, color: 'rgba(139,150,171,0.05)' },
+    { from: p70, to: yMax, color: 'rgba(239,91,91,0.07)' },
+  ];
 
   const d = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(p.pe).toFixed(1)}`).join(' ');
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="PE 历史与分位带">
+      {zones.map((z) => (
+        <rect
+          key={z.color}
+          x={PL}
+          y={y(z.to)}
+          width={W - PL - PR}
+          height={Math.max(0, y(z.from) - y(z.to))}
+          fill={z.color}
+        />
+      ))}
       {[[high, '5y 高'], [median, '5y 中位'], [low, '5y 低']].map(([v, label], idx) =>
         typeof v === 'number' && Number.isFinite(v) ? (
           <g key={idx}>
@@ -74,22 +90,34 @@ export function PercentileBand({
         ) : null,
       )}
 
-      {typeof currentPe === 'number' && Number.isFinite(currentPe) ? (
-        <>
-          <circle cx={x(points.length - 1)} cy={y(currentPe)} r={11} fill="none" stroke="var(--color-warn)" strokeWidth={1.2} opacity={0.8} />
-          <circle cx={x(points.length - 1)} cy={y(currentPe)} r={4.5} fill="var(--color-warn)" stroke="var(--color-elev)" strokeWidth={1.5} />
+      {current !== null ? (
+        <g
+          role={onCurrentClick ? 'button' : undefined}
+          tabIndex={onCurrentClick ? 0 : undefined}
+          aria-label={onCurrentClick ? '跳转到估值模块中当前 PE 的依据' : undefined}
+          onClick={onCurrentClick}
+          onKeyDown={(event) => {
+            if (onCurrentClick && (event.key === 'Enter' || event.key === ' ')) {
+              event.preventDefault();
+              onCurrentClick();
+            }
+          }}
+          style={{ cursor: onCurrentClick ? 'pointer' : undefined }}
+        >
+          <circle cx={x(points.length - 1)} cy={y(current)} r={11} fill="none" stroke="var(--color-warn)" strokeWidth={1.2} opacity={0.8} />
+          <circle cx={x(points.length - 1)} cy={y(current)} r={4.5} fill="var(--color-warn)" stroke="var(--color-elev)" strokeWidth={1.5} />
           <text
             x={x(points.length - 1)}
-            y={Math.min(y(currentPe) + 24, H - 4)}
+            y={Math.min(y(current) + 24, H - 4)}
             textAnchor="middle"
             fontSize={10}
             fontWeight={700}
             fill="var(--color-warn)"
           >
-            当前 {currentPe.toFixed(1)}
+            当前 {current.toFixed(1)}
             {typeof percentile === 'number' ? ` · ${Math.round(percentile)} 分位` : ''}
           </text>
-        </>
+        </g>
       ) : null}
 
       <path d={d} fill="none" stroke="var(--color-accent)" strokeWidth={1.8} />
@@ -107,4 +135,14 @@ export function PercentileBand({
       </text>
     </svg>
   );
+}
+
+function percentileOf(sorted: number[], fraction: number): number {
+  if (sorted.length === 1) return sorted[0]!;
+  const index = (sorted.length - 1) * fraction;
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+  if (lower === upper) return sorted[lower]!;
+  const weight = index - lower;
+  return sorted[lower]! + (sorted[upper]! - sorted[lower]!) * weight;
 }

@@ -27,12 +27,15 @@ export function ScenarioRangeBar({
   currentPrice,
   currency,
   impliedGrowth,
+  codeComputed,
 }: {
   scenarios: ScenarioRange[];
   currentPrice: number;
   currency: string;
   /** 反向 DCF：现价隐含增长率（代码计算，如 0.142）。 */
   impliedGrowth?: number | null;
+  /** P0（review 2026-08-16）：只有存在代码公允价值时才可声称"代码计算"。 */
+  codeComputed?: boolean;
 }) {
   const [active, setActive] = useState<string | null>(null);
   const withRange = scenarios.filter((s) => s.valueRange);
@@ -41,10 +44,13 @@ export function ScenarioRangeBar({
   const lo = Math.min(currentPrice, ...withRange.map((s) => s.valueRange!.low)) * 0.95;
   const hi = Math.max(currentPrice, ...withRange.map((s) => s.valueRange!.high)) * 1.03;
   const px = (v: number) => ((v - lo) / (hi - lo)) * 100;
+  const rangeLow = Math.min(...withRange.map((s) => s.valueRange!.low));
+  const rangeHigh = Math.max(...withRange.map((s) => s.valueRange!.high));
+  const outsideRange = currentPrice < rangeLow || currentPrice > rangeHigh;
 
   return (
     <div>
-      <div className="relative h-[132px]" role="img" aria-label={`情景价值区间图，当前价 ${currentPrice.toFixed(1)} ${currency}`}>
+      <div className="relative h-[132px]" role="group" aria-label={`情景价值区间图，当前价 ${currentPrice.toFixed(1)} ${currency}`}>
         {[0, 25, 50, 75, 100].map((p) => (
           <span
             key={p}
@@ -69,6 +75,18 @@ export function ScenarioRangeBar({
               style={{ top: `${topPct}%`, left: 0, right: 0, height: '18px' }}
               onMouseEnter={() => setActive(s.case)}
               onMouseLeave={() => setActive(null)}
+              onFocus={() => setActive(s.case)}
+              onBlur={() => setActive(null)}
+              onClick={() => setActive(active === s.case ? null : s.case)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  setActive(active === s.case ? null : s.case);
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              aria-label={`${CASE_LABEL[s.case]}区间 ${s.valueRange!.low} 至 ${s.valueRange!.high} ${s.valueRange!.currency}`}
             >
               <span className="absolute left-0 top-px text-[11px] font-semibold" style={{ color }}>
                 {CASE_LABEL[s.case]}
@@ -112,17 +130,25 @@ export function ScenarioRangeBar({
           style={{
             left: `${Math.min(Math.max(px(currentPrice) - 26, 0), 86)}%`,
             top: 0,
-            background: 'var(--color-accent)',
+            background: outsideRange ? 'var(--color-signal-bearish)' : 'var(--color-accent)',
           }}
         >
           现价 {currentPrice.toFixed(1)}
         </span>
       </div>
 
+      {outsideRange ? (
+        <p className="m-0 mt-1 text-right text-[10.5px] font-medium text-[var(--color-signal-bearish)]">
+          价格已脱离全部情景的假设范围
+        </p>
+      ) : null}
+
       <p className="m-0 mt-1 text-right text-[10.5px] text-[var(--color-fg-3)]">
         {typeof impliedGrowth === 'number'
           ? `反向 DCF：现价隐含 ${(impliedGrowth * 100).toFixed(1)}% 增长（WACC 10% · 终值 3% · 10Y，代码计算）`
-          : '区间来自代码计算的估值结果'}
+          : codeComputed
+            ? '区间引用代码计算的公允价值'
+            : '区间为模型基于快照数据的假设（代码未计算公允价值）'}
       </p>
 
       {active ? (

@@ -53,40 +53,20 @@ describe('tools/cn/akshareNorthbound', () => {
     expect(result.data.rows[0]!.sgt).toBe(0);
     expect(result.data.rows[0]!.holdShares).toBe(4_800_000);
     expect(result.data.rows[0]!.holdPctOfFloat).toBeCloseTo(0.0532, 4);
+    // Generic individual-stock fund flow is not a northbound fallback.
     expect(result.data.sourceMirror).toBe('eastmoney-datacenter');
   });
 
-  it('falls forward to the next mirror when first returns empty rows', async () => {
+  it('does not fall forward to generic individual-stock fund flow', async () => {
     const calls: string[] = [];
     const fetchImpl: CnToolFetchLike = vi.fn((url) => {
       calls.push(typeof url === 'string' ? url : String(url));
-      if (calls.length === 1) {
-        // 1st mirror returns no rows
-        return Promise.resolve(fakeRes({ body: { result: { data: [] } } }));
-      }
-      // 2nd mirror returns klines
-      return Promise.resolve(
-        fakeRes({
-          body: {
-            data: {
-              klines: [
-                '2026-05-22,150000000,0,0,0,0,0,0',
-                '2026-05-21,-100000000,0,0,0,0,0,0',
-              ],
-            },
-          },
-        }),
-      );
+      return Promise.resolve(fakeRes({ body: { result: { data: [] } } }));
     });
     const tool = makeAkshareNorthboundCN({ fetchImpl });
-    const result = await tool.run!(
-      { symbol: '600519.SS', market: 'CN', daysBack: 5 },
-      ctx,
-    );
-    expect(calls).toHaveLength(2);
-    expect(result.data.sourceMirror).toBe('eastmoney-push2-flow');
-    expect(result.data.rows[0]!.hgt).toBeCloseTo(1.5, 4); // 1.5亿元
-    expect(result.data.rows[0]!.date).toBe('2026-05-22');
+    await expect(tool.run!({ symbol: '600519.SS', market: 'CN', daysBack: 5 }, ctx))
+      .rejects.toThrow(/all mirrors failed/);
+    expect(calls).toHaveLength(1);
   });
 
   it('throws with not_implemented reason when ALL mirrors fail', async () => {

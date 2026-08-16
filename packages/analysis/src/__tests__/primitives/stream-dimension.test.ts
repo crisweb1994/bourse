@@ -172,7 +172,7 @@ describe('streamDimension — valuation semantic repair (visualization §四.④
     disclaimer: 'Model text',
     methods: [{ name: 'PE 分位', rationale: 'r', inputs: [] }],
     scenarios: [
-      { case: 'BASE', assumptions: ['a'], valueRange: { low: 205, high: 235, currency: 'USD' }, invalidators: [] },
+      { case: 'BASE', assumptions: ['a'], valueRange: { low: 205, high: 280, currency: 'USD' }, invalidators: [] },
       { case: 'BEAR', assumptions: ['a'], valueRange: null, invalidators: [] },
     ],
   });
@@ -185,7 +185,7 @@ describe('streamDimension — valuation semantic repair (visualization §四.④
     dataAvailability: { complete: [], missing: [], fallbacks: [] },
     citations: [],
     trace: { toolCalls: 0, durationMs: 0, costUsd: 0 },
-    computedFacts: { valuation: { pe5yMedian: 30 } },
+    computedFacts: { valuation: { pe5yMedian: 30, fairValuePerShare: 246.2, baseCurrency: 'USD' } },
   };
 
   function valuationProvider(
@@ -222,7 +222,7 @@ describe('streamDimension — valuation semantic repair (visualization §四.④
       json: {
         type: 'VALUATION_SCENARIOS',
         scenarios: [
-          { case: 'BASE', valueRange: { low: 205, high: 235 } },
+          { case: 'BASE', valueRange: { low: 205, high: 280 } },
           { case: 'BEAR' },
         ],
       },

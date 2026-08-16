@@ -23,6 +23,20 @@ export class StockController {
     return this.stockService.search(query || '');
   }
 
+  /** C13 · bounded watchlist history batch (items=US:AAPL,CN:600519). */
+  @Get('history')
+  async historyBatch(
+    @Query('items') items?: string,
+    @Query('days') days?: string,
+  ) {
+    const parsedItems = (items ?? '').split(',').map((item) => item.trim()).filter(Boolean);
+    const parsedDays = parseOptionalPositiveInt(days, 'days');
+    return this.stockService.getChartHistoryBatch(
+      parsedItems,
+      parsedDays,
+    );
+  }
+
   /**
    * Recent announcements feed for the stock header. Filings (SEC EDGAR /
    * HKEX / cninfo) as the primary source, web-search news as best-effort
@@ -36,13 +50,11 @@ export class StockController {
     @Query('limit') limit?: string,
   ) {
     if (!symbol) throw new BadRequestException('symbol is required');
-    const parsedLimit = limit ? Number.parseInt(limit, 10) : undefined;
+    const parsedLimit = parseOptionalPositiveInt(limit, 'limit');
     return this.stockNewsService.getNews(
       symbol,
       market ?? 'US',
-      Number.isFinite(parsedLimit) && parsedLimit! > 0
-        ? Math.min(parsedLimit!, 20)
-        : undefined,
+      parsedLimit === undefined ? undefined : Math.min(parsedLimit, 20),
     );
   }
 
@@ -62,11 +74,11 @@ export class StockController {
     @Query('days') days?: string,
   ) {
     if (!symbol) throw new BadRequestException('symbol is required');
-    const parsedDays = days ? Number.parseInt(days, 10) : undefined;
+    const parsedDays = parseOptionalPositiveInt(days, 'days');
     return this.stockService.getChartHistory(
       symbol,
       market ?? 'US',
-      Number.isFinite(parsedDays) ? parsedDays : undefined,
+      parsedDays,
     );
   }
 
@@ -85,4 +97,16 @@ export class StockController {
     if (!symbol) throw new BadRequestException('symbol is required');
     return this.stockService.getDetail(symbol, market ?? 'US');
   }
+}
+
+function parseOptionalPositiveInt(value: string | undefined, field: string): number | undefined {
+  if (value === undefined || value.trim() === '') return undefined;
+  if (!/^\d+$/.test(value.trim())) {
+    throw new BadRequestException(`${field} must be a positive integer`);
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) {
+    throw new BadRequestException(`${field} must be a positive integer`);
+  }
+  return parsed;
 }

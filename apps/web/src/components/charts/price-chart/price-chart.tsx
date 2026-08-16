@@ -11,14 +11,16 @@
  * - V7：body.print-mode 时冻结当前视图高度，避免 canvas 打印空白。
  */
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   CandlestickSeries,
+  createSeriesMarkers,
   HistogramSeries,
   LineSeries,
   createChart,
   type IChartApi,
   type ISeriesApi,
+  type MouseEventParams,
   type Time,
   type UTCTimestamp,
 } from 'lightweight-charts';
@@ -32,6 +34,14 @@ export interface TechnicalForChart {
     sma50?: Array<{ t: string; v: number }>;
     sma200?: Array<{ t: string; v: number }>;
   };
+}
+
+export interface CorporateActionForChart {
+  id?: string;
+  type?: string;
+  exDate?: string;
+  announcedAt?: string;
+  effectiveDate?: string;
 }
 
 const SMA_STYLES = {
@@ -61,16 +71,31 @@ export function PriceChart({
   market,
   height = 300,
   onAnnotationClick,
+  corporateActions = [],
 }: {
   priceSeries: ChartPriceSeries;
   technical?: TechnicalForChart | null;
   market: string;
   height?: number;
   /** V4 出口：点击支撑/阻力标注 → 跳转模块论述（宿主决定去向）。 */
-  onAnnotationClick?: () => void;
+  onAnnotationClick?: (kind?: 'support' | 'resistance') => void;
+  corporateActions?: CorporateActionForChart[];
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  const [tooltip, setTooltip] = useState<{
+    x: number;
+    y: number;
+    date: string;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number | null;
+  } | null>(null);
+  const corporateActionKey = corporateActions
+    .map((action) => `${action.id ?? ''}:${action.exDate ?? action.effectiveDate ?? action.announcedAt ?? ''}:${action.type ?? ''}`)
+    .join('|');
 
   // 涨跌语义色：US 绿涨红跌；CN/HK 红涨绿跌（真实产品惯例，D 决策）。
   const [upColor, downColor] = useMemo(
@@ -84,6 +109,15 @@ export function PriceChart({
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+
+    // A tiny history cannot support a meaningful candle chart. The SVG
+    // fallback below still exposes the observed closes without implying a
+    // technical structure that the data cannot support.
+    if (priceSeries.bars.length < 20) {
+      chartRef.current = null;
+      setTooltip(null);
+      return;
+    }
 
     const theme = readThemeColors();
     const chart = createChart(container, {
@@ -140,6 +174,47 @@ export function PriceChart({
         })),
     );
 
+    const candleDates = new Set(priceSeries.bars.map((bar) => bar.t));
+    const markers = corporateActions.flatMap((action, index) => {
+      const date = (action.exDate ?? action.effectiveDate ?? action.announcedAt)?.slice(0, 10);
+      if (!date || !candleDates.has(date)) return [];
+      return [{
+        id: action.id ?? `${date}-${index}`,
+        time: toTime(date),
+        position: 'aboveBar' as const,
+        shape: 'circle' as const,
+        color: '#e6a23c',
+        text: action.type === 'DIVIDEND' ? '息' : action.type === 'SPLIT' ? '拆' : '权',
+      }];
+    });
+    const markerPlugin = markers.length > 0 ? createSeriesMarkers(candle, markers) : null;
+
+    const onCrosshairMove = (param: MouseEventParams<Time>) => {
+      const point = param.point;
+      const data = param.seriesData.get(candle) as
+        | { time?: Time; open?: number; high?: number; low?: number; close?: number }
+        | undefined;
+      if (!point || !data || !Number.isFinite(data.close)) {
+        setTooltip(null);
+        return;
+      }
+      const date = typeof param.time === 'number'
+        ? new Date(param.time * 1000).toISOString().slice(0, 10)
+        : String(param.time ?? '');
+      const bar = priceSeries.bars.find((item) => item.t === date);
+      setTooltip({
+        x: point.x,
+        y: point.y,
+        date,
+        open: data.open ?? bar?.o ?? 0,
+        high: data.high ?? bar?.h ?? 0,
+        low: data.low ?? bar?.l ?? 0,
+        close: data.close ?? bar?.c ?? 0,
+        volume: bar?.v ?? null,
+      });
+    };
+    chart.subscribeCrosshairMove(onCrosshairMove);
+
     for (const key of ['sma20', 'sma50', 'sma200'] as const) {
       const points = technical?.series?.[key];
       if (!points?.length) continue; // V5：窗口不足（如 sma200）不画，不补值
@@ -178,21 +253,26 @@ export function PriceChart({
       chart.applyOptions({ autoSize: !printing, height: printing ? height : undefined } as never);
     };
     const observer = new MutationObserver(applyPrintMode);
+    applyPrintMode();
     observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
 
     return () => {
       observer.disconnect();
+      chart.unsubscribeCrosshairMove(onCrosshairMove);
+      markerPlugin?.detach();
+      setTooltip(null);
       for (const line of priceLines) {
         try { candle.removePriceLine(line); } catch { /* chart already disposed */ }
       }
       chart.remove();
       chartRef.current = null;
     };
-  }, [priceSeries, technical, upColor, downColor, height]);
+  }, [priceSeries, technical, upColor, downColor, height, corporateActionKey]);
 
-  // 主题切换重映射（next-themes class 翻转时）
+  // 主题切换重映射（next-themes class 翻转时）。观察 class 变化即可，
+  // 不需要让每个图表长期运行定时器。
   useEffect(() => {
-    const id = window.setInterval(() => {
+    const applyTheme = () => {
       if (!chartRef.current) return;
       const theme = readThemeColors();
       chartRef.current.applyOptions({
@@ -204,18 +284,100 @@ export function PriceChart({
         rightPriceScale: { borderColor: theme.border },
         timeScale: { borderColor: theme.border },
       });
-    }, 2_000);
-    return () => window.clearInterval(id);
+    };
+    const observer = new MutationObserver(applyTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] });
+    return () => observer.disconnect();
   }, []);
 
+  const levels = [
+    technical?.nearestSupport != null ? { kind: 'support' as const, label: `支撑 ${technical.nearestSupport.toFixed(2)}` } : null,
+    technical?.nearestResistance != null ? { kind: 'resistance' as const, label: `阻力 ${technical.nearestResistance.toFixed(2)}` } : null,
+  ].filter((level): level is { kind: 'support' | 'resistance'; label: string } => level !== null);
+
+  if (priceSeries.bars.length < 20) {
+    const closes = priceSeries.bars.map((bar) => bar.c);
+    const min = Math.min(...closes);
+    const max = Math.max(...closes);
+    const span = max - min || 1;
+    const width = 460;
+    const chartHeight = Math.max(180, height - 48);
+    const pointX = (index: number) => 8 + (index * (width - 16)) / Math.max(closes.length - 1, 1);
+    const pointY = (value: number) => 12 + ((max - value) / span) * (chartHeight - 28);
+    return (
+      <div className="space-y-2">
+        <div className="relative" role="img" aria-label={`价格收盘散点图：${priceSeries.bars.length} 根，历史不足 20 根 K 线`}>
+          <svg viewBox={`0 0 ${width} ${chartHeight}`} className="h-auto w-full">
+            <path
+              d={closes.map((value, index) => `${index === 0 ? 'M' : 'L'}${pointX(index).toFixed(1)},${pointY(value).toFixed(1)}`).join(' ')}
+              fill="none"
+              stroke="var(--color-accent)"
+              strokeWidth={1.8}
+            />
+            {priceSeries.bars.map((bar, index) => (
+              <circle key={bar.t} cx={pointX(index)} cy={pointY(bar.c)} r={3} fill="var(--color-accent)">
+                <title>{`${bar.t}：收盘 ${bar.c.toFixed(2)}${bar.v == null ? '' : `，成交量 ${bar.v.toLocaleString()}`}`}</title>
+              </circle>
+            ))}
+          </svg>
+          <p className="m-0 text-[11px] text-[var(--color-fg-3)]">历史不足 20 根 K 线，仅显示收盘散点；不绘制均线。</p>
+        </div>
+        {levels.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {levels.map((level) => (
+              <button
+                key={level.kind}
+                type="button"
+                onClick={() => onAnnotationClick?.(level.kind)}
+                className="rounded-[5px] border border-[var(--color-border)] px-2 py-1 text-[11px] text-[var(--color-fg-2)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+              >
+                {level.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
-    <div
-      ref={containerRef}
-      style={{ height }}
-      className="w-full"
-      role="img"
-      aria-label={`价格走势图：${priceSeries.bars.length} 根K线，${priceSeries.basis === 'raw' ? '未复权' : priceSeries.basis === 'mixed' ? '复权口径混合' : '前复权'}${technical?.nearestSupport != null ? `，支撑 ${technical.nearestSupport.toFixed(2)}` : ''}${technical?.nearestResistance != null ? `，阻力 ${technical.nearestResistance.toFixed(2)}` : ''}`}
-      onClick={onAnnotationClick}
-    />
+    <div className="space-y-2">
+      <div className="relative" style={{ height }}>
+        <div
+          ref={containerRef}
+          style={{ height }}
+          className="w-full"
+          role="img"
+          aria-label={`价格走势图：${priceSeries.bars.length} 根K线，${priceSeries.basis === 'raw' ? '未复权' : priceSeries.basis === 'mixed' ? '复权口径混合' : '前复权'}${technical?.nearestSupport != null ? `，支撑 ${technical.nearestSupport.toFixed(2)}` : ''}${technical?.nearestResistance != null ? `，阻力 ${technical.nearestResistance.toFixed(2)}` : ''}`}
+        />
+        {tooltip ? (
+          <div
+            className="pointer-events-none absolute z-10 rounded-[5px] border border-[var(--color-border)] bg-[var(--color-bg-elev)] px-2 py-1.5 text-[10.5px] shadow-sm"
+            style={{ left: Math.min(Math.max(tooltip.x + 10, 4), 250), top: Math.max(tooltip.y - 72, 4) }}
+          >
+            <div className="font-mono text-[var(--color-fg-2)]">{tooltip.date}</div>
+            <div className="mt-0.5 grid grid-cols-2 gap-x-2 gap-y-0.5 font-mono text-[var(--color-fg-3)]">
+              <span>开 {tooltip.open.toFixed(2)}</span><span>高 {tooltip.high.toFixed(2)}</span>
+              <span>低 {tooltip.low.toFixed(2)}</span><span>收 {tooltip.close.toFixed(2)}</span>
+              {tooltip.volume != null ? <span className="col-span-2">量 {tooltip.volume.toLocaleString()}</span> : null}
+            </div>
+          </div>
+        ) : null}
+      </div>
+      {levels.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {levels.map((level) => (
+            <button
+              key={level.kind}
+              type="button"
+              onClick={() => onAnnotationClick?.(level.kind)}
+              className="rounded-[5px] border border-[var(--color-border)] px-2 py-1 text-[11px] text-[var(--color-fg-2)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+            >
+              {level.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }

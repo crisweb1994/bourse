@@ -36,21 +36,27 @@ export function MetricTrendChart({
   points,
   valueLabel,
   unit,
+  onPointClick,
 }: {
   points: MetricTrendPoint[];
   valueLabel: string;
   unit?: string;
+  onPointClick?: (period: string) => void;
 }) {
   const rows = points.filter((p) => p.value !== null);
-  if (rows.length < 2) return null;
+  if (rows.length === 0) return null;
+  const singlePeriod = rows.length === 1;
 
   const values = rows.map((p) => p.value!);
   const neg = values.some((v) => v < 0);
   const vMax = Math.max(...values) * 1.12 || 1;
   const vMin = neg ? Math.min(...values) * 1.15 : 0;
   const yoyVals = rows.map((p) => p.yoyPct).filter((v): v is number => v !== null);
-  const yMax = yoyVals.length ? Math.max(...yoyVals) * 1.2 : 1;
-  const yMin = yoyVals.length ? Math.min(...yoyVals) * 1.2 : 0;
+  const yMaxRaw = yoyVals.length ? Math.max(...yoyVals) : 1;
+  const yMinRaw = yoyVals.length ? Math.min(...yoyVals) : 0;
+  // Review P2 fix: 全正序列下 min*1.2 会把最低点裁出绘图区 — 向下留 20% 余量
+  const yMax = yMaxRaw >= 0 ? yMaxRaw * 1.2 : yMaxRaw * 0.8;
+  const yMin = yMinRaw >= 0 ? yMinRaw * 0.8 : yMinRaw * 1.2;
 
   const slot = (W - PL - PR) / rows.length;
   const cx = (i: number) => PL + slot * i + slot / 2;
@@ -67,7 +73,7 @@ export function MetricTrendChart({
     .join(' ');
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label={`${valueLabel} 跨期趋势柱状图与同比折线`}>
+    <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label={`${valueLabel} ${singlePeriod ? '单期数值' : '跨期趋势柱状图与同比折线'}`}>
       <defs>
         <pattern id="metric-ytd" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
           <rect width="6" height="6" fill="var(--color-accent)" opacity="0.35" />
@@ -93,6 +99,16 @@ export function MetricTrendChart({
               opacity={p.derived ? 1 : 0.72}
               stroke={p.conflict ? 'var(--color-warn)' : 'none'}
               strokeWidth={p.conflict ? 2 : 0}
+              role={onPointClick ? 'button' : undefined}
+              tabIndex={onPointClick ? 0 : undefined}
+              aria-label={onPointClick ? `${p.period} ${valueLabel}，点击查看来源` : undefined}
+              onClick={() => onPointClick?.(p.period)}
+              onKeyDown={(event) => {
+                if (onPointClick && (event.key === 'Enter' || event.key === ' ')) {
+                  event.preventDefault();
+                  onPointClick(p.period);
+                }
+              }}
             >
               <title>{`${p.period}：${v.toLocaleString()}${unit ?? ''}${p.yoyPct !== null ? `，同比 ${p.yoyPct >= 0 ? '+' : ''}${p.yoyPct.toFixed(1)}%` : ''}${p.derived ? '（YTD 差分推导）' : ''}${p.conflict ? '（对账冲突）' : ''}`}</title>
             </rect>
@@ -117,6 +133,11 @@ export function MetricTrendChart({
       <text x={W - 4} y={PT - 6} textAnchor="end" fontSize={9.5} fill="var(--color-warn)">
         同比%
       </text>
+      {singlePeriod ? (
+        <text x={W - 4} y={H - 8} textAnchor="end" fontSize={9.5} fill="var(--color-fg-3)">
+          仅 1 期，无法比较趋势
+        </text>
+      ) : null}
     </svg>
   );
 }

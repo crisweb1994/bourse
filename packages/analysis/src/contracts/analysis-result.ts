@@ -98,24 +98,75 @@ export type SectionResult = z.infer<typeof SectionResultSchema>;
 export type StructuredJson = SectionResult;
 
 /**
- * FUNCTIONAL.md (估值): scenario value ranges may only quote code-computed
- * valuation results. When the snapshot carries no computed valuation at all,
- * force every scenario's valueRange to null — the model must not invent
- * price targets, and a prompt rule alone is not an enforcement point.
+ * FUNCTIONAL.md (估值): scenario value ranges may only quote a code-computed
+ * per-share valuation. A model-provided range is retained only when it is
+ * anchored to the computed fair value and uses the computed currency. When
+ * the snapshot carries no usable computed valuation, force every range to
+ * null — a prompt rule alone is not an enforcement point.
  */
 export function enforceComputedValueRanges<T extends SectionResult>(
   result: T,
   hasComputedValuation: boolean,
+  computedValuation?: { fairValuePerShare?: unknown; baseCurrency?: unknown } | null,
 ): T {
-  if (hasComputedValuation || result.type !== 'VALUATION_SCENARIOS') return result;
+  if (result.type !== 'VALUATION_SCENARIOS') return result;
+  // Keep the historical pure-function contract for callers that only know a
+  // boolean. The snapshot pipeline passes the valuation object below, which
+  // enables the stronger provenance check without breaking older consumers.
+  if (hasComputedValuation && computedValuation === undefined) return result;
+  const fairValue = numberOrNull(computedValuation?.fairValuePerShare);
+  const currency = typeof computedValuation?.baseCurrency === 'string'
+    ? computedValuation.baseCurrency
+    : null;
+  if (!hasComputedValuation || fairValue === null) {
+    return {
+      ...result,
+      scenarios: result.scenarios.map((scenario) =>
+        scenario.valueRange === null
+          ? scenario
+          : { ...scenario, valueRange: null },
+      ),
+    } as T;
+  }
   return {
     ...result,
     scenarios: result.scenarios.map((scenario) =>
-      scenario.valueRange === null
+      scenario.valueRange !== null && isCodeAnchoredRange(
+        scenario.valueRange,
+        fairValue,
+        currency ?? scenario.valueRange.currency,
+      )
         ? scenario
         : { ...scenario, valueRange: null },
     ),
   } as T;
+}
+
+function numberOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+/**
+ * The compute layer currently exposes one deterministic fair price rather
+ * than three scenario-specific prices. Requiring that fair price to sit
+ * inside a reported range is the only honest provenance link available at
+ * this boundary; unrelated model numbers (for example 1000–2000 for a fair
+ * value of 100) are discarded instead of being labelled "代码计算".
+ */
+function isCodeAnchoredRange(
+  range: { low: number; high: number; currency: string },
+  fairValue: number,
+  currency: string,
+): boolean {
+  return (
+    range.currency === currency &&
+    Number.isFinite(range.low) &&
+    Number.isFinite(range.high) &&
+    range.low > 0 &&
+    range.high >= range.low &&
+    range.low <= fairValue &&
+    fairValue <= range.high
+  );
 }
 
 /**
@@ -128,7 +179,16 @@ export function enforceComputedValueRanges<T extends SectionResult>(
 export function hasComputedValuationFact(
   computedFacts: { valuation: unknown } | null | undefined,
 ): boolean {
-  return computedFacts != null && computedFacts.valuation != null;
+  // P0 fix (review 2026-08-16): computeValuation returns a non-null object
+  // when ONLY marketCap exists (fairValuePerShare can be null). The per-share
+  // fair value is the one code-computed PRICE RANGE source — without it the
+  // model would fabricate numbers that the chart then labels "代码计算",
+  // violating V1. Enforcer and semantic validator must both key on it.
+  return (
+    computedFacts != null &&
+    computedFacts.valuation != null &&
+    numberOrNull((computedFacts.valuation as { fairValuePerShare?: unknown }).fairValuePerShare) !== null
+  );
 }
 
 export interface ValuationSemantics {

@@ -247,9 +247,9 @@ export function snapshotToEvidencePack(
         type: event.unlockType,
       }))
       .filter((event) => Number.isFinite(event.shares) && event.shares > 0);
-    if (events.length > 0) {
-      putFact('unlockCalendar', events);
-    }
+    // Preserve []: an authoritative empty response means "no upcoming
+    // unlocks", while a missing fact means the connector was unavailable.
+    putFact('unlockCalendar', events);
   }
 
   // shareholderConcentration — derive from snapshot.shareholders rows when

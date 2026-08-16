@@ -30,11 +30,17 @@ function valuationResult(overrides: {
 }
 
 describe('hasComputedValuationFact — shared predicate (R-4)', () => {
-  it('true only when computedFacts.valuation is non-null', () => {
+  it('true only when valuation carries a code-computed fair value (P0 fix)', () => {
     expect(hasComputedValuationFact(null)).toBe(false);
     expect(hasComputedValuationFact(undefined)).toBe(false);
     expect(hasComputedValuationFact({ valuation: null })).toBe(false);
-    expect(hasComputedValuationFact({ valuation: { pe5yMedian: 1 } })).toBe(true);
+    // P0 回归锁：valuation 对象存在但没有公允价值（如仅 marketCap）→ false，
+    // 否则模型编造的区间会被标注"代码计算"（review 2026-08-16）
+    expect(hasComputedValuationFact({ valuation: { pe5yMedian: 1 } })).toBe(false);
+    expect(hasComputedValuationFact({ valuation: { marketCap: 1e12 } })).toBe(false);
+    expect(
+      hasComputedValuationFact({ valuation: { fairValuePerShare: 246.2 } }),
+    ).toBe(true);
   });
 });
 

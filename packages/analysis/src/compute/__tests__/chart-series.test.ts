@@ -152,4 +152,17 @@ describe('smaPoints — {t,v} alignment invariants (I5–I7)', () => {
   it('empty output when bars < window', () => {
     expect(smaPoints(bars.slice(0, 10), 20)).toEqual([]);
   });
+
+  it('uses raw close when adjustedClose is zero and keeps support/resistance on the same basis', () => {
+    const rawBars = Array.from({ length: 20 }, (_, i) => bar(i, { close: 100, raw: true }));
+    rawBars[19] = { ...rawBars[19]!, adjustedClose: 0 };
+    const result = computeTechnicalIndicators({ bars: rawBars });
+    expect(result.indicators?.lastClose).toBe(100);
+    expect(result.indicators?.sma20).toBeCloseTo(100, 8);
+
+    const adjustedBars = Array.from({ length: 20 }, (_, i) => bar(i, { close: 100, factor: 0.5 }));
+    const adjusted = computeTechnicalIndicators({ bars: adjustedBars }).indicators!;
+    expect(adjusted.nearestSupport).toBeCloseTo(49, 8);
+    expect(adjusted.nearestResistance).toBeCloseTo(51, 8);
+  });
 });

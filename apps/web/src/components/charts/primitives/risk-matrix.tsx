@@ -13,6 +13,7 @@ export interface RiskItem {
   impact?: string;
   mechanism?: string;
   indicators?: string[];
+  evidence?: Array<{ claim?: string; citations?: Array<{ title?: string; url?: string }> }>;
 }
 
 const LEVELS = ['LOW', 'MEDIUM', 'HIGH'] as const;
@@ -43,7 +44,7 @@ export function RiskMatrix({ risks }: { risks: RiskItem[] }) {
         <div
           className="grid gap-1"
           style={{ gridTemplateColumns: 'repeat(3, 58px)', gridTemplateRows: 'repeat(3, 52px)' }}
-          role="img"
+          role="group"
           aria-label={`风险矩阵，共 ${placed.length} 项风险`}
         >
           {[...LEVELS].reverse().map((impact) =>
@@ -113,6 +114,15 @@ export function RiskMatrix({ risks }: { risks: RiskItem[] }) {
                   <p className="m-0 mt-1 text-[11.5px] text-[var(--color-fg-3)]">
                     <b className="text-[var(--color-fg-2)]">监控指标</b>：{r.indicators.join(' · ')}
                   </p>
+                ) : null}
+                {r.evidence?.flatMap((item) => item.citations ?? []).filter((citation) => citation.url).length ? (
+                  <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+                    {r.evidence.flatMap((item) => item.citations ?? []).filter((citation) => citation.url).map((citation, index) => (
+                      <a key={`${citation.url}-${index}`} href={citation.url} target="_blank" rel="noreferrer" className="text-[var(--color-accent)] hover:underline">
+                        {citation.title ?? citation.url}
+                      </a>
+                    ))}
+                  </div>
                 ) : null}
                 <button
                   type="button"

@@ -75,6 +75,37 @@ export const PriceSeriesBlockSchema = z.object({
 });
 export type PriceSeriesBlock = z.infer<typeof PriceSeriesBlockSchema>;
 
+/**
+ * One price basis shared by chart bars and technical indicators.
+ * Invalid adjustedClose values are treated as absent; when an adjustment is
+ * present, the same positive factor is applied to the complete OHLC tuple.
+ */
+export interface PriceBasisValues {
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  hasAdjusted: boolean;
+}
+
+export function toPriceBasis(bar: PriceBar): PriceBasisValues {
+  const rawClose = Number(bar.close);
+  const adjusted = Number(bar.adjustedClose);
+  const hasAdjustedCandidate =
+    Number.isFinite(rawClose) && rawClose > 0 &&
+    bar.adjustedClose !== undefined && bar.adjustedClose !== null &&
+    Number.isFinite(adjusted) && adjusted > 0;
+  const candidateFactor = hasAdjustedCandidate ? adjusted / rawClose : 1;
+  const hasAdjusted = hasAdjustedCandidate && Number.isFinite(candidateFactor) && candidateFactor > 0;
+  const close = hasAdjusted ? adjusted : rawClose;
+  const factor = hasAdjusted ? candidateFactor : 1;
+  const scale = (value: number): number => Number.isFinite(value) ? value * factor : rawClose;
+  const open = scale(Number(bar.open));
+  const high = Math.max(scale(Number(bar.high)), open, close);
+  const low = Math.min(scale(Number(bar.low)), open, close);
+  return { open, high, low, close, hasAdjusted };
+}
+
 export const MAX_PRICE_SERIES_BARS = 1200;
 
 /** Bars below this count cannot support a "52-week" label. */
@@ -100,58 +131,52 @@ export function derivePriceSeries(
   sourceTier: SourceTier,
 ): PriceSeriesBlock | null {
   const usable: PriceSeriesBar[] = [];
-  let barsWithAdjusted = 0;
+  const adjustedFlags: boolean[] = [];
 
   for (const bar of bars) {
     const t = barDate(bar);
     if (!t) continue;
-    const close = Number(bar.close);
-    if (!Number.isFinite(close) || close <= 0) continue;
+    const basis = toPriceBasis(bar);
+    if (!Number.isFinite(basis.close) || basis.close <= 0) continue;
 
-    const adjusted = Number(bar.adjustedClose);
-    const hasAdjusted =
-      bar.adjustedClose !== undefined && bar.adjustedClose !== null &&
-      Number.isFinite(adjusted) && adjusted > 0;
-    // I3: non-finite / non-positive factor → treat as "no adjustment", f=1.
-    const factor = hasAdjusted ? adjusted / close : 1;
-    if (!Number.isFinite(factor) || factor <= 0) continue;
-
-    const o = Number(bar.open);
-    const h = Number(bar.high);
-    const l = Number(bar.low);
-    const scale = (x: number): number => (Number.isFinite(x) ? x * factor : close);
     // I1: c' is the source adjustedClose verbatim; I2: single positive
     // factor preserves high/low ordering by construction.
     usable.push({
       t,
-      o: scale(o),
-      h: Math.max(scale(h), scale(o), adjusted > 0 ? adjusted : close),
-      l: Math.min(scale(l), scale(o), adjusted > 0 ? adjusted : close),
-      c: hasAdjusted ? adjusted : close,
+      o: basis.open,
+      h: basis.high,
+      l: basis.low,
+      c: basis.close,
       v: bar.volume != null && Number.isFinite(Number(bar.volume)) ? Number(bar.volume) : null,
     });
-    if (hasAdjusted) barsWithAdjusted++;
+    adjustedFlags.push(basis.hasAdjusted);
   }
 
   if (usable.length === 0) return null;
-
-  const basis: PriceSeriesBasis =
-    barsWithAdjusted === 0
-      ? 'raw'
-      : barsWithAdjusted === usable.length
-        ? 'derived'
-        : 'mixed';
 
   // Keep only the newest MAX_PRICE_SERIES_BARS bars (no resampling — R15).
   const clipped = usable.length > MAX_PRICE_SERIES_BARS
     ? usable.slice(usable.length - MAX_PRICE_SERIES_BARS)
     : usable;
+  const clippedFlags = usable.length > MAX_PRICE_SERIES_BARS
+    ? adjustedFlags.slice(adjustedFlags.length - MAX_PRICE_SERIES_BARS)
+    : adjustedFlags;
+  const barsWithAdjusted = clippedFlags.filter(Boolean).length;
+  const basis: PriceSeriesBasis =
+    barsWithAdjusted === 0
+      ? 'raw'
+      : barsWithAdjusted === clipped.length
+        ? 'derived'
+        : 'mixed';
 
   let week52High: number | null = null;
   let week52Low: number | null = null;
   if (clipped.length >= MIN_BARS_FOR_WEEK52) {
-    week52High = Math.max(...clipped.map((b) => b.h));
-    week52Low = Math.min(...clipped.map((b) => b.l));
+    // Review P2: 3Y windows would otherwise label 3-year extremes as "52周".
+    // 252 bars ≈ 52 trading weeks — take extremes over the newest window only.
+    const last52w = clipped.slice(-252);
+    week52High = Math.max(...last52w.map((b) => b.h));
+    week52Low = Math.min(...last52w.map((b) => b.l));
   }
 
   return {
@@ -178,9 +203,9 @@ export function smaPoints(
   const points: ChartPricePoint[] = [];
   let sum = 0;
   for (let i = 0; i < bars.length; i++) {
-    const close = bars[i]!.adjustedClose ?? bars[i]!.close;
+    const close = toPriceBasis(bars[i]!).close;
     sum += close;
-    if (i >= window) sum -= bars[i - window]!.adjustedClose ?? bars[i - window]!.close;
+    if (i >= window) sum -= toPriceBasis(bars[i - window]!).close;
     if (i >= window - 1) {
       const t = barDate(bars[i]!);
       if (t) points.push({ t, v: sum / window });

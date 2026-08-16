@@ -433,7 +433,7 @@ export async function* streamDimension(
   const postChain = (raw: SectionResult): SectionResult =>
     enforceComputedValueRanges(
       applyFixedDisclaimer(
-        applyResearchCoverage(
+      applyResearchCoverage(
           applyEvidenceGate(raw, {
             ...(options.domainTiers ? { domainTiers: options.domainTiers } : {}),
           }).data,
@@ -441,6 +441,10 @@ export async function* streamDimension(
         ),
       ),
       computedValuationPresent,
+      isV2Pack ? (options.evidencePack?.computedFacts?.valuation as {
+        fairValuePerShare?: unknown;
+        baseCurrency?: unknown;
+      } | null | undefined) : null,
     );
   let fixedData = postChain(structured.data);
 
@@ -452,7 +456,11 @@ export async function* streamDimension(
   // semantics); semantic shortfall degrades instead of fabricating.
   if (sectionType === 'VALUATION_SCENARIOS') {
     const verdict = validateValuationSemantics(fixedData, computedValuationPresent);
-    if (!verdict.ok) {
+    // 全局两次 LLM 预算（review P1-8）：schema 修复已花掉第二次调用时，
+    // 语义修复不再追加第三 call —— 直接走降级出口，成本/超时可控。
+    if (!verdict.ok && structured.llmCalls >= 2) {
+      fixedData = degradeValuationSemantics(fixedData, verdict.gaps);
+    } else if (!verdict.ok) {
       const repairUser =
         `${jsonPrompts.user}\n\n上一次输出存在以下语义问题，请修复后重新输出完整 JSON（只输出 JSON，不要解释）：\n` +
         verdict.gaps.map((g) => `- ${g}`).join('\n');

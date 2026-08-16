@@ -102,14 +102,12 @@ export async function fetchSnapshot(
 
   // 1. Build & run fetcher list in parallel ----------------------------------
   const today = capturedAt.slice(0, 10);
-  const fromDate = isoDaysAgo(historyDays);
-
   const tasks: FetcherTask[] = [
     task('quote', config.quote ? (ctx) => config.quote(options.symbol, ctx) : null),
     task(
       'history',
       config.history
-        ? (ctx) => config.history!(options.symbol, fromDate, today, ctx)
+        ? (ctx) => config.history!(options.symbol, isoDaysAgo(historyDays), today, ctx)
         : null,
     ),
     task('profile', config.profile ? (ctx) => config.profile!(options.symbol, ctx) : null),
@@ -130,43 +128,44 @@ export async function fetchSnapshot(
     task('macro', config.macro ? (ctx) => config.macro!(options.symbol, ctx) : null),
   ];
 
-  const results = await Promise.all(
-    tasks.map((t) => runWithTimeout(t, timeoutMs, options.signal)),
-  );
-
-  // Valuation-only long history (§四.③): fired alongside the main wave so
-  // latency stays flat; discarded when financials never arrive; fail-soft.
-  const valuationDays =
-    options.valuationHistoryDays ?? DEFAULT_VALUATION_HISTORY_DAYS;
-  const valuationHistoryPromise: Promise<PriceBar[] | null> =
-    valuationDays > 0 && config.history
+  // Valuation history is an independent capability. A failed long request
+  // must not remove the chart window, and a failed chart request must not
+  // prevent PE history from being computed. Keep the extra request outside
+  // the main FetcherResult list so its failure is a warning, not a duplicate
+  // `history` availability entry.
+  const valuationDays = valuationHistoryDays(options);
+  const valuationHistoryPromise: Promise<FetcherResult | null> =
+    valuationDays > historyDays && config.history
       ? runWithTimeout(
-          {
-            field: 'history',
-            fn: (ctx) =>
-              config.history!(options.symbol, isoDaysAgo(valuationDays), today, ctx),
-          },
+          task(
+            'history',
+            (ctx) => config.history!(options.symbol, isoDaysAgo(valuationDays), today, ctx),
+          ),
           timeoutMs,
           options.signal,
         )
-          .then((r) => (Array.isArray(r.value) ? (r.value as PriceBar[]) : null))
-          .catch(() => null)
       : Promise.resolve(null);
 
-  const [valuationHistory] = await Promise.all([valuationHistoryPromise]);
+  const [results, valuationHistoryResult] = await Promise.all([
+    Promise.all(tasks.map((t) => runWithTimeout(t, timeoutMs, options.signal))),
+    valuationHistoryPromise,
+  ]);
 
   const rawFacts = assembleRawFacts(results);
   const dataAvailability = assembleAvailability(results);
+
+  let valuationHistory: PriceBar[] | null = null;
+  if (valuationHistoryResult?.missing === null && Array.isArray(valuationHistoryResult.value)) {
+    valuationHistory = valuationHistoryResult.value as PriceBar[];
+  } else if (valuationDays > historyDays && config.history) {
+    dataAvailability.warnings.push('valuation_history_unavailable');
+  }
 
   // C8 (visualization §5.2): peer quotes for the relative-comparison block.
   // Fail-soft, quotes-only metrics (pe/pb) — per-peer financials would add
   // ~8 heavy upstream fetches per analysis; fundamental metrics stay null
   // and the chart renders only what exists. Bounded to 8 peers.
   const peerMetricsMap = await fetchPeerQuoteMetrics(rawFacts, options, config);
-  if (rawFacts.financials && valuationDays > 0 && config.history && valuationHistory === null) {
-    // Fail-soft: valuation compute falls back to the main window below.
-    dataAvailability.warnings.push('valuation_history_unavailable');
-  }
 
   // 2. Compute layer ---------------------------------------------------------
   const computedFacts = runComputeLayer(
@@ -179,7 +178,13 @@ export async function fetchSnapshot(
 
   // 3. Preserve connector provenance. A source that did not produce a usable
   // fact cannot become a citation for the run.
-  const citations = dedupeCitations(results.flatMap((result) => result.citations));
+  // The valuation-only history request feeds peHistorySeries even though it
+  // is not part of the main rawFacts wave. Keep its citations in the immutable
+  // snapshot so long-range PE points remain traceable to their history source.
+  const citations = dedupeCitations([
+    ...results.flatMap((result) => result.citations),
+    ...(valuationHistoryResult?.citations ?? []),
+  ]);
   const sourceMetadata = Object.fromEntries(
     results.flatMap((result) =>
       result.metadata ? [[result.field, result.metadata] as const] : [],
@@ -290,15 +295,25 @@ async function runWithTimeout(
 
     const usability = factUsability(t.field, value);
     if (usability !== 'valid') {
+      const authoritativeEmptyUnlock =
+        t.field === 'unlockCalendar' && usability === 'no_data' && Array.isArray(value);
       return {
         field: t.field,
-        value: null,
+        // An empty unlock response is a valid, source-backed "no upcoming
+        // events" signal. Keep the empty array so the evidence projection can
+        // distinguish it from a missing/failed connector.
+        value: authoritativeEmptyUnlock ? value : null,
         missing: {
           field: t.field,
           reason: usability,
           detail: invalidFactDetail(t.field, value),
         },
-        citations: [],
+        // An empty unlock list is still a source-backed answer when the
+        // connector supplied citations. Keep that provenance so the pack can
+        // distinguish "no upcoming events" from an unavailable connector.
+        citations: authoritativeEmptyUnlock && envelope
+          ? citationsFromEnvelope(t.field, envelope)
+          : [],
         ...(metadata ? { metadata } : {}),
         warnings,
       };
@@ -630,6 +645,11 @@ function deriveConsensusEpsGrowth(raw: RawFacts['consensusEps']): number | null 
   return (y1.value - y0.value) / y0.value;
 }
 
+/** §四.③：估值历史天数（0 = 关闭，回落图表窗口）。 */
+function valuationHistoryDays(options: FetchSnapshotOptions): number {
+  return options.valuationHistoryDays ?? DEFAULT_VALUATION_HISTORY_DAYS;
+}
+
 function isoDaysAgo(days: number): string {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() - days);
@@ -655,11 +675,16 @@ async function fetchPeerQuoteMetrics(
   const rows = await Promise.all(
     group.map(async (peer) => {
       try {
-        const out = await config.quote(peer.symbol, {
-          signal: options.signal,
-          timeoutMs: 8_000,
-        });
-        const q = unwrapFetcherOutput(out);
+        const result = await runWithTimeout(
+          {
+            field: 'quote',
+            fn: (ctx) => config.quote!(peer.symbol, ctx),
+          },
+          8_000,
+          options.signal,
+        );
+        if (result.missing) return null;
+        const q = unwrapFetcherOutput(result.value);
         if (!q || typeof q !== 'object') return null;
         const quote = q as { peRatio?: unknown; pbRatio?: unknown };
         const metrics: PeerMetrics = {

@@ -53,7 +53,7 @@ export function LeftSectionNav({ items, activeId, onSelect }: Props) {
   if (items.length === 0) return null;
 
   return (
-    <nav className="sticky top-0 z-10 self-start lg:top-2">
+    <nav className="sticky top-0 z-10 min-w-0 max-w-full self-start lg:top-2">
       {/* lg+ vertical list */}
       <ul className="m-0 hidden list-none p-0 pt-1 lg:block">
         {items.map((item) => {

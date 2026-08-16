@@ -5,6 +5,7 @@ import {
   ChannelType,
   type ChartEvidenceResponse,
   type StockHistoryResponse,
+  type StockHistoryBatchResponse,
 } from '@bourse/shared-types';
 import type {
   AnalysisMode,
@@ -564,6 +565,18 @@ export async function getStockHistory(
   return fetchApi<StockHistoryResponse>(
     `/api/stocks/${encodeURIComponent(symbol)}/history?${q.toString()}`,
   );
+}
+
+/** C13 · one request for the watchlist sparkline batch. */
+export async function getStockHistoryBatch(
+  items: Array<{ symbol: string; market: string }>,
+  days = 30,
+): Promise<StockHistoryBatchResponse> {
+  const q = new URLSearchParams({
+    items: items.map((item) => `${item.market}:${item.symbol}`).join(','),
+    days: String(days),
+  });
+  return fetchApi<StockHistoryBatchResponse>(`/api/stocks/history?${q.toString()}`);
 }
 
 export async function getAnalysisHistory(

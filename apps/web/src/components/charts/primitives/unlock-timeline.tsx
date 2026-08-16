@@ -24,7 +24,9 @@ export function UnlockTimeline({ rows }: { rows: UnlockRow[] }) {
   if (events.length === 0) return null;
 
   const times = events.map((e) => Date.parse(e.date.slice(0, 10)));
-  const tMin = Date.now() - 86_400_000 * 3;
+  // Review P2 fix: 布局完全由持久化数据推导（P2 快照不变性）— 回放时
+  // 轴不随 Date.now() 漂移，事件也不会因滑入"过去"被裁掉。
+  const tMin = Math.min(...times) - 86_400_000 * 3;
   const tMax = Math.max(...times) + 86_400_000 * 15;
   const x = (t: number) => 26 + ((t - tMin) / (tMax - tMin || 1)) * (W - 52);
   const maxMv = Math.max(...events.map((e) => e.marketValue ?? 0), 1);

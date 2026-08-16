@@ -23,7 +23,7 @@
 import { z } from 'zod';
 import type { PriceBar } from '@bourse/market-data';
 import type { ComputeWarning } from './types';
-import { smaPoints, type ChartPricePoint } from './chart-series';
+import { smaPoints, toPriceBasis, type ChartPricePoint } from './chart-series';
 
 // ============================================================================
 // Schema
@@ -116,7 +116,7 @@ export function computeTechnicalIndicators(
     return { indicators: null, warnings };
   }
 
-  const closes = bars.map((b) => b.adjustedClose ?? b.close);
+  const closes = bars.map((b) => toPriceBasis(b).close);
   const lastClose = closes[closes.length - 1] ?? null;
 
   // SMAs
@@ -358,10 +358,12 @@ function atr(bars: readonly PriceBar[], window: number): number | null {
   for (let i = 1; i < bars.length; i++) {
     const cur = bars[i]!;
     const prev = bars[i - 1]!;
+    const curBasis = toPriceBasis(cur);
+    const prevBasis = toPriceBasis(prev);
     const tr = Math.max(
-      cur.high - cur.low,
-      Math.abs(cur.high - prev.close),
-      Math.abs(cur.low - prev.close),
+      curBasis.high - curBasis.low,
+      Math.abs(curBasis.high - prevBasis.close),
+      Math.abs(curBasis.low - prevBasis.close),
     );
     trs.push(tr);
   }
@@ -385,11 +387,12 @@ function supportResistance(
   let support: number | null = null;
   let resistance: number | null = null;
   for (const bar of slice) {
-    if (bar.low < lastClose) {
-      if (support === null || bar.low > support) support = bar.low;
+    const basis = toPriceBasis(bar);
+    if (basis.low < lastClose) {
+      if (support === null || basis.low > support) support = basis.low;
     }
-    if (bar.high > lastClose) {
-      if (resistance === null || bar.high < resistance) resistance = bar.high;
+    if (basis.high > lastClose) {
+      if (resistance === null || basis.high < resistance) resistance = basis.high;
     }
   }
   return { support, resistance };
@@ -425,8 +428,8 @@ function obvTrend(
     const cur = bars[i]!;
     const prev = bars[i - 1]!;
     const v = cur.volume ?? 0;
-    const closeCur = cur.adjustedClose ?? cur.close;
-    const closePrev = prev.adjustedClose ?? prev.close;
+    const closeCur = toPriceBasis(cur).close;
+    const closePrev = toPriceBasis(prev).close;
     const last = obv[obv.length - 1]!;
     if (closeCur > closePrev) obv.push(last + v);
     else if (closeCur < closePrev) obv.push(last - v);

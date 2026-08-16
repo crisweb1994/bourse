@@ -318,6 +318,14 @@ describe('snapshotToEvidencePack · CN-only facts', () => {
     expect(pack.facts.unlockCalendar?.value).toHaveLength(1);
     expect(pack.facts.unlockCalendar?.value?.[0]?.shares).toBe(5_000_000);
   });
+
+  it('keeps an authoritative empty unlock list as an empty fact', () => {
+    const snap = baseSnapshot({
+      rawFacts: { ...baseSnapshot().rawFacts, unlockCalendar: [] },
+    });
+    const pack = snapshotToEvidencePack(snap);
+    expect(pack.facts.unlockCalendar?.value).toEqual([]);
+  });
 });
 
 describe('snapshotToEvidencePack · computedFacts passthrough', () => {
