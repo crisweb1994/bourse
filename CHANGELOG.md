@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.10.0](https://github.com/crisweb1994/bourse/compare/v0.9.0...v0.10.0) (2026-08-16)
+
+
+### Features
+
+* **visualization:** 研究报告图表体系 — 价格结构图 / 信号矩阵 / PE 分位带 / 情景区间 / 风险矩阵，及证据数据管线 ([851aa9c](https://github.com/crisweb1994/bourse/commit/851aa9c9949f9ed5c9d7e69c66490e309dfdfac9))
+* **visualization:** 补齐全部剩余图表 C7-C14（PRD S4+P1） ([150e2e5](https://github.com/crisweb1994/bourse/commit/150e2e5545b4294bd4df67fd4e950a976ee49d81))
+* **web:** simplify analysis presentation ([85d70b6](https://github.com/crisweb1994/bourse/commit/85d70b67e012c2db64b5911c6fbee44d60855daf))
+
+
+### Bug Fixes
+
+* fix something ([04909c2](https://github.com/crisweb1994/bourse/commit/04909c21624935b12a9760a79d2af03a395131fb))
+* **snapshot:** 单请求双窗口取历史 — 修复并发估值请求触发同源限流 ([9eee7cc](https://github.com/crisweb1994/bourse/commit/9eee7cc1a871337d2af029a53fc126ba7b97dd3a))
+* **typecheck:** narrow optional market data tool runner ([7e98403](https://github.com/crisweb1994/bourse/commit/7e984036e0be9c713c5490120e506ee900b064b5))
+* **watchlist:** sparkline hook 依赖数组稳定性 — 修复 Maximum update depth exceeded ([4fd2293](https://github.com/crisweb1994/bourse/commit/4fd22930a2ea4d2ff1efcbc36487dfcafee51c6e))
+
 ## [0.9.0](https://github.com/crisweb1994/bourse/compare/v0.8.0...v0.9.0) (2026-08-15)
 
 
