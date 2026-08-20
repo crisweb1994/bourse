@@ -15,11 +15,13 @@ export function StockSearch({
   className,
   autoFocus = true,
   placeholder = '输入股票代码或公司名',
+  inputId,
 }: {
   onAdded?: () => void;
   className?: string;
   autoFocus?: boolean;
   placeholder?: string;
+  inputId?: string;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState('');
@@ -120,6 +122,7 @@ export function StockSearch({
         }
       >
         <Input
+          id={inputId}
           type="text"
           value={query}
           onChange={(e) => handleSearch(e.target.value)}
