@@ -25,6 +25,7 @@ import type {
   EarningsTrendSeriesDto,
   InvestorRelationsGenerationRunDto,
   InvestorRelationsTimelineResponseDto,
+  HomepageBriefDto,
 } from '@bourse/shared-types';
 import { API_URL, csrfHeaders } from './utils';
 
@@ -403,6 +404,10 @@ export async function getStockNews(
 
 
 // Watchlist APIs
+export async function getHomepageBrief(): Promise<HomepageBriefDto> {
+  return fetchApi('/api/homepage/brief');
+}
+
 export async function getWatchlist(): Promise<WatchlistItemDto[]> {
   return fetchApi('/api/watchlist');
 }
