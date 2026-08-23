@@ -1009,7 +1009,11 @@ function formatCondition(condition: ScreeningCondition): string {
 function formatCurrency(value: number, currency: string, precise: boolean): string {
   const symbol = currency === 'USD' ? '$' : currency === 'CNY' ? '¥' : currency === 'HKD' ? 'HK$' : `${currency} `;
   if (precise) return `${symbol}${value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  return `${symbol}${new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumFractionDigits: 2 }).format(value)}`;
+  const absolute = Math.abs(value);
+  if (absolute >= 1e12) return `${symbol}${formatNumber(value / 1e12, 2)}万亿`;
+  if (absolute >= 1e8) return `${symbol}${formatNumber(value / 1e8, 2)}亿`;
+  if (absolute >= 1e4) return `${symbol}${formatNumber(value / 1e4, 2)}万`;
+  return `${symbol}${formatNumber(value, 2)}`;
 }
 
 function formatNumber(value: number, digits: number): string {

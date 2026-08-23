@@ -557,7 +557,7 @@ describe('ScreeningService', () => {
     assert.equal(quoteCalls, 0);
   });
 
-  it('refines candidates two at a time and independently upserts each result', async () => {
+  it('refines candidates two at a time and independently handles each result', async () => {
     const keys = ['CN:600000', 'CN:600001', 'CN:600002'];
     let quoteCallsInFlight = 0;
     let maxQuoteCallsInFlight = 0;
@@ -625,7 +625,7 @@ describe('ScreeningService', () => {
     });
 
     assert.equal(maxQuoteCallsInFlight, 2);
-    assert.equal(upserts.length, 3);
+    assert.equal(upserts.length, 0);
     assert.equal(placeholders.length, 3);
     assert.ok(
       placeholders.every(
@@ -643,7 +643,57 @@ describe('ScreeningService', () => {
       result.results.map((item) => item.identityKey),
       keys,
     );
-    assert.ok(result.results.every((item) => item.status === 'PARTIAL'));
+    assert.ok(result.results.every((item) => item.status === 'FAILED'));
+  });
+
+  it('does not overwrite a complete refinement when every retry source fails', async () => {
+    let shouldFail = false;
+    let storedRows!: Map<string, unknown>;
+    let upsertCalls = 0;
+    const refinement = refinementPrisma(snapshot(), {
+      onUpsert: async (args: any) => {
+        upsertCalls += 1;
+        storedRows.set(args.create.identityKey, args.update.payload);
+        return {
+          identityKey: args.create.identityKey,
+          payload: args.update.payload,
+          createdAt: new Date('2026-08-22T02:00:00.000Z'),
+          updatedAt: new Date('2026-08-22T02:00:00.000Z'),
+        };
+      },
+    });
+    storedRows = refinement.rows;
+    const service = new ScreeningService(
+      refinement.prisma as any,
+      {
+        getQuote: async () => (shouldFail ? failed() : ok(null)),
+        getProfile: async () => (shouldFail ? failed() : ok(null)),
+        getFinancials: async () => (shouldFail ? failed() : ok(null)),
+        getHistory: async () => (shouldFail ? failed() : ok([])),
+      } as any,
+    );
+
+    const first = await service.refineRun('user-1', 'run-1', {
+      identityKeys: ['CN:600000'],
+    });
+    const firstCandidate = first.results[0];
+    assert.ok(firstCandidate && firstCandidate.status !== 'FAILED');
+    assert.equal(firstCandidate?.refinement.payload.status, 'COMPLETE');
+    const completePayload = storedRows.get('CN:600000');
+    assert.ok(completePayload);
+
+    shouldFail = true;
+    const retry = await service.refineRun('user-1', 'run-1', {
+      identityKeys: ['CN:600000'],
+    });
+
+    assert.deepEqual(retry.results, [{
+      identityKey: 'CN:600000',
+      status: 'FAILED',
+      error: 'Candidate refinement failed.',
+    }]);
+    assert.equal(upsertCalls, 1);
+    assert.deepEqual(storedRows.get('CN:600000'), completePayload);
   });
 
   it('stores ATR14 as a positive share of the latest close', async () => {
@@ -756,7 +806,7 @@ describe('ScreeningService', () => {
     const service = new ScreeningService(
       prisma as any,
       {
-        getQuote: async () => failed(),
+        getQuote: async () => ok(null),
         getProfile: async () => failed(),
         getFinancials: async () => failed(),
         getHistory: async () => failed(),
@@ -892,7 +942,7 @@ describe('ScreeningService', () => {
     const service = new ScreeningService(
       prisma as any,
       {
-        getQuote: async () => failed('PERMISSION_DENIED', 'apikey=secret'),
+        getQuote: async () => ok(null),
         getProfile: async () => failed('PERMISSION_DENIED', 'apikey=secret'),
         getFinancials: async () => failed('PERMISSION_DENIED', 'apikey=secret'),
         getHistory: async () => failed('PERMISSION_DENIED', 'apikey=secret'),

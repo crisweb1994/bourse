@@ -5,6 +5,7 @@ import type {
   ScreeningCandidateRow,
   ScreeningMetricCell,
   ScreeningRunDto,
+  ScreeningViewColumn,
 } from '@bourse/shared-types';
 import { ResultsTable } from './results-table';
 
@@ -46,6 +47,24 @@ describe('ResultsTable', () => {
       screen.getByRole('button', { name: '将 CN:600000 加入自选' }),
     ).toBeEnabled();
   });
+
+  it('formats large currency values with Chinese units without compacting prices', () => {
+    const first = candidate();
+    first.metrics.MARKET_CAP = cell(123_456_789, 'CURRENCY');
+    first.metrics.PRICE = cell(12.34, 'CURRENCY');
+    const firstRun = screeningRun([first], ['SECURITY', 'SORT_METRIC', 'PRICE']);
+    const { rerender } = render(<ResultsTable {...resultsProps(firstRun)} />);
+
+    expect(screen.getAllByText('¥1.23亿').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('¥12.34').length).toBeGreaterThan(0);
+
+    const second = candidate();
+    second.metrics.MARKET_CAP = cell(1_234_567_890_000, 'CURRENCY');
+    const secondRun = screeningRun([second], ['SECURITY', 'SORT_METRIC']);
+    rerender(<ResultsTable {...resultsProps(secondRun)} />);
+
+    expect(screen.getAllByText('¥1.23万亿').length).toBeGreaterThan(0);
+  });
 });
 
 function resultsProps(run: ScreeningRunDto) {
@@ -73,7 +92,10 @@ function resultsProps(run: ScreeningRunDto) {
   };
 }
 
-function screeningRun(items: ScreeningCandidateRow[]): ScreeningRunDto {
+function screeningRun(
+  items: ScreeningCandidateRow[],
+  visibleColumns: ScreeningViewColumn[] = ['SECURITY'],
+): ScreeningRunDto {
   return {
     id: 'run-1',
     savedScreenId: null,
@@ -96,7 +118,7 @@ function screeningRun(items: ScreeningCandidateRow[]): ScreeningRunDto {
       warnings: [],
       items,
     },
-    view: { visibleColumns: ['SECURITY'] },
+    view: { visibleColumns },
     refinements: [],
   };
 }

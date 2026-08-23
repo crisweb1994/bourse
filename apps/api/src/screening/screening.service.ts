@@ -474,6 +474,14 @@ export class ScreeningService {
       ),
     ]);
 
+    if ([quote, profile, financials, history].every(isFailed)) {
+      return {
+        identityKey,
+        status: 'FAILED',
+        error: REFINEMENT_FAILED_MESSAGE,
+      };
+    }
+
     const payload = buildRefinement(
       query.market,
       quote,

@@ -221,19 +221,33 @@ describe('ResearchMarketDataClient', () => {
     expect(snapshot.trace.selectedSource).toBe(sourceId);
   });
 
-  it('does not invoke a no-store screener when persistence-safe sources are required', async () => {
+  it('invokes the CN screener when persistence-safe sources are required', async () => {
     const sourceId = 'eastmoney-cn-screener';
     const describe = vi.fn(async () => ({
-      status: 'failed' as const,
-      data: null,
+      status: 'ok' as const,
+      data: {
+        market: 'CN' as const,
+        metrics: [{ metric: 'PRICE' as const, operators: ['GTE' as const] }],
+        sortableMetrics: ['PRICE' as const],
+        delay: 'delayed' as const,
+        universeLabel: 'A shares',
+        universeRules: ['Active common stocks'],
+      },
       sourceId,
       citations: [],
       freshness: [],
       warnings: [],
     }));
     const screen = vi.fn(async () => ({
-      status: 'failed' as const,
-      data: null,
+      status: 'ok' as const,
+      data: {
+        universeCount: 1,
+        matchedCount: 0,
+        providerAsOf: '2026-08-22T00:00:00.000Z',
+        complete: true,
+        truncated: false,
+        items: [],
+      },
       sourceId,
       citations: [],
       freshness: [],
@@ -255,18 +269,14 @@ describe('ResearchMarketDataClient', () => {
       sort: { metric: 'PRICE', direction: 'DESC' },
     }, {}, { acceptedRedistribution: ['public-cache-allowed'] });
 
-    expect(descriptorResponse.status).toBe('failed');
-    if (descriptorResponse.status !== 'failed') throw new Error('expected rejected descriptor');
-    expect(descriptorResponse.error?.code).toBe('PERMISSION_DENIED');
-    expect(response.status).toBe('failed');
-    if (response.status !== 'failed') throw new Error('expected rejected screener');
-    expect(response.error?.code).toBe('PERMISSION_DENIED');
-    expect(response.trace.attempts).toContainEqual(expect.objectContaining({
-      sourceId,
-      reasonCode: 'POLICY_DISABLED',
-    }));
-    expect(describe).not.toHaveBeenCalled();
-    expect(screen).not.toHaveBeenCalled();
+    expect(descriptorResponse.status).toBe('ok');
+    if (descriptorResponse.status !== 'ok') throw new Error('expected descriptor');
+    expect(descriptorResponse.trace.selectedSource).toBe(sourceId);
+    expect(response.status).toBe('ok');
+    if (response.status !== 'ok') throw new Error('expected snapshot');
+    expect(response.trace.selectedSource).toBe(sourceId);
+    expect(describe).toHaveBeenCalledOnce();
+    expect(screen).toHaveBeenCalledOnce();
   });
 
   it('routes HK earnings consensus through the declared capability', async () => {

@@ -106,7 +106,7 @@ function builtInInstances(providers: BuiltInProviderPorts): SourceInstance[] {
 
 function cnEquityScreenerSource(equityScreener: EquityScreenerPort): SourceInstance {
   return source('eastmoney-cn-screener', 'Eastmoney CN equity screener', 'public-api', false, [{
-    ...spec('equity-screener', ['CN'], 'aggregated', 'B', 'no-store', 15_000),
+    ...spec('equity-screener', ['CN'], 'aggregated', 'B', 'public-cache-allowed', 15_000),
     securityTypes: ['stock'],
     delay: 'delayed',
     transport: 'scrape',
