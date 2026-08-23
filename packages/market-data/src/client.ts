@@ -22,6 +22,7 @@ import { createOfficialMacroFileSourcePlugin, type OfficialMacroFileSourceConfig
 import { createTushareSourcePlugin, type TushareSourceConfig } from './connectors/tushare';
 import { createHkexDerivedCorporateActionsConnector, createHkexDerivedMarketEventsConnector, createSfcShortPositionConnector } from './connectors/hk';
 import { createMassiveSourcePlugin, type MassiveSourceConfig } from './connectors/massive';
+import { createEastmoneyEquityScreenerConnector } from './connectors/equity-screener';
 import {
   createCnPublicMarketEventsConnector,
   createCnPublicOwnershipConnector,
@@ -70,6 +71,15 @@ import type { InstrumentResolver } from './sources/resolver';
 import type { CorporateAction, CorporateActionsInput } from './ports/corporate-actions';
 import type { OwnershipInput, OwnershipObservation } from './ports/ownership';
 import type { MarketEvent, MarketEventsInput } from './ports/market-events';
+import type {
+  EquityScreenerDescriptor,
+  EquityScreenerPort,
+} from './ports/equity-screener';
+import type {
+  EquityScreenerSnapshot,
+  Market,
+  ScreeningQuery,
+} from '@bourse/shared-types';
 
 const DEFAULT_SEC_USER_AGENT = 'stock-suggest-research contact@example.com';
 type SupportedMarket = 'US' | 'CN' | 'HK';
@@ -210,6 +220,42 @@ export class ResearchMarketDataClient {
       seriesCode,
     )));
     return mergeMacroResults(requestInput.market, results);
+  }
+
+  describeEquityScreener(
+    market: Market,
+    ctx: ConnectorRunContext = {},
+    constraints?: RouteConstraints,
+  ): Promise<ResearchResultV2<EquityScreenerDescriptor>> {
+    return this.routeEquityScreener(market, ctx, { market }, (port, requestContext) =>
+      port.describe(market, connectorContext(requestContext, ctx)), constraints);
+  }
+
+  screenEquities(
+    query: ScreeningQuery,
+    ctx: ConnectorRunContext = {},
+    constraints?: RouteConstraints,
+  ): Promise<ResearchResultV2<EquityScreenerSnapshot>> {
+    return this.routeEquityScreener(query.market, ctx, query, (port, requestContext) =>
+      port.screen(query, connectorContext(requestContext, ctx)), constraints);
+  }
+
+  private routeEquityScreener<T>(
+    market: Market,
+    ctx: ConnectorRunContext,
+    input: unknown,
+    operation: (port: EquityScreenerPort, context: SourceRequestContext) => Promise<SourceResult<T>>,
+    constraints?: RouteConstraints,
+  ): Promise<ResearchResultV2<T>> {
+    const request = routeRequest('equity-screener', market, input, ctx, {
+      ...(constraints ? { constraints } : {}),
+    });
+    return this.toV2(this.router.fetch(request, (source, requestContext) => {
+      const port = source.ports.equityScreener;
+      return port
+        ? operation(port, requestContext)
+        : Promise.resolve(unavailable(source.manifest.id, 'Source does not implement EquityScreenerPort.'));
+    }));
   }
 
   private routeMacro(
@@ -397,6 +443,7 @@ function createDefaultProviderPorts(options: CreateMarketDataOptions = {}) {
     macro: createOfficialMacroConnector(),
     cnOwnership: createCnPublicOwnershipConnector(),
     cnEvents: createCnPublicMarketEventsConnector(),
+    cnEquityScreener: createEastmoneyEquityScreenerConnector(),
     instrumentSearch: [new EastMoneyInstrumentSearchProvider(), new TencentInstrumentSearchProvider(), new YahooInstrumentSearchProvider()],
   };
 }

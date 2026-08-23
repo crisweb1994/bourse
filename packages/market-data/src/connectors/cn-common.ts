@@ -37,6 +37,6 @@ export function inferExchange(symbol: string): Exchange | null {
   if (/^(00|001|002|003|300|301)\d/.test(symbol) || /^0\d{5}$/.test(symbol) || /^3\d{5}$/.test(symbol)) {
     return 'SZ';
   }
-  if (/^(43|83|87|88)\d{4}$/.test(symbol)) return 'BJ';
+  if (/^(43|83|87|88|92)\d{4}$/.test(symbol)) return 'BJ';
   return null;
 }

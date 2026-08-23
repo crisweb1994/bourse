@@ -51,6 +51,7 @@ function portsFor(capability: CapabilitySpec['capability']): SourcePorts {
     case 'corporate-actions': return { corporateActions: { listActions: notCalled } };
     case 'ownership': return { ownership: { listOwnership: notCalled } };
     case 'market-events': return { marketEvents: { listEvents: notCalled } };
+    case 'equity-screener': return { equityScreener: { describe: notCalled, screen: notCalled } };
   }
 }
 
@@ -484,6 +485,36 @@ describe('CapabilityRouter', () => {
     expect(result.status).toBe('failed');
     if (result.status !== 'failed') throw new Error('expected aborted route');
     expect(result.error?.code).toBe('ABORTED');
+    expect(operation).not.toHaveBeenCalled();
+  });
+
+  it('does not call a source whose redistribution policy the request rejects', async () => {
+    const noStore = source('no-store', {
+      ...quoteSpec,
+      redistribution: 'no-store',
+    });
+    const operation = vi.fn(async () => ok('no-store'));
+    const result = await router(
+      [noStore],
+      { ...policy, preferredSources: ['no-store'] },
+    ).fetch(
+      {
+        capability: 'quote',
+        market: 'HK',
+        input: {},
+        credentialScope: 'public',
+        constraints: { acceptedRedistribution: ['public-cache-allowed'] },
+      },
+      operation,
+    );
+
+    expect(result.status).toBe('failed');
+    if (result.status !== 'failed') throw new Error('expected rejected route');
+    expect(result.error?.code).toBe('PERMISSION_DENIED');
+    expect(result.attempts).toContainEqual(expect.objectContaining({
+      sourceId: 'no-store',
+      reasonCode: 'POLICY_DISABLED',
+    }));
     expect(operation).not.toHaveBeenCalled();
   });
 

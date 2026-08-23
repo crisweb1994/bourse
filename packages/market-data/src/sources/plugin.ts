@@ -8,6 +8,7 @@ import type { InstrumentSearchPort } from '../ports/instrument-search';
 import type { CorporateActionsPort } from '../ports/corporate-actions';
 import type { OwnershipPort } from '../ports/ownership';
 import type { MarketEventsPort } from '../ports/market-events';
+import type { EquityScreenerPort } from '../ports/equity-screener';
 
 export interface SourcePorts {
   finance?: FinancePort;
@@ -20,6 +21,7 @@ export interface SourcePorts {
   corporateActions?: CorporateActionsPort;
   ownership?: OwnershipPort;
   marketEvents?: MarketEventsPort;
+  equityScreener?: EquityScreenerPort;
 }
 
 export interface SourceConfig {

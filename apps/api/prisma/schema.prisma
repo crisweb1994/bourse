@@ -26,6 +26,8 @@ model User {
   researchThreads                 ResearchThread[]
   earningsGenerationRuns          EarningsGenerationRun[]
   investorRelationsGenerationRuns InvestorRelationsGenerationRun[]
+  savedScreens                    SavedScreen[]
+  screeningRuns                   ScreeningRun[]
 }
 
 model Stock {
@@ -74,6 +76,51 @@ model WatchlistItem {
 
   @@unique([userId, stockId])
   @@index([userId, order])
+}
+
+model SavedScreen {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  query     Json
+  view      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  runs ScreeningRun[]
+
+  @@index([userId, updatedAt])
+}
+
+model ScreeningRun {
+  id            String   @id @default(cuid())
+  userId        String
+  savedScreenId String?
+  query         Json
+  sourceId      String
+  capturedAt    DateTime
+  snapshot      Json
+  createdAt     DateTime @default(now())
+
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  savedScreen SavedScreen?          @relation(fields: [savedScreenId], references: [id], onDelete: SetNull)
+  refinements ScreeningRefinement[]
+
+  @@index([userId, createdAt])
+  @@index([savedScreenId, createdAt])
+}
+
+model ScreeningRefinement {
+  runId       String
+  identityKey String
+  payload     Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  run ScreeningRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@id([runId, identityKey])
 }
 
 model AiProviderSetting {

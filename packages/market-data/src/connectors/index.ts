@@ -8,3 +8,4 @@ export * from './macro';
 export * from './tushare';
 export * from './hk';
 export * from './massive';
+export * from './equity-screener';

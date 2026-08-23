@@ -1,4 +1,11 @@
-import type { Capability, CacheScope, DataSet, QuoteDelay, SecurityType } from '../contracts/source';
+import type {
+  Capability,
+  CacheScope,
+  DataSet,
+  QuoteDelay,
+  RedistributionPolicy,
+  SecurityType,
+} from '../contracts/source';
 import type { MarketCode } from '../contracts/instrument';
 import type { QualityTier } from '../contracts/research-citation';
 import type { SourceCandidate } from '../sources/registry';
@@ -28,6 +35,7 @@ export interface RouteRequest {
 export interface RouteConstraints {
   minQualityTier?: QualityTier;
   acceptedDelays?: readonly QuoteDelay[];
+  acceptedRedistribution?: readonly RedistributionPolicy[];
   maxAgeMs?: number;
 }
 
@@ -44,6 +52,7 @@ export class CapabilityPlanner {
   plan(request: RouteRequest, policy: RoutingPolicy): PlannedCandidate[] {
     const minQualityTier = stricterQuality(policy.minQualityTier, request.constraints?.minQualityTier);
     const acceptedDelays = intersectDelays(policy.acceptedDelays, request.constraints?.acceptedDelays);
+    const acceptedRedistribution = request.constraints?.acceptedRedistribution;
     const priority = new Map(policy.preferredSources.map((sourceId, index) => [sourceId, index]));
     return this.registry.find(request).map((candidate): PlannedCandidate => {
       const sourceId = candidate.instance.manifest.id;
@@ -57,9 +66,10 @@ export class CapabilityPlanner {
             : health.status === 'cooldown'
               ? 'CIRCUIT_OPEN'
               : !qualitySatisfies(candidate.spec.qualityTier, minQualityTier) ||
-                  (acceptedDelays !== undefined && (!candidate.spec.delay || !acceptedDelays.includes(candidate.spec.delay)))
+                  (acceptedDelays !== undefined && (!candidate.spec.delay || !acceptedDelays.includes(candidate.spec.delay))) ||
+                  (acceptedRedistribution !== undefined && !acceptedRedistribution.includes(candidate.spec.redistribution))
                 ? 'POLICY_DISABLED'
-              : undefined;
+                : undefined;
       return { ...candidate, skipReason };
     }).sort((left, right) => {
       const leftPriority = priority.get(left.instance.manifest.id) ?? Number.MAX_SAFE_INTEGER;
