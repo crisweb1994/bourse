@@ -11,10 +11,13 @@ import { getStockHistoryBatch } from '@/lib/api';
 
 export type SparklineState =
   | { status: 'loading' }
-  | { status: 'ready'; closes: number[]; anomalyIndex: number | null }
+  | { status: 'ready'; closes: number[]; anomalyIndex: number | null; asOf: string }
   | { status: 'empty' };
 
-const cache = new Map<string, { closes: number[]; anomalyIndex: number | null }>();
+const cache = new Map<
+  string,
+  { closes: number[]; anomalyIndex: number | null; asOf: string }
+>();
 
 export function useWatchlistSparklines(
   items: Array<{ symbol: string; market: string }>,
@@ -40,7 +43,12 @@ export function useWatchlistSparklines(
       const key = `${item.market}:${item.symbol}`;
       const hit = cache.get(key);
       initial[key] = hit
-        ? { status: 'ready', closes: hit.closes, anomalyIndex: hit.anomalyIndex }
+        ? {
+            status: 'ready',
+            closes: hit.closes,
+            anomalyIndex: hit.anomalyIndex,
+            asOf: hit.asOf,
+          }
         : { status: 'loading' };
     }
     setStates(initial);
@@ -71,8 +79,9 @@ export function useWatchlistSparklines(
           const closes = (response?.priceSeries?.bars ?? []).map((bar) => bar.c);
           if (closes.length >= 3) {
             const anomalyIndex = response?.anomalyIndex ?? null;
-            cache.set(key, { closes, anomalyIndex });
-            next[key] = { status: 'ready', closes, anomalyIndex };
+            const asOf = response!.priceSeries.asOf;
+            cache.set(key, { closes, anomalyIndex, asOf });
+            next[key] = { status: 'ready', closes, anomalyIndex, asOf };
           } else {
             next[key] = { status: 'empty' };
           }

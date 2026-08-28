@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.0](https://github.com/crisweb1994/bourse/compare/v0.10.0...v0.11.0) (2026-08-20)
+
+
+### Features
+
+* **homepage:** 新增研究总览聚合接口并重构首页 ([b0c3210](https://github.com/crisweb1994/bourse/commit/b0c32104ab16f337089333705b49f4814d3f0ab1))
+* **homepage:** 新增研究总览聚合接口并重构首页 ([2caf0d5](https://github.com/crisweb1994/bourse/commit/2caf0d59171301e3ab10e900b2ac73e5089ed48e))
+
 ## [0.10.0](https://github.com/crisweb1994/bourse/compare/v0.9.0...v0.10.0) (2026-08-16)
 
 

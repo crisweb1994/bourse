@@ -3,6 +3,7 @@ export * from './build-metadata';
 export * from './earnings';
 export * from './charts';
 export * from './screening';
+export * from './homepage';
 
 // ===== Enums =====
 
