@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/crisweb1994/bourse/compare/v0.11.0...v0.12.0) (2026-09-01)
+
+
+### Features
+
+* 新增股票筛选工作台 ([23bb5a6](https://github.com/crisweb1994/bourse/commit/23bb5a6f843c1426d2b9ebe23655c035c63a9eac))
+
 ## [0.11.0](https://github.com/crisweb1994/bourse/compare/v0.10.0...v0.11.0) (2026-08-20)
 
 
