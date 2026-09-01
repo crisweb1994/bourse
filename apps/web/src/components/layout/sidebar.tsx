@@ -13,6 +13,7 @@ import {
   LogOut,
   Moon,
   Sun,
+  ScanSearch,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useTheme } from 'next-themes';
@@ -44,6 +45,7 @@ interface NavItem {
 
 const WORKSPACE_NAV: NavItem[] = [
   { href: '/', label: '首页', icon: Home },
+  { href: '/discover', label: '候选发现', icon: ScanSearch },
   { href: '/watchlist', label: '自选股', icon: Pin },
   { href: '/chat', label: 'Chat', icon: MessageSquareText },
   { href: '/history', label: '历史记录', icon: History },

@@ -69,4 +69,35 @@ describe('CapabilityPlanner', () => {
         ['low-quality', 'POLICY_DISABLED'],
       ]);
   });
+
+  it('disables sources outside the request redistribution allowlist', () => {
+    const base: CapabilitySpec = {
+      capability: 'quote',
+      markets: ['US'],
+      qualityTier: 'B',
+      authority: 'aggregated',
+      ttlMs: 10_000,
+      redistribution: 'public-cache-allowed',
+      delay: 'realtime',
+      securityTypes: ['stock'],
+    };
+    const planner = new CapabilityPlanner(new SourceRegistry([
+      source('cacheable', base),
+      source('no-store', { ...base, redistribution: 'no-store' }),
+    ]), new InMemorySourceHealth());
+
+    const planned = planner.plan({
+      ...request,
+      constraints: { acceptedRedistribution: ['public-cache-allowed'] },
+    }, {
+      ...policy,
+      preferredSources: ['cacheable', 'no-store'],
+    });
+
+    expect(planned.map((candidate) => [candidate.instance.manifest.id, candidate.skipReason]))
+      .toEqual([
+        ['cacheable', undefined],
+        ['no-store', 'POLICY_DISABLED'],
+      ]);
+  });
 });

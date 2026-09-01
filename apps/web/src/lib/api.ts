@@ -25,6 +25,13 @@ import type {
   EarningsTrendSeriesDto,
   InvestorRelationsGenerationRunDto,
   InvestorRelationsTimelineResponseDto,
+  SavedScreenPayload,
+  SavedScreenPatch,
+  SavedScreenDto,
+  CreateScreeningRunRequest,
+  ScreeningConfig,
+  ScreeningRunDto,
+  RefineResponse,
   HomepageBriefDto,
 } from '@bourse/shared-types';
 import { API_URL, csrfHeaders } from './utils';
@@ -40,7 +47,7 @@ async function fetchApi<T>(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new ApiError(res.status, body.message || res.statusText);
+    throw new ApiError(res.status, body.message || res.statusText, body);
   }
 
   if (res.status === 204) return undefined as T;
@@ -51,6 +58,7 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    public details?: Record<string, unknown>,
   ) {
     super(message);
   }
@@ -442,6 +450,70 @@ export async function updateWatchlistItem(
 
 export async function removeFromWatchlist(id: string): Promise<{ ok: boolean }> {
   return fetchApi(`/api/watchlist/${id}`, {
+    method: 'DELETE',
+    headers: csrfHeaders(),
+  });
+}
+
+// Candidate discovery APIs
+export function getScreeningConfig(market: string): Promise<ScreeningConfig> {
+  return fetchApi(
+    `/api/screening/config?market=${encodeURIComponent(market)}`,
+  );
+}
+
+export function createScreeningRun(
+  input: CreateScreeningRunRequest,
+): Promise<ScreeningRunDto> {
+  return fetchApi('/api/screening/runs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+    body: JSON.stringify(input),
+  });
+}
+
+export function getScreeningRun(id: string): Promise<ScreeningRunDto> {
+  return fetchApi(`/api/screening/runs/${encodeURIComponent(id)}`);
+}
+
+export function refineScreeningRun(
+  id: string,
+  identityKeys: string[],
+): Promise<RefineResponse> {
+  return fetchApi(`/api/screening/runs/${encodeURIComponent(id)}/refine`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+    body: JSON.stringify({ identityKeys }),
+  });
+}
+
+export function listSavedScreens(): Promise<SavedScreenDto[]> {
+  return fetchApi('/api/screening/saved-screens');
+}
+
+export function createSavedScreen(
+  payload: SavedScreenPayload,
+): Promise<SavedScreenDto> {
+  return fetchApi('/api/screening/saved-screens', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateSavedScreen(
+  id: string,
+  patch: SavedScreenPatch,
+): Promise<SavedScreenDto> {
+  return fetchApi(`/api/screening/saved-screens/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteSavedScreen(id: string): Promise<{ ok: boolean }> {
+  return fetchApi(`/api/screening/saved-screens/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     headers: csrfHeaders(),
   });

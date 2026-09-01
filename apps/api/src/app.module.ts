@@ -14,6 +14,7 @@ import { ChatModule } from './chat/chat.module';
 import { MetaController } from './meta/meta.controller';
 import { EarningsModule } from './earnings/earnings.module';
 import { InvestorRelationsModule } from './investor-relations/investor-relations.module';
+import { ScreeningModule } from './screening/screening.module';
 import { HomepageModule } from './homepage/homepage.module';
 
 @Module({
@@ -36,6 +37,7 @@ import { HomepageModule } from './homepage/homepage.module';
     ChatModule,
     EarningsModule,
     InvestorRelationsModule,
+    ScreeningModule,
     HomepageModule,
     // plan-v2 Wave 2.6e — ResearchModule + PlannerModule removed. CRUD
     // surface for research / planner endpoints is gone; AnalysisModule

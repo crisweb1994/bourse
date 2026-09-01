@@ -81,6 +81,7 @@ export const DEFAULT_ROUTING_POLICIES: readonly RoutingPolicy[] = [
   { capability: 'macro', market: 'CN', strategy: 'official-first', preferredSources: ['official-macro', 'nbs-cn-macro'] },
   { capability: 'instrument-search', market: 'CN', strategy: 'merge', preferredSources: ['eastmoney-search', 'tencent-search', 'yahoo-search'] },
   { capability: 'market-calendar', market: 'CN', strategy: 'fallback', preferredSources: ['tushare-pro', 'market-calendar-rules'] },
+  { capability: 'equity-screener', market: 'CN', strategy: 'fallback', preferredSources: ['eastmoney-cn-screener'], attemptTimeoutMs: 12_000 },
   { capability: 'corporate-actions', dataSet: 'adjustment-factor', market: 'CN', strategy: 'fallback', preferredSources: ['tushare-pro'] },
   { capability: 'corporate-actions', dataSet: 'dividend', market: 'CN', strategy: 'fallback', preferredSources: ['tushare-pro'] },
   { capability: 'corporate-actions', dataSet: 'buyback', market: 'CN', strategy: 'fallback', preferredSources: ['tushare-pro'] },

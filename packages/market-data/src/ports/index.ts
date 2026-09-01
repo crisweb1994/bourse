@@ -9,4 +9,5 @@ export * from './market-calendar';
 export * from './corporate-actions';
 export * from './ownership';
 export * from './market-events';
+export * from './equity-screener';
 export * from './request-context';

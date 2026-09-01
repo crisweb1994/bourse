@@ -16,6 +16,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@bourse/shared-types": "workspace:*",
     "cheerio": "^1.2.0",
     "pdfjs-dist": "^6.1.200",
     "zod": "^3.23.8"

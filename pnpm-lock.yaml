@@ -248,6 +248,9 @@ importers:
 
   packages/market-data:
     dependencies:
+      '@bourse/shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
       cheerio:
         specifier: ^1.2.0
         version: 1.2.0

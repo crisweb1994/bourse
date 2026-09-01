@@ -14,7 +14,8 @@ export type Capability =
   | 'market-calendar'
   | 'corporate-actions'
   | 'ownership'
-  | 'market-events';
+  | 'market-events'
+  | 'equity-screener';
 
 export type DataSet =
   | 'dividend'

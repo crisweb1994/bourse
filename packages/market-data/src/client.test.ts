@@ -141,6 +141,144 @@ describe('ResearchMarketDataClient', () => {
     expect(response.data?.state).toBe('HOLIDAY');
   });
 
+  it('reports an explicit unsupported capability when no CN screener source is registered', async () => {
+    const client = createResearchMarketDataClient(createBuiltInSources(providers()));
+
+    const descriptor = await client.describeEquityScreener('CN');
+    const snapshot = await client.screenEquities({
+      market: 'CN',
+      universe: 'ACTIVE_COMMON_STOCKS',
+      conditions: [{ metric: 'PRICE', operator: 'GTE', value: 1 }],
+      sort: { metric: 'MARKET_CAP', direction: 'DESC' },
+    });
+
+    expect(descriptor.status).toBe('failed');
+    if (descriptor.status !== 'failed') throw new Error('expected unavailable descriptor');
+    expect(descriptor.error?.code).toBe('UNSUPPORTED_CAPABILITY');
+    expect(descriptor.trace.attempts).toEqual([]);
+    expect(snapshot.status).toBe('failed');
+    if (snapshot.status !== 'failed') throw new Error('expected unavailable snapshot');
+    expect(snapshot.error?.code).toBe('UNSUPPORTED_CAPABILITY');
+    expect(snapshot.trace.attempts).toEqual([]);
+  });
+
+  it('routes screener descriptor and snapshot through the declared bulk source', async () => {
+    const sourceId = 'eastmoney-cn-screener';
+    const client = createResearchMarketDataClient(createBuiltInSources(providers({
+      cnEquityScreener: {
+        describe: async () => ({
+          status: 'ok',
+          data: {
+            market: 'CN',
+            metrics: [{ metric: 'PRICE', operators: ['GTE', 'LTE', 'BETWEEN'] }],
+            sortableMetrics: ['PRICE'],
+            delay: 'delayed',
+            universeLabel: 'A shares',
+            universeRules: ['Active common stocks'],
+          },
+          sourceId,
+          citations: [],
+          freshness: [],
+          warnings: [],
+        }),
+        screen: async () => ({
+          status: 'ok',
+          data: {
+            universeCount: 1,
+            matchedCount: 0,
+            providerAsOf: '2026-08-22T00:00:00.000Z',
+            complete: true,
+            truncated: false,
+            items: [],
+          },
+          sourceId,
+          citations: [],
+          freshness: [],
+          warnings: [],
+        }),
+      },
+    })));
+
+    const descriptor = await client.describeEquityScreener(
+      'CN',
+      {},
+      { acceptedDelays: ['delayed'] },
+    );
+    const snapshot = await client.screenEquities({
+      market: 'CN',
+      universe: 'ACTIVE_COMMON_STOCKS',
+      conditions: [{ metric: 'PRICE', operator: 'GTE', value: 1 }],
+      sort: { metric: 'PRICE', direction: 'DESC' },
+    }, {}, { acceptedDelays: ['delayed'] });
+
+    expect(descriptor.status).toBe('ok');
+    if (descriptor.status !== 'ok') throw new Error('expected descriptor');
+    expect(descriptor.data?.metrics[0]?.metric).toBe('PRICE');
+    expect(descriptor.trace.selectedSource).toBe(sourceId);
+    expect(snapshot.status).toBe('ok');
+    if (snapshot.status !== 'ok') throw new Error('expected snapshot');
+    expect(snapshot.data?.matchedCount).toBe(0);
+    expect(snapshot.trace.selectedSource).toBe(sourceId);
+  });
+
+  it('invokes the CN screener when persistence-safe sources are required', async () => {
+    const sourceId = 'eastmoney-cn-screener';
+    const describe = vi.fn(async () => ({
+      status: 'ok' as const,
+      data: {
+        market: 'CN' as const,
+        metrics: [{ metric: 'PRICE' as const, operators: ['GTE' as const] }],
+        sortableMetrics: ['PRICE' as const],
+        delay: 'delayed' as const,
+        universeLabel: 'A shares',
+        universeRules: ['Active common stocks'],
+      },
+      sourceId,
+      citations: [],
+      freshness: [],
+      warnings: [],
+    }));
+    const screen = vi.fn(async () => ({
+      status: 'ok' as const,
+      data: {
+        universeCount: 1,
+        matchedCount: 0,
+        providerAsOf: '2026-08-22T00:00:00.000Z',
+        complete: true,
+        truncated: false,
+        items: [],
+      },
+      sourceId,
+      citations: [],
+      freshness: [],
+      warnings: [],
+    }));
+    const client = createResearchMarketDataClient(createBuiltInSources(providers({
+      cnEquityScreener: { describe, screen },
+    })));
+
+    const descriptorResponse = await client.describeEquityScreener(
+      'CN',
+      {},
+      { acceptedRedistribution: ['public-cache-allowed'] },
+    );
+    const response = await client.screenEquities({
+      market: 'CN',
+      universe: 'ACTIVE_COMMON_STOCKS',
+      conditions: [{ metric: 'PRICE', operator: 'GTE', value: 1 }],
+      sort: { metric: 'PRICE', direction: 'DESC' },
+    }, {}, { acceptedRedistribution: ['public-cache-allowed'] });
+
+    expect(descriptorResponse.status).toBe('ok');
+    if (descriptorResponse.status !== 'ok') throw new Error('expected descriptor');
+    expect(descriptorResponse.trace.selectedSource).toBe(sourceId);
+    expect(response.status).toBe('ok');
+    if (response.status !== 'ok') throw new Error('expected snapshot');
+    expect(response.trace.selectedSource).toBe(sourceId);
+    expect(describe).toHaveBeenCalledOnce();
+    expect(screen).toHaveBeenCalledOnce();
+  });
+
   it('routes HK earnings consensus through the declared capability', async () => {
     const client = createResearchMarketDataClient(createBuiltInSources(providers({
       yahoo: finance({

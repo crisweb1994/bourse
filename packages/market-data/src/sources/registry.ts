@@ -128,5 +128,7 @@ function implementsCapability(instance: SourceInstance, capability: Capability):
     case 'corporate-actions': return typeof instance.ports.corporateActions?.listActions === 'function';
     case 'ownership': return typeof instance.ports.ownership?.listOwnership === 'function';
     case 'market-events': return typeof instance.ports.marketEvents?.listEvents === 'function';
+    case 'equity-screener': return typeof instance.ports.equityScreener?.screen === 'function' &&
+      typeof instance.ports.equityScreener?.describe === 'function';
   }
 }

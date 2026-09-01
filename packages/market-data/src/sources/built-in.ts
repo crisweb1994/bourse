@@ -9,6 +9,7 @@ import type { ProviderInstrumentSearchPort } from '../ports/instrument-search';
 import type { ProviderOwnershipPort } from '../ports/ownership';
 import type { ProviderMarketEventsPort } from '../ports/market-events';
 import type { ProviderCorporateActionsPort } from '../ports/corporate-actions';
+import type { EquityScreenerPort } from '../ports/equity-screener';
 import type { SourceInstance, SourcePlugin } from './plugin';
 import { createRuleBasedMarketCalendarPort } from './rule-calendar';
 import {
@@ -49,6 +50,7 @@ interface BuiltInProviderPorts {
   hkCorporateActions?: ProviderCorporateActionsPort;
   hkEvents?: ProviderMarketEventsPort;
   hkOwnership?: ProviderOwnershipPort;
+  cnEquityScreener?: EquityScreenerPort;
 }
 
 export function createBuiltInSourcePlugins(providers: BuiltInProviderPorts): SourcePlugin[] {
@@ -89,6 +91,7 @@ function builtInInstances(providers: BuiltInProviderPorts): SourceInstance[] {
   if (providers.cnEvents) sources.push(cnEventsSource(providers.cnEvents));
   if (providers.hkCorporateActions || providers.hkEvents) sources.push(hkDerivedEventsSource(providers.hkCorporateActions, providers.hkEvents));
   if (providers.hkOwnership) sources.push(hkOwnershipSource(providers.hkOwnership));
+  if (providers.cnEquityScreener) sources.push(cnEquityScreenerSource(providers.cnEquityScreener));
   if (providers.twelveData) sources.push(financeSource('twelve-data', 'Twelve Data', providers.twelveData, ['US', 'HK', 'CN'], 'licensed', true, ['quote', 'history', 'profile']));
   if (providers.alphaVantage) sources.push(financeSource('alpha-vantage', 'Alpha Vantage', providers.alphaVantage, ['US'], 'licensed', true, ['quote', 'history', 'profile']));
   if (providers.eodhd) sources.push(financeSource('eodhd', 'EODHD', providers.eodhd, ['US', 'HK', 'CN'], 'licensed', true, ['quote', 'history', 'profile']));
@@ -99,6 +102,16 @@ function builtInInstances(providers: BuiltInProviderPorts): SourceInstance[] {
     sources.push(instrumentSearchSource(id, port));
   }
   return sources;
+}
+
+function cnEquityScreenerSource(equityScreener: EquityScreenerPort): SourceInstance {
+  return source('eastmoney-cn-screener', 'Eastmoney CN equity screener', 'public-api', false, [{
+    ...spec('equity-screener', ['CN'], 'aggregated', 'B', 'public-cache-allowed', 15_000),
+    securityTypes: ['stock'],
+    delay: 'delayed',
+    transport: 'scrape',
+    rateLimit: { concurrent: 1 },
+  }], { equityScreener });
 }
 
 function hkDerivedEventsSource(
