@@ -141,6 +141,8 @@ pnpm dev                                     # Web :3000 + API :3001
 
 参考 [`.env.production.example`](.env.production.example) 配置 GitHub OAuth、JWT、CORS 和跨域 cookie。生产部署使用发布流水线生成的版本化镜像，或直接从当前源码执行 `docker compose up -d --build`。
 
+**多租户部署的安全前提**：Provider / Web 搜索设置的无状态测试端点（`POST /api/settings/providers/test`、`/api/settings/providers/models`、`POST /api/settings/web-search/test`）会按用户填写的 `baseUrl` 从服务器侧发起请求。单租户匿名模式下这是刻意设计（支持本地 Ollama 等自建端点）；但在 `AUTH_REQUIRED=true` 的多用户部署中，不受信用户可借此探测服务端内网（SSRF）。此类部署应通过网络策略限制 API 容器的出网范围，或将设置功能限定给可信用户。
+
 ---
 
 ## 工作原理
