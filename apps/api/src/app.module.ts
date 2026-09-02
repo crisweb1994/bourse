@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
-import { UserModule } from './user/user.module';
 import { StockModule } from './stock/stock.module';
 import { WatchlistModule } from './watchlist/watchlist.module';
 import { AnalysisModule } from './analysis/analysis.module';
@@ -11,7 +10,6 @@ import { WebSearchSettingsModule } from './web-search-settings/web-search-settin
 import { DigestModule } from './digest/digest.module';
 import { ROOT_ENV_FILE_PATHS } from './config/root-env';
 import { ChatModule } from './chat/chat.module';
-import { MetaController } from './meta/meta.controller';
 import { EarningsModule } from './earnings/earnings.module';
 import { InvestorRelationsModule } from './investor-relations/investor-relations.module';
 import { ScreeningModule } from './screening/screening.module';
@@ -27,7 +25,6 @@ import { HomepageModule } from './homepage/homepage.module';
     }),
     PrismaModule,
     AuthModule,
-    UserModule,
     AiSettingsModule,
     WebSearchSettingsModule,
     DigestModule,
@@ -45,6 +42,5 @@ import { HomepageModule } from './homepage/homepage.module';
     // plan-v2 §12.3 — AgentModule removed; ProviderFactoryService (renamed
     // from AgentRunnerService) now lives inside AnalysisModule.
   ],
-  controllers: [MetaController],
 })
 export class AppModule {}
