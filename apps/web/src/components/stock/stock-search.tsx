@@ -3,12 +3,16 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Search, Plus, Loader2, X, ArrowUpRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import type { StockSearchResult } from '@bourse/shared-types';
+import { Market, type StockSearchResult } from '@bourse/shared-types';
 import { searchStocks, addToWatchlist, ApiError } from '@/lib/api';
 import { MARKET_LABELS } from '@/lib/constants';
 import { stockHref } from '@/lib/stock-href';
 import { InputShell, Input, Kbd, toast } from '@/components/ui';
 import { cn } from '@/lib/utils';
+
+// Yahoo search returns global listings; watchlist persistence only supports
+// the three markets of the Prisma enum. Single source: shared-types Market.
+const SUPPORTED_MARKETS = new Set<string>(Object.values(Market));
 
 export function StockSearch({
   onAdded,
@@ -149,6 +153,9 @@ export function StockSearch({
               {results.map((stock) => {
                 const key = stock.yahooSymbol || stock.symbol;
                 const isAdding = adding === key;
+                const canAdd = SUPPORTED_MARKETS.has(
+                  stock.market.trim().toUpperCase(),
+                );
                 return (
                   <div
                     key={key}
@@ -179,12 +186,13 @@ export function StockSearch({
                     <button
                       type="button"
                       onClick={(e) => handleAdd(stock, e)}
-                      disabled={isAdding}
-                      title="加入自选"
+                      disabled={isAdding || !canAdd}
+                      title={canAdd ? '加入自选' : '暂不支持该市场加入自选'}
                       className={cn(
                         'w-7 h-7 grid place-items-center rounded-[6px] ',
                         'border border-[var(--color-border)] text-[var(--color-fg-2)]',
                         'hover:bg-[var(--color-fg)] hover:text-[var(--color-bg)] hover:border-[var(--color-fg)] transition-colors',
+                        !canAdd && 'opacity-30 cursor-not-allowed hover:bg-transparent hover:text-[var(--color-fg-2)] hover:border-[var(--color-border)]',
                       )}
                     >
                       {isAdding ? (
