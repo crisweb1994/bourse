@@ -8,7 +8,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
+import { credentialEncryptionKey, decryptCredential, encryptCredential } from '../common/credentials-crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   AiProviderSettingDetailDto,
@@ -35,13 +35,8 @@ const ANTHROPIC_STATIC_MODELS = [
   'claude-haiku-4-5',
 ];
 
-const CREDENTIAL_CIPHER_VERSION = 'v1';
-const CREDENTIAL_IV_BYTES = 12;
-
 @Injectable()
 export class AiSettingsService {
-  private credentialsKey: Buffer | null = null;
-
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
@@ -402,60 +397,11 @@ export class AiSettingsService {
   }
 
   private encryptApiKey(apiKey: string): string {
-    const iv = randomBytes(CREDENTIAL_IV_BYTES);
-    const cipher = createCipheriv('aes-256-gcm', this.getCredentialsKey(), iv);
-    const ciphertext = Buffer.concat([cipher.update(apiKey, 'utf8'), cipher.final()]);
-    const authTag = cipher.getAuthTag();
-    return [
-      CREDENTIAL_CIPHER_VERSION,
-      iv.toString('base64url'),
-      authTag.toString('base64url'),
-      ciphertext.toString('base64url'),
-    ].join(':');
+    return encryptCredential(credentialEncryptionKey(this.config), apiKey);
   }
 
   private decryptApiKey(payload: string): string {
-    const [version, ivEncoded, authTagEncoded, ciphertextEncoded, ...extra] = payload.split(':');
-    if (
-      version !== CREDENTIAL_CIPHER_VERSION ||
-      !ivEncoded ||
-      !authTagEncoded ||
-      !ciphertextEncoded ||
-      extra.length > 0
-    ) {
-      throw new InternalServerErrorException(
-        'Stored AI credential has an unsupported or invalid format',
-      );
-    }
-
-    const iv = Buffer.from(ivEncoded, 'base64url');
-    const authTag = Buffer.from(authTagEncoded, 'base64url');
-    const ciphertext = Buffer.from(ciphertextEncoded, 'base64url');
-    try {
-      const decipher = createDecipheriv('aes-256-gcm', this.getCredentialsKey(), iv);
-      decipher.setAuthTag(authTag);
-      return Buffer.concat([
-        decipher.update(ciphertext),
-        decipher.final(),
-      ]).toString('utf8');
-    } catch {
-      throw new InternalServerErrorException(
-        'Unable to decrypt stored AI credential; verify AI_CREDENTIALS_ENCRYPTION_KEY',
-      );
-    }
-  }
-
-  private getCredentialsKey(): Buffer {
-    if (this.credentialsKey) return this.credentialsKey;
-
-    const dedicatedSecret = this.config.get<string>('AI_CREDENTIALS_ENCRYPTION_KEY')?.trim();
-    if (!dedicatedSecret) {
-      throw new InternalServerErrorException(
-        'AI credential encryption is not configured; set AI_CREDENTIALS_ENCRYPTION_KEY',
-      );
-    }
-    this.credentialsKey = createHash('sha256').update(dedicatedSecret, 'utf8').digest();
-    return this.credentialsKey;
+    return decryptCredential(credentialEncryptionKey(this.config), payload);
   }
 
   private emptyToNull(value?: string | null): string | null {

@@ -144,7 +144,7 @@ describe('AiSettingsService · credential storage', () => {
 
     await assert.rejects(
       service.get('user-1', 'provider-1'),
-      /Unable to decrypt stored AI credential/,
+      /Unable to decrypt stored credential/,
     );
   });
 
@@ -162,7 +162,7 @@ describe('AiSettingsService · credential storage', () => {
         providerType: 'OPENAI_COMPATIBLE',
         apiKey: 'sk-secret-1234',
       }),
-      /AI credential encryption is not configured/,
+      /Credential encryption is not configured/,
     );
   });
 });

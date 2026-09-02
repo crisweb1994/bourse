@@ -1,9 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { EarningsNoticePayload } from '../digest/brief-payload';
-import type { EarningsCardPayload } from '@bourse/analysis';
+import { ChannelConfig, type EarningsCardPayload } from '@bourse/analysis';
 import { Prisma } from '@prisma/client';
 import { delay } from '../common/async';
 import { maskChannelTarget } from '../common/channel-target';
+import { decryptChannelSecrets } from '../common/credentials-crypto';
 import { postJson } from '../common/http';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -11,7 +13,10 @@ import { PrismaService } from '../prisma/prisma.service';
 export class EarningsNoticeService {
   private readonly logger = new Logger(EarningsNoticeService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {}
 
   async notify(
     stockId: string,
@@ -38,7 +43,9 @@ export class EarningsNoticeService {
         || !subscription.earningsImmediateEnabled
         || !subscription.markets.includes(stock.market as never)
       ) return;
-      const channels = Array.isArray(subscription.channels) ? subscription.channels : [];
+      const channels = Array.isArray(subscription.channels)
+        ? decryptChannelSecrets(subscription.channels as ChannelConfig[], this.config)
+        : [];
       await Promise.allSettled(channels.map((channel) => this.send(item.userId, channel, notice)));
     }));
   }

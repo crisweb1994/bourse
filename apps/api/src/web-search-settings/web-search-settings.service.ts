@@ -1,6 +1,13 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { buildWebSearchExecutorFromSetting } from '@bourse/analysis';
+import {
+  credentialEncryptionKey,
+  decryptCredential,
+  encryptCredential,
+  isEncryptedCredential,
+} from '../common/credentials-crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   TestWebSearchSettingDto,
@@ -16,7 +23,10 @@ export class ProviderShapeError extends Error {}
 
 @Injectable()
 export class WebSearchSettingsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private config: ConfigService,
+  ) {}
 
   async get(userId: string): Promise<WebSearchSettingDto | null> {
     const row = await this.prisma.webSearchSetting.findUnique({
@@ -37,6 +47,7 @@ export class WebSearchSettingsService {
     const existing = await this.prisma.webSearchSetting.findUnique({
       where: { userId },
     });
+    // existing.apiKey 在库中为密文（v1:…）；merge 语义只做透传，不参与形状校验。
     const apiKey =
       dto.apiKey?.trim() ||
       (existing?.providerType === dto.providerType ? existing.apiKey : null);
@@ -48,7 +59,10 @@ export class WebSearchSettingsService {
 
     const data = {
       providerType: dto.providerType,
-      apiKey,
+      apiKey:
+        apiKey && !isEncryptedCredential(apiKey)
+          ? encryptCredential(credentialEncryptionKey(this.config), apiKey)
+          : apiKey,
       baseUrl,
       primaryMode: dto.primaryMode ?? existing?.primaryMode ?? 'NATIVE_FIRST',
       timeoutMs: dto.timeoutMs ?? existing?.timeoutMs ?? null,
@@ -143,7 +157,14 @@ export class WebSearchSettingsService {
    * for executor construction. Not exposed via HTTP.
    */
   async getInternalForRuntime(userId: string) {
-    return this.prisma.webSearchSetting.findUnique({ where: { userId } });
+    const row = await this.prisma.webSearchSetting.findUnique({ where: { userId } });
+    return row ? { ...row, apiKey: this.readApiKey(row.apiKey) } : row;
+  }
+
+  /** 库内密文 → 明文；非密文形态（空/历史明文）原样返回。 */
+  private readApiKey(stored: string | null): string | null {
+    if (!stored || !isEncryptedCredential(stored)) return stored;
+    return decryptCredential(credentialEncryptionKey(this.config), stored);
   }
 
   private validateProviderShape(dto: {
@@ -171,7 +192,7 @@ export class WebSearchSettingsService {
   }): WebSearchSettingDto {
     return {
       providerType: row.providerType as WebSearchSettingDto['providerType'],
-      apiKeyMasked: maskApiKey(row.apiKey),
+      apiKeyMasked: maskApiKey(this.readApiKey(row.apiKey)),
       baseUrl: row.baseUrl,
       primaryMode: row.primaryMode as WebSearchSettingDto['primaryMode'],
       timeoutMs: row.timeoutMs,

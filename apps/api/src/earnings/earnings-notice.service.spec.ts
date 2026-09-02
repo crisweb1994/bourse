@@ -50,7 +50,7 @@ test('earnings notice does nothing without explicit immediate-notice opt-in', as
       updateMany: async () => ({ count: 0 }),
     },
   };
-  const service = new EarningsNoticeService(prisma as any);
+  const service = new EarningsNoticeService(prisma as any, { get: () => undefined } as any);
   await service.notify('stock-1', PAYLOAD, 'revision-1', undefined, 'NEW_CARD');
   assert.equal(writes, 0);
 });
@@ -83,7 +83,7 @@ test('earnings notice uses revision and correction kind in the delivery dedupe k
     },
   };
   try {
-    const service = new EarningsNoticeService(prisma as any);
+    const service = new EarningsNoticeService(prisma as any, { get: () => undefined } as any);
     await service.notify('stock-1', PAYLOAD, 'revision-2', 'revision-1', 'CORRECTION');
     assert.equal(dedupeKey, 'user-1:revision-2:CORRECTION:FEISHU:example.com');
   } finally {
@@ -108,7 +108,7 @@ test('earnings notice atomically claims a delivery across concurrent workers', a
       updateMany: async () => ({ count: 0 }),
     },
   };
-  const service = new EarningsNoticeService(prisma as any);
+  const service = new EarningsNoticeService(prisma as any, { get: () => undefined } as any);
   const notice = {
     stockId: 'stock-1',
     revisionId: 'revision-1',
