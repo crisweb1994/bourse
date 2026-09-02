@@ -25,6 +25,7 @@ import {
   ScreeningRefinementPayloadSchema,
   ScreeningRunDtoSchema,
   ScreeningViewSchema,
+  isMarket,
   type CreateScreeningRunRequest,
   type EquityScreenerSnapshot,
   type RefineCandidateResult,
@@ -509,7 +510,7 @@ export class ScreeningService {
 
 function parseMarket(value?: string): ScreeningQuery['market'] {
   const market = value?.trim().toUpperCase();
-  if (market !== 'US' && market !== 'CN' && market !== 'HK') {
+  if (!market || !isMarket(market)) {
     throw new BadRequestException('market must be one of US | CN | HK');
   }
   return market;

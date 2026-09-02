@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { isMarket } from '@bourse/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { StockService } from '../stock/stock.service';
 import { CreateThreadDto, UpdateThreadDto } from './chat.dto';
@@ -30,7 +31,7 @@ export class ThreadService {
         return symbols.includes(normalized)
           && (!market || candidate.market.toUpperCase() === market.toUpperCase());
       });
-      if (exact && ['US', 'CN', 'HK'].includes(exact.market.toUpperCase())) {
+      if (exact && isMarket(exact.market.toUpperCase())) {
         stock = await this.stocks.upsert({
           symbol: exact.symbol,
           name: exact.name,

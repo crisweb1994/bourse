@@ -157,6 +157,13 @@ export const Market = {
 
 export type Market = (typeof Market)[keyof typeof Market];
 
+const MARKET_SET = new Set<string>(Object.values(Market));
+
+/** Strict (case-sensitive) market guard; callers normalize before checking. */
+export function isMarket(value: string): value is Market {
+  return MARKET_SET.has(value);
+}
+
 export const DigestSession = {
   PRE: 'PRE',
   POST: 'POST',

@@ -3,6 +3,7 @@ import {
   Market,
   StockHistoryResponseSchema,
   StockHistoryBatchResponseSchema,
+  isMarket,
   type StockHistoryResponse,
   type StockHistoryBatchResponse,
   type StockSearchResult,
@@ -138,7 +139,7 @@ export class StockService {
     days?: number,
   ): Promise<StockHistoryResponse> {
     const normalizedMarket = market.trim().toUpperCase();
-    if (normalizedMarket !== 'US' && normalizedMarket !== 'CN' && normalizedMarket !== 'HK') {
+    if (!isMarket(normalizedMarket)) {
       throw new BadRequestException('market must be one of US | CN | HK');
     }
     const window =
@@ -269,7 +270,7 @@ export class StockService {
     market: string;
   }): Promise<{ quote: QuoteDto; profile: ProfileDto }> {
     const market = stock.market.trim().toUpperCase();
-    if (market !== 'US' && market !== 'CN' && market !== 'HK') {
+    if (!isMarket(market)) {
       const reason = 'UNSUPPORTED_MARKET';
       return {
         quote: { degraded: true, reason },

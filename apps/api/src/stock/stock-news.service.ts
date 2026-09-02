@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { isMarket } from '@bourse/shared-types';
 import {
   buildAdapterFromEnv,
   WebSearchExecutor,
@@ -77,7 +78,7 @@ export class StockNewsService {
   ): Promise<StockNewsResponse> {
     const m = (market ?? '').trim().toUpperCase();
     const s = (symbol ?? '').trim().toUpperCase();
-    if (!s || (m !== 'US' && m !== 'CN' && m !== 'HK')) {
+    if (!s || !isMarket(m)) {
       return { items: [], degraded: { reason: 'UNSUPPORTED_MARKET' } };
     }
 
