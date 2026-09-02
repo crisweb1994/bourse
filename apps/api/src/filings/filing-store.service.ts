@@ -3,10 +3,8 @@ import type {
   FilingSummary,
 } from '@bourse/market-data';
 import { Injectable } from '@nestjs/common';
-import {
-  computeContentHash,
-  sectionizeFilingText,
-} from '@bourse/analysis';
+import { computeContentHash } from '@bourse/market-data';
+import { sectionizeFilingText } from '@bourse/analysis';
 import { Prisma, type Stock } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 

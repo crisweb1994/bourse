@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { EarningsCardPayload, EarningsNoticePayload } from '@bourse/analysis';
+import { EarningsNoticePayload } from '../digest/brief-payload';
+import type { EarningsCardPayload } from '@bourse/analysis';
 import { Prisma } from '@prisma/client';
 import { delay } from '../common/async';
 import { maskChannelTarget } from '../common/channel-target';

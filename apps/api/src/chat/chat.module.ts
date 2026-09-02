@@ -9,7 +9,6 @@ import { ChatGenerationService } from './generation.service';
 import { ResearchGatewayService } from './research-gateway.service';
 import { ThreadService } from './thread.service';
 import { EarningsModule } from '../earnings/earnings.module';
-import { ANALYSIS_CHAT_PORT, RESEARCH_GATEWAY_PORT } from './types';
 import { InvestorRelationsModule } from '../investor-relations/investor-relations.module';
 
 @Module({
@@ -19,8 +18,6 @@ import { InvestorRelationsModule } from '../investor-relations/investor-relation
     ThreadService,
     ChatGenerationService,
     ResearchGatewayService,
-    { provide: ANALYSIS_CHAT_PORT, useExisting: AnalysisChatService },
-    { provide: RESEARCH_GATEWAY_PORT, useExisting: ResearchGatewayService },
   ],
   exports: [ThreadService, ChatGenerationService],
 })

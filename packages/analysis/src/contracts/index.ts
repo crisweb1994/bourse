@@ -9,7 +9,5 @@ export * from './comprehensive-summary';
 export * from './evidence-pack-v2';
 export * from './sse-events';
 
-// Daily Brief (docs/prd-daily-brief.md) — 定时行情简报契约
-export * from './brief-payload';
 export * from './earnings';
 export * from './investor-relations';

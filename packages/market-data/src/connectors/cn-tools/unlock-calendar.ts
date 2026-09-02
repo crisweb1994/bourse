@@ -120,11 +120,6 @@ async function tryFetch(
   if (source === 'eastmoney') {
     return fetchFromEastmoney(symbol, daysAhead, marketProfile, fetchImpl, signal);
   }
-  if (source === 'cninfo') {
-    throw new Error(
-      `cninfo unlockCalendar not implemented in RFC-02 Phase 1 (future RFC)`,
-    );
-  }
   throw new Error(`unknown source: ${source}`);
 }
 

@@ -1,36 +1,12 @@
 import { z } from 'zod';
-import {
-  ChannelType as SharedChannelType,
-  DigestSession as SharedDigestSession,
-  Market as SharedMarket,
-} from '@bourse/shared-types';
+import { Market as SharedMarket, DigestSession as SharedDigestSession } from '@bourse/shared-types';
 
 /**
- * Daily Brief 契约（docs/prd-daily-brief.md v1.5）。
- *
- * Schema-first（不变式 #4）。本文件是 digest 子系统的全部 zod 契约：
- *  - ChannelConfig：DigestSubscription.channels 的 JSON 形状（订阅凭证）
- *  - BriefPayload：生成层 → ChannelAdapter 的运行时内存结构（v1.4 不落库）
- *
- * 历史注:曾因「api 不直接依赖 zod」放在 analysis——该前提已过时(shared-types
- * 依赖 zod)。ChannelConfig 属 API 订阅契约,迁移 shared-types 归 T2(KISS C2-3);
- * 指数数据获取(fetchIndexQuote 等)实现与导出均在 @bourse/market-data。
- *
- * Market / DigestSession / ChannelType 通过 z.nativeEnum 复用 @bourse/shared-types
- * 的 const-object（与 enums.ts 的 AnalysisMode/Signal 同款桥接），单一来源。
+ * Daily Brief 契约(KISS Codex #5:自 @bourse/analysis 迁入 digest 域——
+ * 这些是 API 内部生成→投递的运行时结构,仅 apps/api/src/digest 与
+ * earnings-notice 消费,不是分析包契约)。ChannelConfig 的单源在
+ * @bourse/shared-types/channel-config。
  */
-
-// ============================================================================
-// 渠道配置（订阅凭证，存 DigestSubscription.channels JSON）
-// ============================================================================
-
-// 渠道契约已单源到 @bourse/shared-types/channel-config(KISS T2-2)——订阅凭证
-// 是 API↔web 公共契约而非分析契约。此处保留同名重导出以兼容既有导入。
-export { ChannelConfig, ChannelType } from '@bourse/shared-types';
-
-// ============================================================================
-// BriefPayload（两段式，发给 ChannelAdapter）
-// ============================================================================
 
 export const IndexQuoteBrief = z.object({
   symbol: z.string(),

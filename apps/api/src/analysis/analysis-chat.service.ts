@@ -1,9 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import type { AnalysisChatContext, AnalysisChatPort, AnalysisChatSummary } from '../chat/types';
+import type { AnalysisChatContext, AnalysisChatSummary } from '../chat/types';
 
 @Injectable()
-export class AnalysisChatService implements AnalysisChatPort {
+export class AnalysisChatService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getAnalysisContext(input: {

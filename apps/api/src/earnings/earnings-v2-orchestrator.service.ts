@@ -1,16 +1,8 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type EarningsEvent, type Filing, type Stock } from '@prisma/client';
-import {
-  computeContentHash,
-  EarningsCardPayloadSchema,
-  EarningsGuidanceCandidateSchema,
-  EarningsNarrativeExtractionSchema,
-  locateSourceSpan,
-  structuredOutputWithRepair,
-  type EarningsCardPayload,
-  type EarningsNarrativeExtraction,
-} from '@bourse/analysis';
+import { computeContentHash } from '@bourse/market-data';
+import { EarningsCardPayloadSchema, EarningsGuidanceCandidateSchema, EarningsNarrativeExtractionSchema, locateSourceSpan, structuredOutputWithRepair, type EarningsCardPayload, type EarningsNarrativeExtraction } from '@bourse/analysis';
 import { PrismaService } from '../prisma/prisma.service';
 import { BoundedTaskQueue } from '../common/bounded-task-queue';
 import { ProviderFactoryService } from '../analysis/provider-factory.service';

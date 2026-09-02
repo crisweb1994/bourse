@@ -3,19 +3,8 @@ import type {
 } from '@bourse/market-data';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  INVESTOR_RELATIONS_MAX_OUTPUT_TOKENS,
-  INVESTOR_RELATIONS_PROMPT_VERSION,
-  INVESTOR_RELATIONS_SCHEMA_VERSION,
-  INVESTOR_RELATIONS_SYSTEM_PROMPT,
-  InvestorRelationsExtractionSchema,
-  InvestorRelationsRevisionPayloadSchema,
-  buildInvestorRelationsUserPrompt,
-  computeContentHash,
-  locateSourceSpan,
-  structuredOutputWithRepair,
-  type InvestorRelationsRevisionPayload,
-} from '@bourse/analysis';
+import { computeContentHash } from '@bourse/market-data';
+import { INVESTOR_RELATIONS_MAX_OUTPUT_TOKENS, INVESTOR_RELATIONS_PROMPT_VERSION, INVESTOR_RELATIONS_SCHEMA_VERSION, INVESTOR_RELATIONS_SYSTEM_PROMPT, InvestorRelationsExtractionSchema, InvestorRelationsRevisionPayloadSchema, buildInvestorRelationsUserPrompt, locateSourceSpan, structuredOutputWithRepair, type InvestorRelationsRevisionPayload } from '@bourse/analysis';
 import { Prisma, type Filing, type InvestorRelationsEvent, type Stock } from '@prisma/client';
 import { BoundedTaskQueue } from '../common/bounded-task-queue';
 import { ProviderFactoryService } from '../analysis/provider-factory.service';

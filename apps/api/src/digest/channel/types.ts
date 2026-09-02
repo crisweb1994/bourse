@@ -1,4 +1,5 @@
-import type { BriefPayload, ChannelConfig } from '@bourse/analysis';
+import { BriefPayload } from '../brief-payload';
+import type { ChannelConfig } from '@bourse/analysis';
 
 /** Credential-free target used by DeliveryRecord and warning logs. */
 export { maskChannelTarget as maskTarget } from '../../common/channel-target';

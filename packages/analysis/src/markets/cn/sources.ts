@@ -100,13 +100,12 @@ export const CN_SOURCE_PRIORITIES: Record<string, string[]> = {
   // financialStatement isn't a fact field on its own (it populates revenue/
   // netIncome/EPS into the broader fundamentals view) but tools key on it.
   financialStatement: ['eastmoney', 'cninfo'],
-  consensusEps: ['eastmoney', 'thsNorthbound'],
+  // KISS(Codex #4):优先级只列已实现的数据源;未来接入同花顺/巨潮时再加回。
+  consensusEps: ['eastmoney'],
   lhbAppearances: ['eastmoney'],
-  // RFC-02 Phase 1: eastmoney has the working impl; thsNorthbound is kept as
-  // fallback for the future RFC that adds the 10jqka adapter.
-  northboundFlow: ['eastmoney', 'thsNorthbound'],
-  unlockCalendar: ['eastmoney', 'cninfo'],
-  shareholderConcentration: ['cninfo', 'eastmoney'],
+  northboundFlow: ['eastmoney'],
+  unlockCalendar: ['eastmoney'],
+  shareholderConcentration: ['eastmoney'],
   // peHistoricalPercentile is derived locally from quote + financialStatement.
   // Not a separately-fetched source.
 };

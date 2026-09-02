@@ -5,7 +5,8 @@ import { DigestDeliveryService } from './delivery.service';
 import { WebhookAdapter } from './channel/webhook.adapter';
 import { FeishuAdapter } from './channel/feishu.adapter';
 import { TelegramAdapter } from './channel/telegram.adapter';
-import type { BriefPayload, ChannelConfig } from '@bourse/analysis';
+import { BriefPayload } from './brief-payload';
+import type { ChannelConfig } from '@bourse/analysis';
 
 // ============================================================================
 // 单测：DigestDeliveryService。fetch 全局 stub，验证重试 / DeliveryRecord / 脱敏 /

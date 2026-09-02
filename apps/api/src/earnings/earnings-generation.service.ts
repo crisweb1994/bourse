@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { computeContentHash } from '@bourse/analysis';
+import { computeContentHash } from '@bourse/market-data';
 import { EARNINGS_EXTRACTION_PROMPT_VERSION, EARNINGS_SCHEMA_VERSION } from '@bourse/analysis';
 import { Prisma, type Stock } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';

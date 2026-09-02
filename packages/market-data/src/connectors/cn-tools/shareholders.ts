@@ -7,7 +7,7 @@ import type {
   MarketDataToolResult as ToolResult,
 } from './types';
 import type { CnToolFetchLike } from './_fetch-headers';
-import { defaultFetch, pickFloat, pickInt, pickDecimalFromPct } from './shared';
+import { defaultFetch, pickFloat, pickInt, pickDecimalFromPct, resolveSourcePriorities } from './shared';
 import { cnBrowserHeaders } from './_fetch-headers';
 
 /**
@@ -236,15 +236,6 @@ function makeCitation(symbol: string, url: string): Citation {
     sourceType: 'OTHER',
     retrievedAt: new Date().toISOString(),
   };
-}
-
-function resolveSourcePriorities(
-  profile: MarketProfile | undefined,
-  fact: string,
-): string[] {
-  const fromProfile = profile?.sourcePriorities?.[fact];
-  if (fromProfile && fromProfile.length > 0) return fromProfile;
-  return ['eastmoney'];
 }
 
 export const shareholdersCN = makeShareholdersCN();

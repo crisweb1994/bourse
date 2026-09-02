@@ -55,7 +55,7 @@ import type { MarketCode } from './contracts/instrument';
 import type { CachePort } from './ports/cache';
 import type { SourceRequestContext } from './ports/request-context';
 import { MemoryCache } from './cache/memory-cache';
-import { createBuiltInSourcePlugins } from './sources/built-in';
+import { createBuiltInSources } from './sources/built-in';
 import { unavailable } from './sources/provider-port';
 import { InMemorySourceHealth } from './sources/health';
 import { InMemoryRateLimiter } from './sources/rate-limit';
@@ -383,8 +383,11 @@ export class ResearchMarketDataClient {
 
 export function createMarketData(options: CreateMarketDataOptions = {}): ResearchMarketDataClient {
   const registry = new SourceRegistry();
-  for (const plugin of createBuiltInSourcePlugins(createDefaultProviderPorts(options))) {
-    registry.registerPlugin(plugin, {});
+  // KISS Codex #1: built-in sources register as instances directly — the
+  // instance→plugin→instance round-trip was ceremony. registerPlugin stays
+  // for config-driven external plugins (tushare/massive/nbs).
+  for (const instance of createBuiltInSources(createDefaultProviderPorts(options))) {
+    registry.register(instance);
   }
   registry.registerPlugin(createNbsMacroSourcePlugin(), {});
   if (options.tushare?.token.trim() && options.tushare.enabledDataSets.length > 0) {

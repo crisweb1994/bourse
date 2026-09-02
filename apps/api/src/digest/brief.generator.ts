@@ -1,10 +1,8 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { BriefPayload, type IndexQuoteBrief, type WatchlistItemBrief } from './brief-payload';
 import {
   type AgentProvider,
-  BriefPayload,
-  type IndexQuoteBrief,
-  type WatchlistItemBrief,
   computeTechnicalIndicators,
 } from '@bourse/analysis';
 import {

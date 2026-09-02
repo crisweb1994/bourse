@@ -45,19 +45,6 @@ export interface AnalysisChatContext extends AnalysisChatSummary {
   }>;
 }
 
-export interface AnalysisChatPort {
-  getAnalysisContext(input: {
-    userId: string;
-    stockId: string;
-    analysisId: string;
-    sectionTypes?: string[];
-  }): Promise<AnalysisChatContext>;
-  listEligibleAnalyses(input: {
-    userId: string;
-    stockId: string;
-  }): Promise<AnalysisChatSummary[]>;
-}
-
 export interface ChatSourceSnapshot {
   title: string;
   url: string;
@@ -79,15 +66,3 @@ export interface ResearchGatewayResult {
   }>;
 }
 
-export interface ResearchGatewayPort {
-  research(input: {
-    userId: string;
-    stockId: string;
-    symbol: string;
-    question: string;
-    requestId: string;
-  }): Promise<ResearchGatewayResult>;
-}
-
-export const ANALYSIS_CHAT_PORT = Symbol('ANALYSIS_CHAT_PORT');
-export const RESEARCH_GATEWAY_PORT = Symbol('RESEARCH_GATEWAY_PORT');

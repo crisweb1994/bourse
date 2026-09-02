@@ -19,16 +19,7 @@ export * from './contracts';
 export { QualityTier } from '@bourse/market-data';
 // Daily Brief (docs/prd-daily-brief.md) — zod schemas 同名 value+type，跨包
 // 需 explicit re-export（isolatedModules，同 QualityTier 模式）。
-export { ChannelConfig, ChannelType, BriefPayload } from './contracts/brief-payload';
-export {
-  computeContentHash,
-  computeBinaryContentHash,
-  formatInstrumentId,
-  isInstrumentIdFormat,
-  parseInstrumentId,
-  parseYahooSymbol,
-} from './util';
-export type { ParsedInstrumentId, ParsedProviderSymbol } from './util';
+export { ChannelConfig, ChannelType } from '@bourse/shared-types';
 export { canonicalJson, canonicalJsonHash } from './util';
 
 // ---- Agent SDK (formerly @bourse/agent) ----------------------------

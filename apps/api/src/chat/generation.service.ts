@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -15,17 +14,13 @@ import {
   type ChatSseEnvelope,
   OverallSignal,
 } from '@bourse/shared-types';
+import { AnalysisChatService } from '../analysis/analysis-chat.service';
 import { ProviderResolverService } from '../analysis/provider-resolver.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StockService } from '../stock/stock.service';
 import { CreateChatGenerationDto } from './chat.dto';
-import {
-  ANALYSIS_CHAT_PORT,
-  RESEARCH_GATEWAY_PORT,
-  type AnalysisChatContext,
-  type AnalysisChatPort,
-  type ResearchGatewayPort,
-} from './types';
+import type { AnalysisChatContext } from './types';
+import { ResearchGatewayService } from './research-gateway.service';
 import {
   isEarningsQuestion,
   isUnsupportedQuestion,
@@ -71,8 +66,8 @@ export class ChatGenerationService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly threads: ThreadService,
-    @Inject(ANALYSIS_CHAT_PORT) private readonly analysis: AnalysisChatPort,
-    @Inject(RESEARCH_GATEWAY_PORT) private readonly gateway: ResearchGatewayPort,
+    private readonly analysis: AnalysisChatService,
+    private readonly gateway: ResearchGatewayService,
     private readonly providerResolver: ProviderResolverService,
     private readonly stocks: StockService,
     private readonly earnings: EarningsQueryService,

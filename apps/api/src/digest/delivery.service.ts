@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { BriefPayload, ChannelConfig } from '@bourse/analysis';
+import { BriefPayload } from './brief-payload';
+import type { ChannelConfig } from '@bourse/analysis';
 import { delay } from '../common/async';
 import { PrismaService } from '../prisma/prisma.service';
 import { DigestSubscriptionService } from './digest.service';
