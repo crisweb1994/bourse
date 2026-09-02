@@ -24,47 +24,9 @@ import {
 // 渠道配置（订阅凭证，存 DigestSubscription.channels JSON）
 // ============================================================================
 
-export const ChannelType = z.nativeEnum(SharedChannelType);
-export type ChannelType = z.infer<typeof ChannelType>;
-
-/**
- * 渠道配置 discriminated union。各平台字段不同：
- *  - incoming webhook 类（飞书/钉钉/企微/Slack）：url [+ secret]
- *  - Telegram：Bot Token + Chat ID（非 webhook）
- *  - 通用 Webhook：url + HMAC secret
- * 凭证明文落库（同 AiProviderSetting.apiKey 策略，加密属 Phase 2）。
- */
-export const ChannelConfig = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('WEBHOOK'),
-    url: z.string().url(),
-    secret: z.string().min(1),
-  }),
-  z.object({
-    type: z.literal('FEISHU'),
-    url: z.string().url(),
-    secret: z.string().optional(), // 飞书自定义机器人签名校验可选
-  }),
-  z.object({
-    type: z.literal('DINGTALK'),
-    url: z.string().url(),
-    secret: z.string().min(1), // 钉钉必填签名（timestamp + secret）
-  }),
-  z.object({
-    type: z.literal('WECOM'),
-    url: z.string().url(),
-  }),
-  z.object({
-    type: z.literal('TELEGRAM'),
-    botToken: z.string().min(1),
-    chatId: z.string().min(1),
-  }),
-  z.object({
-    type: z.literal('SLACK'),
-    url: z.string().url(),
-  }),
-]);
-export type ChannelConfig = z.infer<typeof ChannelConfig>;
+// 渠道契约已单源到 @bourse/shared-types/channel-config(KISS T2-2)——订阅凭证
+// 是 API↔web 公共契约而非分析契约。此处保留同名重导出以兼容既有导入。
+export { ChannelConfig, ChannelType } from '@bourse/shared-types';
 
 // ============================================================================
 // BriefPayload（两段式，发给 ChannelAdapter）

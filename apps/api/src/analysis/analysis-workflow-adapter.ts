@@ -1,5 +1,4 @@
 import { Logger } from '@nestjs/common';
-import { createHash } from 'node:crypto';
 import type {
   AnalysisMode,
   AnalysisTerminalStatus,
@@ -14,6 +13,7 @@ import {
   SectionResult,
   type SseEvent,
   streamComprehensive,
+  canonicalJsonHash,
 } from '@bourse/analysis';
 import type { PrismaService } from '../prisma/prisma.service';
 import {
@@ -468,7 +468,7 @@ async function persistEvidenceSnapshot(
   }
   const capturedAt =
     typeof raw.capturedAt === 'string' ? raw.capturedAt : new Date().toISOString();
-  const contentHash = createHash('sha256').update(canonicalJson(pack)).digest('hex');
+  const contentHash = canonicalJsonHash(pack);
   await prisma.analysisEvidenceSnapshot.create({
     data: {
       analysisId,
@@ -484,14 +484,4 @@ async function persistEvidenceSnapshot(
       contentHash,
     },
   });
-}
-
-function canonicalJson(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  const object = value as Record<string, unknown>;
-  return `{${Object.keys(object)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key])}`)
-    .join(',')}}`;
 }

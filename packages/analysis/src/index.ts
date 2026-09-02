@@ -29,6 +29,7 @@ export {
   parseYahooSymbol,
 } from './util';
 export type { ParsedInstrumentId, ParsedProviderSymbol } from './util';
+export { canonicalJson, canonicalJsonHash } from './util';
 
 // ---- Agent SDK (formerly @bourse/agent) ----------------------------
 export * from './compute';

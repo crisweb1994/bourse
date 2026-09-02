@@ -7,7 +7,6 @@ import {
   NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
-import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import {
   ChatEventNameSchema,
@@ -37,6 +36,7 @@ import { ThreadService } from './thread.service';
 import { EarningsQueryService } from '../earnings/earnings-query.service';
 import { EarningsSectionsService, type EarningsSectionSource } from '../earnings/earnings-sections.service';
 import { InvestorRelationsQueryService } from '../investor-relations/investor-relations-query.service';
+import { canonicalJsonHash } from '@bourse/analysis';
 
 export type ChatSseEvent = ChatSseEnvelope;
 
@@ -171,7 +171,7 @@ export class ChatGenerationService implements OnModuleInit {
       investorRelations: irEvent ?? null,
     };
     const analysisContextHash = context
-      ? createHash('sha256').update(canonicalJson(context)).digest('hex')
+      ? canonicalJsonHash(context)
       : undefined;
 
     let generation;
@@ -492,9 +492,7 @@ export class ChatGenerationService implements OnModuleInit {
             gatewayVersion: result.gatewayVersion,
             sources: result.sources as any,
             citationCandidates: result.citationCandidates as any,
-            contentHash: createHash('sha256')
-              .update(canonicalJson({ question, result }))
-              .digest('hex'),
+            contentHash: canonicalJsonHash({ question, result }),
           },
         });
         openResearchSnapshotId = open.id;
@@ -958,11 +956,4 @@ export class ChatGenerationService implements OnModuleInit {
       if (terminal) this.states.delete(terminal[0]);
     }
   }
-}
-
-function canonicalJson(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  const object = value as Record<string, unknown>;
-  return `{${Object.keys(object).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key])}`).join(',')}}`;
 }

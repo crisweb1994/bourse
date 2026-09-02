@@ -7,3 +7,4 @@ export {
   parseYahooSymbol,
 } from '@bourse/market-data';
 export type { ParsedInstrumentId, ParsedProviderSymbol } from '@bourse/market-data';
+export { canonicalJson, canonicalJsonHash } from './canonical-json';

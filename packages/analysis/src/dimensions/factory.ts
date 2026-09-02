@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { SectionResult } from '../contracts/analysis-result';
-import type { SectionType } from '../contracts/enums';
+import { FocusWindow, type SectionType } from '../contracts/enums';
 import { DEFAULT_FRESHNESS } from './freshness';
 import type { Dimension, DimensionInput, MultiRoundPlan } from './types';
 
@@ -10,7 +10,7 @@ export const STANDARD_INPUT_SCHEMA = z.object({
   name: z.string().optional(),
   locale: z.string().min(2),
   question: z.string().trim().min(1).max(500).optional(),
-  focusWindow: z.enum(['30D', '90D', '1Y', '3Y']).optional(),
+  focusWindow: FocusWindow.optional(),
   sectionContext: z.string().max(20_000).optional(),
 });
 

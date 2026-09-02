@@ -39,6 +39,9 @@ export function hashRawFixture(raw: RawFixture): string {
   return createHash('sha256').update(JSON.stringify(canonical)).digest('hex').slice(0, 16);
 }
 
+// 注意:这是 eval 专用的 canonicalize(排序后 JSON.stringify,输出取 16 位),
+// 与共享的 canonicalJsonHash 序列化方式不同——切换会改变全部 eval fixture
+// 哈希,故保留独立实现(KISS T2-1 记录)。
 function canonicalize(v: unknown): unknown {
   if (Array.isArray(v)) return v.map(canonicalize);
   if (v && typeof v === 'object') {

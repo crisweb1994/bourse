@@ -16,9 +16,6 @@ export function inMemoryCache(): CachePort {
         storedAt: new Date().toISOString(),
       });
     },
-    async invalidate(prefix) {
-      for (const k of store.keys()) if (k.startsWith(prefix)) store.delete(k);
-    },
   };
 }
 

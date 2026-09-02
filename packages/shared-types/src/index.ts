@@ -7,6 +7,7 @@ export * from './homepage';
 export * from './web-search-settings';
 export * from './ai-provider-settings';
 export * from './analysis-sse';
+export * from './channel-config';
 
 // ===== Enums =====
 

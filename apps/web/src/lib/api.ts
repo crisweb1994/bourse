@@ -6,6 +6,7 @@ import {
   type ChartEvidenceResponse,
   type StockHistoryResponse,
   type StockHistoryBatchResponse,
+  ChannelConfig,
 } from '@bourse/shared-types';
 import type {
   AnalysisMode,
@@ -852,13 +853,8 @@ export type DigestMarket = Market;
 export type { DigestSession };
 export type DigestChannelType = ChannelType;
 
-export type DigestChannel =
-  | { type: 'WEBHOOK'; url: string; secret: string }
-  | { type: 'FEISHU'; url: string; secret?: string }
-  | { type: 'DINGTALK'; url: string; secret: string }
-  | { type: 'WECOM'; url: string }
-  | { type: 'TELEGRAM'; botToken: string; chatId: string }
-  | { type: 'SLACK'; url: string };
+// 渠道契约单源于 shared-types 的 zod union(T2-2);结构与原手写联合逐字段一致。
+export type DigestChannel = ChannelConfig;
 
 export interface DigestSubscriptionDto {
   markets: DigestMarket[];

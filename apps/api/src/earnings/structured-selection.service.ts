@@ -1,8 +1,7 @@
-import { createHash } from 'crypto';
 import { Injectable } from '@nestjs/common';
 import { Prisma, type FinancialDataSnapshot } from '@prisma/client';
 import type { FinancialsBundleV2 } from '@bourse/market-data';
-import type { StructuredEarningsSelection } from '@bourse/analysis';
+import { canonicalJsonHash, type StructuredEarningsSelection } from '@bourse/analysis';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -92,21 +91,7 @@ export function selectionVersionOf(selection: StructuredEarningsSelection): stri
   return stableHash({ status: selection.status, selectedPeriodId, facts });
 }
 
-/** 稳定 JSON hash：递归排序对象 key，避免键序影响 content hash。 */
+/** 稳定 JSON hash:委托 @bourse/analysis 的 canonical 单源实现(T2-1)。 */
 export function stableHash(value: unknown): string {
-  return createHash('sha256').update(canonicalJson(value)).digest('hex');
-}
-
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) {
-    return `[${value.map((item) => canonicalJson(item)).join(',')}]`;
-  }
-  if (value !== null && typeof value === 'object') {
-    const record = value as Record<string, unknown>;
-    const keys = Object.keys(record).sort();
-    return `{${keys
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value);
+  return canonicalJsonHash(value);
 }
