@@ -105,3 +105,26 @@ export function failure<T>(
     ],
   };
 }
+
+
+/**
+ * KISS C6 (429 throw-type completion): sentinel for raw HTTP status failures
+ * thrown past a fetch helper, so wrapping catches can classify rate limiting
+ * instead of collapsing everything into SOURCE_UNAVAILABLE.
+ */
+export class HttpError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = 'HttpError';
+  }
+}
+
+/** Map a caught fetch error to the source failure code for the envelope. */
+export function failureCodeFor(error: unknown): 'RATE_LIMITED' | 'SOURCE_UNAVAILABLE' {
+  return error instanceof HttpError && error.status === 429
+    ? 'RATE_LIMITED'
+    : 'SOURCE_UNAVAILABLE';
+}

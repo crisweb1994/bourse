@@ -3,7 +3,7 @@ import { RESEARCH_SCHEMA_VERSION, type ResearchResult } from '../../contracts/re
 import type { ResearchWarning } from '../../contracts/warning';
 import type { ProviderFinancePort as FinancePort, HistoryInput, PriceBar, Quote, QuoteInput } from '../../ports/finance';
 import { parseInstrumentId } from '../../util/instrument-id';
-import { failure as httpFailure, resolveFetch, withTimeout } from '../http';
+import { failure as httpFailure, resolveFetch, withTimeout, HttpError, failureCodeFor } from '../http';
 import type { ConnectorRunContext, FetchLike } from '../types';
 
 const PROVIDER = 'tencent-finance';
@@ -88,7 +88,7 @@ export function createTencentHkFinanceConnector(
           }],
         };
       } catch (error) {
-        return quoteFailure(retrievedAt, 'SOURCE_UNAVAILABLE', `Tencent HK quote failed: ${messageOf(error)}`);
+        return quoteFailure(retrievedAt, failureCodeFor(error), `Tencent HK quote failed: ${messageOf(error)}`);
       }
     },
 
@@ -129,7 +129,7 @@ export function createTencentHkFinanceConnector(
             : [],
         };
       } catch (error) {
-        return historyFailure(retrievedAt, 'SOURCE_UNAVAILABLE', `Tencent HK history failed: ${messageOf(error)}`);
+        return historyFailure(retrievedAt, failureCodeFor(error), `Tencent HK history failed: ${messageOf(error)}`);
       }
     },
   };
@@ -148,7 +148,7 @@ async function fetchSeries(
       headers: { Accept: 'application/json, text/plain, */*', 'User-Agent': 'Mozilla/5.0' },
       signal,
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) throw new HttpError(`HTTP ${response.status}`, response.status);
     const payload = await response.json() as TencentKlineResponse;
     const rows = payload.data?.[providerSymbol]?.day;
     if (payload.code !== 0 || !Array.isArray(rows)) throw new Error('invalid or empty kline payload');

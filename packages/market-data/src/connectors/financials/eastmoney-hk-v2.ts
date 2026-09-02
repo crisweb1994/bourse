@@ -10,7 +10,7 @@ import {
 } from '../../ports/financials-v2';
 import { parseInstrumentId } from '../../util/instrument-id';
 import type { ConnectorRunContext, FetchLike } from '../types';
-import { failure as httpFailure, resolveFetch, withTimeout } from '../http';
+import { failure as httpFailure, resolveFetch, withTimeout, HttpError, failureCodeFor } from '../http';
 
 /**
  * Eastmoney HK F10 connector — v2（structured-first earnings）。
@@ -116,7 +116,7 @@ export function createEastmoneyHkV2FinancialsConnector(
         reportingCurrency = currency;
       } catch (err) {
         const message = (err as Error)?.message ?? String(err);
-        return failure(retrievedAt, 'SOURCE_UNAVAILABLE', `Eastmoney HK fetch error: ${message}`, message);
+        return failure(retrievedAt, failureCodeFor(err), `Eastmoney HK fetch error: ${message}`, message);
       }
 
       if (mainRows.length === 0) {
@@ -194,7 +194,7 @@ function queryFor(reportName: string, secucode: string, pageSize: number): strin
 
 async function readBody(fetchLike: FetchLike, url: string, signal: AbortSignal): Promise<string> {
   const res = await fetchLike(url, { headers: COMMON_HEADERS, signal });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) throw new HttpError(`HTTP ${res.status}`, res.status);
   return res.text ? await res.text() : JSON.stringify(await res.json());
 }
 

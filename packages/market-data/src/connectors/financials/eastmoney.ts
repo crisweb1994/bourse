@@ -13,7 +13,7 @@ import type {
 } from '../../ports/financials';
 import { parseInstrumentId } from '../../util/instrument-id';
 import type { ConnectorRunContext, FetchLike } from '../types';
-import { failure as httpFailure, resolveFetch, withTimeout } from '../http';
+import { failure as httpFailure, resolveFetch, withTimeout, HttpError, failureCodeFor } from '../http';
 import { deriveTTM } from './ttm-derivation';
 import {
   BALANCE_FIELDS,
@@ -138,7 +138,7 @@ export function createEastmoneyFinancialsConnector(
         cashflowRows = cashflowRes;
       } catch (err) {
         const message = (err as Error)?.message ?? String(err);
-        return failure(retrievedAt, 'SOURCE_UNAVAILABLE', `Eastmoney fetch error: ${message}`, message);
+        return failure(retrievedAt, failureCodeFor(err), `Eastmoney fetch error: ${message}`, message);
       }
 
       if (incomeRows.length === 0 && balanceRows.length === 0 && cashflowRows.length === 0) {
@@ -217,7 +217,7 @@ async function fetchRows(
 ): Promise<EastmoneyFinancialsRow[]> {
   const res = await fetchLike(url, { headers: COMMON_HEADERS, signal });
   if (!res.ok) {
-    throw new Error(`HTTP ${res.status}`);
+    throw new HttpError(`HTTP ${res.status}`, res.status);
   }
   const body = res.text ? await res.text() : JSON.stringify(await res.json());
   let parsed: unknown;
