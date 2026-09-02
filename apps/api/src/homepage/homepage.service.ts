@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { FocusWindow as PrismaFocusWindow } from '@prisma/client';
 import type {
   FocusWindow,
   HomepageBriefDto,
@@ -233,14 +234,15 @@ function toStockDto(stock: StockRow): StockDto {
 }
 
 function toFocusWindow(value: string): FocusWindow {
-  return (
-    {
-      D30: '30D',
-      D90: '90D',
-      Y1: '1Y',
-      Y3: '3Y',
-    } as Record<string, FocusWindow>
-  )[value] ?? (value as FocusWindow);
+  // Keyed by the Prisma FocusWindow enum names; Record makes the mapping
+  // exhaustive at compile time so enum drift fails typecheck, not runtime.
+  const MAP: Record<PrismaFocusWindow, FocusWindow> = {
+    D30: '30D',
+    D90: '90D',
+    Y1: '1Y',
+    Y3: '3Y',
+  };
+  return (MAP as Record<string, FocusWindow>)[value] ?? '30D';
 }
 
 function earningsPeriodLabel(event: {
