@@ -12,9 +12,9 @@ import {
  *  - ChannelConfig：DigestSubscription.channels 的 JSON 形状（订阅凭证）
  *  - BriefPayload：生成层 → ChannelAdapter 的运行时内存结构（v1.4 不落库）
  *
- * 放在 analysis/contracts 是因为 zod 依赖在 analysis 包（api 不直接依赖 zod，
- * pnpm strict）。指数数据层（fetchIndexQuote 等）也在 analysis 包，契约同包一致。
- * api digest module 从 @bourse/analysis 消费这些类型。
+ * 历史注:曾因「api 不直接依赖 zod」放在 analysis——该前提已过时(shared-types
+ * 依赖 zod)。ChannelConfig 属 API 订阅契约,迁移 shared-types 归 T2(KISS C2-3);
+ * 指数数据获取(fetchIndexQuote 等)实现与导出均在 @bourse/market-data。
  *
  * Market / DigestSession / ChannelType 通过 z.nativeEnum 复用 @bourse/shared-types
  * 的 const-object（与 enums.ts 的 AnalysisMode/Signal 同款桥接），单一来源。

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type { ProviderFilingPort as FilingPort } from '@bourse/analysis';
+import type { ProviderFilingPort as FilingPort } from '@bourse/market-data';
 import {
   buildParserDerivationKey,
   EarningsSourceService,

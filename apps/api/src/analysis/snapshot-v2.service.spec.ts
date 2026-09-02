@@ -1,14 +1,16 @@
+import type {
+  Quote,
+  ResearchResult,
+} from '@bourse/market-data';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type {
+import {
   ProviderFilingPort as FilingPort,
   ProviderCompanyProfilePort as CompanyProfilePort,
   ProviderFinancePort as FinancePort,
   ProviderFinancialsPort as FinancialsPort,
   ProviderMacroPort as MacroPort,
-  Quote,
-  ResearchResult,
-} from '@bourse/analysis';
+} from '@bourse/market-data';
 import { createBuiltInSources, createResearchMarketDataClient } from '@bourse/market-data';
 import { SnapshotV2Service } from './snapshot-v2.service';
 

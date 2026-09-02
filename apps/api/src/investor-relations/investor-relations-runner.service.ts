@@ -1,3 +1,6 @@
+import type {
+  FilingPage,
+} from '@bourse/market-data';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -11,7 +14,6 @@ import {
   computeContentHash,
   locateSourceSpan,
   structuredOutputWithRepair,
-  type FilingPage,
   type InvestorRelationsRevisionPayload,
 } from '@bourse/analysis';
 import { Prisma, type Filing, type InvestorRelationsEvent, type Stock } from '@prisma/client';

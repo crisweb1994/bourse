@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ToolContext } from '../../../tools/types';
+import type { MarketDataToolContext } from '@bourse/market-data';
 import { makeAkshareNorthboundCN, type CnToolFetchLike } from '@bourse/market-data';
 
-const ctx: ToolContext = {
+const ctx: MarketDataToolContext = {
   marketProfile: undefined,
   signal: undefined,
-} as unknown as ToolContext;
+} as unknown as MarketDataToolContext;
 
 function fakeRes({ body, status = 200 }: { body: unknown; status?: number }) {
   return {

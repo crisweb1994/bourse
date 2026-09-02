@@ -1,9 +1,11 @@
+import type {
+  FilingDocument,
+  FilingSummary,
+} from '@bourse/market-data';
 import { Injectable } from '@nestjs/common';
 import {
   computeContentHash,
   sectionizeFilingText,
-  type FilingDocument,
-  type FilingSummary,
 } from '@bourse/analysis';
 import { Prisma, type Stock } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';

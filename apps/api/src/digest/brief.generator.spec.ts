@@ -1,6 +1,9 @@
+import type {
+  PriceBar,
+} from '@bourse/market-data';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { PriceBar } from '@bourse/analysis';
+
 import { DigestGeneratorService } from './brief.generator';
 
 // ============================================================================

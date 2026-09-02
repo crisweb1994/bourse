@@ -10,12 +10,12 @@
 
 export const VERSION = '0.1.0' as const;
 
-// ---- Research data layer (formerly @bourse/research-core) ----------
-export * from '@bourse/market-data';
+// ---- Contracts ------------------------------------------------------
 export * from './contracts';
 
 // Explicit value+type re-exports for zod schemas that share name with their
 // inferred type — required across package boundaries under isolatedModules.
+// (KISS C4: market-data is NOT star-re-exported; import it directly.)
 export { QualityTier } from '@bourse/market-data';
 // Daily Brief (docs/prd-daily-brief.md) — zod schemas 同名 value+type，跨包
 // 需 explicit re-export（isolatedModules，同 QualityTier 模式）。
@@ -25,8 +25,6 @@ export {
   computeBinaryContentHash,
   formatInstrumentId,
   isInstrumentIdFormat,
-  markdownToPlainText,
-  normalizeUrl,
   parseInstrumentId,
   parseYahooSymbol,
 } from './util';
@@ -64,17 +62,6 @@ export {
   type ProfileFetcher,
   type QuoteFetcher,
 } from './snapshot/market-config';
-
-export {
-  projectForDimension,
-  projectForCompanyQuality,
-  projectForIndustryPosition,
-  projectForValuationScenarios,
-  projectForRiskRegister,
-  projectForMarketSignals,
-  type DimensionFactView,
-  type DimensionName,
-} from './snapshot/fact-filter';
 
 export {
   DataAvailabilitySchema,

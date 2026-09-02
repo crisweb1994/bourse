@@ -6,10 +6,12 @@ import {
   type IndexQuoteBrief,
   type WatchlistItemBrief,
   computeTechnicalIndicators,
+} from '@bourse/analysis';
+import {
   fetchIndexHistory,
   fetchIndexQuote,
   INDEX_SYMBOLS,
-} from '@bourse/analysis';
+} from '@bourse/market-data';
 import { PrismaService } from '../prisma/prisma.service';
 import { SnapshotV2Service } from '../analysis/snapshot-v2.service';
 import { ProviderFactoryService } from '../analysis/provider-factory.service';
@@ -55,10 +57,10 @@ export class DigestGeneratorService {
     private readonly earnings: EarningsQueryService,
     /**
      * 指数数据层 + 技术指标计算钩子，仅用于单测注入 stub；生产环境留空走
-     * `@bourse/analysis` 默认实现（fetchIndexQuote / fetchIndexHistory /
-     * computeTechnicalIndicators）。@Optional() 让真实 Nest DI 不注入（生产
-     * 不传），单测直接 new 时手动传。与 analysis-workflow-adapter 的
-     * `_streamFactory` 同款 test hook 风格。
+     * `@bourse/market-data` 的 fetchIndexQuote / fetchIndexHistory 与
+     * `@bourse/analysis` 的 computeTechnicalIndicators。@Optional() 让真实
+     * Nest DI 不注入（生产不传），单测直接 new 时手动传。与
+     * analysis-workflow-adapter 的 `_streamFactory` 同款 test hook 风格。
      */
     @Optional() deps?: {
       index?: IndexLayer;

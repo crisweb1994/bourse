@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type {
   FinancialsBundle,
   FinancialsPeriodEntry,
-} from '../..';
+} from '@bourse/market-data';
 import { detectRedFlags } from '../red-flags';
 
 function fy(

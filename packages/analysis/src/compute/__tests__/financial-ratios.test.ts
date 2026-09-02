@@ -3,7 +3,7 @@ import type {
   FinancialsBundle,
   FinancialsPeriodEntry,
   Quote,
-} from '../..';
+} from '@bourse/market-data';
 import { computeFinancialRatios } from '../financial-ratios';
 
 // ============================================================================

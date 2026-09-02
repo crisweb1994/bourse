@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { Quote } from '../..';
+import type {
+  Quote,
+} from '@bourse/market-data';
 import { snapshotToEvidencePack } from '../to-evidence-pack';
 import type { StockSnapshot } from '../types';
 

@@ -4,7 +4,7 @@ import type {
   FinancialsPeriodEntry,
   PriceBar,
   Quote,
-} from '../..';
+} from '@bourse/market-data';
 import {
   __test,
   computeValuation,

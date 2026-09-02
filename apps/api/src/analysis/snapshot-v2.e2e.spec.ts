@@ -1,3 +1,10 @@
+import type {
+  FilingSummary,
+  FinancialsBundle,
+  PriceBar,
+  Quote,
+  ResearchResult,
+} from '@bourse/market-data';
 /**
  * plan-v2 Wave 2.5 — end-to-end test for SnapshotV2 path.
  *
@@ -17,19 +24,16 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type {
+import {
   ProviderFilingPort as FilingPort,
   ProviderCompanyProfilePort as CompanyProfilePort,
-  FilingSummary,
   ProviderFinancePort as FinancePort,
-  FinancialsBundle,
   ProviderFinancialsPort as FinancialsPort,
   ProviderMacroPort as MacroPort,
-  PriceBar,
-  Quote,
-  ResearchResult,
+} from '@bourse/market-data';
+import {
+  EvidencePackV2 as EvidencePackV2Schema,
 } from '@bourse/analysis';
-import { EvidencePackV2 as EvidencePackV2Schema } from '@bourse/analysis';
 import {
   createBuiltInSources,
   createCnPublicMarketEventsConnector,
