@@ -16,7 +16,10 @@ import {
   TestWebSearchSettingDto,
   UpsertWebSearchSettingDto,
 } from './web-search-settings.dto';
-import { WebSearchSettingsService } from './web-search-settings.service';
+import {
+  ProviderShapeError,
+  WebSearchSettingsService,
+} from './web-search-settings.service';
 
 @Controller('settings/web-search')
 @UseGuards(JwtCookieGuard, CsrfGuard)
@@ -36,8 +39,12 @@ export class WebSearchSettingsController {
     try {
       return await this.svc.upsert(user.id, dto);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      throw new BadRequestException(msg);
+      // Only client-fixable shape violations map to 400; infrastructure
+      // errors keep their 500 semantics.
+      if (err instanceof ProviderShapeError) {
+        throw new BadRequestException(err.message);
+      }
+      throw err;
     }
   }
 
