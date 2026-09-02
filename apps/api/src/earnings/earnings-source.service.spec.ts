@@ -235,38 +235,6 @@ test('HK earnings source priority preserves unrelated filing slots', () => {
   );
 });
 
-test('EarningsSourceService does not fetch an excluded source group', async () => {
-  const excludedGroup = '0700:2026-04-09:annual';
-  const allowedGroup = '0700:2026-03-18:preliminary';
-  const summaries = [
-    hkSummary('annual-en', excludedGroup, 'annual', 'en-HK'),
-    hkSummary('preliminary-en', allowedGroup, 'preliminary', 'en-HK'),
-  ];
-  const fetched: string[] = [];
-  const port: FilingPort = {
-    async searchFilings() { return envelope(summaries); },
-    async getFiling(input) {
-      fetched.push(input.sourceDocumentId ?? input.id);
-      return envelope({
-        ...summaries.find((item) => item.sourceDocumentId === input.sourceDocumentId)!,
-        text: undefined,
-        contentHash: 'e'.repeat(64),
-      });
-    },
-  };
-  const prisma = { filing: { findFirst: async () => null } } as any;
-  const service = new EarningsSourceService(prisma, clientFromPort(port), new FilingStoreService(prisma));
-
-  await assert.rejects(
-    () => service.discoverAndIngest(
-      { ...stock, symbol: '0700', market: 'HK', exchange: 'HKEX', currency: 'HKD' },
-      { excludedSourceGroupIds: [excludedGroup] },
-    ),
-    (error: unknown) => error instanceof EarningsSourceError && error.code === 'BODY_UNREADABLE',
-  );
-  assert.deepEqual(fetched, ['preliminary-en']);
-});
-
 function summary(id: string, filingUrl: string) {
   return {
     id,

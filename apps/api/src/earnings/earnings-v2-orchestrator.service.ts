@@ -18,7 +18,7 @@ import {
   EARNINGS_EXTRACTION_SYSTEM_PROMPT,
   EARNINGS_MAX_OUTPUT_TOKENS,
   buildEarningsExtractionUserPrompt,
-} from './earnings-prompts';
+} from '@bourse/analysis';
 import {
   decideFilingRelation,
   guidanceSourceSupportsCandidate,
@@ -243,16 +243,19 @@ export class EarningsV2OrchestratorService implements OnModuleInit {
       });
     } catch (error) {
       const runError = normalizeV2RunError(error);
-      await this.prisma.earningsGenerationRun.update({
-        where: { id: runId },
-        data: {
-          status: 'FAILED',
-          retryable: runError.retryable,
-          errorCode: runError.code,
-          errorMessage: runError.message.slice(0, 1000),
-          completedAt: new Date(),
-        },
-      });
+      await this.prisma.earningsGenerationRun
+        .update({
+          where: { id: runId },
+          data: {
+            status: 'FAILED',
+            retryable: runError.retryable,
+            errorCode: runError.code,
+            errorMessage: runError.message.slice(0, 1000),
+            completedAt: new Date(),
+          },
+        })
+        .catch((persistError) =>
+          this.logger.error(`failed to persist earnings run error: ${String(persistError)}`));
       this.logger.error(`earnings v2 run ${runId} failed: ${runError.message}`);
     }
   }

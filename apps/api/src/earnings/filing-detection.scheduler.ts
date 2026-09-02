@@ -47,6 +47,12 @@ export class FilingDetectionScheduler implements OnModuleInit, OnModuleDestroy {
       for (let index = 0; index < due.length; index += CONCURRENCY) {
         await Promise.all(due.slice(index, index + CONCURRENCY).map(({ stockId }) => this.scanOne(stockId)));
       }
+    } catch (error) {
+      // 与 digest-scheduler 同款纪律:单次 tick 失败只记日志,不成为
+      // unhandled rejection 杀掉进程,下个窗口自动补。
+      this.logger.error(
+        `财报检测 tick 失败: ${error instanceof Error ? error.message : String(error)}`,
+      );
     } finally {
       this.running = false;
     }

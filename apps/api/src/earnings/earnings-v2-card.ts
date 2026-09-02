@@ -112,7 +112,9 @@ export function buildV2CardPayload(input: BuildV2CardInput): EarningsCardPayload
     },
     supplementalNonGaap: input.supplementalNonGaap,
     managementClaims: input.managementClaims,
-    omittedFactCount: 0,
+    // KISS C5(E2-1):候选被选择器拒绝(字段完整性/期间/市场兼容检查)即不计入
+    // facts,此处把拒绝数回填,让 web 的「N 项数字未通过检查未予展示」横幅可用。
+    omittedFactCount: input.selection.diagnostics.rejected.length,
     statusSummary: {
       total: input.facts.length,
       reconciled: 0,
