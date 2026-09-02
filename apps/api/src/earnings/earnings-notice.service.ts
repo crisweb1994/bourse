@@ -206,9 +206,9 @@ async function sendChannel(channel: Record<string, unknown>, notice: EarningsNot
 
 function renderNotice(notice: EarningsNoticePayload): string {
   const title = notice.kind === 'CORRECTION' ? '财报更正通知' : notice.kind === 'UPDATE' ? '财报速读更新' : '新财报速读';
-  const status = notice.statusSummary.conflicted > 0
-    ? `${notice.statusSummary.conflicted} 项冲突`
-    : `${notice.statusSummary.reconciled}/${notice.statusSummary.total} 已对账`;
+  // KISS E2-2 (决策 3B):结构化对账尚未接线,reconciled 恒 0——通知按
+  // structured-only 口径陈述,不打印「已对账」。对账能力落地后恢复。
+  const status = `${notice.statusSummary.total} 项结构化指标`;
   return [
     `${title} · ${notice.symbol}`,
     `${notice.periodEndOn} · ${notice.periodType} · ${status}`,
