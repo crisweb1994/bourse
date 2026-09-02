@@ -143,7 +143,9 @@ export function createSecEdgarXbrlV2FinancialsConnector(
             return {
               envelope: failure(
                 retrievedAt,
-                res.status === 403 ? 'AUTH_REQUIRED' : 'SOURCE_UNAVAILABLE',
+                res.status === 429 ? 'RATE_LIMITED'
+                : res.status === 403 ? 'AUTH_REQUIRED'
+                : 'SOURCE_UNAVAILABLE',
                 `SEC XBRL companyfacts HTTP ${res.status}`,
                 `HTTP ${res.status}`,
               ),

@@ -86,20 +86,3 @@ export type ResearchResultV2<T> =
       trace: { attempts: SourceAttempt[] };
       error?: SourceError;
     };
-
-export interface OrchestratorOptions {
-  strict?: boolean;
-  traceMode?: 'none' | 'summary' | 'detailed';
-  cacheMode?: 'prefer-fresh' | 'allow-stale' | 'bypass';
-}
-
-export class ResearchError extends Error {
-  constructor(
-    message: string,
-    readonly code: string,
-    readonly cause?: unknown,
-  ) {
-    super(message);
-    this.name = 'ResearchError';
-  }
-}

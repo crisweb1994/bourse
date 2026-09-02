@@ -51,8 +51,6 @@ import {
 export function sourceFinancePort(sourceId: string, port: ProviderFinancePort): FinancePort {
   return {
     getQuote: async (input, ctx) => toSourceResult(sourceId, await port.getQuote(input, ctx), usableQuote, validates(QuoteSchema)),
-    getQuotes: async (inputs, ctx) => Promise.all(inputs.map(async (input) =>
-      toSourceResult(sourceId, await port.getQuote(input, ctx), usableQuote, validates(QuoteSchema)))),
     getHistory: async (input, ctx) => toSourceResult(sourceId, await port.getHistory(input, ctx), usableHistory, validates(PriceHistorySchema)),
     ...(port.getProfile
       ? { getProfile: async (input, ctx) => toSourceResult(sourceId, await port.getProfile!(input, ctx), usableProfile, validates(CompanyProfileSchema)) }

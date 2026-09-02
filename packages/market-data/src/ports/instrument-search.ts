@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import type { SourceResult } from '../contracts/source-result';
 
-export type InstrumentSearchMarket = 'US' | 'HK' | 'CN' | 'JP' | 'UK' | string;
+// KISS C6/G-12: a union with `| string` collapses to string — declare it as
+// such instead of a fake enum.
+export type InstrumentSearchMarket = string;
 
 export const InstrumentSearchResultSchema = z.object({
   symbol: z.string().min(1),

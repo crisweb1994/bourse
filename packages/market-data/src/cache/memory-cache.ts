@@ -40,8 +40,4 @@ export class MemoryCache implements CachePort {
       this.entries.delete(oldest);
     }
   }
-
-  async invalidate(prefix: string): Promise<void> {
-    for (const key of this.entries.keys()) if (key.startsWith(prefix)) this.entries.delete(key);
-  }
 }

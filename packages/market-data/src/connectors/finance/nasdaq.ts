@@ -99,7 +99,7 @@ export function createNasdaqFinanceConnector(
           if (!res.ok) {
             return quoteFailure(
               retrievedAt,
-              'SOURCE_UNAVAILABLE',
+              res.status === 429 ? 'RATE_LIMITED' : 'SOURCE_UNAVAILABLE',
               `Nasdaq HTTP ${res.status} for ${parsed.symbol}`,
               `HTTP ${res.status}`,
             );
@@ -210,7 +210,7 @@ export function createNasdaqFinanceConnector(
           if (!res.ok) {
             return historyFailure(
               retrievedAt,
-              'SOURCE_UNAVAILABLE',
+              res.status === 429 ? 'RATE_LIMITED' : 'SOURCE_UNAVAILABLE',
               `Nasdaq HTTP ${res.status} for ${parsed.symbol} history`,
               `HTTP ${res.status}`,
             );

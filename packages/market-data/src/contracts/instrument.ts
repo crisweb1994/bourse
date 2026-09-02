@@ -14,9 +14,3 @@ export const InstrumentRef = z.object({
   providerSymbols: z.record(z.string()).optional(),
 });
 export type InstrumentRef = z.infer<typeof InstrumentRef>;
-
-export const SUPPORTED_MARKETS_PHASE_1_4: readonly MarketCode[] = ['US', 'CN', 'HK'] as const;
-
-export function isMarketSupported(market: MarketCode): boolean {
-  return SUPPORTED_MARKETS_PHASE_1_4.includes(market);
-}

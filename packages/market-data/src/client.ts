@@ -18,7 +18,6 @@ import { createHkexDerivedFinancialsConnector } from './connectors/financials/hk
 import { createSecEdgarXbrlFinancialsConnector } from './connectors/financials/sec-edgar-xbrl';
 import { createOfficialMacroConnector } from './connectors/macro/official';
 import { createNbsMacroSourcePlugin } from './connectors/macro/nbs';
-import { createOfficialMacroFileSourcePlugin, type OfficialMacroFileSourceConfig } from './connectors/macro/official-file';
 import { createTushareSourcePlugin, type TushareSourceConfig } from './connectors/tushare';
 import { createHkexDerivedCorporateActionsConnector, createHkexDerivedMarketEventsConnector, createSfcShortPositionConnector } from './connectors/hk';
 import { createMassiveSourcePlugin, type MassiveSourceConfig } from './connectors/massive';
@@ -91,7 +90,6 @@ export interface CreateMarketDataOptions {
   eodhdApiKey?: string;
   tushare?: TushareSourceConfig;
   massive?: MassiveSourceConfig;
-  officialMacroFiles?: readonly OfficialMacroFileSourceConfig[];
   sfcShortPositionCsvUrl?: string;
   cache?: CachePort;
   policies?: readonly RoutingPolicy[];
@@ -135,11 +133,6 @@ export class ResearchMarketDataClient {
         ? port.getQuote({ instrumentId }, connectorContext(requestContext, ctx))
         : unavailable(source.manifest.id, 'Source does not implement QuotePort.');
     }, undefined, undefined, constraints);
-  }
-
-  /** Results always have the same length and order as the input. */
-  getQuotes(inputs: readonly QuoteInput[], ctx: ConnectorRunContext = {}): Promise<ResearchResultV2<Quote>[]> {
-    return Promise.all(inputs.map((input) => this.getQuote(input.instrumentId, ctx)));
   }
 
   getHistory(input: HistoryInput, ctx: ConnectorRunContext = {}, constraints?: RouteConstraints): Promise<ResearchResultV2<PriceBar[]>> {
@@ -394,9 +387,6 @@ export function createMarketData(options: CreateMarketDataOptions = {}): Researc
     registry.registerPlugin(plugin, {});
   }
   registry.registerPlugin(createNbsMacroSourcePlugin(), {});
-  for (const source of options.officialMacroFiles ?? []) {
-    registry.registerPlugin(createOfficialMacroFileSourcePlugin(source), { enabled: source.enabled });
-  }
   if (options.tushare?.token.trim() && options.tushare.enabledDataSets.length > 0) {
     registry.registerPlugin(createTushareSourcePlugin(), options.tushare);
   }
