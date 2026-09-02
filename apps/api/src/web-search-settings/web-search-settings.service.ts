@@ -176,8 +176,8 @@ export class WebSearchSettingsService {
       primaryMode: row.primaryMode as WebSearchSettingDto['primaryMode'],
       timeoutMs: row.timeoutMs,
       cacheTtlMs: row.cacheTtlMs,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
     };
   }
 }

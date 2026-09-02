@@ -5,9 +5,22 @@ import {
   IsOptional,
   IsString,
 } from 'class-validator';
+import {
+  PROVIDER_TYPES,
+  type AiProviderSettingDetailDto,
+  type AiProviderSettingInput,
+  type AiProviderSettingSummaryDto,
+  type ProviderTypeStr,
+} from '@bourse/shared-types';
 
-export const PROVIDER_TYPES = ['ANTHROPIC', 'OPENAI_COMPATIBLE'] as const;
-export type ProviderTypeStr = (typeof PROVIDER_TYPES)[number];
+// Wire contract lives in @bourse/shared-types; re-exported for this
+// module's existing imports.
+export type {
+  AiProviderSettingDetailDto,
+  AiProviderSettingInput,
+  AiProviderSettingSummaryDto,
+  ProviderTypeStr,
+};
 
 // Single source of truth for the providerType ↔ short-name mapping used by
 // provider resolution and provider construction.
@@ -118,24 +131,4 @@ export class ListModelsDto {
   @IsIn(PROVIDER_TYPES as unknown as string[]) providerType!: ProviderTypeStr;
   @IsString() baseUrl!: string;
   @IsOptional() @IsString() apiKey?: string;
-}
-
-export interface AiProviderSettingSummaryDto {
-  id: string;
-  label: string;
-  providerType: ProviderTypeStr;
-  enabledModels: string[];
-  primaryModel: string | null;
-  utilityModel: string | null;
-  isDefault: boolean;
-  enabled: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface AiProviderSettingDetailDto
-  extends AiProviderSettingSummaryDto {
-  baseUrl: string;
-  hasApiKey: boolean;
-  apiKeyMasked: string | null;
 }

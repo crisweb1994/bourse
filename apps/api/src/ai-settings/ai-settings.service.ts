@@ -382,8 +382,8 @@ export class AiSettingsService {
       utilityModel: row.utilityModel ?? null,
       isDefault: row.isDefault ?? false,
       enabled: row.enabled,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
     };
   }
 

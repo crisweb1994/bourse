@@ -1,0 +1,172 @@
+// /api/settings/providers contract (apps/api ai-settings module + apps/web
+// settings pages). Enums, wire DTOs, and the built-in provider catalog live
+// here as the single source; class-validator request classes stay in the API.
+
+export const PROVIDER_TYPES = ['ANTHROPIC', 'OPENAI_COMPATIBLE'] as const;
+export type ProviderTypeStr = (typeof PROVIDER_TYPES)[number];
+
+/** GET /settings/providers item (list response). */
+export interface AiProviderSettingSummaryDto {
+  id: string;
+  label: string;
+  providerType: ProviderTypeStr;
+  enabledModels: string[];
+  primaryModel: string | null;
+  utilityModel: string | null;
+  isDefault: boolean;
+  enabled: boolean;
+  /** ISO strings on the wire. */
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** GET /settings/providers/:id response — adds credential-safe detail. */
+export interface AiProviderSettingDetailDto extends AiProviderSettingSummaryDto {
+  baseUrl: string;
+  hasApiKey: boolean;
+  apiKeyMasked: string | null;
+}
+
+/** POST / PATCH body. `clearApiKey: true` removes the stored key. */
+export interface AiProviderSettingInput {
+  label: string;
+  providerType: ProviderTypeStr;
+  baseUrl?: string;
+  apiKey?: string;
+  clearApiKey?: boolean;
+  enabledModels?: string[];
+  primaryModel?: string;
+  utilityModel?: string;
+  isDefault?: boolean;
+  enabled?: boolean;
+}
+
+export interface AiModelOptionDto {
+  id: string;
+  name: string;
+}
+
+/** POST /settings/providers/test response. */
+export interface AiProviderTestResult {
+  ok: boolean;
+  latencyMs: number;
+  error?: string;
+}
+
+export interface BuiltinProviderTemplate {
+  id: string;
+  label: string;
+  providerType: ProviderTypeStr;
+  baseUrl: string;
+  defaultModels: string[];
+  iconColor: string;
+  iconText: string;
+}
+
+/**
+ * Served by GET /settings/providers/catalog and inlined by the web app.
+ * Single source — the web bundle imports this constant at build time, so
+ * no fetch is needed and the picker works before the API is up.
+ */
+export const BUILTIN_PROVIDER_CATALOG: BuiltinProviderTemplate[] = [
+  {
+    id: 'anthropic',
+    label: 'Anthropic',
+    providerType: 'ANTHROPIC',
+    baseUrl: 'https://api.anthropic.com',
+    defaultModels: ['claude-sonnet-4-6', 'claude-opus-4-7'],
+    iconColor: '#d97757',
+    iconText: 'A',
+  },
+  {
+    id: 'openai',
+    label: 'OpenAI',
+    providerType: 'OPENAI_COMPATIBLE',
+    baseUrl: 'https://api.openai.com/v1',
+    defaultModels: ['gpt-4o', 'gpt-4o-mini'],
+    iconColor: '#10a37f',
+    iconText: 'O',
+  },
+  {
+    id: 'deepseek',
+    label: 'DeepSeek',
+    providerType: 'OPENAI_COMPATIBLE',
+    baseUrl: 'https://api.deepseek.com/v1',
+    defaultModels: ['deepseek-chat', 'deepseek-reasoner'],
+    iconColor: '#4d6bfe',
+    iconText: 'D',
+  },
+  {
+    id: 'qwen',
+    label: '通义千问',
+    providerType: 'OPENAI_COMPATIBLE',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    defaultModels: ['qwen-max', 'qwen-plus'],
+    iconColor: '#615ced',
+    iconText: 'Q',
+  },
+  {
+    id: 'kimi',
+    label: 'Kimi (Moonshot)',
+    providerType: 'OPENAI_COMPATIBLE',
+    baseUrl: 'https://api.moonshot.cn/v1',
+    defaultModels: ['moonshot-v1-8k', 'moonshot-v1-32k'],
+    iconColor: '#000000',
+    iconText: 'K',
+  },
+  {
+    id: 'zhipu',
+    label: '智谱 GLM',
+    providerType: 'OPENAI_COMPATIBLE',
+    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    defaultModels: ['glm-4-plus'],
+    iconColor: '#1e40af',
+    iconText: '智',
+  },
+  {
+    id: 'doubao',
+    label: '豆包 (火山方舟)',
+    providerType: 'OPENAI_COMPATIBLE',
+    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+    defaultModels: [],
+    iconColor: '#f55036',
+    iconText: '豆',
+  },
+  {
+    id: 'groq',
+    label: 'Groq',
+    providerType: 'OPENAI_COMPATIBLE',
+    baseUrl: 'https://api.groq.com/openai/v1',
+    defaultModels: ['llama-3.3-70b-versatile'],
+    iconColor: '#f97316',
+    iconText: 'G',
+  },
+  {
+    id: 'openrouter',
+    label: 'OpenRouter',
+    providerType: 'OPENAI_COMPATIBLE',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    defaultModels: [],
+    iconColor: '#6366f1',
+    iconText: 'R',
+  },
+  // 小米 MiMo: 官方公开 API 端点尚未确认，baseUrl 留空待用户填
+  {
+    id: 'xiaomi',
+    label: '小米 MiMo',
+    providerType: 'OPENAI_COMPATIBLE',
+    baseUrl: '',
+    defaultModels: ['mimo-7b'],
+    iconColor: '#ff6900',
+    iconText: '米',
+  },
+  {
+    id: 'ollama',
+    label: 'Ollama (本地)',
+    providerType: 'OPENAI_COMPATIBLE',
+    baseUrl: 'http://localhost:11434/v1',
+    defaultModels: [],
+    iconColor: '#000000',
+    iconText: 'O',
+  },
+];

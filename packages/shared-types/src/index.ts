@@ -4,6 +4,8 @@ export * from './earnings';
 export * from './charts';
 export * from './screening';
 export * from './homepage';
+export * from './web-search-settings';
+export * from './ai-provider-settings';
 
 // ===== Enums =====
 

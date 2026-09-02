@@ -700,60 +700,27 @@ export async function retryAnalysis(analysisId: string): Promise<{ ok: boolean }
   });
 }
 
-export type ProviderTypeStr = 'ANTHROPIC' | 'OPENAI_COMPATIBLE';
+// Settings contracts live in @bourse/shared-types (KISS review B1-7);
+// re-exported here under the names existing consumers import.
+import type {
+  AiModelOptionDto,
+  AiProviderSettingDetailDto,
+  AiProviderSettingInput,
+  AiProviderSettingSummaryDto,
+  AiProviderTestResult,
+  BuiltinProviderTemplate,
+  ProviderTypeStr,
+} from '@bourse/shared-types';
 
-export interface AiProviderSettingDto {
-  id: string;
-  label: string;
-  providerType: ProviderTypeStr;
-  enabledModels: string[];
-  primaryModel: string | null;
-  utilityModel: string | null;
-  isDefault: boolean;
-  enabled: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface AiProviderSettingDetailDto extends AiProviderSettingDto {
-  baseUrl: string;
-  hasApiKey: boolean;
-  apiKeyMasked: string | null;
-}
-
-export interface BuiltinProviderTemplate {
-  id: string;
-  label: string;
-  providerType: ProviderTypeStr;
-  baseUrl: string;
-  defaultModels: string[];
-  iconColor: string;
-  iconText: string;
-}
-
-export interface AiModelOptionDto {
-  id: string;
-  name: string;
-}
-
-export interface TestConnectionResult {
-  ok: boolean;
-  latencyMs: number;
-  error?: string;
-}
-
-export interface AiProviderSettingInput {
-  label: string;
-  providerType: ProviderTypeStr;
-  baseUrl?: string;
-  apiKey?: string;
-  clearApiKey?: boolean;
-  enabledModels?: string[];
-  primaryModel?: string;
-  utilityModel?: string;
-  isDefault?: boolean;
-  enabled?: boolean;
-}
+export type {
+  AiModelOptionDto,
+  AiProviderSettingDetailDto,
+  AiProviderSettingInput,
+  BuiltinProviderTemplate,
+  ProviderTypeStr,
+};
+export type AiProviderSettingDto = AiProviderSettingSummaryDto;
+export type TestConnectionResult = AiProviderTestResult;
 
 export function listAiProviderSettings(): Promise<AiProviderSettingDto[]> {
   return fetchApi('/api/settings/providers');
@@ -824,35 +791,22 @@ export function testProviderConnection(input: {
   });
 }
 
-export type WebSearchProviderType = 'TAVILY' | 'SEARXNG';
-export type WebSearchPrimaryMode = 'NATIVE_FIRST' | 'CUSTOM_ONLY';
+// Web-search settings contract lives in @bourse/shared-types (KISS review B1-4).
+import type {
+  UpsertWebSearchSettingPayload,
+  WebSearchPrimaryMode,
+  WebSearchProviderType,
+  WebSearchSettingDto,
+  WebSearchTestResult,
+} from '@bourse/shared-types';
 
-export interface WebSearchSettingDto {
-  providerType: WebSearchProviderType;
-  apiKeyMasked: string | null;
-  baseUrl: string | null;
-  primaryMode: WebSearchPrimaryMode;
-  timeoutMs: number | null;
-  cacheTtlMs: number | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface UpsertWebSearchSettingPayload {
-  providerType: WebSearchProviderType;
-  apiKey?: string;
-  baseUrl?: string;
-  primaryMode?: WebSearchPrimaryMode;
-  timeoutMs?: number;
-  cacheTtlMs?: number;
-}
-
-export interface WebSearchTestResult {
-  ok: boolean;
-  latencyMs: number;
-  sample?: { title: string; url: string };
-  error?: string;
-}
+export type {
+  UpsertWebSearchSettingPayload,
+  WebSearchPrimaryMode,
+  WebSearchProviderType,
+  WebSearchSettingDto,
+  WebSearchTestResult,
+};
 
 export function getWebSearchSetting(): Promise<WebSearchSettingDto | null> {
   return fetchApi('/api/settings/web-search');
