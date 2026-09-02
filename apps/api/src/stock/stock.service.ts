@@ -124,18 +124,6 @@ export class StockService {
   }
 
   /**
-   * plan-v2 §12.1 — single merged detail endpoint replacing the legacy
-   * lookup / :id/quote / :id/profile triple. Returns the canonical Stock
-   * row (when known) plus a live quote + profile snapshot fetched in
-   * parallel. On unknown (symbol, market), `stock` is null and
-   * `candidates` carries provider-search results so the UI can offer
-   * "add to watchlist + analyze" recovery.
-   *
-   * Quote / profile degradation is per-field, not whole-response: each
-   * carries its own `{ degraded, reason }` marker so a stock with valid
-   * quote but missing profile still renders most of the panel.
-   */
-  /**
    * Chart history for the stock page (visualization §五⑦ / D3).
    *
    * P1 invariant: every indicator is computed server-side by the SAME pure
@@ -245,6 +233,18 @@ export class StockService {
     return StockHistoryBatchResponseSchema.parse(result);
   }
 
+  /**
+   * plan-v2 §12.1 — single merged detail endpoint replacing the legacy
+   * lookup / :id/quote / :id/profile triple. Returns the canonical Stock
+   * row (when known) plus a live quote + profile snapshot fetched in
+   * parallel. On unknown (symbol, market), `stock` is null and
+   * `candidates` carries provider-search results so the UI can offer
+   * "add to watchlist + analyze" recovery.
+   *
+   * Quote / profile degradation is per-field, not whole-response: each
+   * carries its own `{ degraded, reason }` marker so a stock with valid
+   * quote but missing profile still renders most of the panel.
+   */
   async getDetail(symbol: string, market: string) {
     const stock = await this.findBySymbolAndMarket(symbol, market);
     if (!stock) {
