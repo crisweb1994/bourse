@@ -14,6 +14,7 @@ import type {
 import { parseInstrumentId } from '../../util/instrument-id';
 import type { ConnectorRunContext, FetchLike } from '../types';
 import { failure as httpFailure, resolveFetch, withTimeout, HttpError, failureCodeFor } from '../http';
+import { eastmoneyQuery, fetchEastmoneyRows } from './eastmoney-http';
 import { deriveTTM } from './ttm-derivation';
 import {
   BALANCE_FIELDS,
@@ -111,11 +112,7 @@ export function createEastmoneyFinancialsConnector(
       const fetchLike = resolveFetch(ctx, options);
 
       const queryFor = (reportName: string) =>
-        `${BASE_URL}?reportName=${reportName}` +
-        `&columns=ALL` +
-        `&filter=(SECURITY_CODE%3D%22${encodeURIComponent(providerSymbol)}%22)` +
-        `&pageNumber=1&pageSize=${pageSize}` +
-        `&sortColumns=REPORT_DATE&sortTypes=-1`;
+        eastmoneyQuery(BASE_URL, 'SECURITY_CODE', providerSymbol, pageSize, reportName);
 
       const incomeUrl = queryFor('RPT_DMSK_FN_INCOME');
       const balanceUrl = queryFor('RPT_DMSK_FN_BALANCE');
@@ -210,31 +207,12 @@ export function createEastmoneyFinancialsConnector(
 // HTTP helper
 // ============================================================================
 
-async function fetchRows(
+const fetchRows = (
   fetchLike: FetchLike,
   url: string,
   signal: AbortSignal,
-): Promise<EastmoneyFinancialsRow[]> {
-  const res = await fetchLike(url, { headers: COMMON_HEADERS, signal });
-  if (!res.ok) {
-    throw new HttpError(`HTTP ${res.status}`, res.status);
-  }
-  const body = res.text ? await res.text() : JSON.stringify(await res.json());
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(body);
-  } catch {
-    throw new Error('JSON parse failed');
-  }
-  // Some failure responses come 200 + success:false (e.g. unknown reportName)
-  const root = parsed as { success?: boolean; message?: string; result?: { data?: unknown } };
-  if (root.success === false) {
-    throw new Error(root.message ?? 'eastmoney success=false');
-  }
-  const rows = root.result?.data;
-  if (!Array.isArray(rows)) return [];
-  return rows as EastmoneyFinancialsRow[];
-}
+): Promise<EastmoneyFinancialsRow[]> =>
+  fetchEastmoneyRows<EastmoneyFinancialsRow>(fetchLike, url, signal, COMMON_HEADERS);
 
 // ============================================================================
 // Period building — cumulative → standalone Q

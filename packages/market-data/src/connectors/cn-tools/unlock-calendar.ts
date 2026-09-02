@@ -7,6 +7,7 @@ import type {
   MarketDataToolResult as ToolResult,
 } from './types';
 import type { CnToolFetchLike } from './_fetch-headers';
+import { defaultFetch, pickFloat, resolveSourcePriorities } from './shared';
 import { cnBrowserHeaders } from './_fetch-headers';
 
 /**
@@ -41,10 +42,6 @@ export const UnlockCalendarOutputSchema = z.object({
 });
 export type UnlockCalendarOutput = z.infer<typeof UnlockCalendarOutputSchema>;
 
-const defaultFetch: CnToolFetchLike = (url, init) =>
-  globalThis.fetch(url, init) as Promise<
-    ReturnType<CnToolFetchLike> extends Promise<infer T> ? T : never
-  >;
 
 export function makeUnlockCalendarCN(opts?: {
   fetchImpl?: CnToolFetchLike;
@@ -252,22 +249,5 @@ function pickPositive(v: unknown): number | null {
   return null;
 }
 
-function pickFloat(v: unknown): number | null {
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (typeof v === 'string') {
-    const n = parseFloat(v);
-    if (Number.isFinite(n)) return n;
-  }
-  return null;
-}
-
-function resolveSourcePriorities(
-  profile: MarketProfile | undefined,
-  fact: string,
-): string[] {
-  const fromProfile = profile?.sourcePriorities?.[fact];
-  if (fromProfile && fromProfile.length > 0) return fromProfile;
-  return ['eastmoney', 'cninfo'];
-}
 
 export const unlockCalendarCN = makeUnlockCalendarCN();
