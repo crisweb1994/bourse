@@ -14,7 +14,6 @@ import { computeTechnicalIndicators, derivePriceSeries } from '@bourse/analysis'
 import { PrismaService } from '../prisma/prisma.service';
 import { UpsertStockDto } from './stock.dto';
 import { MARKET_DATA_CLIENT } from '../connectors/connectors.module';
-import { resolveMarketState } from './market-hours';
 import { TtlLruCache } from './search-cache';
 import { EarningsQueryService } from '../earnings/earnings-query.service';
 
@@ -264,6 +263,18 @@ export class StockService {
     return { stock, quote, profile, candidates: [] as const };
   }
 
+  private async marketSessionLabel(market: string): Promise<string> {
+    try {
+      const result = await this.marketData.getMarketSession(
+        market as 'US' | 'CN' | 'HK',
+      );
+      const state = result.status === 'ok' ? result.data?.state : undefined;
+      return SESSION_STATE_LABEL[state ?? 'CLOSED'] ?? 'CLOSED';
+    } catch {
+      return 'CLOSED';
+    }
+  }
+
   private async fetchQuoteAndProfile(stock: {
     id: string;
     symbol: string;
@@ -314,12 +325,12 @@ export class StockService {
       currency: q.currency,
       // Authoritative session state first: Yahoo (US/HK) reports it via the
       // crumb'd price module. When the source omits it (CN, or a Yahoo crumb
-      // miss) fall back to deriving it from the exchange's trading session in
-      // the exchange's own timezone — q.timestamp (real last-trade time) then
-      // doubles as a holiday guard. See market-hours.ts.
+      // miss) fall back to market-data's rule-based calendar — weekend AND
+      // static-holiday aware (KISS C6-9). Note: the rule calendar models a
+      // continuous session, so CN/HK lunch reads as REGULAR here.
       marketState:
-        marketStatusToLabel(q.marketStatus) ??
-        resolveMarketState(market, new Date(), q.timestamp),
+        marketStatusToLabel(q.marketStatus)
+        ?? (await this.marketSessionLabel(market)),
       asOf: q.timestamp,
     };
 
@@ -436,6 +447,20 @@ function normalizeDetailSearchSymbol(symbol: string, market: string): string {
  * web header understands. Returns null when the source gave no usable state
  * (absent or UNKNOWN) so the caller can fall back to the exchange-clock check.
  */
+/**
+ * Map the market-data calendar states to the Yahoo-style state strings the
+ * web header understands (REGULAR / PRE / POST / CLOSED). HOLIDAY and UNKNOWN
+ * both render as CLOSED.
+ */
+const SESSION_STATE_LABEL: Record<string, string> = {
+  OPEN: 'REGULAR',
+  PRE_MARKET: 'PRE',
+  AFTER_HOURS: 'POST',
+  CLOSED: 'CLOSED',
+  HOLIDAY: 'CLOSED',
+  UNKNOWN: 'CLOSED',
+};
+
 function marketStatusToLabel(
   status: 'OPEN' | 'CLOSED' | 'PRE_MARKET' | 'AFTER_HOURS' | 'UNKNOWN' | undefined,
 ): string | null {
