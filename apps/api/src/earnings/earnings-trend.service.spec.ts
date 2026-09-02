@@ -9,7 +9,9 @@ function card(
   value: string,
   accumulation: 'discrete' | 'YTD' = 'discrete',
 ) {
-  const periodType = quarter === 2 && accumulation === 'YTD' ? 'H1' : `Q${quarter}`;
+  // Prisma 枚举无 Q4（年末走 FY），fixture 与真实事件对齐。
+  const periodType =
+    quarter === 4 ? 'FY' : quarter === 2 && accumulation === 'YTD' ? 'H1' : `Q${quarter}`;
   const month = String(quarter * 3).padStart(2, '0');
   const day = quarter === 1 || quarter === 4 ? '31' : '30';
   const periodEndOn = `${year}-${month}-${day}`;
@@ -18,7 +20,6 @@ function card(
     currentRevisionId: `revision-${year}-q${quarter}-${accumulation}`,
     event: {
       fiscalYear: year,
-      fiscalQuarter: quarter,
       periodType,
       periodEndOn: new Date(`${periodEndOn}T00:00:00.000Z`),
     },

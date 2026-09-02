@@ -33,7 +33,6 @@ interface TrendFact {
   sourceUrl?: string;
   event: {
     fiscalYear: number;
-    fiscalQuarter: number | null;
     periodType: string;
   };
 }
@@ -194,7 +193,7 @@ export function factCompatibilityFingerprint(fact: FingerprintFact): string {
 function sourceFact(input: {
   eventId: string;
   revisionId: string;
-  event: { fiscalYear: number; fiscalQuarter: number | null; periodType: string };
+  event: { fiscalYear: number; periodType: string };
   payload: EarningsCardPayload;
   fact: MetricFact;
 }): TrendFact {
@@ -322,7 +321,6 @@ function projectionQuarter(row: TrendFact): number | null {
     if (row.event.periodType === 'Q3') return 3;
     if (row.event.periodType === 'FY') return 4;
   }
-  if (row.event.fiscalQuarter) return row.event.fiscalQuarter;
   if (row.event.periodType === 'Q1') return 1;
   if (row.event.periodType === 'H1' || row.event.periodType === 'Q2') return 2;
   if (row.event.periodType === 'Q3') return 3;

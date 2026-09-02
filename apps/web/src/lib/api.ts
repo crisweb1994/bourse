@@ -1,7 +1,6 @@
 import {
   ChatSsePayloadSchema,
   Market,
-  DigestSession,
   ChannelType,
   type ChartEvidenceResponse,
   type StockHistoryResponse,
@@ -847,10 +846,9 @@ export function testWebSearchSetting(
 // keep-existing（后端 mergeSecrets 处理）。
 // ============================================================================
 
-// Market / DigestSession / ChannelType 从 @bourse/shared-types 复用（与 Prisma
+// Market / ChannelType 从 @bourse/shared-types 复用（与 Prisma
 // enum 同源），单一来源。别名保留以减少 digest-card 等消费方的 import 改动。
 export type DigestMarket = Market;
-export type { DigestSession };
 export type DigestChannelType = ChannelType;
 
 // 渠道契约单源于 shared-types 的 zod union(T2-2);结构与原手写联合逐字段一致。
@@ -858,7 +856,6 @@ export type DigestChannel = ChannelConfig;
 
 export interface DigestSubscriptionDto {
   markets: DigestMarket[];
-  sessions: DigestSession[];
   /** 后端 mask 过的 channels（secret/botToken 显示 •••• 末四位）。 */
   channels: DigestChannel[];
   enabled: boolean;
@@ -869,7 +866,6 @@ export interface DigestSubscriptionDto {
 
 export interface UpsertDigestSubscriptionPayload {
   markets: DigestMarket[];
-  sessions: DigestSession[];
   /** 真凭证（新建）或 mask 形态（编辑 keep-existing）。 */
   channels: DigestChannel[];
   enabled?: boolean;

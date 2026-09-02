@@ -157,7 +157,6 @@ export class HomepageService {
               stockId: true,
               periodType: true,
               fiscalYear: true,
-              fiscalQuarter: true,
               filingLinks: { select: { filingId: true } },
             },
           },
@@ -247,7 +246,6 @@ function toFocusWindow(value: string): FocusWindow {
 
 function earningsPeriodLabel(event: {
   fiscalYear: number;
-  fiscalQuarter: number | null;
   periodType: string;
 }): string {
   const period =
@@ -257,8 +255,6 @@ function earningsPeriodLabel(event: {
         ? '前三季度'
         : event.periodType === 'FY'
           ? '年度'
-          : event.fiscalQuarter
-            ? `Q${event.fiscalQuarter}`
-            : event.periodType;
+          : event.periodType;
   return `${event.fiscalYear} ${period}`;
 }

@@ -38,7 +38,8 @@ model Stock {
   exchange    String
   currency    String   @default("USD")
   yahooSymbol String?
-  // 由 connector 首次 ingest 写入，用于 compute/relative.ts 同行分组。
+  // 股票详情页拉取 finance profile 时落库（stock.service detail），供 POST 简报
+  // 板块归因（brief.generator.computeSectorAttribution）分组使用。
   sector      String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -183,8 +184,7 @@ model WebSearchSetting {
 model DigestSubscription {
   id                       String          @id @default(cuid())
   userId                   String          @unique
-  markets                  Market[] // ["US","CN","HK"] 子集
-  sessions                 DigestSession[] // ["PRE","POST"] 子集
+  markets                  Market[] // ["US","CN","HK"] 子集；PRE/POST 两个窗口均投递，不按 session 订阅
   channels                 Json // ChannelConfig[]（discriminated union，含凭证）
   enabled                  Boolean         @default(true)
   earningsImmediateEnabled Boolean         @default(false)
@@ -553,7 +553,6 @@ model EarningsEvent {
   periodType     EarningsPeriodType
   reportingScope EarningsReportingScope
   fiscalYear     Int
-  fiscalQuarter  Int?
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
 

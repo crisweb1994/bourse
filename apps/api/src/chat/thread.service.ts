@@ -163,6 +163,11 @@ export class ThreadService {
       throw new ConflictException('Cannot delete a thread while an answer is running');
     }
     await this.prisma.researchThread.delete({ where: { id: threadId } });
+    // 线程删除后回收失去全部引用的去重快照（ChatGeneration.analysisContextSnapshotId
+    // 为 SetNull，多个 generation 可共享同一快照，不能靠 FK 级联）。
+    await this.prisma.chatAnalysisContextSnapshot.deleteMany({
+      where: { generations: { none: {} } },
+    });
     return { ok: true };
   }
 

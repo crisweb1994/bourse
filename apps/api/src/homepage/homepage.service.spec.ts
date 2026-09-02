@@ -170,7 +170,6 @@ describe('HomepageService', () => {
                 stockId: stockA.id,
                 periodType: 'Q2',
                 fiscalYear: 2026,
-                fiscalQuarter: 2,
                 filingLinks: [{ filingId: 'filing-linked' }],
               },
               currentRevision: {
@@ -185,7 +184,6 @@ describe('HomepageService', () => {
                 stockId: stockB.id,
                 periodType: 'H1',
                 fiscalYear: 2026,
-                fiscalQuarter: null,
                 filingLinks: [],
               },
               currentRevision: {

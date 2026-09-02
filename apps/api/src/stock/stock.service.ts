@@ -357,6 +357,19 @@ export class StockService {
     const sector = companyProfile?.sector;
     const industry = companyProfile?.industry;
 
+    // Stock.sector 的唯一读取方是 POST 简报板块归因（brief.generator），在
+    // 详情页顺手落库；best-effort，失败不影响详情响应，下次详情会再试。
+    if (sector) {
+      try {
+        await this.prisma.stock.update({
+          where: { id: stock.id },
+          data: { sector },
+        });
+      } catch {
+        // ignore
+      }
+    }
+
     const nextEarningsDate = this.pickNextEarningsDate(
       earningsSettled.status === 'fulfilled' ? earningsSettled.value?.data : undefined,
     );

@@ -4,7 +4,6 @@ import { ChannelConfig } from '@bourse/analysis';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   DIGEST_MARKETS,
-  DIGEST_SESSIONS,
   type UpsertDigestSubscriptionDto,
 } from './digest.dto';
 
@@ -25,17 +24,12 @@ export class DigestSubscriptionService {
     return row ? this.toPublic(row) : null;
   }
 
-  /** PUT — 整体替换；markets/sessions 枚举校验 + channels zod 严验 +
+  /** PUT — 整体替换；markets 枚举校验 + channels zod 严验 +
    *  敏感字段空/mask 形态时保留旧值（前端拿不到真凭证）。 */
   async upsert(userId: string, dto: UpsertDigestSubscriptionDto) {
     for (const m of dto.markets) {
       if (!DIGEST_MARKETS.includes(m as (typeof DIGEST_MARKETS)[number])) {
         throw new BadRequestException(`invalid market: ${m}`);
-      }
-    }
-    for (const s of dto.sessions) {
-      if (!DIGEST_SESSIONS.includes(s as (typeof DIGEST_SESSIONS)[number])) {
-        throw new BadRequestException(`invalid session: ${s}`);
       }
     }
 
@@ -61,14 +55,12 @@ export class DigestSubscriptionService {
       create: {
         userId,
         markets: dto.markets,
-        sessions: dto.sessions,
         channels: parsed.data,
         enabled,
         earningsImmediateEnabled,
       },
       update: {
         markets: dto.markets,
-        sessions: dto.sessions,
         channels: parsed.data,
         enabled,
         earningsImmediateEnabled,
@@ -102,7 +94,6 @@ export class DigestSubscriptionService {
 
   private toPublic(row: {
     markets: string[];
-    sessions: string[];
     channels: unknown;
     enabled: boolean;
     earningsImmediateEnabled: boolean;
@@ -111,7 +102,6 @@ export class DigestSubscriptionService {
   }) {
     return {
       markets: row.markets,
-      sessions: row.sessions,
       channels: (row.channels as ChannelConfig[]).map(maskChannel),
       enabled: row.enabled,
       earningsImmediateEnabled: row.earningsImmediateEnabled,
