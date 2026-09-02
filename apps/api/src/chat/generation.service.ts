@@ -228,7 +228,6 @@ export class ChatGenerationService implements OnModuleInit {
           where: { id: userMessage.id },
           data: { generationId: row.id },
         });
-        await tx.researchThread.update({ where: { id: threadId }, data: {} });
         return row;
       });
     } catch (error) {
@@ -316,81 +315,29 @@ export class ChatGenerationService implements OnModuleInit {
       where: { generationId, sequence: { gt: afterSeq } },
       orderBy: { sequence: 'asc' },
     });
-    if (durableEvents.length > 0) {
-      for (const event of durableEvents) {
-        const eventName = ChatEventNameSchema.safeParse(event.event);
-        if (!eventName.success) continue;
-        listener({
-          event: eventName.data,
-          seq: event.sequence,
-          payload: event.payload as Record<string, unknown>,
-        });
-      }
-      if (['COMPLETED', 'FAILED', 'CANCELLED'].includes(row.status)) {
-        return () => undefined;
-      }
+    for (const event of durableEvents) {
+      const eventName = ChatEventNameSchema.safeParse(event.event);
+      if (!eventName.success) continue;
+      listener({
+        event: eventName.data,
+        seq: event.sequence,
+        payload: event.payload as Record<string, unknown>,
+      });
     }
 
-    // Compatibility replay for generations created before ChatStreamEvent was
-    // introduced. New generations always replay their original durable seq.
-    let seq = 0;
-    const replay = (event: ChatSseEnvelope['event'], payload: Record<string, unknown>) => {
-      seq += 1;
-      if (seq > afterSeq) listener({ event, seq, payload: { ...payload, seq } });
-    };
-    const snapshot = row.contextSnapshot as any;
-    replay('generation_status', {
-      generationId,
-      status: row.status,
-      intent: row.intent,
-    });
-    replay('context_loaded', {
-      generationId,
-      mode: snapshot.mode,
-      analysisIds: snapshot.analysisIds ?? [],
-      snapshotIds: snapshot.analysisSnapshotId ? [snapshot.analysisSnapshotId] : [],
-      dataAsOf: snapshot.dataAsOf ?? null,
-    });
-    const openSnapshot = await this.prisma.openResearchSnapshot.findUnique({ where: { generationId } });
-    if (openSnapshot) {
-      replay('research_sources', {
-        generationId,
-        snapshotId: openSnapshot.id,
-        sources: openSnapshot.sources,
-        dataAsOf: openSnapshot.dataAsOf.toISOString(),
-      });
-    } else if (row.groundedSources || snapshot.analysis) {
-      const sources = row.groundedSources
-        ? row.groundedSources as any[]
-        : this.extractAnalysisSources(snapshot.analysis as AnalysisChatContext);
-      if (sources.length > 0) {
-        replay('research_sources', {
-          generationId,
-          mode: 'ANALYSIS_GROUNDED',
-          snapshotId: snapshot.analysisSnapshotId ?? snapshot.analysis?.snapshot?.id ?? null,
-          sources,
-          dataAsOf: snapshot.dataAsOf ?? snapshot.analysis?.dataAsOf ?? null,
+    // Terminal rows always deliver a closing `done`: the HTTP stream only
+    // closes on that event, and a crash between the final status transaction
+    // and persisting the done event would otherwise hang reconnects forever.
+    if (['COMPLETED', 'FAILED', 'CANCELLED'].includes(row.status)) {
+      const hasDone = durableEvents.some((event) => event.event === 'done');
+      if (!hasDone) {
+        const seq = (durableEvents.at(-1)?.sequence ?? afterSeq) + 1;
+        listener({
+          event: 'done',
+          seq,
+          payload: { generationId, finishReason: row.status.toLowerCase(), seq },
         });
       }
-    }
-    const assistant = await this.prisma.chatMessage.findFirst({
-      where: { generationId, role: 'ASSISTANT' as any },
-      orderBy: { createdAt: 'asc' },
-    });
-    if (assistant) {
-      replay('text_block', {
-        generationId,
-        blockId: `answer-${generationId}`,
-        text: assistant.content,
-        citationIds: assistant.citationRefs ?? [],
-        numericIds: [],
-      });
-    }
-    if (row.status === 'COMPLETED' || row.status === 'FAILED' || row.status === 'CANCELLED') {
-      replay('done', {
-        generationId,
-        finishReason: row.status.toLowerCase(),
-      });
     }
     return () => undefined;
   }
