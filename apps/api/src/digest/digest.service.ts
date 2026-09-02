@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { ChannelConfig } from '@bourse/analysis';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -76,11 +77,19 @@ export class DigestSubscriptionService {
     return this.toPublic(row);
   }
 
-  /** DELETE — 删订阅（idempotent，不存在不报错）。 */
+  /** DELETE — 删订阅(幂等:不存在视为已删,其余错误照常抛)。 */
   async remove(userId: string): Promise<void> {
-    await this.prisma.digestSubscription
-      .delete({ where: { userId } })
-      .catch(() => undefined);
+    try {
+      await this.prisma.digestSubscription.delete({ where: { userId } });
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
+        return;
+      }
+      throw err;
+    }
   }
 
   /**
