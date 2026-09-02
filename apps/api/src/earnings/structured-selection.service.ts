@@ -12,8 +12,8 @@ import { PrismaService } from '../prisma/prisma.service';
  *   按 (stockId, provider, contentHash, schemaVersion) 幂等去重；
  * - EarningsStructuredSelection：event 级 selection（knowledgeCutoffAt +
  *   retryAt），selectionVersion 由 status/period/fact IDs 稳定哈希得到——
- *   只有快照 hash 或选择结果变化时才产生新版本，避免重试无意义膨胀；
- * - SelectionSnapshot：多 provider 多对多关联。
+ *   只有快照 hash 或选择结果变化时才产生新版本，避免重试无意义膨胀。
+ *   事实级 provenance.snapshotId（normalizedPayload 内）是权威引用。
  */
 
 @Injectable()
@@ -50,11 +50,10 @@ export class StructuredSelectionService {
     });
   }
 
-  /** 幂等保存 selection + snapshot 关联；同一 (eventId, selectionVersion) 不重复。 */
+  /** 幂等保存 selection；同一 (eventId, selectionVersion) 不重复。 */
   async saveSelection(input: {
     eventId: string;
     selection: StructuredEarningsSelection;
-    snapshotIds: string[];
     knowledgeCutoffAt: string;
     retryAt?: string;
   }): Promise<void> {
@@ -80,12 +79,6 @@ export class StructuredSelectionService {
         diagnostics: input.selection.diagnostics as unknown as Prisma.InputJsonValue,
         knowledgeCutoffAt: new Date(input.knowledgeCutoffAt),
         retryAt: input.retryAt ? new Date(input.retryAt) : null,
-        snapshots: {
-          create: input.snapshotIds.map((snapshotId, index) => ({
-            snapshotId,
-            role: index === 0 ? 'primary' : 'supplemental',
-          })),
-        },
       },
     });
   }

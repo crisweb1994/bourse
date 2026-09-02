@@ -452,7 +452,6 @@ export class EarningsV2RunnerService {
       await this.selectionService.saveSelection({
         eventId: input.eventId,
         selection,
-        snapshotIds: [],
         knowledgeCutoffAt: input.knowledgeCutoffAt,
         retryAt: defaultRetryAt(input.now, input.stock.market),
       });
@@ -474,7 +473,6 @@ export class EarningsV2RunnerService {
     await this.selectionService.saveSelection({
       eventId: input.eventId,
       selection,
-      snapshotIds: [snapshot.id],
       knowledgeCutoffAt: input.knowledgeCutoffAt,
       retryAt: selection.status === 'pending' ? selection.retryAt : undefined,
     });

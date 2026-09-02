@@ -262,7 +262,6 @@ test('runStructuredLane saves snapshot and ready selection for an exact period',
   assert.equal(selectionService.snapshots.length, 1);
   assert.equal(selectionService.snapshots[0].stockId, 'stock-1');
   assert.equal(selectionService.selections.length, 1);
-  assert.equal((selectionService.selections[0].snapshotIds as string[])[0], 'snap-saved-1');
 });
 
 test('runStructuredLane returns pending when the exact period is missing', async () => {

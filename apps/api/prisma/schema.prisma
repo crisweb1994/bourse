@@ -667,8 +667,7 @@ model FinancialDataSnapshot {
   normalizedPayload Json
   createdAt         DateTime @default(now())
 
-  stock      Stock                         @relation(fields: [stockId], references: [id], onDelete: Cascade)
-  selections SelectionSnapshot[]
+  stock Stock @relation(fields: [stockId], references: [id], onDelete: Cascade)
 
   @@unique([stockId, provider, contentHash, schemaVersion])
   @@index([stockId, retrievedAt])
@@ -685,25 +684,10 @@ model EarningsStructuredSelection {
   retryAt           DateTime?
   createdAt         DateTime @default(now())
 
-  event     EarningsEvent      @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  snapshots SelectionSnapshot[]
+  event EarningsEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@unique([eventId, selectionVersion])
   @@index([eventId, createdAt])
-}
-
-// 多 provider 多对多：同一 selection 可引用多个 snapshot（不同 metric 来自不同
-// provider）；事实级 provenance.snapshotId 是权威引用，role 仅作汇总标记。
-model SelectionSnapshot {
-  selectionId String
-  snapshotId  String
-  role        String   @default("primary")
-  createdAt   DateTime @default(now())
-
-  selection EarningsStructuredSelection @relation(fields: [selectionId], references: [id], onDelete: Cascade)
-  snapshot  FinancialDataSnapshot       @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
-
-  @@id([selectionId, snapshotId])
 }
 
 model FilingDetectionCursor {
