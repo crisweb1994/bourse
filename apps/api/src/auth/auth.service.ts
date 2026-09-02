@@ -19,15 +19,18 @@ const UNIT_SECONDS: Record<string, number> = {
   w: 604800,
 };
 
-/** Parse a duration string like "7d", "2h", "30m" into seconds. */
+/** Parse a duration string like "7d", "2h", "30m" (or bare seconds) into seconds.
+ *  Unparseable values throw — a typo like "7days" must not silently become 7 seconds. */
 function parseDuration(value: string): number {
   const match = value.match(DURATION_RE);
   if (match) {
     return parseInt(match[1], 10) * UNIT_SECONDS[match[2]];
   }
-  const asNum = parseInt(value, 10);
-  if (!isNaN(asNum)) return asNum;
-  return 604800; // default 7 days
+  const asNum = Number(value);
+  if (Number.isFinite(asNum) && asNum > 0) return asNum;
+  throw new Error(
+    `Invalid JWT_EXPIRES_IN "${value}": use forms like "7d", "12h", "30m", or bare seconds`,
+  );
 }
 
 @Injectable()
@@ -35,7 +38,11 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
-  ) {}
+  ) {
+    // Validate at bootstrap so a typo'd JWT_EXPIRES_IN fails the process
+    // startup instead of surfacing later as tokens that expire in seconds.
+    parseDuration(this.config.get<string>('JWT_EXPIRES_IN', '7d'));
+  }
 
   async findOrCreateUser(profile: GithubProfile) {
     const githubId = profile.id;
