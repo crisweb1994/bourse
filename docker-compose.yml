@@ -74,13 +74,29 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       AUTH_REQUIRED: ${AUTH_REQUIRED:-true}
       # Web search — global env fallback. Per-user config lives in
-      # /settings/ai and overrides these when set.
+      # /settings/ai and overrides these when set. (KISS env review: timeout/
+      # max-searches/cache-ttl knobs demoted to code constants.)
       WEB_SEARCH_PROVIDER: ${WEB_SEARCH_PROVIDER:-}
       SEARXNG_BASE_URL: ${SEARXNG_BASE_URL:-}
       SEARXNG_API_KEY: ${SEARXNG_API_KEY:-}
-      WEB_SEARCH_TIMEOUT_MS: ${WEB_SEARCH_TIMEOUT_MS:-}
-      WEB_SEARCH_MAX_SEARCHES_PER_RUN: ${WEB_SEARCH_MAX_SEARCHES_PER_RUN:-}
-      WEB_SEARCH_CACHE_TTL_MS: ${WEB_SEARCH_CACHE_TTL_MS:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      # Market data sources (KISS env review: these were silently NOT
+      # forwarded before — configured keys never reached the container).
+      RESEARCH_CORE_USER_AGENT: ${RESEARCH_CORE_USER_AGENT:-}
+      TWELVE_DATA_API_KEY: ${TWELVE_DATA_API_KEY:-}
+      ALPHA_VANTAGE_API_KEY: ${ALPHA_VANTAGE_API_KEY:-}
+      EODHD_API_KEY: ${EODHD_API_KEY:-}
+      TUSHARE_TOKEN: ${TUSHARE_TOKEN:-}
+      TUSHARE_ENABLED_DATASETS: ${TUSHARE_ENABLED_DATASETS:-}
+      TUSHARE_REQUESTS_PER_MINUTE: ${TUSHARE_REQUESTS_PER_MINUTE:-}
+      MASSIVE_API_KEY: ${MASSIVE_API_KEY:-}
+      MASSIVE_ENABLED_CAPABILITIES: ${MASSIVE_ENABLED_CAPABILITIES:-}
+      MASSIVE_QUOTE_DELAY: ${MASSIVE_QUOTE_DELAY:-}
+      MASSIVE_HISTORY_INTERVALS: ${MASSIVE_HISTORY_INTERVALS:-}
+      MASSIVE_REQUESTS_PER_MINUTE: ${MASSIVE_REQUESTS_PER_MINUTE:-}
+      SFC_SHORT_POSITION_CSV_URL: ${SFC_SHORT_POSITION_CSV_URL:-}
+      # Manual digest trigger (POST /api/digest/trigger); unset → endpoint 503s.
+      DIGEST_TRIGGER_TOKEN: ${DIGEST_TRIGGER_TOKEN:-}
 
   web:
     <<: *bourse-service

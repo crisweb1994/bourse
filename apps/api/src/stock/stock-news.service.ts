@@ -65,7 +65,7 @@ export class StockNewsService {
   ): WebSearchExecutor {
     return new WebSearchExecutor({
       adapter,
-      timeoutMs: Number(process.env.WEB_SEARCH_TIMEOUT_MS) || 12_000,
+      timeoutMs: 12_000,
       maxSearchesPerRun: 50,
       cacheTtlMs,
     });

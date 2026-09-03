@@ -102,35 +102,6 @@ describe('searxng adapter', () => {
     expect(url1d).toContain('time_range=day');
   });
 
-  it('forwards any time_range bucket when SEARXNG_FORWARD_TIME_RANGE=true', async () => {
-    const prev = process.env.SEARXNG_FORWARD_TIME_RANGE;
-    process.env.SEARXNG_FORWARD_TIME_RANGE = 'true';
-    try {
-      const fetchMock = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        statusText: '',
-        json: async () => ({ query: 'x', results: [] }),
-      }) as unknown as typeof fetch;
-
-      const adapter = createSearxngAdapter({
-        baseUrl: 'https://s.example.com/',
-        _internalFetch: fetchMock,
-      });
-
-      await adapter.search(
-        { query: 'q', count: 3, freshnessDays: 14 },
-        { timeoutMs: 5000 },
-      );
-      const url = (fetchMock as unknown as { mock: { calls: unknown[][] } })
-        .mock.calls[0]?.[0] as string;
-      expect(url).toContain('time_range=month');
-    } finally {
-      if (prev === undefined) delete process.env.SEARXNG_FORWARD_TIME_RANGE;
-      else process.env.SEARXNG_FORWARD_TIME_RANGE = prev;
-    }
-  });
-
   it('passes Bearer auth when apiKey is set', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

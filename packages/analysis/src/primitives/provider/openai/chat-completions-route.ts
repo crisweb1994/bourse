@@ -310,21 +310,8 @@ export class OpenAIChatCompletionsRoute implements OpenAIRoute {
           );
           toolUseCounts.webSearch = (toolUseCounts.webSearch ?? 0) + 1;
           for (const c of result.output.citations) pushCitation(c);
-          // Diag (2026-05-19): print every web_search invocation + outcome
-          // so dev triage knows what the model was asking about.
           const itemCount = result.output.results?.items?.length ?? 0;
-          const durationMs = Date.now() - searchStartedAt;
-          if (process.env.LOG_WEB_SEARCH) {
-            // eslint-disable-next-line no-console
-            console.log(
-              `[OpenAIChatCompletionsRoute] web_search round=${round} #${toolUseCounts.webSearch} ` +
-                `· q=${JSON.stringify(queryStr)}` +
-                (freshnessDays ? ` · ${freshnessDays}d` : '') +
-                ` · ${itemCount} hits · ${durationMs}ms` +
-                (result.error ? ` · ERROR ${result.error.code}` : '') +
-                (result.limitReached ? ' · LIMIT_REACHED' : ''),
-            );
-          }
+          void itemCount; void searchStartedAt;
           messages.push({
             role: 'tool',
             tool_call_id: call.id,

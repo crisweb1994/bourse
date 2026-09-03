@@ -240,7 +240,7 @@ export class DigestGeneratorService {
       };
     }
 
-    const thresholds = this.anomalyThresholds();
+    const thresholds = ANOMALY_THRESHOLDS;
 
     // 并发 fetch 每只票（每只一次 fetchSnapshot，守 #2）+ 取最近一次 Analysis。
     // CN Eastmoney kline 实测偶有 >8s 响应（fetchSnapshot 默认 perConnectorTimeout
@@ -468,20 +468,6 @@ export class DigestGeneratorService {
   // 异动触发（DB.5 ③）
   // ===========================================================================
 
-  /** 从 env 读异动阈值（全局，非 per-user），缺失用 DB.5 初值。 */
-  private anomalyThresholds(): AnomalyThresholds {
-    const num = (key: string, fallback: number) => {
-      const v = this.config.get<string>(key);
-      const n = v ? Number(v) : NaN;
-      return Number.isFinite(n) ? n : fallback;
-    };
-    return {
-      changePct: num('DIGEST_ANOMALY_CHANGE_PCT', 3),
-      rsiOverbought: num('DIGEST_ANOMALY_RSI_OVERBOUGHT', 70),
-      rsiOversold: num('DIGEST_ANOMALY_RSI_OVERSOLD', 30),
-      staleDays: num('DIGEST_ANOMALY_STALE_DAYS', 30),
-    };
-  }
 
   /**
    * 异动判定（PRD DB.5）。命中任一条件 → 返回带 reasons 的 context；否则 null。
@@ -609,6 +595,14 @@ interface IndexLayer {
   quote: typeof fetchIndexQuote;
   history: typeof fetchIndexHistory;
 }
+
+/** 异动触发阈值(PRD DB.5 初值)——产品阈值属代码,非运维配置(KISS env 审查)。 */
+const ANOMALY_THRESHOLDS: AnomalyThresholds = {
+  changePct: 3,
+  rsiOverbought: 70,
+  rsiOversold: 30,
+  staleDays: 30,
+};
 
 interface AnomalyThresholds {
   changePct: number;

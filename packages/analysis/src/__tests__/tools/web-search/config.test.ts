@@ -35,7 +35,7 @@ describe('loadWebSearchConfigFromEnv', () => {
     expect(cfg?.maxSearchesPerRun).toBeGreaterThan(0);
   });
 
-  it('respects override env vars', () => {
+  it('ignores demoted tuning knobs — provider/keys from env, timing from constants (KISS env review)', () => {
     const cfg = loadWebSearchConfigFromEnv({
       WEB_SEARCH_PROVIDER: 'searxng',
       SEARXNG_BASE_URL: 'https://s.example.com',
@@ -46,9 +46,9 @@ describe('loadWebSearchConfigFromEnv', () => {
     });
     expect(cfg).toMatchObject({
       apiKey: 'k',
-      timeoutMs: 5000,
-      maxSearchesPerRun: 25,
-      cacheTtlMs: 60000,
+      timeoutMs: 12_000,
+      maxSearchesPerRun: 50,
+      cacheTtlMs: 5 * 60 * 1000,
     });
   });
 

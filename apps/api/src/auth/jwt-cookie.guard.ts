@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import * as crypto from 'crypto';
-import { AuthService } from './auth.service';
+import { SESSION_TTL_MS, AuthService } from './auth.service';
 
 @Injectable()
 export class JwtCookieGuard implements CanActivate {
@@ -33,7 +33,7 @@ export class JwtCookieGuard implements CanActivate {
           httpOnly: false, // 前端 JS 要读
           secure: isProduction,
           sameSite: 'lax',
-          maxAge: 7 * 24 * 60 * 60 * 1000,
+          maxAge: SESSION_TTL_MS,
           path: '/',
           domain: cookieDomain,
         });

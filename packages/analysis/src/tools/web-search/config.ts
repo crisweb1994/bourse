@@ -63,12 +63,9 @@ export function loadWebSearchConfigFromEnv(
       providerId,
       baseUrl,
       apiKey: env.SEARXNG_API_KEY?.trim() || undefined,
-      timeoutMs: parseIntEnv(env.WEB_SEARCH_TIMEOUT_MS, DEFAULT_TIMEOUT_MS),
-      maxSearchesPerRun: parseIntEnv(
-        env.WEB_SEARCH_MAX_SEARCHES_PER_RUN,
-        DEFAULT_MAX_SEARCHES_PER_RUN,
-      ),
-      cacheTtlMs: parseIntEnv(env.WEB_SEARCH_CACHE_TTL_MS, DEFAULT_CACHE_TTL_MS),
+      timeoutMs: DEFAULT_TIMEOUT_MS,
+      maxSearchesPerRun: DEFAULT_MAX_SEARCHES_PER_RUN,
+      cacheTtlMs: DEFAULT_CACHE_TTL_MS,
     };
   }
 
@@ -78,12 +75,9 @@ export function loadWebSearchConfigFromEnv(
     return {
       providerId,
       apiKey,
-      timeoutMs: parseIntEnv(env.WEB_SEARCH_TIMEOUT_MS, DEFAULT_TIMEOUT_MS),
-      maxSearchesPerRun: parseIntEnv(
-        env.WEB_SEARCH_MAX_SEARCHES_PER_RUN,
-        DEFAULT_MAX_SEARCHES_PER_RUN,
-      ),
-      cacheTtlMs: parseIntEnv(env.WEB_SEARCH_CACHE_TTL_MS, DEFAULT_CACHE_TTL_MS),
+      timeoutMs: DEFAULT_TIMEOUT_MS,
+      maxSearchesPerRun: DEFAULT_MAX_SEARCHES_PER_RUN,
+      cacheTtlMs: DEFAULT_CACHE_TTL_MS,
     };
   }
 

@@ -26,7 +26,7 @@ export class ResearchGatewayService {
     const accessedAt = new Date().toISOString();
     const setting = await this.settings.getInternalForRuntime(input.userId).catch(() => null);
     const providerType = setting?.providerType?.toLowerCase() as 'tavily' | 'searxng' | undefined;
-    const envProvider = this.config.get<string>('RESEARCH_GATEWAY_PROVIDER')?.toLowerCase();
+    const envProvider = this.config.get<string>('WEB_SEARCH_PROVIDER')?.toLowerCase();
     const selected = providerType ?? envProvider ?? (this.config.get<string>('TAVILY_API_KEY') ? 'tavily' : 'searxng');
     const apiKey = setting?.apiKey ?? this.config.get<string>('TAVILY_API_KEY');
     const baseUrl = setting?.baseUrl ?? this.config.get<string>('SEARXNG_BASE_URL');

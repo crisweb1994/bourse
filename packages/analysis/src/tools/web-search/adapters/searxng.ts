@@ -46,7 +46,7 @@ export function createSearxngAdapter(config: SearxngAdapterConfig): WebSearchAda
       });
       if (query.language) params.set('language', query.language);
       const bucket = freshnessToBucket(query.freshnessDays);
-      if (bucket && (bucket === 'day' || process.env.SEARXNG_FORWARD_TIME_RANGE === 'true')) {
+      if (bucket && bucket === 'day') {
         params.set('time_range', bucket);
       }
 
