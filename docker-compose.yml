@@ -57,7 +57,6 @@ services:
       # api talks to postgres over the compose network (internal hostname).
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-bourse}
       JWT_SECRET: ${JWT_SECRET}
-      AI_CREDENTIALS_ENCRYPTION_KEY: ${AI_CREDENTIALS_ENCRYPTION_KEY}
       COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
       # GitHub OAuth — leave blank for AUTH_REQUIRED=false single-user mode.
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
