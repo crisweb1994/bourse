@@ -159,12 +159,10 @@ export class EarningsV2OrchestratorService implements OnModuleInit {
         data: { eventId: event.id },
       });
 
-      // ---- 持久化 guidance / claims / supplemental ----
+      // ---- 校验 guidance / 抽取 claims / supplemental ----
       let guidanceCount = 0;
       if (narrative) {
-        guidanceCount = await this.extractAndPersistGuidance(
-          run.stock,
-          filing,
+        guidanceCount = this.countSupportedGuidance(
           parserDerivation,
           narrative.extraction.guidance,
         );
@@ -431,12 +429,15 @@ export class EarningsV2OrchestratorService implements OnModuleInit {
     });
   }
 
-  private async extractAndPersistGuidance(
-    stock: Stock,
-    filing: Filing,
-    derivation: { id: string; contentHash: string; normalizedText: string; pages: Prisma.JsonValue | null },
+  /**
+   * 校验 narrative 抽取出的 guidance 候选并计数（供卡片 payload 的
+   * dataStatus.guidance 三态）。只做证据定位校验，不落库——当前无任何
+   * 消费方；将来实现「vs 指引」对比时按当时需求重新持久化。
+   */
+  private countSupportedGuidance(
+    derivation: { normalizedText: string; pages: Prisma.JsonValue | null },
     candidates: EarningsNarrativeExtraction['guidance'],
-  ): Promise<number> {
+  ): number {
     let count = 0;
     for (const rawCandidate of candidates) {
       const parsedCandidate = EarningsGuidanceCandidateSchema.safeParse(rawCandidate);
@@ -450,63 +451,6 @@ export class EarningsV2OrchestratorService implements OnModuleInit {
         parsePages(derivation.pages),
       );
       if (!span || !guidanceSourceSupportsCandidate(span.quote, candidate)) continue;
-      const valueMin = new Prisma.Decimal(candidate.value.min).mul(candidate.scale);
-      const valueMax = new Prisma.Decimal(candidate.value.max).mul(candidate.scale);
-      const sourceSpan = {
-        kind: 'filingSpan' as const,
-        filingId: filing.id,
-        derivationId: derivation.id,
-        contentHash: derivation.contentHash,
-        quote: span.quote,
-        startOffset: span.startOffset,
-        endOffset: span.endOffset,
-        page: span.page,
-        section: candidate.sourceSection,
-      };
-      const dedupeKey = computeContentHash({
-        text: JSON.stringify({
-          filingId: filing.id,
-          metricCode: candidate.metricCode,
-          targetPeriodEndOn: candidate.targetPeriodEndOn,
-          startOffset: span.startOffset,
-          valueMin: valueMin.toString(),
-          valueMax: valueMax.toString(),
-        }),
-      });
-      await this.prisma.earningsGuidance.updateMany({
-        where: {
-          stockId: stock.id,
-          metricCode: candidate.metricCode,
-          targetPeriodEndOn: new Date(`${candidate.targetPeriodEndOn}T00:00:00.000Z`),
-          targetPeriodType: 'FY',
-          supersededAt: null,
-          issuedAt: { lt: filing.publishedAt },
-        },
-        data: { supersededAt: new Date() },
-      });
-      await this.prisma.earningsGuidance.upsert({
-        where: { dedupeKey },
-        update: {},
-        create: {
-          dedupeKey,
-          stockId: stock.id,
-          filingId: filing.id,
-          metricCode: candidate.metricCode,
-          targetPeriodEndOn: new Date(`${candidate.targetPeriodEndOn}T00:00:00.000Z`),
-          targetPeriodType: 'FY',
-          valueMin,
-          valueMax,
-          unit: candidate.unit,
-          currency: candidate.currency,
-          scale: 1,
-          accountingBasis: candidate.accountingBasis,
-          consolidationScope: scopeToPrisma(candidate.consolidationScope),
-          issuedAt: filing.publishedAt,
-          provider: filing.provider,
-          sourceUrl: filing.sourceUrl,
-          sourceSpan,
-        },
-      });
       count += 1;
     }
     return count;
@@ -568,31 +512,28 @@ export class EarningsV2OrchestratorService implements OnModuleInit {
   ) {
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${event.id}))`;
-      const card = await tx.earningsCard.upsert({
-        where: { eventId: event.id },
-        update: {},
-        create: { eventId: event.id },
-        include: { currentRevision: true },
-      });
-      const currentPayload = card.currentRevision
-        ? EarningsCardPayloadSchema.safeParse(card.currentRevision.payload)
+      const current = event.currentRevisionId
+        ? await tx.earningsCardRevision.findUnique({ where: { id: event.currentRevisionId } })
+        : null;
+      const currentPayload = current
+        ? EarningsCardPayloadSchema.safeParse(current.payload)
         : null;
       const mergedPayload = currentPayload?.success
         ? mergeEarningsCardPayload(currentPayload.data, payload, relationType)
         : payload;
       const { generatedAt: _generatedAt, ...stablePayload } = mergedPayload;
       const contentHash = computeContentHash({ text: JSON.stringify(stablePayload) });
-      if (card.currentRevision?.contentHash === contentHash) {
-        return { ...card.currentRevision, supersededRevisionId: undefined, cardPayload: mergedPayload };
+      if (current?.contentHash === contentHash) {
+        return { ...current, supersededRevisionId: undefined, cardPayload: mergedPayload };
       }
       const latest = await tx.earningsCardRevision.findFirst({
-        where: { cardId: card.id },
+        where: { eventId: event.id },
         orderBy: { revisionNo: 'desc' },
         select: { revisionNo: true },
       });
       const revision = await tx.earningsCardRevision.create({
         data: {
-          cardId: card.id,
+          eventId: event.id,
           revisionNo: (latest?.revisionNo ?? 0) + 1,
           status: mergedPayload.managementClaims.length > 0 ? 'COMPLETE' : 'PARTIAL',
           schemaVersion: V2_CARD_SCHEMA_VERSION,
@@ -604,17 +545,17 @@ export class EarningsV2OrchestratorService implements OnModuleInit {
           outputTokens,
         },
       });
-      if (card.currentRevisionId) {
+      if (event.currentRevisionId) {
         await tx.earningsCardRevision.update({
-          where: { id: card.currentRevisionId },
+          where: { id: event.currentRevisionId },
           data: { supersededAt: new Date() },
         });
       }
-      await tx.earningsCard.update({
-        where: { id: card.id },
+      await tx.earningsEvent.update({
+        where: { id: event.id },
         data: { currentRevisionId: revision.id },
       });
-      return { ...revision, supersededRevisionId: card.currentRevisionId ?? undefined, cardPayload: mergedPayload };
+      return { ...revision, supersededRevisionId: event.currentRevisionId ?? undefined, cardPayload: mergedPayload };
     });
   }
 }
@@ -645,10 +586,6 @@ function unsupportedSelection(reason: string, diagnostics: string[]) {
       warnings: diagnostics,
     },
   };
-}
-
-function scopeToPrisma(scope: 'consolidated' | 'parent' | 'unknown') {
-  return scope === 'consolidated' ? ('CONSOLIDATED' as const) : scope === 'parent' ? ('PARENT' as const) : ('UNKNOWN' as const);
 }
 
 function toPrismaPeriodType(periodType: V2LaneIdentity['periodType']) {

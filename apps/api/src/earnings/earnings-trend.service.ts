@@ -147,19 +147,19 @@ export class EarningsTrendService {
   }
 
   private async loadFacts(stockId: string): Promise<TrendFact[]> {
-    const cards = await this.prisma.earningsCard.findMany({
-      where: { event: { stockId }, currentRevisionId: { not: null } },
-      include: { event: true, currentRevision: true },
+    const events = await this.prisma.earningsEvent.findMany({
+      where: { stockId, currentRevisionId: { not: null } },
+      include: { currentRevision: true },
     });
-    const sourceFacts = cards.flatMap((card) => {
-      const revision = card.currentRevision;
+    const sourceFacts = events.flatMap((event) => {
+      const revision = event.currentRevision;
       if (!revision) return [];
       const parsed = EarningsCardPayloadSchema.safeParse(revision.payload);
       if (!parsed.success) return [];
       return parsed.data.facts.map((fact) => sourceFact({
-        eventId: card.eventId,
+        eventId: event.id,
         revisionId: revision.id,
-        event: card.event,
+        event,
         payload: parsed.data,
         fact,
       }));

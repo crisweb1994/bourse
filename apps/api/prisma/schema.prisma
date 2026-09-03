@@ -51,7 +51,6 @@ model Stock {
   filings                          Filing[]
   earningsEvents                   EarningsEvent[]
   earningsGenerationRuns           EarningsGenerationRun[]
-  earningsGuidance                 EarningsGuidance[]
   filingDetectionCursor            FilingDetectionCursor?
   earningsDeliveryRecords          EarningsDeliveryRecord[]
   investorRelationsEvents         InvestorRelationsEvent[]
@@ -484,7 +483,6 @@ model Filing {
   derivations                 FilingDerivation[]
   eventLinks                  EarningsEventFiling[]
   investorRelationsEventLinks InvestorRelationsEventFiling[]
-  guidance                    EarningsGuidance[]
 
   @@unique([provider, sourceDocumentId])
   @@index([stockId, publishedAt])
@@ -515,52 +513,22 @@ model FilingDerivation {
   @@index([filingId, createdAt])
 }
 
-// Forward-looking company guidance. It stays separate from actuals and is
-// eligible only when issued before the actual filing publication time.
-model EarningsGuidance {
-  id                 String                 @id @default(cuid())
-  dedupeKey          String                 @unique
-  stockId            String
-  filingId           String?
-  metricCode         String
-  targetPeriodEndOn  DateTime               @db.Date
-  targetPeriodType   EarningsPeriodType
-  valueMin           Decimal                @db.Decimal(30, 8)
-  valueMax           Decimal                @db.Decimal(30, 8)
-  unit               String
-  currency           String?
-  scale              Int                    @default(1)
-  accountingBasis    String
-  consolidationScope EarningsReportingScope
-  issuedAt           DateTime
-  provider           String
-  sourceUrl          String
-  sourceSpan         Json
-  supersededAt       DateTime?
-  createdAt          DateTime               @default(now())
-
-  stock  Stock   @relation(fields: [stockId], references: [id], onDelete: Cascade)
-  filing Filing? @relation(fields: [filingId], references: [id], onDelete: SetNull)
-
-  @@index([stockId, targetPeriodEndOn, targetPeriodType, metricCode, issuedAt], map: "EarningsGuidance_lookup_idx")
-  @@index([filingId])
-}
-
 model EarningsEvent {
-  id             String                 @id @default(cuid())
-  stockId        String
-  periodEndOn    DateTime               @db.Date
-  periodType     EarningsPeriodType
-  reportingScope EarningsReportingScope
-  fiscalYear     Int
-  createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
+  id                String                 @id @default(cuid())
+  stockId           String
+  periodEndOn       DateTime               @db.Date
+  periodType        EarningsPeriodType
+  reportingScope    EarningsReportingScope
+  fiscalYear        Int
+  currentRevisionId String?                @unique
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
 
-  stock          Stock                   @relation(fields: [stockId], references: [id], onDelete: Cascade)
-  filingLinks    EarningsEventFiling[]
-  card           EarningsCard?
-  generationRuns EarningsGenerationRun[]
-  structuredSelections EarningsStructuredSelection[]
+  stock            Stock                   @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  filingLinks      EarningsEventFiling[]
+  generationRuns   EarningsGenerationRun[]
+  currentRevision  EarningsCardRevision?   @relation("CurrentEarningsRevision", fields: [currentRevisionId], references: [id], onDelete: SetNull)
+  revisions        EarningsCardRevision[]  @relation("EarningsCardRevisions")
 
   @@unique([stockId, periodEndOn, periodType, reportingScope])
   @@index([stockId, periodEndOn])
@@ -579,21 +547,9 @@ model EarningsEventFiling {
   @@index([filingId])
 }
 
-model EarningsCard {
-  id                String   @id @default(cuid())
-  eventId           String   @unique
-  currentRevisionId String?  @unique
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  event           EarningsEvent          @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  currentRevision EarningsCardRevision?  @relation("CurrentEarningsRevision", fields: [currentRevisionId], references: [id], onDelete: SetNull)
-  revisions       EarningsCardRevision[] @relation("EarningsCardRevisions")
-}
-
 model EarningsCardRevision {
   id            String                     @id @default(cuid())
-  cardId        String
+  eventId       String
   revisionNo    Int
   status        EarningsCardRevisionStatus
   schemaVersion String
@@ -606,14 +562,14 @@ model EarningsCardRevision {
   generatedAt   DateTime                   @default(now())
   supersededAt  DateTime?
 
-  card            EarningsCard          @relation("EarningsCardRevisions", fields: [cardId], references: [id], onDelete: Cascade)
-  currentFor      EarningsCard?         @relation("CurrentEarningsRevision")
+  event           EarningsEvent          @relation("EarningsCardRevisions", fields: [eventId], references: [id], onDelete: Cascade)
+  currentFor      EarningsEvent?         @relation("CurrentEarningsRevision")
   generationRuns  EarningsGenerationRun[]
   chatGenerations ChatGeneration[]
   deliveryRecords EarningsDeliveryRecord[]
 
-  @@unique([cardId, revisionNo])
-  @@index([cardId, generatedAt])
+  @@unique([eventId, revisionNo])
+  @@index([eventId, generatedAt])
 }
 
 model EarningsGenerationRun {
@@ -657,8 +613,6 @@ model FinancialDataSnapshot {
   id                String   @id @default(cuid())
   stockId           String
   provider          String
-  sourceNature      String
-  qualityTier       String
   sourceUrl         String
   schemaVersion     String
   retrievedAt       DateTime
@@ -670,23 +624,6 @@ model FinancialDataSnapshot {
 
   @@unique([stockId, provider, contentHash, schemaVersion])
   @@index([stockId, retrievedAt])
-}
-
-model EarningsStructuredSelection {
-  id                String   @id @default(cuid())
-  eventId           String
-  selectionVersion  String
-  status            String
-  selectedPeriodId  String?
-  diagnostics       Json
-  knowledgeCutoffAt DateTime
-  retryAt           DateTime?
-  createdAt         DateTime @default(now())
-
-  event EarningsEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
-
-  @@unique([eventId, selectionVersion])
-  @@index([eventId, createdAt])
 }
 
 model FilingDetectionCursor {

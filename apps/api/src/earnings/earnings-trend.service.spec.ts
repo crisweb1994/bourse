@@ -16,13 +16,11 @@ function card(
   const day = quarter === 1 || quarter === 4 ? '31' : '30';
   const periodEndOn = `${year}-${month}-${day}`;
   return {
-    eventId: `event-${year}-q${quarter}-${accumulation}`,
+    id: `event-${year}-q${quarter}-${accumulation}`,
     currentRevisionId: `revision-${year}-q${quarter}-${accumulation}`,
-    event: {
-      fiscalYear: year,
-      periodType,
-      periodEndOn: new Date(`${periodEndOn}T00:00:00.000Z`),
-    },
+    fiscalYear: year,
+    periodType,
+    periodEndOn: new Date(`${periodEndOn}T00:00:00.000Z`),
     currentRevision: {
       id: `revision-${year}-q${quarter}-${accumulation}`,
       payload: {
@@ -95,7 +93,7 @@ function card(
 function service(cards: ReturnType<typeof card>[]) {
   const prisma = {
     stock: { findUnique: async () => ({ id: 'stock-1' }) },
-    earningsCard: { findMany: async () => cards },
+    earningsEvent: { findMany: async () => cards },
   };
   return new EarningsTrendService(prisma as any);
 }

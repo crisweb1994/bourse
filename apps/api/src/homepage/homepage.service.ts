@@ -143,23 +143,19 @@ export class HomepageService {
           publishedAt: true,
         },
       }),
-      this.prisma.earningsCard.findMany({
+      this.prisma.earningsEvent.findMany({
         where: {
-          event: { stockId: { in: stockIds } },
+          stockId: { in: stockIds },
           currentRevision: { is: { generatedAt: { gt: minBaseline } } },
         },
         orderBy: { currentRevision: { generatedAt: 'desc' } },
         take: CHANGE_CANDIDATE_LIMIT,
         select: {
           id: true,
-          event: {
-            select: {
-              stockId: true,
-              periodType: true,
-              fiscalYear: true,
-              filingLinks: { select: { filingId: true } },
-            },
-          },
+          stockId: true,
+          periodType: true,
+          fiscalYear: true,
+          filingLinks: { select: { filingId: true } },
           currentRevision: {
             select: { id: true, revisionNo: true, generatedAt: true },
           },
@@ -170,17 +166,17 @@ export class HomepageService {
     const linkedFilingIds = new Set<string>();
     const earningsChanges = cards.flatMap((card): HomepageChangeDto[] => {
       const revision = card.currentRevision;
-      const baseline = baselineByStock.get(card.event.stockId);
-      const stock = stockById.get(card.event.stockId);
+      const baseline = baselineByStock.get(card.stockId);
+      const stock = stockById.get(card.stockId);
       if (!revision || !baseline || !stock || revision.generatedAt <= baseline) return [];
-      card.event.filingLinks.forEach((link) => linkedFilingIds.add(link.filingId));
-      const hasResearch = latestByStock.get(card.event.stockId) !== null;
+      card.filingLinks.forEach((link) => linkedFilingIds.add(link.filingId));
+      const hasResearch = latestByStock.get(card.stockId) !== null;
       return [
         {
           id: `earnings:${revision.id}`,
           kind: 'EARNINGS_CARD',
           stock: toStockDto(stock),
-          title: `${earningsPeriodLabel(card.event)} 财报卡${revision.revisionNo > 1 ? '已更新' : '已生成'}`,
+          title: `${earningsPeriodLabel(card)} 财报卡${revision.revisionNo > 1 ? '已更新' : '已生成'}`,
           detail: `第 ${revision.revisionNo} 版 · ${hasResearch ? '生成于上次研究之后' : '加入自选后生成'}`,
           occurredAt: revision.generatedAt.toISOString(),
         },

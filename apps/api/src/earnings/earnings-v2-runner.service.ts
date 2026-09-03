@@ -436,12 +436,6 @@ export class EarningsV2RunnerService {
         'source_no_data',
         result.warnings.map((warning) => warning.message),
       );
-      await this.selectionService.saveSelection({
-        eventId: input.eventId,
-        selection,
-        knowledgeCutoffAt: input.knowledgeCutoffAt,
-        retryAt: defaultRetryAt(input.now, input.stock.market),
-      });
       return { selection };
     }
 
@@ -456,12 +450,6 @@ export class EarningsV2RunnerService {
       eventPublishedAt: input.eventPublishedAt,
       knowledgeCutoffAt: input.knowledgeCutoffAt,
       now: input.now,
-    });
-    await this.selectionService.saveSelection({
-      eventId: input.eventId,
-      selection,
-      knowledgeCutoffAt: input.knowledgeCutoffAt,
-      retryAt: selection.status === 'pending' ? selection.retryAt : undefined,
     });
     return { selection, snapshotId: snapshot.id };
   }
@@ -481,12 +469,4 @@ function unsupportedSelection(
       warnings,
     },
   };
-}
-
-function defaultRetryAt(now: string | undefined, market: string): string | undefined {
-  if (!now) return undefined;
-  const baseMs = Date.parse(now);
-  if (Number.isNaN(baseMs)) return undefined;
-  const intervalMs = market === 'US' ? 12 * 60 * 60 * 1000 : 30 * 60 * 1000;
-  return new Date(baseMs + intervalMs).toISOString();
 }
