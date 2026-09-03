@@ -15,20 +15,14 @@ import type { ChannelType } from './index';
 const CHANNEL_TYPES = [
   'WEBHOOK',
   'FEISHU',
-  'DINGTALK',
-  'WECOM',
   'TELEGRAM',
-  'SLACK',
 ] as const;
 
 // 编译期锚定:CHANNEL_TYPES 与共享 ChannelType 单源双向对齐,漂移即编译错。
 const _channelTypeAnchor: Record<ChannelType, true> = {
   WEBHOOK: true,
   FEISHU: true,
-  DINGTALK: true,
-  WECOM: true,
   TELEGRAM: true,
-  SLACK: true,
 };
 void _channelTypeAnchor;
 
@@ -44,22 +38,9 @@ export const ChannelConfig = z.discriminatedUnion('type', [
     secret: z.string().optional(), // 飞书自定义机器人签名校验可选
   }),
   z.object({
-    type: z.literal('DINGTALK'),
-    url: z.string().url(),
-    secret: z.string().min(1), // 钉钉必填签名（timestamp + secret）
-  }),
-  z.object({
-    type: z.literal('WECOM'),
-    url: z.string().url(),
-  }),
-  z.object({
     type: z.literal('TELEGRAM'),
     botToken: z.string().min(1),
     chatId: z.string().min(1),
-  }),
-  z.object({
-    type: z.literal('SLACK'),
-    url: z.string().url(),
   }),
 ]);
 

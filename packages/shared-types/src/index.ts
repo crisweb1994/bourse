@@ -185,10 +185,7 @@ export type DeliveryStatus =
 export const ChannelType = {
   WEBHOOK: 'WEBHOOK',
   FEISHU: 'FEISHU',
-  DINGTALK: 'DINGTALK',
-  WECOM: 'WECOM',
   TELEGRAM: 'TELEGRAM',
-  SLACK: 'SLACK',
 } as const;
 
 export type ChannelType = (typeof ChannelType)[keyof typeof ChannelType];

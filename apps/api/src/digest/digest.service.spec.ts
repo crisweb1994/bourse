@@ -139,7 +139,7 @@ describe('DigestSubscriptionService · keep-existing secrets', () => {
 });
 
 describe('DigestSubscriptionService · masking on get', () => {
-  it('masks secret/botToken in get response; leaves WECOM untouched', async () => {
+  it('masks secret/botToken in get response', async () => {
     const stub = {
       digestSubscription: {
         findUnique: async () => ({
@@ -150,7 +150,6 @@ describe('DigestSubscriptionService · masking on get', () => {
           channels: [
             FEISHU('abcdefgh5678'),
             { type: 'TELEGRAM', botToken: '1234567890:ABC', chatId: '99' },
-            { type: 'WECOM', url: 'https://y' },
           ],
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -164,7 +163,6 @@ describe('DigestSubscriptionService · masking on get', () => {
     const ch = out!.channels as any[];
     assert.equal(ch[0].secret, '••••5678');
     assert.equal(ch[1].botToken, '••••:ABC');
-    assert.equal(ch[2].url, 'https://y'); // WECOM 无敏感字段，不变
     assert.equal(out!.earningsImmediateEnabled, true);
   });
 

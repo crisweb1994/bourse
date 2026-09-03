@@ -134,12 +134,8 @@ function maskChannel(c: ChannelConfig): ChannelConfig {
       return { ...c, secret: maskSecret(c.secret) };
     case 'FEISHU':
       return c.secret ? { ...c, secret: maskSecret(c.secret) } : c;
-    case 'DINGTALK':
-      return { ...c, secret: maskSecret(c.secret) };
     case 'TELEGRAM':
       return { ...c, botToken: maskSecret(c.botToken) };
-    default:
-      return c; // WECOM / SLACK 无敏感字段
   }
 }
 

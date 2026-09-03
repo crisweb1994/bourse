@@ -41,15 +41,10 @@ const MARKET_OPTIONS: { value: DigestMarket; label: string }[] = [
 const CHANNEL_OPTIONS: {
   value: DigestChannelType;
   label: string;
-  /** 飞书/钉钉/企微/Slack 留 backlog（PRD Phase B），首批只 Webhook + 飞书 + TG。 */
-  available: boolean;
 }[] = [
-  { value: 'TELEGRAM', label: 'Telegram', available: true },
-  { value: 'FEISHU', label: '飞书', available: true },
-  { value: 'WEBHOOK', label: '通用 Webhook', available: true },
-  { value: 'DINGTALK', label: '钉钉', available: false },
-  { value: 'WECOM', label: '企业微信', available: false },
-  { value: 'SLACK', label: 'Slack', available: false },
+  { value: 'TELEGRAM', label: 'Telegram' },
+  { value: 'FEISHU', label: '飞书' },
+  { value: 'WEBHOOK', label: '通用 Webhook' },
 ];
 
 interface FormState {
@@ -329,15 +324,9 @@ function AddChannelMenu({ onAdd }: { onAdd: (t: DigestChannelType) => void }) {
         {CHANNEL_OPTIONS.map((opt) => (
           <DropdownMenuItem
             key={opt.value}
-            disabled={!opt.available}
             onSelect={() => onAdd(opt.value)}
           >
             {opt.label}
-            {!opt.available && (
-              <span className="ml-auto font-mono text-[10.5px] text-[var(--color-fg-3)]">
-                后续版本
-              </span>
-            )}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
@@ -390,7 +379,7 @@ function ChannelEditor({
           />
         </div>
       ) : (
-        // WEBHOOK / FEISHU / DINGTALK / WECOM / SLACK：incoming webhook URL + 可选/必填 secret
+        // WEBHOOK / FEISHU：incoming webhook URL + 可选/必填 secret
         <>
           <ChannelInput
             label="Webhook URL"
@@ -400,11 +389,7 @@ function ChannelEditor({
           />
           {('secret' in channel) && (
             <ChannelInput
-              label={
-                channel.type === 'DINGTALK' || channel.type === 'WEBHOOK'
-                  ? '签名 Secret'
-                  : '签名 Secret（可选）'
-              }
+              label={channel.type === 'WEBHOOK' ? '签名 Secret' : '签名 Secret（可选）'}
               value={channel.secret ?? ''}
               placeholder={masked ? '••••（留空保持不变）' : '签名密钥'}
               onChange={(v) => onChange({ secret: v } as Partial<DigestChannel>)}
@@ -452,11 +437,5 @@ function emptyChannel(type: DigestChannelType): DigestChannel {
       return { type: 'WEBHOOK', url: '', secret: '' };
     case 'FEISHU':
       return { type: 'FEISHU', url: '' };
-    case 'DINGTALK':
-      return { type: 'DINGTALK', url: '', secret: '' };
-    case 'WECOM':
-      return { type: 'WECOM', url: '' };
-    case 'SLACK':
-      return { type: 'SLACK', url: '' };
   }
 }

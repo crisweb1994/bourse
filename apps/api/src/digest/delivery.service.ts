@@ -71,7 +71,7 @@ export class DigestDeliveryService {
   ): Promise<void> {
     const adapter = this.adapters.get(channel.type);
     if (!adapter) {
-      // 未注册的渠道类型（如 SLACK/DINGTARK/WECOM 留 backlog）→ 记 FAILED 不重试。
+      // 契约上不应到达（ChannelConfig 三值均有 adapter）；防御性记 FAILED 不重试。
       await this.record(userId, market, session, channel, 'FAILED', null, `no adapter for ${channel.type}`);
       return;
     }

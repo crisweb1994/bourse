@@ -776,10 +776,7 @@ enum DeliveryStatus {
 enum ChannelType {
   WEBHOOK
   FEISHU
-  DINGTALK
-  WECOM
   TELEGRAM
-  SLACK
 }
 
 enum EarningsDeliveryKind {
