@@ -1,18 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { DigestSubscriptionService } from './digest.service';
-import {
-  credentialEncryptionKey,
-  decryptCredential,
-} from '../common/credentials-crypto';
 
-// Stateless unit tests — validation / keep-existing / masking / 加密落库，不碰 Prisma。
+// Stateless unit tests — validation / keep-existing / masking，不碰 Prisma。
 // 真实 upsert 集成留 e2e。
-
-const testConfig = {
-  get: (key: string) =>
-    key === 'AI_CREDENTIALS_ENCRYPTION_KEY' ? 'test-only-credential-secret' : undefined,
-} as any;
 
 const FEISHU = (secret: string) => ({
   type: 'FEISHU' as const,
@@ -22,7 +13,7 @@ const FEISHU = (secret: string) => ({
 
 describe('DigestSubscriptionService · validation', () => {
   const stubPrisma = { digestSubscription: { findUnique: async () => null } };
-  const svc = new DigestSubscriptionService(stubPrisma as any, testConfig);
+  const svc = new DigestSubscriptionService(stubPrisma as any);
 
   it('rejects invalid market', async () => {
     await assert.rejects(
@@ -82,16 +73,12 @@ describe('DigestSubscriptionService · keep-existing secrets', () => {
         },
       },
     };
-    const svc = new DigestSubscriptionService(stub as any, testConfig);
+    const svc = new DigestSubscriptionService(stub as any);
     await svc.upsert('u1', {
       markets: ['US'],
-      channels: [FEISHU('••••5678')], // mask 形态 → 应保留旧值（加密落库）
+      channels: [FEISHU('••••5678')], // mask 形态 → 应保留旧值
     } as any);
-    assert.match(captured.channels[0].secret, /^v1:/);
-    assert.equal(
-      decryptCredential(credentialEncryptionKey(testConfig), captured.channels[0].secret),
-      'REAL-SECRET-5678',
-    );
+    assert.equal(captured.channels[0].secret, 'REAL-SECRET-5678');
   });
 
   it('uses new secret when incoming is a fresh value', async () => {
@@ -105,16 +92,12 @@ describe('DigestSubscriptionService · keep-existing secrets', () => {
         },
       },
     };
-    const svc = new DigestSubscriptionService(stub as any, testConfig);
+    const svc = new DigestSubscriptionService(stub as any);
     await svc.upsert('u1', {
       markets: ['US'],
       channels: [FEISHU('NEW-SECRET-9999')],
     } as any);
-    assert.match(captured.channels[0].secret, /^v1:/);
-    assert.equal(
-      decryptCredential(credentialEncryptionKey(testConfig), captured.channels[0].secret),
-      'NEW-SECRET-9999',
-    );
+    assert.equal(captured.channels[0].secret, 'NEW-SECRET-9999');
   });
 
   it('persists the explicit earnings immediate-notice opt-in', async () => {
@@ -128,7 +111,7 @@ describe('DigestSubscriptionService · keep-existing secrets', () => {
         },
       },
     };
-    const svc = new DigestSubscriptionService(stub as any, testConfig);
+    const svc = new DigestSubscriptionService(stub as any);
     await svc.upsert('u1', {
       markets: ['US'],
       channels: [FEISHU('SECRET')],
@@ -156,7 +139,7 @@ describe('DigestSubscriptionService · masking on get', () => {
         }),
       },
     };
-    const svc = new DigestSubscriptionService(stub as any, testConfig);
+    const svc = new DigestSubscriptionService(stub as any);
     const out = await svc.get('u1');
     // channels is ChannelConfig[] (discriminated union) — index access narrows
     // to the union, so cast per element to read variant-specific fields.
@@ -168,7 +151,7 @@ describe('DigestSubscriptionService · masking on get', () => {
 
   it('returns null when no subscription', async () => {
     const stub = { digestSubscription: { findUnique: async () => null } };
-    const svc = new DigestSubscriptionService(stub as any, testConfig);
+    const svc = new DigestSubscriptionService(stub as any);
     assert.equal(await svc.get('u1'), null);
   });
 });

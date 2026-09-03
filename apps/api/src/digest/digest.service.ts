@@ -1,8 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { ChannelConfig } from '@bourse/analysis';
-import { decryptChannelSecrets, encryptChannelSecrets } from '../common/credentials-crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   DIGEST_MARKETS,
@@ -11,16 +9,13 @@ import {
 
 /**
  * Daily Brief 订阅 CRUD（docs/prd-daily-brief.md）。
- * 单条 per-user（userId unique）。channels 存 ChannelConfig[] JSON，
- * 其中 secret/botToken 以 AES-256-GCM 密文落库（credentials-crypto）。
+ * 单条 per-user（userId unique）。channels 存 ChannelConfig[] JSON
+ * （凭证明文，产品决策：不做静态加密）。
  * 完整简报不落库（v1.4）——这里只管订阅配置 + 投递记录（DeliveryRecord）。
  */
 @Injectable()
 export class DigestSubscriptionService {
-  constructor(
-    private prisma: PrismaService,
-    private config: ConfigService,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
   /** GET — 返回订阅，channels 敏感字段已 mask。null = 未订阅。 */
   async get(userId: string) {
@@ -56,7 +51,7 @@ export class DigestSubscriptionService {
 
     const enabled = dto.enabled ?? true;
     const earningsImmediateEnabled = dto.earningsImmediateEnabled ?? false;
-    const channels = encryptChannelSecrets(parsed.data, this.config);
+    const channels = parsed.data;
     const row = await this.prisma.digestSubscription.upsert({
       where: { userId },
       create: {
@@ -96,10 +91,7 @@ export class DigestSubscriptionService {
    * 仅进程内调用，不暴露 HTTP。
    */
   async getInternal(userId: string) {
-    const row = await this.prisma.digestSubscription.findUnique({ where: { userId } });
-    return row
-      ? { ...row, channels: decryptChannelSecrets(row.channels as ChannelConfig[], this.config) }
-      : row;
+    return this.prisma.digestSubscription.findUnique({ where: { userId } });
   }
 
   private toPublic(row: {
@@ -112,8 +104,7 @@ export class DigestSubscriptionService {
   }) {
     return {
       markets: row.markets,
-      // 先解密再 mask，展示层始终是「真值的末四位」而非密文尾巴。
-      channels: decryptChannelSecrets(row.channels as ChannelConfig[], this.config).map(maskChannel),
+      channels: (row.channels as ChannelConfig[]).map(maskChannel),
       enabled: row.enabled,
       earningsImmediateEnabled: row.earningsImmediateEnabled,
       createdAt: row.createdAt,

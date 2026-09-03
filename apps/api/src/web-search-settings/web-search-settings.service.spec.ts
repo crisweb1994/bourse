@@ -1,15 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { WebSearchSettingsService } from './web-search-settings.service';
-import {
-  credentialEncryptionKey,
-  decryptCredential,
-} from '../common/credentials-crypto';
-
-const testConfig = {
-  get: (key: string) =>
-    key === 'AI_CREDENTIALS_ENCRYPTION_KEY' ? 'test-only-credential-secret' : undefined,
-} as any;
 
 /**
  * Stateless unit tests — exercise the validation + masking logic without
@@ -24,7 +15,7 @@ describe('WebSearchSettingsService · validation', () => {
       findUnique: async () => null,
     },
   };
-  const svc = new WebSearchSettingsService(stubPrisma as any, testConfig);
+  const svc = new WebSearchSettingsService(stubPrisma as any);
 
   it('rejects TAVILY without apiKey (no existing row)', async () => {
     await assert.rejects(
@@ -94,17 +85,12 @@ describe('WebSearchSettingsService · upsert preserves existing fields', () => {
         },
       },
     };
-    const svc = new WebSearchSettingsService(stub as any, testConfig);
+    const svc = new WebSearchSettingsService(stub as any);
     await svc.upsert('u1', {
       providerType: 'TAVILY',
       primaryMode: 'CUSTOM_ONLY',
     } as any);
-    // 历史明文在保存时应被加密落库（解密回读校验）。
-    assert.match(captured.update.apiKey, /^v1:/);
-    assert.equal(
-      decryptCredential(credentialEncryptionKey(testConfig), captured.update.apiKey),
-      'tvly-OLD-KEY-1234',
-    );
+    assert.equal(captured.update.apiKey, 'tvly-OLD-KEY-1234');
     assert.equal(captured.update.primaryMode, 'CUSTOM_ONLY');
   });
 
@@ -138,7 +124,7 @@ describe('WebSearchSettingsService · upsert preserves existing fields', () => {
         },
       },
     };
-    const svc = new WebSearchSettingsService(stub as any, testConfig);
+    const svc = new WebSearchSettingsService(stub as any);
     await svc.upsert('u1', {
       providerType: 'SEARXNG',
       baseUrl: 'https://searxng.example.com',
@@ -151,7 +137,7 @@ describe('WebSearchSettingsService · upsert preserves existing fields', () => {
 describe('WebSearchSettingsService · apiKey masking', () => {
   // Indirectly via toDto's call to maskApiKey. We use the module-private
   // helper through a constructed row.
-  const svc = new WebSearchSettingsService(null as any, testConfig) as any;
+  const svc = new WebSearchSettingsService(null as any) as any;
 
   it('preserves tvly- prefix and exposes last 4 chars', () => {
     const masked = svc.toDto({

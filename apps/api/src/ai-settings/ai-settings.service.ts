@@ -7,8 +7,6 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { credentialEncryptionKey, decryptCredential, encryptCredential } from '../common/credentials-crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   AiProviderSettingDetailDto,
@@ -37,10 +35,7 @@ const ANTHROPIC_STATIC_MODELS = [
 
 @Injectable()
 export class AiSettingsService {
-  constructor(
-    private prisma: PrismaService,
-    private config: ConfigService,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
   getCatalog() {
     return BUILTIN_PROVIDER_CATALOG;
@@ -67,7 +62,7 @@ export class AiSettingsService {
       label: dto.label.trim() || '未命名',
       providerType: dto.providerType,
       baseUrl: this.emptyToNull(dto.baseUrl),
-      apiKeyEncrypted: apiKey ? this.encryptApiKey(apiKey) : null,
+      apiKey,
       enabledModels: dto.enabledModels ?? [],
       primaryModel: this.emptyToNull(dto.primaryModel),
       utilityModel: this.emptyToNull(dto.utilityModel),
@@ -117,10 +112,9 @@ export class AiSettingsService {
     if (dto.enabled !== undefined) data.enabled = dto.enabled;
 
     if (dto.clearApiKey === true) {
-      data.apiKeyEncrypted = null;
+      data.apiKey = null;
     } else if (dto.apiKey !== undefined) {
-      const apiKey = dto.apiKey.trim() || null;
-      data.apiKeyEncrypted = apiKey ? this.encryptApiKey(apiKey) : null;
+      data.apiKey = dto.apiKey.trim() || null;
     }
 
     if (dto.isDefault === true) {
@@ -212,7 +206,7 @@ export class AiSettingsService {
     input: { providerType: ProviderTypeStr; baseUrl: string; apiKey?: string },
   ) {
     const row = await this.ensureOwned(userId, id);
-    const savedApiKey = await this.readApiKey(row);
+    const savedApiKey = row.apiKey ?? null;
     return this.listModelsStateless({
       ...input,
       apiKey: input.apiKey?.trim() || savedApiKey || undefined,
@@ -301,7 +295,7 @@ export class AiSettingsService {
     },
   ) {
     const row = await this.ensureOwned(userId, id);
-    const savedApiKey = await this.readApiKey(row);
+    const savedApiKey = row.apiKey ?? null;
     return this.testConnectionStateless({
       ...input,
       apiKey: input.apiKey?.trim() || savedApiKey || '',
@@ -360,7 +354,7 @@ export class AiSettingsService {
     return {
       id: row.id,
       providerType: row.providerType,
-      apiKey: await this.readApiKey(row),
+      apiKey: row.apiKey ?? null,
       baseUrl: row.baseUrl,
       model: row.primaryModel ?? row.enabledModels[0] ?? null,
       utilityModel: row.utilityModel ?? null,
@@ -383,25 +377,13 @@ export class AiSettingsService {
   }
 
   private async toDetailDto(row: any): Promise<AiProviderSettingDetailDto> {
-    const apiKey = await this.readApiKey(row);
+    const apiKey = row.apiKey ?? null;
     return {
       ...this.toSummaryDto(row),
       baseUrl: row.baseUrl ?? '',
       hasApiKey: Boolean(apiKey),
       apiKeyMasked: apiKey ? `****${apiKey.slice(-4)}` : null,
     };
-  }
-
-  private async readApiKey(row: any): Promise<string | null> {
-    return row.apiKeyEncrypted ? this.decryptApiKey(row.apiKeyEncrypted) : null;
-  }
-
-  private encryptApiKey(apiKey: string): string {
-    return encryptCredential(credentialEncryptionKey(this.config), apiKey);
-  }
-
-  private decryptApiKey(payload: string): string {
-    return decryptCredential(credentialEncryptionKey(this.config), payload);
   }
 
   private emptyToNull(value?: string | null): string | null {
