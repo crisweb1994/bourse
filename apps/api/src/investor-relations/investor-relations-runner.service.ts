@@ -8,6 +8,7 @@ import { INVESTOR_RELATIONS_MAX_OUTPUT_TOKENS, INVESTOR_RELATIONS_PROMPT_VERSION
 import { Prisma, type Filing, type InvestorRelationsEvent, type Stock } from '@prisma/client';
 import { BoundedTaskQueue } from '../common/bounded-task-queue';
 import { ProviderFactoryService } from '../analysis/provider-factory.service';
+import { resolveEnvProviderName } from '../analysis/provider-resolver.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { PreparedInvestorRelationsSource } from './investor-relations-source.service';
 
@@ -71,7 +72,7 @@ export class InvestorRelationsRunnerService implements OnModuleInit {
         this.prisma.filingDerivation.findUnique({ where: { id: source.derivationId } }),
       ]);
       if (!filing || !derivation) throw new IrRunError('SOURCE_NOT_PERSISTED', false);
-      const provider = this.providerFactory.buildProvider(this.config.get<string>('AI_PROVIDER') || 'claude');
+      const provider = this.providerFactory.buildProvider(resolveEnvProviderName(this.config));
       const model = provider.getUtilityModel();
       const prompt = buildInvestorRelationsUserPrompt({
         title: filing.title ?? undefined,

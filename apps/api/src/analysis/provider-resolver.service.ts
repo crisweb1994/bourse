@@ -77,7 +77,7 @@ export class ProviderResolverService {
 
   /** Env-fallback provider name when the user has no AI setting row. */
   envProviderName(hint?: string | null): string {
-    return hint || this.config.get<string>('AI_PROVIDER') || 'claude';
+    return hint || resolveEnvProviderName(this.config);
   }
 
   /**
@@ -170,4 +170,22 @@ export class ProviderResolverService {
       forceChatCompletions: true,
     };
   }
+}
+
+
+/**
+ * Env-level provider pick (KISS env review): explicit AI_PROVIDER wins;
+ * otherwise inferred from whichever key is configured; 'claude' is the
+ * legacy no-key fallback. Replaces three divergent defaults (code 'claude',
+ * compose 'openai') that broke the paste-one-key quickstart.
+ */
+export function resolveEnvProviderName(
+  config: { get<T = string>(name: string): T | undefined },
+): string {
+  const explicit = config.get<string>('AI_PROVIDER')?.trim().toLowerCase();
+  if (explicit === 'openai') return 'openai';
+  if (explicit) return 'claude';
+  if (config.get<string>('ANTHROPIC_API_KEY')?.trim()) return 'claude';
+  if (config.get<string>('OPENAI_API_KEY')?.trim()) return 'openai';
+  return 'claude';
 }

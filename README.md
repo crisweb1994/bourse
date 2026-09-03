@@ -121,7 +121,7 @@ git clone https://github.com/crisweb1994/bourse.git
 cd bourse
 cp .env.example .env
 # 在 .env 中至少配置一个 ANTHROPIC_API_KEY 或 OPENAI_API_KEY
-docker compose --profile app up -d --build
+docker compose up -d --build
 ```
 
 打开 <http://localhost:3000>。默认 `AUTH_REQUIRED=false`，适合单人本地 review，不需要 GitHub OAuth。

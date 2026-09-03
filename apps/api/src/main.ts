@@ -3,13 +3,14 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import cookieParser from 'cookie-parser';
 import { loadRootEnv } from './config/root-env';
+import { resolveEnvProviderName } from './analysis/provider-resolver.service';
 
 async function bootstrap() {
   loadRootEnv();
   const { AppModule } = await import('./app.module');
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
-  const provider = (config.get<string>('AI_PROVIDER') || 'claude').toLowerCase();
+  const provider = resolveEnvProviderName(config);
   const credentialConfigured =
     provider === 'openai'
       ? Boolean(config.get<string>('OPENAI_API_KEY'))

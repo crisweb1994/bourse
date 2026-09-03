@@ -6,6 +6,7 @@ import { EarningsCardPayloadSchema, EarningsGuidanceCandidateSchema, EarningsNar
 import { PrismaService } from '../prisma/prisma.service';
 import { BoundedTaskQueue } from '../common/bounded-task-queue';
 import { ProviderFactoryService } from '../analysis/provider-factory.service';
+import { resolveEnvProviderName } from '../analysis/provider-resolver.service';
 import {
   EARNINGS_EXTRACTION_SYSTEM_PROMPT,
   EARNINGS_MAX_OUTPUT_TOKENS,
@@ -118,7 +119,7 @@ export class EarningsV2OrchestratorService implements OnModuleInit {
       ]);
       if (!filing || !parserDerivation) throw new V2RunError('SOURCE_NOT_PERSISTED', false);
 
-      const providerName = this.config.get<string>('AI_PROVIDER') || 'claude';
+      const providerName = resolveEnvProviderName(this.config);
       const provider = this.providerFactory.buildProvider(providerName);
       const model = provider.getUtilityModel();
 
