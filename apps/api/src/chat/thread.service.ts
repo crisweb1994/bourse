@@ -129,7 +129,6 @@ export class ThreadService {
               select: {
                 id: true,
                 dataAsOf: true,
-                gatewayVersion: true,
                 sources: true,
               },
             },

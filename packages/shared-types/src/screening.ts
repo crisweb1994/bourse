@@ -329,8 +329,6 @@ export const ScreeningRunDtoSchema = z
     savedScreenId: z.string().nullable(),
     status: z.enum(['COMPLETE', 'PARTIAL']),
     query: ScreeningQuerySchema,
-    sourceId: z.string(),
-    capturedAt: z.string().datetime(),
     createdAt: z.string().datetime(),
     snapshot: EquityScreenerSnapshotSchema,
     view: ScreeningViewSchema,

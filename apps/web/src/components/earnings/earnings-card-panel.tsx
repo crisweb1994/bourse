@@ -47,15 +47,10 @@ const METRIC_LABELS: Record<string, string> = {
   cashAndCashEquivalents: '现金及等价物',
 };
 
+// EarningsGenerationStage（Prisma enum）三值映射；status 提供 QUEUED/RUNNING/FAILED 外层状态。
 const STAGE_LABELS: Record<string, string> = {
   DISCOVER: '查找最新公告',
-  FETCH: '获取公告正文',
-  DERIVE: '解析公告内容',
-  EXTRACT: '提取财务数字',
-  CHECK: '执行一致性检查',
-  RECONCILE: '与结构化三表对账',
-  INTERPRET: '整理管理层说法',
-  PERSIST: '保存财报卡片',
+  EXTRACT: '解析公告并提取财务数字',
   DONE: '已完成',
 };
 

@@ -164,11 +164,8 @@ export interface ChatMessageDto {
   id: string;
   generationId: string | null;
   role: 'USER' | 'ASSISTANT' | 'SYSTEM_NOTICE';
-  kind: string;
-  status: string;
   content: string;
   sequence: number;
-  citationRefs?: string[] | null;
   createdAt: string;
 }
 
@@ -185,7 +182,6 @@ export interface ChatGenerationDto {
   openResearchSnapshot?: {
     id: string;
     dataAsOf: string;
-    gatewayVersion: string;
     sources: any[];
   } | null;
 }
@@ -525,7 +521,6 @@ export interface AnalysisDto {
   userId: string;
   stockId: string;
   symbol: string;
-  market: Market;
   mode: AnalysisMode;
   focusWindow: FocusWindow;
   question: string | null;

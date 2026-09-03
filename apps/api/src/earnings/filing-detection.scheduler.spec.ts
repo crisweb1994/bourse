@@ -37,7 +37,6 @@ test('filing detector scans a due watchlist stock without a database lease', asy
   await instance.tick();
   assert.deepEqual(queued, ['stock-1']);
   assert.equal(updates.length, 1);
-  assert.equal(updates[0].lastSourceDocumentId, 'filing-1');
   assert.equal(updates[0].failureCount, 0);
   assert.equal('leaseUntil' in updates[0], false);
 });
@@ -50,5 +49,4 @@ test('no eligible filing is a normal scan result, not a backoff failure', async 
   });
   await instance.tick();
   assert.equal(updates[0].failureCount, 0);
-  assert.equal(updates[0].lastError, null);
 });

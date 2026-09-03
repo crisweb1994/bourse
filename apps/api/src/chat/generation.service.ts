@@ -44,7 +44,6 @@ interface GenerationState {
   persistence: Promise<void>;
 }
 
-const PROMPT_VERSION = 'chat-phase1-v1';
 const MAX_HISTORY_MESSAGES = 12;
 /**
  * Open Research must not emit a formal Analysis signal. The blocked
@@ -193,8 +192,6 @@ export class ChatGenerationService implements OnModuleInit {
           data: {
             threadId,
             role: 'USER' as any,
-            kind: 'TEXT' as any,
-            status: 'COMPLETED' as any,
             content: dto.question.trim(),
             sequence: sequence + 1,
           },
@@ -207,8 +204,6 @@ export class ChatGenerationService implements OnModuleInit {
             status: 'PENDING' as any,
             contextSnapshot: contextSnapshot as any,
             analysisContextSnapshotId: analysisContextSnapshot?.id,
-            earningsRevisionId: earningsCard?.revisionId,
-            investorRelationsRevisionId: irEvent?.revisionId,
             groundedSources: intent === 'EARNINGS_BRIEF'
               ? earningsSources as any
               : intent === 'INVESTOR_RELATIONS'
@@ -216,7 +211,6 @@ export class ChatGenerationService implements OnModuleInit {
               : context
                 ? this.extractAnalysisSources(context) as any
                 : Prisma.JsonNull,
-            promptVersion: PROMPT_VERSION,
           },
         });
         await tx.chatMessage.update({
@@ -260,8 +254,6 @@ export class ChatGenerationService implements OnModuleInit {
           threadId: row.threadId,
           generationId,
           role: 'SYSTEM_NOTICE' as any,
-          kind: 'ERROR_NOTICE' as any,
-          status: 'COMPLETED' as any,
           content: '本轮回答已取消。',
           sequence: sequence + 1,
         },
@@ -463,7 +455,6 @@ export class ChatGenerationService implements OnModuleInit {
         });
         const result = existingOpen
           ? {
-              gatewayVersion: existingOpen.gatewayVersion,
               dataAsOf: existingOpen.dataAsOf.toISOString(),
               sources: existingOpen.sources as any[],
               citationCandidates: existingOpen.citationCandidates as Array<{
@@ -484,10 +475,8 @@ export class ChatGenerationService implements OnModuleInit {
             stockId,
             query: question,
             dataAsOf: new Date(result.dataAsOf),
-            gatewayVersion: result.gatewayVersion,
             sources: result.sources as any,
             citationCandidates: result.citationCandidates as any,
-            contentHash: canonicalJsonHash({ question, result }),
           },
         });
         openResearchSnapshotId = open.id;
@@ -629,11 +618,8 @@ export class ChatGenerationService implements OnModuleInit {
             threadId: row.threadId,
             generationId,
             role: 'ASSISTANT' as any,
-            kind: 'TEXT' as any,
-            status: 'COMPLETED' as any,
             content: answer,
             sequence: sequence + 1,
-            citationRefs: actualCitationIds as any,
           },
         });
         const completed = await tx.chatGeneration.updateMany({

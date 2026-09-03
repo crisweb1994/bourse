@@ -39,16 +39,12 @@ export class AnalysisChatService {
         ? {
             snapshot: {
               id: analysis.evidenceSnapshot.id,
-              schemaVersion: analysis.evidenceSnapshot.schemaVersion,
-              evidencePackVersion: analysis.evidenceSnapshot.evidencePackVersion,
               capturedAt: analysis.evidenceSnapshot.capturedAt.toISOString(),
               dataAsOf: analysis.evidenceSnapshot.dataAsOf,
-              sourceMode: analysis.evidenceSnapshot.sourceMode,
               degraded: analysis.evidenceSnapshot.degraded,
               missingFields: analysis.evidenceSnapshot.missingFields,
               payload: analysis.evidenceSnapshot.payload as any,
               sourceSnapshots: analysis.evidenceSnapshot.sourceSnapshots,
-              contentHash: analysis.evidenceSnapshot.contentHash,
             },
           }
         : {}),

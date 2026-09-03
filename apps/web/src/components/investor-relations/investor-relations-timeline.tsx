@@ -90,7 +90,8 @@ function activityLabel(type: InvestorRelationsActivityType) {
   const labels: Record<InvestorRelationsActivityType, string> = { INSTITUTIONAL_RESEARCH: '机构调研', EARNINGS_BRIEFING: '业绩说明会', ANALYST_MEETING: '分析师会议', ROADSHOW: '路演', PHONE_CALL: '电话交流', SITE_VISIT: '现场参观', OTHER: '投关活动' };
   return labels[type];
 }
-function stageLabel(stage: string) { return ({ DISCOVER: '查找公告', FETCH: '读取原文', DERIVE: '解析文档', EXTRACT: '提取主题', CHECK: '核对引用', PERSIST: '生成时间线' } as Record<string, string>)[stage] ?? '处理中'; }
+// InvestorRelationsGenerationStage（Prisma enum）五值映射。
+function stageLabel(stage: string) { return ({ DISCOVER: '查找公告', EXTRACT: '解析并提取主题', CHECK: '核对引用', PERSIST: '生成时间线', DONE: '已完成' } as Record<string, string>)[stage] ?? '处理中'; }
 function generationError(run: InvestorRelationsGenerationRunDto) {
   if (run.errorCode === 'CHECK_REJECTED_ALL') return '未找到可被原文引用支持的管理层说法';
   if (run.errorCode === 'ACTIVITY_DATE_UNRESOLVED') return '无法从公告中确认活动日期';

@@ -18,7 +18,7 @@ interface ReplayEvidenceSnapshot {
   dataAsOf: unknown;
   degraded: boolean;
   missingFields: string[];
-  sourceMode?: string;
+
 }
 
 interface ReplayAnalysis {

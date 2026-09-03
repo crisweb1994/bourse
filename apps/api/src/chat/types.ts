@@ -20,16 +20,12 @@ export interface AnalysisChatSummary {
 export interface AnalysisChatContext extends AnalysisChatSummary {
   snapshot?: {
     id: string;
-    schemaVersion: string;
-    evidencePackVersion: string;
     capturedAt: string;
     dataAsOf: unknown;
-    sourceMode: string;
     degraded: boolean;
     missingFields: string[];
     payload: EvidencePackV2 | Record<string, unknown>;
     sourceSnapshots: unknown;
-    contentHash: string;
   };
   sections: Array<{
     id: string;

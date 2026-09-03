@@ -377,8 +377,6 @@ function screeningRun(
     savedScreenId: null,
     status: 'COMPLETE',
     query,
-    sourceId: 'test-screener',
-    capturedAt: '2026-08-22T00:00:00.000Z',
     createdAt: '2026-08-22T00:00:00.000Z',
     snapshot: {
       universeCount: 100,

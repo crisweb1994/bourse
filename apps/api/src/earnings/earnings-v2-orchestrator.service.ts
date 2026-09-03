@@ -206,7 +206,7 @@ export class EarningsV2OrchestratorService implements OnModuleInit {
         generatedAt: new Date().toISOString(),
       });
 
-      const revision = await this.persistV2Revision(event, payload, model, 0, 0, filingRelation);
+      const revision = await this.persistV2Revision(event, payload, filingRelation);
       await this.notices
         .notify(
           run.stock.id,
@@ -224,10 +224,6 @@ export class EarningsV2OrchestratorService implements OnModuleInit {
           stage: 'DONE',
           retryable: false,
           cardRevisionId: revision.id,
-          provider: providerName,
-          model,
-          inputTokens: 0,
-          outputTokens: 0,
           completedAt: new Date(),
         },
       });
@@ -331,10 +327,6 @@ export class EarningsV2OrchestratorService implements OnModuleInit {
           create: {
             filingId: filing.id,
             derivationKey: extractionKey,
-            parserVersion: parserDerivation.contentHash,
-            modelVersion: result.model ?? model,
-            promptVersion: V2_NARRATIVE_PROMPT_VERSION,
-            schemaVersion: V2_NARRATIVE_SCHEMA_VERSION,
             status: 'COMPLETE',
             normalizedText: parserDerivation.normalizedText,
             contentHash: parserDerivation.contentHash,
@@ -505,9 +497,6 @@ export class EarningsV2OrchestratorService implements OnModuleInit {
   private async persistV2Revision(
     event: EarningsEvent,
     payload: EarningsCardPayload,
-    model: string,
-    inputTokens: number,
-    outputTokens: number,
     relationType: 'SUPPLEMENTS' | 'CORRECTS' | 'SUPERSEDES',
   ) {
     return this.prisma.$transaction(async (tx) => {
@@ -536,13 +525,8 @@ export class EarningsV2OrchestratorService implements OnModuleInit {
           eventId: event.id,
           revisionNo: (latest?.revisionNo ?? 0) + 1,
           status: mergedPayload.managementClaims.length > 0 ? 'COMPLETE' : 'PARTIAL',
-          schemaVersion: V2_CARD_SCHEMA_VERSION,
-          promptVersion: V2_NARRATIVE_PROMPT_VERSION,
-          model,
           payload: mergedPayload as unknown as Prisma.InputJsonValue,
           contentHash,
-          inputTokens,
-          outputTokens,
         },
       });
       if (event.currentRevisionId) {

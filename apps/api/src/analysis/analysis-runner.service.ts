@@ -57,7 +57,6 @@ interface AnalysisRun {
     dataAsOf: unknown;
     degraded: boolean;
     missingFields: string[];
-    sourceMode: string;
   } | null;
   stock: { symbol: string; market: string; name?: string | null };
 }
@@ -112,7 +111,6 @@ export class AnalysisRunnerService {
             dataAsOf: true,
             degraded: true,
             missingFields: true,
-            sourceMode: true,
           },
         },
       },
@@ -123,7 +121,7 @@ export class AnalysisRunnerService {
       mode: row.mode as AnalysisMode,
       focusWindow: FOCUS_WINDOW_FROM_PRISMA[row.focusWindow],
       status: row.status as AnalysisStatus,
-      market: row.market,
+      market: row.stock.market,
       sections: row.sections.map((section) => ({
         ...section,
         type: section.type as SectionType,

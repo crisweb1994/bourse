@@ -57,7 +57,6 @@ describe('AnalysisReplayService', () => {
           dataAsOf: '2026-07-08',
           degraded: true,
           missingFields: ['cashFlow'],
-          sourceMode: 'WEB_SEARCH_FALLBACK',
         },
         sections: [
           section({

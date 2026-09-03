@@ -13,7 +13,6 @@ import {
   SectionResult,
   type SseEvent,
   streamComprehensive,
-  canonicalJsonHash,
 } from '@bourse/analysis';
 import type { PrismaService } from '../prisma/prisma.service';
 import {
@@ -158,7 +157,6 @@ export async function runAnalysisWorkflowAdapter(
     if (!snapshotPersisted && capturedEvidencePack) {
       await persistEvidenceSnapshot(ctx.prisma, ctx.analysisId, capturedEvidencePack, {
         degraded: degradedSourceMark !== null,
-        sourceMode: degradedSourceMark ? 'WEB_SEARCH_FALLBACK' : 'EVIDENCE_PACK',
       });
       snapshotPersisted = true;
     }
@@ -325,7 +323,6 @@ export async function runAnalysisWorkflowAdapter(
   if (capturedEvidencePack && !snapshotPersisted) {
     await persistEvidenceSnapshot(ctx.prisma, ctx.analysisId, capturedEvidencePack, {
       degraded: degradedSourceMark !== null,
-      sourceMode: degradedSourceMark ? 'WEB_SEARCH_FALLBACK' : 'EVIDENCE_PACK',
     });
     snapshotPersisted = true;
   }
@@ -452,7 +449,7 @@ async function persistEvidenceSnapshot(
   prisma: PrismaService,
   analysisId: string,
   pack: EvidencePackV2,
-  options: { sourceMode: string; degraded: boolean },
+  options: { degraded: boolean },
 ) {
   const raw = pack as unknown as Record<string, any>;
   const availability = raw.dataAvailability ?? {};
@@ -468,20 +465,15 @@ async function persistEvidenceSnapshot(
   }
   const capturedAt =
     typeof raw.capturedAt === 'string' ? raw.capturedAt : new Date().toISOString();
-  const contentHash = canonicalJsonHash(pack);
   await prisma.analysisEvidenceSnapshot.create({
     data: {
       analysisId,
-      schemaVersion: String(raw.schemaVersion ?? 'unknown'),
-      evidencePackVersion: String(raw.schemaVersion ?? 'unknown'),
       capturedAt: new Date(capturedAt),
       dataAsOf: raw.dataAsOf ?? capturedAt,
-      sourceMode: options.sourceMode,
       degraded: options.degraded,
       missingFields: missing,
       payload: pack as any,
       sourceSnapshots: Array.isArray(raw.citations) ? raw.citations : [],
-      contentHash,
     },
   });
 }

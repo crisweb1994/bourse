@@ -43,7 +43,6 @@ export class FilingStoreService {
         sourceUrl: document.filingUrl,
         publishedAt: parsePublishedAt(summary.filingDate),
         retrievedAt: document.retrievedAt ? new Date(document.retrievedAt) : new Date(),
-        mimeType: document.mimeType ?? 'text/plain',
         language: document.language ?? summary.language,
         contentHash,
       },
@@ -56,10 +55,6 @@ export class FilingStoreService {
       create: {
         filingId: filing.id,
         derivationKey,
-        parserVersion: PARSER_VERSION,
-        modelVersion: 'none',
-        promptVersion: 'none',
-        schemaVersion: DERIVATION_SCHEMA_VERSION,
         status: 'COMPLETE',
         normalizedText,
         contentHash: derivationContentHash,

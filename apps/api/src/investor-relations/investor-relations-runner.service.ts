@@ -85,8 +85,6 @@ export class InvestorRelationsRunnerService implements OnModuleInit {
       });
       const cached = await this.prisma.filingDerivation.findUnique({ where: { derivationKey: extractionKey } });
       let extraction;
-      let inputTokens = run.inputTokens;
-      let outputTokens = run.outputTokens;
       if (cached?.extraction) {
         extraction = InvestorRelationsExtractionSchema.parse(cached.extraction);
       } else {
@@ -98,16 +96,10 @@ export class InvestorRelationsRunnerService implements OnModuleInit {
           { maxTokens: INVESTOR_RELATIONS_MAX_OUTPUT_TOKENS, signal: AbortSignal.timeout(INVESTOR_RELATIONS_EXTRACTION_TIMEOUT_MS) },
         );
         extraction = result.data;
-        inputTokens += result.usage.tokensIn;
-        outputTokens += result.usage.tokensOut;
         await this.prisma.filingDerivation.create({
           data: {
             filingId: filing.id,
             derivationKey: extractionKey,
-            parserVersion: derivation.parserVersion,
-            modelVersion: model,
-            promptVersion: INVESTOR_RELATIONS_PROMPT_VERSION,
-            schemaVersion: INVESTOR_RELATIONS_SCHEMA_VERSION,
             status: 'COMPLETE',
             normalizedText: derivation.normalizedText,
             contentHash: derivation.contentHash,
@@ -117,7 +109,7 @@ export class InvestorRelationsRunnerService implements OnModuleInit {
           },
         });
       }
-      await this.prisma.investorRelationsGenerationRun.update({ where: { id: runId }, data: { stage: 'CHECK', provider: filing.provider, model, inputTokens, outputTokens } });
+      await this.prisma.investorRelationsGenerationRun.update({ where: { id: runId }, data: { stage: 'CHECK' } });
       validateActivityDate(extraction.occurredAt, filing.publishedAt);
       const pages = parsePages(derivation.pages);
       const extractedTopics = extraction.topics ?? [];
@@ -158,10 +150,10 @@ export class InvestorRelationsRunnerService implements OnModuleInit {
         omittedItemCount: extractedTopics.length + extractedClaims.length - topics.length - managementClaims.length,
         generatedAt: new Date().toISOString(),
       });
-      const revision = await this.persistRevision(event, payload, model, inputTokens, outputTokens, relationType);
+      const revision = await this.persistRevision(event, payload, relationType);
       await this.prisma.investorRelationsGenerationRun.update({
         where: { id: runId },
-        data: { revisionId: revision.id, status: 'COMPLETED', stage: 'DONE', retryable: false, inputTokens, outputTokens, completedAt: new Date() },
+        data: { revisionId: revision.id, status: 'COMPLETED', stage: 'DONE', retryable: false, completedAt: new Date() },
       });
     } catch (error) {
       const failure = error instanceof IrRunError ? error : new IrRunError('IR_GENERATION_FAILED', true, error instanceof Error ? error.message : String(error));
@@ -203,9 +195,6 @@ export class InvestorRelationsRunnerService implements OnModuleInit {
   private async persistRevision(
     event: InvestorRelationsEvent,
     payload: InvestorRelationsRevisionPayload,
-    model: string,
-    inputTokens: number,
-    outputTokens: number,
     relationType: 'PRIMARY' | 'SUPPLEMENTS' | 'CORRECTS',
   ) {
     return this.prisma.$transaction(async (tx) => {
@@ -226,7 +215,7 @@ export class InvestorRelationsRunnerService implements OnModuleInit {
       if (current?.contentHash === contentHash) return current;
       const latest = await tx.investorRelationsRevision.findFirst({ where: { eventId: event.id }, orderBy: { revisionNo: 'desc' }, select: { revisionNo: true } });
       const revision = await tx.investorRelationsRevision.create({
-        data: { eventId: event.id, revisionNo: (latest?.revisionNo ?? 0) + 1, status: mergedPayload.managementClaims.length && mergedPayload.topics.length ? 'COMPLETE' : 'PARTIAL', schemaVersion: INVESTOR_RELATIONS_SCHEMA_VERSION, promptVersion: INVESTOR_RELATIONS_PROMPT_VERSION, model, payload: mergedPayload as unknown as Prisma.InputJsonValue, contentHash, inputTokens, outputTokens },
+        data: { eventId: event.id, revisionNo: (latest?.revisionNo ?? 0) + 1, status: mergedPayload.managementClaims.length && mergedPayload.topics.length ? 'COMPLETE' : 'PARTIAL', payload: mergedPayload as unknown as Prisma.InputJsonValue, contentHash },
       });
       if (lockedEvent.currentRevisionId) {
         await tx.investorRelationsRevision.update({
