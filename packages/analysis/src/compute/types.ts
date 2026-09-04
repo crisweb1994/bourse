@@ -88,6 +88,7 @@ export const ComputeWarningCodeSchema = z.enum([
   'unknown_unit',
   'insufficient_history',
   'negative_denominator',
+  'approximation',
 ]);
 export type ComputeWarningCode = z.infer<typeof ComputeWarningCodeSchema>;
 

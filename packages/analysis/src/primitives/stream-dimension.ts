@@ -477,8 +477,10 @@ export async function* streamDimension(
         throw error;
       }
       if (!parsed.success) {
+        // User-facing message stays clean (surfaced as section failure text);
+        // the zod detail rides on `cause`.
         throw new StructuredOutputError(
-          `Valuation semantic repair failed schema: ${parsed.error}`,
+          'Valuation semantic repair failed schema validation',
           parsed.error,
         );
       }

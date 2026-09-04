@@ -81,14 +81,19 @@ describe('primitives/structuredOutputWithRepair', () => {
     expect(secondUserPrompt).toContain('{"name":"x"}');
   });
 
-  it('throws StructuredOutputError after second failure', async () => {
+  it('throws StructuredOutputError after second failure with a user-safe message', async () => {
     const provider = fakeProvider([
       { text: 'garbage 1' },
       { text: 'still garbage' },
     ]);
-    await expect(
-      structuredOutputWithRepair(provider, 'sys', 'user', schema),
-    ).rejects.toBeInstanceOf(StructuredOutputError);
+    const promise = structuredOutputWithRepair(provider, 'sys', 'user', schema);
+    await expect(promise).rejects.toBeInstanceOf(StructuredOutputError);
+    // The message is rendered to end users as the section failure text — it
+    // must not embed the zod detail; the detail rides on `cause`.
+    await expect(promise).rejects.toMatchObject({
+      message: 'Structured output failed after one repair pass',
+      cause: expect.stringContaining('JSON parse failed'),
+    });
   });
 
   it('handles provider returning no usage gracefully', async () => {

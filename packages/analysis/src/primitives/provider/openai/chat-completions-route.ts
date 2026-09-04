@@ -140,6 +140,9 @@ export class OpenAIChatCompletionsRoute implements OpenAIRoute {
         messages,
         stream: true,
         ...(options.maxTokens ? { max_tokens: options.maxTokens } : {}),
+        ...(model.toLowerCase().startsWith('deepseek-')
+          ? { thinking: { type: 'disabled' } }
+          : {}),
       };
       if (executor && !isLastRound && webSearchUses < maxToolUses) {
         params.tools = [WEB_SEARCH_FUNCTION_SCHEMA];
@@ -423,9 +426,15 @@ export class OpenAIChatCompletionsRoute implements OpenAIRoute {
         { role: 'system', content: flattenSystem(systemPrompt) },
         { role: 'user', content: userPrompt },
       ],
+      ...(model.toLowerCase().startsWith('deepseek-')
+        ? { thinking: { type: 'disabled' } }
+        : {}),
     };
     if (options.maxTokens) completeParams.max_tokens = options.maxTokens;
-    if (process.env?.OPENAI_CHAT_RESPONSE_FORMAT === 'true') {
+    if (
+      model.toLowerCase().startsWith('deepseek-') ||
+      process.env?.OPENAI_CHAT_RESPONSE_FORMAT === 'true'
+    ) {
       completeParams.response_format = { type: 'json_object' };
     }
     const response = (await this.client.chat.completions.create(

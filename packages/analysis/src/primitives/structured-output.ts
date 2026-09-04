@@ -73,8 +73,10 @@ export async function structuredOutputWithRepair<T>(
   };
 
   if (!secondParsed.success) {
+    // The message is surfaced verbatim to end users as the section failure
+    // text — keep it schema-detail-free; the full zod error stays on `cause`.
     throw new StructuredOutputError(
-      `Structured output failed after one repair pass: ${secondParsed.error}`,
+      'Structured output failed after one repair pass',
       secondParsed.error,
     );
   }

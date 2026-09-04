@@ -120,6 +120,24 @@ describe('OpenAIProvider OPENAI_USE_CHAT_COMPLETIONS=true — stream path', () =
     expect(messages[0]).toEqual({ role: 'system', content: 'SYS_PROMPT' });
     expect(messages[1]).toEqual({ role: 'user', content: 'USER_PROMPT' });
   });
+
+  it('disables thinking for DeepSeek streams', async () => {
+    process.env.OPENAI_USE_CHAT_COMPLETIONS = 'true';
+    const { client, captured } = buildChatCompletionsClient({
+      streamChunks: [{ choices: [{ delta: { content: 'ok' } }] }],
+    });
+    const provider = new OpenAIProvider({
+      apiKey: 'k',
+      model: 'deepseek-v4-flash',
+      _internalClient: client,
+    });
+
+    await provider.stream('sys', 'user', () => {});
+
+    expect((captured.params as Record<string, unknown>).thinking).toEqual({
+      type: 'disabled',
+    });
+  });
 });
 
 describe('OpenAIProvider OPENAI_USE_CHAT_COMPLETIONS=true — complete path', () => {
@@ -192,6 +210,25 @@ describe('OpenAIProvider OPENAI_USE_CHAT_COMPLETIONS=true — complete path', ()
     const params = captured.params as { response_format?: { type: string } };
     expect(params.response_format).toEqual({ type: 'json_object' });
     delete process.env.OPENAI_CHAT_RESPONSE_FORMAT;
+  });
+
+  it('disables thinking and requests JSON output for DeepSeek completions', async () => {
+    process.env.OPENAI_USE_CHAT_COMPLETIONS = 'true';
+    delete process.env.OPENAI_CHAT_RESPONSE_FORMAT;
+    const { client, captured } = buildChatCompletionsClient({
+      createResponse: { choices: [{ message: { content: '{}' } }] },
+    });
+    const provider = new OpenAIProvider({
+      apiKey: 'k',
+      model: 'deepseek-v4-flash',
+      _internalClient: client,
+    });
+
+    await provider.complete('sys', 'user');
+
+    const params = captured.params as Record<string, unknown>;
+    expect(params.thinking).toEqual({ type: 'disabled' });
+    expect(params.response_format).toEqual({ type: 'json_object' });
   });
 
   it('stream path: stream_options NOT sent by default; opt-in via OPENAI_CHAT_STREAM_USAGE', async () => {
