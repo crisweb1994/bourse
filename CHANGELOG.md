@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.13.0](https://github.com/crisweb1994/bourse/compare/v0.12.0...v0.13.0) (2026-09-04)
+
+
+### Features
+
+* **analysis:** wire the private-data degradation signal end to end ([0c96d42](https://github.com/crisweb1994/bourse/commit/0c96d42f873bf86908d1c4c6b129fd758583ba74))
+* **security:** encrypt web-search keys and digest channel secrets with the shared credential cipher ([4d1f158](https://github.com/crisweb1994/bourse/commit/4d1f1582ce2e181534911f8bab92f7fb5d51e704))
+* **tests:** enhance test coverage for structured output prompts and financial ratios ([cf04933](https://github.com/crisweb1994/bourse/commit/cf04933dbbc3802f5f88ccb7c5330ba6e173fec7))
+
+
+### Bug Fixes
+
+* **db:** honor reality over dead columns — drop sessions/fiscalQuarter, persist sector, GC orphan context snapshots ([bf9d506](https://github.com/crisweb1994/bourse/commit/bf9d506653a50873943612193947e6ad8c11c970))
+* **env:** repair example/compose drift and auto-detect the env provider ([df76927](https://github.com/crisweb1994/bourse/commit/df769278daf5f8fb46af414238ccbbe49a4037f3))
+* **market-data:** classify 429 on throw-typed fetches, route 920xxx to BJ ([913a493](https://github.com/crisweb1994/bourse/commit/913a4935c00c0074a0526af3122503cb4d3b252c))
+
+
+### Reverts
+
+* **security:** drop at-rest credential encryption per product decision — store plaintext ([206fd33](https://github.com/crisweb1994/bourse/commit/206fd33a95a4cac5d66f53b773b39fde0c16dba3))
+
 ## [0.12.0](https://github.com/crisweb1994/bourse/compare/v0.11.0...v0.12.0) (2026-09-01)
 
 
