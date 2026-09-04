@@ -12,7 +12,9 @@
  * - Every metric is independently nullable. Missing inputs do NOT throw —
  *   they surface as `null` + a `ComputeWarning` for `dataAvailability`.
  * - TTM-derived metrics prefer the TTM period; falls back to latest FY.
- * - YoY growth requires two comparable periods of the same `kind`.
+ * - YoY growth is FY-on-FY (latest FY vs prior FY). The TTM anchor is never
+ *   a YoY operand — its window ends 1–2 years past the prior FY, so TTM vs
+ *   prior-FY is not a year-over-year figure.
  */
 
 import type {
@@ -96,6 +98,14 @@ export function computeFinancialRatios(
     anchorBalance.cash,
   );
   const evToEbitda = safeDiv(enterpriseValue, anchorIncome.operatingIncome, warnings, 'evToEbitda');
+  if (evToEbitda !== null) {
+    warnings.push({
+      code: 'approximation',
+      metric: 'evToEbitda',
+      detail:
+        'EBITDA unavailable — computed as EV / pre-tax operatingIncome; EV debt term is totalLiabilities',
+    });
+  }
 
   // ---- Profitability ------------------------------------------------------
   const grossMargin = safeDiv(anchorIncome.grossProfit, anchorIncome.revenue, warnings, 'grossMargin');
@@ -107,6 +117,14 @@ export function computeFinancialRatios(
   // operatingIncome (no tax adj available in current schema).
   const investedCapital = sumNullable(anchorBalance.totalEquity, anchorBalance.longTermDebt);
   const roic = safeDiv(anchorIncome.operatingIncome, investedCapital, warnings, 'roic');
+  if (roic !== null) {
+    warnings.push({
+      code: 'approximation',
+      metric: 'roic',
+      detail:
+        'NOPAT approximated by pre-tax operatingIncome; investedCapital = equity + longTermDebt (missing → 0), excess cash not netted',
+    });
+  }
 
   const cashConversionRatio = safeDiv(anchorCash.operatingCashFlow, anchorIncome.netIncome, warnings, 'cashConversionRatio');
 
@@ -147,14 +165,18 @@ export function computeFinancialRatios(
       : null;
 
   // ---- Growth -------------------------------------------------------------
-  const revenueGrowthYoY = computeYoY(
-    anchorIncome.revenue,
-    readIncome(priorFy, warnings).revenue,
-  );
-  const earningsGrowthYoY = computeYoY(
-    anchorIncome.netIncome,
-    readIncome(priorFy, warnings).netIncome,
-  );
+  const latestFyIncome = readIncome(latestFy, warnings);
+  const priorFyIncome = readIncome(priorFy, warnings);
+  const revenueGrowthYoY = computeYoY(latestFyIncome.revenue, priorFyIncome.revenue);
+  const earningsGrowthYoY = computeYoY(latestFyIncome.netIncome, priorFyIncome.netIncome);
+  if (anchor.kind === 'TTM') {
+    warnings.push({
+      code: 'approximation',
+      metric: 'growthYoY',
+      detail:
+        'YoY is FY-on-FY (latest FY vs prior FY); year-ago TTM is not in the bundle, so no TTM YoY is computed',
+    });
+  }
 
   // 3y CAGR — needs revenue at t-3 (FY only)
   const allFy = periods.filter((p) => p.kind === 'FY');

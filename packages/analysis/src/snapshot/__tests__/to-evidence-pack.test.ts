@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { Quote } from '../..';
+import type {
+  Quote,
+} from '@bourse/market-data';
 import { snapshotToEvidencePack } from '../to-evidence-pack';
 import type { StockSnapshot } from '../types';
 
@@ -202,6 +204,24 @@ describe('snapshotToEvidencePack · core fact projection', () => {
 });
 
 describe('snapshotToEvidencePack · CN-only facts', () => {
+  it('marks the pack degraded when the private consensusEps field is unavailable (KISS C4-6)', () => {
+    const pack = snapshotToEvidencePack(baseSnapshot());
+    expect(pack.dataAvailability.degradedSource).toBe('WEB_SEARCH_FALLBACK');
+    expect(pack.dataAvailability.missingPrivateFields).toEqual(['consensusEps']);
+    expect(pack.dataAvailability.fallbackReason?.failedTools).toEqual(['consensusEps']);
+  });
+
+  it('does not mark degradation when consensusEps is available', () => {
+    const pack = snapshotToEvidencePack(baseSnapshot({
+      dataAvailability: {
+        ...baseSnapshot().dataAvailability,
+        available: [...(baseSnapshot().dataAvailability?.available ?? []), 'consensusEps'],
+      },
+    }));
+    expect(pack.dataAvailability.degradedSource).toBe('NONE');
+    expect(pack.dataAvailability.missingPrivateFields).toBeUndefined();
+  });
+
   it('projects consensusEps from canonical estimates', () => {
     const snap = baseSnapshot({
       rawFacts: {

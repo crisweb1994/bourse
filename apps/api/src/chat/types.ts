@@ -20,16 +20,12 @@ export interface AnalysisChatSummary {
 export interface AnalysisChatContext extends AnalysisChatSummary {
   snapshot?: {
     id: string;
-    schemaVersion: string;
-    evidencePackVersion: string;
     capturedAt: string;
     dataAsOf: unknown;
-    sourceMode: string;
     degraded: boolean;
     missingFields: string[];
     payload: EvidencePackV2 | Record<string, unknown>;
     sourceSnapshots: unknown;
-    contentHash: string;
   };
   sections: Array<{
     id: string;
@@ -43,19 +39,6 @@ export interface AnalysisChatContext extends AnalysisChatSummary {
       claim: string;
     }>;
   }>;
-}
-
-export interface AnalysisChatPort {
-  getAnalysisContext(input: {
-    userId: string;
-    stockId: string;
-    analysisId: string;
-    sectionTypes?: string[];
-  }): Promise<AnalysisChatContext>;
-  listEligibleAnalyses(input: {
-    userId: string;
-    stockId: string;
-  }): Promise<AnalysisChatSummary[]>;
 }
 
 export interface ChatSourceSnapshot {
@@ -79,15 +62,3 @@ export interface ResearchGatewayResult {
   }>;
 }
 
-export interface ResearchGatewayPort {
-  research(input: {
-    userId: string;
-    stockId: string;
-    symbol: string;
-    question: string;
-    requestId: string;
-  }): Promise<ResearchGatewayResult>;
-}
-
-export const ANALYSIS_CHAT_PORT = Symbol('ANALYSIS_CHAT_PORT');
-export const RESEARCH_GATEWAY_PORT = Symbol('RESEARCH_GATEWAY_PORT');

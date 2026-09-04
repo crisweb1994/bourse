@@ -53,22 +53,10 @@ interface BuiltInProviderPorts {
   cnEquityScreener?: EquityScreenerPort;
 }
 
-export function createBuiltInSourcePlugins(providers: BuiltInProviderPorts): SourcePlugin[] {
-  return builtInInstances(providers).map((instance) => ({
-    manifest: instance.manifest,
-    create(config) {
-      return {
-        ...instance,
-        enabled: config.enabled ?? instance.enabled,
-        credentialScope: config.credentialScope ?? instance.credentialScope,
-      };
-    },
-  }));
-}
 
-/** @internal Test/embedding helper. Production composition registers plugins. */
+/** @internal Test/embedding/production helper: the built-in instances. */
 export function createBuiltInSources(providers: BuiltInProviderPorts): SourceInstance[] {
-  return createBuiltInSourcePlugins(providers).map((plugin) => plugin.create({}, {}));
+  return builtInInstances(providers);
 }
 
 function builtInInstances(providers: BuiltInProviderPorts): SourceInstance[] {

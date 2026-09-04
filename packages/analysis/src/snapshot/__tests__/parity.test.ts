@@ -18,7 +18,7 @@ import type {
   FinancialsBundle,
   PriceBar,
   Quote,
-} from '../..';
+} from '@bourse/market-data';
 import { snapshotToEvidencePack } from '../to-evidence-pack';
 import type { StockSnapshot } from '../types';
 

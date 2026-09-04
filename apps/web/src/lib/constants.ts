@@ -50,12 +50,6 @@ export const MARKET_LABELS: Record<string, string> = {
   CN: 'A 股',
 };
 
-export const PROVIDER_LABELS: Record<string, string> = {
-  default: '系统默认',
-  claude: 'Claude',
-  openai: 'OpenAI',
-};
-
 export const SIGNAL_LABELS: Record<string, string> = {
   POSITIVE: '偏积极',
   NEUTRAL: '中性',

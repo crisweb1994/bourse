@@ -1,13 +1,11 @@
 import {
   BadRequestException,
   ConflictException,
-  Inject,
   Injectable,
   Logger,
   NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
-import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import {
   ChatEventNameSchema,
@@ -16,17 +14,13 @@ import {
   type ChatSseEnvelope,
   OverallSignal,
 } from '@bourse/shared-types';
+import { AnalysisChatService } from '../analysis/analysis-chat.service';
 import { ProviderResolverService } from '../analysis/provider-resolver.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StockService } from '../stock/stock.service';
 import { CreateChatGenerationDto } from './chat.dto';
-import {
-  ANALYSIS_CHAT_PORT,
-  RESEARCH_GATEWAY_PORT,
-  type AnalysisChatContext,
-  type AnalysisChatPort,
-  type ResearchGatewayPort,
-} from './types';
+import type { AnalysisChatContext } from './types';
+import { ResearchGatewayService } from './research-gateway.service';
 import {
   isEarningsQuestion,
   isUnsupportedQuestion,
@@ -37,6 +31,7 @@ import { ThreadService } from './thread.service';
 import { EarningsQueryService } from '../earnings/earnings-query.service';
 import { EarningsSectionsService, type EarningsSectionSource } from '../earnings/earnings-sections.service';
 import { InvestorRelationsQueryService } from '../investor-relations/investor-relations-query.service';
+import { canonicalJsonHash } from '@bourse/analysis';
 
 export type ChatSseEvent = ChatSseEnvelope;
 
@@ -49,7 +44,6 @@ interface GenerationState {
   persistence: Promise<void>;
 }
 
-const PROMPT_VERSION = 'chat-phase1-v1';
 const MAX_HISTORY_MESSAGES = 12;
 /**
  * Open Research must not emit a formal Analysis signal. The blocked
@@ -71,8 +65,8 @@ export class ChatGenerationService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly threads: ThreadService,
-    @Inject(ANALYSIS_CHAT_PORT) private readonly analysis: AnalysisChatPort,
-    @Inject(RESEARCH_GATEWAY_PORT) private readonly gateway: ResearchGatewayPort,
+    private readonly analysis: AnalysisChatService,
+    private readonly gateway: ResearchGatewayService,
     private readonly providerResolver: ProviderResolverService,
     private readonly stocks: StockService,
     private readonly earnings: EarningsQueryService,
@@ -171,7 +165,7 @@ export class ChatGenerationService implements OnModuleInit {
       investorRelations: irEvent ?? null,
     };
     const analysisContextHash = context
-      ? createHash('sha256').update(canonicalJson(context)).digest('hex')
+      ? canonicalJsonHash(context)
       : undefined;
 
     let generation;
@@ -198,8 +192,6 @@ export class ChatGenerationService implements OnModuleInit {
           data: {
             threadId,
             role: 'USER' as any,
-            kind: 'TEXT' as any,
-            status: 'COMPLETED' as any,
             content: dto.question.trim(),
             sequence: sequence + 1,
           },
@@ -212,8 +204,6 @@ export class ChatGenerationService implements OnModuleInit {
             status: 'PENDING' as any,
             contextSnapshot: contextSnapshot as any,
             analysisContextSnapshotId: analysisContextSnapshot?.id,
-            earningsRevisionId: earningsCard?.revisionId,
-            investorRelationsRevisionId: irEvent?.revisionId,
             groundedSources: intent === 'EARNINGS_BRIEF'
               ? earningsSources as any
               : intent === 'INVESTOR_RELATIONS'
@@ -221,14 +211,12 @@ export class ChatGenerationService implements OnModuleInit {
               : context
                 ? this.extractAnalysisSources(context) as any
                 : Prisma.JsonNull,
-            promptVersion: PROMPT_VERSION,
           },
         });
         await tx.chatMessage.update({
           where: { id: userMessage.id },
           data: { generationId: row.id },
         });
-        await tx.researchThread.update({ where: { id: threadId }, data: {} });
         return row;
       });
     } catch (error) {
@@ -266,8 +254,6 @@ export class ChatGenerationService implements OnModuleInit {
           threadId: row.threadId,
           generationId,
           role: 'SYSTEM_NOTICE' as any,
-          kind: 'ERROR_NOTICE' as any,
-          status: 'COMPLETED' as any,
           content: '本轮回答已取消。',
           sequence: sequence + 1,
         },
@@ -316,81 +302,29 @@ export class ChatGenerationService implements OnModuleInit {
       where: { generationId, sequence: { gt: afterSeq } },
       orderBy: { sequence: 'asc' },
     });
-    if (durableEvents.length > 0) {
-      for (const event of durableEvents) {
-        const eventName = ChatEventNameSchema.safeParse(event.event);
-        if (!eventName.success) continue;
-        listener({
-          event: eventName.data,
-          seq: event.sequence,
-          payload: event.payload as Record<string, unknown>,
-        });
-      }
-      if (['COMPLETED', 'FAILED', 'CANCELLED'].includes(row.status)) {
-        return () => undefined;
-      }
+    for (const event of durableEvents) {
+      const eventName = ChatEventNameSchema.safeParse(event.event);
+      if (!eventName.success) continue;
+      listener({
+        event: eventName.data,
+        seq: event.sequence,
+        payload: event.payload as Record<string, unknown>,
+      });
     }
 
-    // Compatibility replay for generations created before ChatStreamEvent was
-    // introduced. New generations always replay their original durable seq.
-    let seq = 0;
-    const replay = (event: ChatSseEnvelope['event'], payload: Record<string, unknown>) => {
-      seq += 1;
-      if (seq > afterSeq) listener({ event, seq, payload: { ...payload, seq } });
-    };
-    const snapshot = row.contextSnapshot as any;
-    replay('generation_status', {
-      generationId,
-      status: row.status,
-      intent: row.intent,
-    });
-    replay('context_loaded', {
-      generationId,
-      mode: snapshot.mode,
-      analysisIds: snapshot.analysisIds ?? [],
-      snapshotIds: snapshot.analysisSnapshotId ? [snapshot.analysisSnapshotId] : [],
-      dataAsOf: snapshot.dataAsOf ?? null,
-    });
-    const openSnapshot = await this.prisma.openResearchSnapshot.findUnique({ where: { generationId } });
-    if (openSnapshot) {
-      replay('research_sources', {
-        generationId,
-        snapshotId: openSnapshot.id,
-        sources: openSnapshot.sources,
-        dataAsOf: openSnapshot.dataAsOf.toISOString(),
-      });
-    } else if (row.groundedSources || snapshot.analysis) {
-      const sources = row.groundedSources
-        ? row.groundedSources as any[]
-        : this.extractAnalysisSources(snapshot.analysis as AnalysisChatContext);
-      if (sources.length > 0) {
-        replay('research_sources', {
-          generationId,
-          mode: 'ANALYSIS_GROUNDED',
-          snapshotId: snapshot.analysisSnapshotId ?? snapshot.analysis?.snapshot?.id ?? null,
-          sources,
-          dataAsOf: snapshot.dataAsOf ?? snapshot.analysis?.dataAsOf ?? null,
+    // Terminal rows always deliver a closing `done`: the HTTP stream only
+    // closes on that event, and a crash between the final status transaction
+    // and persisting the done event would otherwise hang reconnects forever.
+    if (['COMPLETED', 'FAILED', 'CANCELLED'].includes(row.status)) {
+      const hasDone = durableEvents.some((event) => event.event === 'done');
+      if (!hasDone) {
+        const seq = (durableEvents.at(-1)?.sequence ?? afterSeq) + 1;
+        listener({
+          event: 'done',
+          seq,
+          payload: { generationId, finishReason: row.status.toLowerCase(), seq },
         });
       }
-    }
-    const assistant = await this.prisma.chatMessage.findFirst({
-      where: { generationId, role: 'ASSISTANT' as any },
-      orderBy: { createdAt: 'asc' },
-    });
-    if (assistant) {
-      replay('text_block', {
-        generationId,
-        blockId: `answer-${generationId}`,
-        text: assistant.content,
-        citationIds: assistant.citationRefs ?? [],
-        numericIds: [],
-      });
-    }
-    if (row.status === 'COMPLETED' || row.status === 'FAILED' || row.status === 'CANCELLED') {
-      replay('done', {
-        generationId,
-        finishReason: row.status.toLowerCase(),
-      });
     }
     return () => undefined;
   }
@@ -521,7 +455,6 @@ export class ChatGenerationService implements OnModuleInit {
         });
         const result = existingOpen
           ? {
-              gatewayVersion: existingOpen.gatewayVersion,
               dataAsOf: existingOpen.dataAsOf.toISOString(),
               sources: existingOpen.sources as any[],
               citationCandidates: existingOpen.citationCandidates as Array<{
@@ -542,12 +475,8 @@ export class ChatGenerationService implements OnModuleInit {
             stockId,
             query: question,
             dataAsOf: new Date(result.dataAsOf),
-            gatewayVersion: result.gatewayVersion,
             sources: result.sources as any,
             citationCandidates: result.citationCandidates as any,
-            contentHash: createHash('sha256')
-              .update(canonicalJson({ question, result }))
-              .digest('hex'),
           },
         });
         openResearchSnapshotId = open.id;
@@ -689,11 +618,8 @@ export class ChatGenerationService implements OnModuleInit {
             threadId: row.threadId,
             generationId,
             role: 'ASSISTANT' as any,
-            kind: 'TEXT' as any,
-            status: 'COMPLETED' as any,
             content: answer,
             sequence: sequence + 1,
-            citationRefs: actualCitationIds as any,
           },
         });
         const completed = await tx.chatGeneration.updateMany({
@@ -1011,11 +937,4 @@ export class ChatGenerationService implements OnModuleInit {
       if (terminal) this.states.delete(terminal[0]);
     }
   }
-}
-
-function canonicalJson(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  const object = value as Record<string, unknown>;
-  return `{${Object.keys(object).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key])}`).join(',')}}`;
 }

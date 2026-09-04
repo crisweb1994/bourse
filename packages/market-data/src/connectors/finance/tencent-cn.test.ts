@@ -3,6 +3,26 @@ import { createTencentCnFinanceConnector } from './tencent-cn';
 import type { FetchLike } from '../types';
 
 describe('Tencent CN history connector', () => {
+  it('routes 920xxx (Beijing Stock Exchange) to the bj prefix, not sh (KISS C6)', async () => {
+    const requested: string[] = [];
+    const fetchLike: FetchLike = async (url: string | URL | Request) => {
+      requested.push(String(url));
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ code: 0, data: { 'bj920001': { qfqday: [] } } }),
+      } as unknown as Response;
+    };
+    const connector = createTencentCnFinanceConnector({ fetchLike });
+    await connector.getHistory({
+      instrumentId: 'CN:920001',
+      from: '2026-07-20',
+      to: '2026-07-24',
+      interval: '1d',
+    });
+    expect(requested[0]).toContain('bj920001');
+  });
+
   it('parses adjusted daily bars and filters the requested date range', async () => {
     const fetchLike: FetchLike = async () => ({
       ok: true,

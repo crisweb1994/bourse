@@ -5,11 +5,7 @@ import { EarningsGenerationService } from './earnings-generation.service';
 import { toEarningsCardDto, toGenerationRunDto } from './earnings.mapper';
 
 const revisionInclude = {
-  card: {
-    include: {
-      event: { include: { stock: true } },
-    },
-  },
+  event: { include: { stock: true } },
 } as const;
 
 @Injectable()
@@ -22,19 +18,16 @@ export class EarningsQueryService {
   async latest(stockId: string): Promise<LatestEarningsResponseDto> {
     const stock = await this.prisma.stock.findUnique({ where: { id: stockId } });
     if (!stock) throw new NotFoundException('Stock not found');
-    const card = await this.prisma.earningsCard.findFirst({
-      where: { event: { stockId }, currentRevisionId: { not: null } },
-      orderBy: { event: { periodEndOn: 'desc' } },
-      include: {
-        event: { include: { stock: true } },
-        currentRevision: true,
-      },
+    const event = await this.prisma.earningsEvent.findFirst({
+      where: { stockId, currentRevisionId: { not: null } },
+      orderBy: { periodEndOn: 'desc' },
+      include: { stock: true, currentRevision: true },
     });
     const generation = await this.prisma.earningsGenerationRun.findFirst({
       where: { stockId, status: { in: ['QUEUED', 'RUNNING'] } },
       orderBy: { createdAt: 'desc' },
     });
-    if (!card?.currentRevision) {
+    if (!event?.currentRevision) {
       const supported = stock.market === 'US' || stock.market === 'CN' || stock.market === 'HK';
       return {
         available: false,
@@ -47,8 +40,8 @@ export class EarningsQueryService {
       available: true,
       supported: true,
       card: toEarningsCardDto({
-        ...card.currentRevision,
-        card: { id: card.id, event: card.event },
+        ...event.currentRevision,
+        event: { id: event.id, stockId: event.stockId, stock: event.stock },
       }),
       generation: generation ? toGenerationRunDto(generation) : undefined,
     };
@@ -67,14 +60,21 @@ export class EarningsQueryService {
   }
 
   async history(stockId: string) {
-    const cards = await this.prisma.earningsCard.findMany({
-      where: { event: { stockId } },
-      orderBy: { event: { periodEndOn: 'desc' } },
+    const events = await this.prisma.earningsEvent.findMany({
+      where: { stockId },
+      orderBy: { periodEndOn: 'desc' },
       include: {
-        event: { include: { stock: true } },
-        revisions: { orderBy: { revisionNo: 'desc' }, include: revisionInclude },
+        stock: true,
+        revisions: { orderBy: { revisionNo: 'desc' } },
       },
     });
-    return cards.flatMap((card) => card.revisions.map(toEarningsCardDto));
+    return events.flatMap((event) =>
+      event.revisions.map((revision) =>
+        toEarningsCardDto({
+          ...revision,
+          event: { id: event.id, stockId: event.stockId, stock: event.stock },
+        }),
+      ),
+    );
   }
 }

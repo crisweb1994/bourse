@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { PriceBar } from '../..';
+import type {
+  PriceBar,
+} from '@bourse/market-data';
 import { computeTechnicalIndicators } from '../technical-indicators';
 
 // ============================================================================

@@ -232,6 +232,19 @@ export const EvidencePackDataAvailability = z.object({
       reason: z.string(),
     }),
   ),
+  // KISS C4-6 (wired 2026-09-02): private/licensed-source degradation signal.
+  // Produced by the evidence-pack builder when gating private facts are
+  // missing; consumed by the workflow skip gate (DEGRADED_SOURCE_MISSING_
+  // PRIVATE_DATA), snapshot persistence, the SSE mapper, and the web banner.
+  degradedSource: z.enum(['NONE', 'WEB_SEARCH_FALLBACK']).optional(),
+  missingPrivateFields: z.array(z.string()).optional(),
+  fallbackReason: z
+    .object({
+      kind: z.enum(['AUTH', 'NETWORK', 'RATE_LIMIT_HARD', 'OTHER']),
+      failedTools: z.array(z.string()),
+      message: z.string(),
+    })
+    .optional(),
 });
 export type EvidencePackDataAvailability = z.infer<
   typeof EvidencePackDataAvailability

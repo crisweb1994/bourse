@@ -753,13 +753,8 @@ function toYahooSymbol(market: MarketCode, symbol: string, ctx?: ConnectorRunCon
       const stripped = symbol.length === 5 && symbol.startsWith('0') ? symbol.slice(1) : symbol;
       return `${stripped}.HK`;
     }
-    case 'JP':
-      return `${symbol}.T`;
-    case 'UK':
-      return `${symbol}.L`;
-    case 'CN':
-      // Best-effort suffix; CN flow normally goes via the CN connector
-      return symbol.startsWith('6') ? `${symbol}.SS` : `${symbol}.SZ`;
+    // JP/UK/CN never reach here: YAHOO_SUPPORTED = ['US','HK'] guards every
+    // call site (KISS C6/F-2) — dead suffix branches removed.
     default:
       return symbol;
   }

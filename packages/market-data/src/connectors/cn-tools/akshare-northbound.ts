@@ -7,6 +7,7 @@ import type {
   MarketDataToolResult as ToolResult,
 } from './types';
 import type { CnToolFetchLike } from './_fetch-headers';
+import { defaultFetch, pickFloat, pickDecimalFromPct } from './shared';
 import { cnBrowserHeaders } from './_fetch-headers';
 
 /**
@@ -58,10 +59,6 @@ export const AkshareNorthboundOutputSchema = z.object({
 });
 export type AkshareNorthboundOutput = z.infer<typeof AkshareNorthboundOutputSchema>;
 
-const defaultFetch: CnToolFetchLike = (url, init) =>
-  globalThis.fetch(url, init) as Promise<
-    ReturnType<CnToolFetchLike> extends Promise<infer T> ? T : never
-  >;
 
 /**
  * Mirror endpoints — ordered by historical stability. The first one to
@@ -255,21 +252,5 @@ function inferExchange(symbol: string): 'SS' | 'SZ' {
   return 'SZ';
 }
 
-function pickFloat(v: unknown): number | null {
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (typeof v === 'string') {
-    const trimmed = v.trim();
-    if (trimmed === '' || trimmed === '-' || trimmed === 'null') return null;
-    const n = parseFloat(trimmed);
-    return Number.isFinite(n) ? n : null;
-  }
-  return null;
-}
-
-function pickDecimalFromPct(v: unknown): number | null {
-  const f = pickFloat(v);
-  if (f === null) return null;
-  return f / 100;
-}
 
 export const akshareNorthboundCN = makeAkshareNorthboundCN();

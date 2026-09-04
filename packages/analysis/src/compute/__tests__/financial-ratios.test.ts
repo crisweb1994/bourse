@@ -3,7 +3,7 @@ import type {
   FinancialsBundle,
   FinancialsPeriodEntry,
   Quote,
-} from '../..';
+} from '@bourse/market-data';
 import { computeFinancialRatios } from '../financial-ratios';
 
 // ============================================================================
@@ -231,16 +231,31 @@ describe('computeFinancialRatios · US — TTM-anchored ratios', () => {
     expect(ratios!.accrualRatio).toBeCloseTo((20 - 22) / 350, 4);
   });
 
-  it('computes YoY growth from FY[0] vs FY[1]', () => {
-    const { ratios } = computeFinancialRatios({
+  it('computes YoY growth FY-on-FY even when anchored on TTM', () => {
+    const { ratios, warnings } = computeFinancialRatios({
       bundle: bundle([ttm, fy2024, fy2023]),
       quote: q,
       market: 'US',
     });
-    // Anchor is TTM, but YoY is FY-on-FY: latest FY=fy2024, prior=fy2023
-    // The anchorIncome (TTM) is used for the numerator instead — verify behavior.
-    // Current impl uses anchorIncome.revenue (TTM=100B) vs priorFy.revenue (FY2023=85B).
-    expect(ratios!.revenueGrowthYoY).toBeCloseTo((100 - 85) / 85, 4);
+    // Regression: the TTM anchor (revenue 100B, NP 20B) must NOT be the YoY
+    // numerator — TTM vs prior FY spans well over a year, not a YoY figure.
+    expect(ratios!.revenueGrowthYoY).toBeCloseTo((90 - 85) / 85, 6);
+    expect(ratios!.earningsGrowthYoY).toBeCloseTo((17 - 15) / 15, 6);
+    expect(
+      warnings.some((w) => w.code === 'approximation' && w.metric === 'growthYoY'),
+    ).toBe(true);
+  });
+
+  it('discloses evToEbitda and roic approximation caveats', () => {
+    const { warnings } = computeFinancialRatios({
+      bundle: bundle([ttm, fy2024, fy2023]),
+      quote: q,
+      market: 'US',
+    });
+    expect(
+      warnings.some((w) => w.code === 'approximation' && w.metric === 'evToEbitda'),
+    ).toBe(true);
+    expect(warnings.some((w) => w.code === 'approximation' && w.metric === 'roic')).toBe(true);
   });
 
   it('flags the baseCurrency on the output', () => {

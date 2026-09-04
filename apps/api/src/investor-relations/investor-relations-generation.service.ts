@@ -1,5 +1,6 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { computeContentHash, INVESTOR_RELATIONS_PROMPT_VERSION, INVESTOR_RELATIONS_SCHEMA_VERSION } from '@bourse/analysis';
+import { computeContentHash } from '@bourse/market-data';
+import { INVESTOR_RELATIONS_PROMPT_VERSION, INVESTOR_RELATIONS_SCHEMA_VERSION } from '@bourse/analysis';
 import { Prisma, type Stock } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { InvestorRelationsRunnerService } from './investor-relations-runner.service';

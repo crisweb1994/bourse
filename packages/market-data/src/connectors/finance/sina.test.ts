@@ -15,6 +15,19 @@ function response(body: string, status = 200): Response {
 }
 
 describe('Sina US finance connector', () => {
+  it('classifies HTTP 429 as RATE_LIMITED so router backoff engages (KISS C6)', async () => {
+    const fetchLike: FetchLike = async () => response('too many requests', 429);
+    const connector = createSinaUsFinanceConnector({ fetchLike });
+    const out = await connector.getHistory({
+      instrumentId: 'US:AAPL',
+      from: '2026-07-20',
+      to: '2026-07-24',
+      interval: '1d',
+    });
+    expect(out.data).toHaveLength(0);
+    expect(out.warnings[0]?.code).toBe('RATE_LIMITED');
+  });
+
   it('parses, sorts and filters daily OHLCV JSONP', async () => {
     const fetchLike: FetchLike = async () => response(jsonp([
       { d: '2026-07-24', o: '321.79', h: '334.37', l: '321.62', c: '333.02', v: '47489415' },

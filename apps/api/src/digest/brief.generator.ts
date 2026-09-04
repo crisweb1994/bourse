@@ -1,15 +1,15 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { BriefPayload, type IndexQuoteBrief, type WatchlistItemBrief } from './brief-payload';
 import {
   type AgentProvider,
-  BriefPayload,
-  type IndexQuoteBrief,
-  type WatchlistItemBrief,
   computeTechnicalIndicators,
+} from '@bourse/analysis';
+import {
   fetchIndexHistory,
   fetchIndexQuote,
   INDEX_SYMBOLS,
-} from '@bourse/analysis';
+} from '@bourse/market-data';
 import { PrismaService } from '../prisma/prisma.service';
 import { SnapshotV2Service } from '../analysis/snapshot-v2.service';
 import { ProviderFactoryService } from '../analysis/provider-factory.service';
@@ -55,10 +55,10 @@ export class DigestGeneratorService {
     private readonly earnings: EarningsQueryService,
     /**
      * 指数数据层 + 技术指标计算钩子，仅用于单测注入 stub；生产环境留空走
-     * `@bourse/analysis` 默认实现（fetchIndexQuote / fetchIndexHistory /
-     * computeTechnicalIndicators）。@Optional() 让真实 Nest DI 不注入（生产
-     * 不传），单测直接 new 时手动传。与 analysis-workflow-adapter 的
-     * `_streamFactory` 同款 test hook 风格。
+     * `@bourse/market-data` 的 fetchIndexQuote / fetchIndexHistory 与
+     * `@bourse/analysis` 的 computeTechnicalIndicators。@Optional() 让真实
+     * Nest DI 不注入（生产不传），单测直接 new 时手动传。与
+     * analysis-workflow-adapter 的 `_streamFactory` 同款 test hook 风格。
      */
     @Optional() deps?: {
       index?: IndexLayer;
@@ -240,7 +240,7 @@ export class DigestGeneratorService {
       };
     }
 
-    const thresholds = this.anomalyThresholds();
+    const thresholds = ANOMALY_THRESHOLDS;
 
     // 并发 fetch 每只票（每只一次 fetchSnapshot，守 #2）+ 取最近一次 Analysis。
     // CN Eastmoney kline 实测偶有 >8s 响应（fetchSnapshot 默认 perConnectorTimeout
@@ -468,20 +468,6 @@ export class DigestGeneratorService {
   // 异动触发（DB.5 ③）
   // ===========================================================================
 
-  /** 从 env 读异动阈值（全局，非 per-user），缺失用 DB.5 初值。 */
-  private anomalyThresholds(): AnomalyThresholds {
-    const num = (key: string, fallback: number) => {
-      const v = this.config.get<string>(key);
-      const n = v ? Number(v) : NaN;
-      return Number.isFinite(n) ? n : fallback;
-    };
-    return {
-      changePct: num('DIGEST_ANOMALY_CHANGE_PCT', 3),
-      rsiOverbought: num('DIGEST_ANOMALY_RSI_OVERBOUGHT', 70),
-      rsiOversold: num('DIGEST_ANOMALY_RSI_OVERSOLD', 30),
-      staleDays: num('DIGEST_ANOMALY_STALE_DAYS', 30),
-    };
-  }
 
   /**
    * 异动判定（PRD DB.5）。命中任一条件 → 返回带 reasons 的 context；否则 null。
@@ -609,6 +595,14 @@ interface IndexLayer {
   quote: typeof fetchIndexQuote;
   history: typeof fetchIndexHistory;
 }
+
+/** 异动触发阈值(PRD DB.5 初值)——产品阈值属代码,非运维配置(KISS env 审查)。 */
+const ANOMALY_THRESHOLDS: AnomalyThresholds = {
+  changePct: 3,
+  rsiOverbought: 70,
+  rsiOversold: 30,
+  staleDays: 30,
+};
 
 interface AnomalyThresholds {
   changePct: number;

@@ -141,7 +141,6 @@ export interface CompanyProfilePort {
 /** Canonical source-plugin port consumed by the capability router. */
 export interface FinancePort {
   getQuote(input: QuoteInput, ctx?: ConnectorRunContext): Promise<SourceResult<Quote>>;
-  getQuotes?(inputs: readonly QuoteInput[], ctx?: ConnectorRunContext): Promise<SourceResult<Quote>[]>;
   getHistory(input: HistoryInput, ctx?: ConnectorRunContext): Promise<SourceResult<PriceBar[]>>;
   getProfile?(input: ProfileInput, ctx?: ConnectorRunContext): Promise<SourceResult<CompanyProfile>>;
   fetchEarningsConsensus?(

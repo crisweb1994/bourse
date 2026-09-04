@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { buildWebSearchExecutorFromSetting } from '@bourse/analysis';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -9,6 +10,10 @@ import {
 } from './web-search-settings.dto';
 
 /** Per-user web search adapter configuration. An absent row uses provider-native search or deployment env defaults. */
+
+/** Client-fixable shape violation (e.g. TAVILY without apiKey). Infrastructure errors are not this. */
+export class ProviderShapeError extends Error {}
+
 @Injectable()
 export class WebSearchSettingsService {
   constructor(private prisma: PrismaService) {}
@@ -58,9 +63,18 @@ export class WebSearchSettingsService {
   }
 
   async remove(userId: string): Promise<void> {
-    await this.prisma.webSearchSetting
-      .delete({ where: { userId } })
-      .catch(() => undefined);
+    try {
+      await this.prisma.webSearchSetting.delete({ where: { userId } });
+    } catch (err) {
+      // P2025 = record not found; delete is idempotent. Anything else is real.
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
+        return;
+      }
+      throw err;
+    }
   }
 
   /**
@@ -138,10 +152,10 @@ export class WebSearchSettingsService {
     baseUrl?: string | null;
   }) {
     if (dto.providerType === 'TAVILY' && !dto.apiKey?.toString().trim()) {
-      throw new Error('Tavily requires apiKey');
+      throw new ProviderShapeError('Tavily requires apiKey');
     }
     if (dto.providerType === 'SEARXNG' && !dto.baseUrl?.toString().trim()) {
-      throw new Error('SearXNG requires baseUrl');
+      throw new ProviderShapeError('SearXNG requires baseUrl');
     }
   }
 
@@ -162,8 +176,8 @@ export class WebSearchSettingsService {
       primaryMode: row.primaryMode as WebSearchSettingDto['primaryMode'],
       timeoutMs: row.timeoutMs,
       cacheTtlMs: row.cacheTtlMs,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
     };
   }
 }

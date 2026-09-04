@@ -25,6 +25,7 @@ import {
   ScreeningRefinementPayloadSchema,
   ScreeningRunDtoSchema,
   ScreeningViewSchema,
+  isMarket,
   type CreateScreeningRunRequest,
   type EquityScreenerSnapshot,
   type RefineCandidateResult,
@@ -217,19 +218,12 @@ export class ScreeningService {
       throw new BadGatewayException('Screener provider returned an invalid snapshot');
     }
     const snapshot = prepareSnapshot(parsedSnapshot.data, request.query);
-    const sourceId = selectedSource(screenResult);
-    if (!sourceId) {
-      throw new BadGatewayException('Screener provider omitted source provenance');
-    }
 
-    const capturedAt = new Date();
     const row = await this.prisma.screeningRun.create({
       data: {
         userId,
         savedScreenId: request.savedScreenId ?? null,
         query: toPrismaJson(request.query),
-        sourceId,
-        capturedAt,
         snapshot: toPrismaJson(snapshot),
       },
       include: {
@@ -509,7 +503,7 @@ export class ScreeningService {
 
 function parseMarket(value?: string): ScreeningQuery['market'] {
   const market = value?.trim().toUpperCase();
-  if (market !== 'US' && market !== 'CN' && market !== 'HK') {
+  if (!market || !isMarket(market)) {
     throw new BadRequestException('market must be one of US | CN | HK');
   }
   return market;
@@ -720,8 +714,6 @@ function mapRun(row: RunRow): ScreeningRunDto {
     savedScreenId: row.savedScreenId ?? null,
     status: snapshot.complete ? 'COMPLETE' : 'PARTIAL',
     query: ScreeningQuerySchema.parse(row.query),
-    sourceId: row.sourceId,
-    capturedAt: toIso(row.capturedAt),
     createdAt: toIso(row.createdAt),
     snapshot,
     view: row.savedScreen

@@ -106,8 +106,6 @@ function screeningRun(
       conditions: [{ metric: 'MARKET_CAP', operator: 'GTE', value: 1 }],
       sort: { metric: 'MARKET_CAP', direction: 'DESC' },
     },
-    sourceId: 'test-screener',
-    capturedAt: '2026-08-22T00:00:00.000Z',
     createdAt: '2026-08-22T00:00:00.000Z',
     snapshot: {
       universeCount: 100,

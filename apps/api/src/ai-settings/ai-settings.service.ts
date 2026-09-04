@@ -7,8 +7,6 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   AiProviderSettingDetailDto,
@@ -35,17 +33,9 @@ const ANTHROPIC_STATIC_MODELS = [
   'claude-haiku-4-5',
 ];
 
-const CREDENTIAL_CIPHER_VERSION = 'v1';
-const CREDENTIAL_IV_BYTES = 12;
-
 @Injectable()
 export class AiSettingsService {
-  private credentialsKey: Buffer | null = null;
-
-  constructor(
-    private prisma: PrismaService,
-    private config: ConfigService,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
   getCatalog() {
     return BUILTIN_PROVIDER_CATALOG;
@@ -72,7 +62,7 @@ export class AiSettingsService {
       label: dto.label.trim() || '未命名',
       providerType: dto.providerType,
       baseUrl: this.emptyToNull(dto.baseUrl),
-      apiKeyEncrypted: apiKey ? this.encryptApiKey(apiKey) : null,
+      apiKey,
       enabledModels: dto.enabledModels ?? [],
       primaryModel: this.emptyToNull(dto.primaryModel),
       utilityModel: this.emptyToNull(dto.utilityModel),
@@ -122,10 +112,9 @@ export class AiSettingsService {
     if (dto.enabled !== undefined) data.enabled = dto.enabled;
 
     if (dto.clearApiKey === true) {
-      data.apiKeyEncrypted = null;
+      data.apiKey = null;
     } else if (dto.apiKey !== undefined) {
-      const apiKey = dto.apiKey.trim() || null;
-      data.apiKeyEncrypted = apiKey ? this.encryptApiKey(apiKey) : null;
+      data.apiKey = dto.apiKey.trim() || null;
     }
 
     if (dto.isDefault === true) {
@@ -217,7 +206,7 @@ export class AiSettingsService {
     input: { providerType: ProviderTypeStr; baseUrl: string; apiKey?: string },
   ) {
     const row = await this.ensureOwned(userId, id);
-    const savedApiKey = await this.readApiKey(row);
+    const savedApiKey = row.apiKey ?? null;
     return this.listModelsStateless({
       ...input,
       apiKey: input.apiKey?.trim() || savedApiKey || undefined,
@@ -306,7 +295,7 @@ export class AiSettingsService {
     },
   ) {
     const row = await this.ensureOwned(userId, id);
-    const savedApiKey = await this.readApiKey(row);
+    const savedApiKey = row.apiKey ?? null;
     return this.testConnectionStateless({
       ...input,
       apiKey: input.apiKey?.trim() || savedApiKey || '',
@@ -365,7 +354,7 @@ export class AiSettingsService {
     return {
       id: row.id,
       providerType: row.providerType,
-      apiKey: await this.readApiKey(row),
+      apiKey: row.apiKey ?? null,
       baseUrl: row.baseUrl,
       model: row.primaryModel ?? row.enabledModels[0] ?? null,
       utilityModel: row.utilityModel ?? null,
@@ -382,80 +371,19 @@ export class AiSettingsService {
       utilityModel: row.utilityModel ?? null,
       isDefault: row.isDefault ?? false,
       enabled: row.enabled,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
     };
   }
 
   private async toDetailDto(row: any): Promise<AiProviderSettingDetailDto> {
-    const apiKey = await this.readApiKey(row);
+    const apiKey = row.apiKey ?? null;
     return {
       ...this.toSummaryDto(row),
       baseUrl: row.baseUrl ?? '',
       hasApiKey: Boolean(apiKey),
       apiKeyMasked: apiKey ? `****${apiKey.slice(-4)}` : null,
     };
-  }
-
-  private async readApiKey(row: any): Promise<string | null> {
-    return row.apiKeyEncrypted ? this.decryptApiKey(row.apiKeyEncrypted) : null;
-  }
-
-  private encryptApiKey(apiKey: string): string {
-    const iv = randomBytes(CREDENTIAL_IV_BYTES);
-    const cipher = createCipheriv('aes-256-gcm', this.getCredentialsKey(), iv);
-    const ciphertext = Buffer.concat([cipher.update(apiKey, 'utf8'), cipher.final()]);
-    const authTag = cipher.getAuthTag();
-    return [
-      CREDENTIAL_CIPHER_VERSION,
-      iv.toString('base64url'),
-      authTag.toString('base64url'),
-      ciphertext.toString('base64url'),
-    ].join(':');
-  }
-
-  private decryptApiKey(payload: string): string {
-    const [version, ivEncoded, authTagEncoded, ciphertextEncoded, ...extra] = payload.split(':');
-    if (
-      version !== CREDENTIAL_CIPHER_VERSION ||
-      !ivEncoded ||
-      !authTagEncoded ||
-      !ciphertextEncoded ||
-      extra.length > 0
-    ) {
-      throw new InternalServerErrorException(
-        'Stored AI credential has an unsupported or invalid format',
-      );
-    }
-
-    const iv = Buffer.from(ivEncoded, 'base64url');
-    const authTag = Buffer.from(authTagEncoded, 'base64url');
-    const ciphertext = Buffer.from(ciphertextEncoded, 'base64url');
-    try {
-      const decipher = createDecipheriv('aes-256-gcm', this.getCredentialsKey(), iv);
-      decipher.setAuthTag(authTag);
-      return Buffer.concat([
-        decipher.update(ciphertext),
-        decipher.final(),
-      ]).toString('utf8');
-    } catch {
-      throw new InternalServerErrorException(
-        'Unable to decrypt stored AI credential; verify AI_CREDENTIALS_ENCRYPTION_KEY',
-      );
-    }
-  }
-
-  private getCredentialsKey(): Buffer {
-    if (this.credentialsKey) return this.credentialsKey;
-
-    const dedicatedSecret = this.config.get<string>('AI_CREDENTIALS_ENCRYPTION_KEY')?.trim();
-    if (!dedicatedSecret) {
-      throw new InternalServerErrorException(
-        'AI credential encryption is not configured; set AI_CREDENTIALS_ENCRYPTION_KEY',
-      );
-    }
-    this.credentialsKey = createHash('sha256').update(dedicatedSecret, 'utf8').digest();
-    return this.credentialsKey;
   }
 
   private emptyToNull(value?: string | null): string | null {

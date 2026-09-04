@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { BriefPayload } from '@bourse/analysis';
+import { BriefPayload } from '../brief-payload';
 import { postJson } from '../../common/http';
 import { inlineSparklineSvg, unicodeSparkline } from './sparkline';
 import { ChannelAdapter } from './types';

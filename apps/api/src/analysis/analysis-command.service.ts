@@ -67,7 +67,6 @@ export class AnalysisCommandService {
         userId,
         stockId: stock.id,
         symbol: stock.symbol,
-        market: stock.market,
         mode,
         focusWindow,
         question: dto.question?.trim() || null,

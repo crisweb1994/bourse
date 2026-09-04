@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ToolContext } from '../../../tools/types';
+import type { MarketDataToolContext } from '@bourse/market-data';
 import { makeShareholdersCN, type CnToolFetchLike } from '@bourse/market-data';
 
-const ctx: ToolContext = {
+const ctx: MarketDataToolContext = {
   // The shareholders tool only reads `marketProfile` + `signal` off ctx.
   marketProfile: undefined,
   signal: undefined,
-} as unknown as ToolContext;
+} as unknown as MarketDataToolContext;
 
 function fakeRes({ body, status = 200 }: { body: unknown; status?: number }) {
   return {

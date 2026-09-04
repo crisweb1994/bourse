@@ -1,8 +1,9 @@
+import type {
+  FilingDocument,
+  FilingSummary,
+} from '@bourse/market-data';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import {
-  type FilingDocument,
-  type FilingSummary,
-} from '@bourse/analysis';
+
 import type { ResearchMarketDataClient } from '@bourse/market-data';
 import { type Stock } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -32,10 +33,6 @@ export interface PreparedEarningsSource {
 
 export type EarningsRunSource = PreparedEarningsSource;
 
-export interface EarningsSourceOptions {
-  excludedSourceGroupIds?: readonly string[];
-}
-
 @Injectable()
 export class EarningsSourceService {
   private readonly logger = new Logger(EarningsSourceService.name);
@@ -46,10 +43,7 @@ export class EarningsSourceService {
     private readonly filingStore: FilingStoreService,
   ) {}
 
-  async discoverAndIngest(
-    stock: Stock,
-    options: EarningsSourceOptions = {},
-  ): Promise<PreparedEarningsSource> {
+  async discoverAndIngest(stock: Stock): Promise<PreparedEarningsSource> {
     const instrumentId = `${stock.market}:${stock.symbol}`;
     if (stock.market !== 'US' && stock.market !== 'CN' && stock.market !== 'HK') {
       throw new EarningsSourceError('UNSUPPORTED_MARKET', false);
@@ -76,10 +70,7 @@ export class EarningsSourceService {
       throw new EarningsSourceError('NO_ELIGIBLE_FILING', true, message);
     }
 
-    const excludedGroups = new Set(options.excludedSourceGroupIds ?? []);
-    const candidates = prioritizeEarningsSources(listed.data, stock.market).filter(
-      (summary) => !excludedGroups.has(summary.sourceGroupId ?? summary.sourceDocumentId),
-    );
+    const candidates = prioritizeEarningsSources(listed.data, stock.market);
     if (candidates.length === 0) {
       throw new EarningsSourceError('NO_NEW_ELIGIBLE_FILING', true);
     }
@@ -272,7 +263,3 @@ export class EarningsSourceError extends Error {
   }
 }
 
-function parsePublishedAt(value: string): Date {
-  const parsed = new Date(value);
-  return Number.isFinite(parsed.getTime()) ? parsed : new Date();
-}

@@ -79,12 +79,10 @@ test('earnings mapper preserves both values for a reconciliation conflict', () =
     payload,
     generatedAt: new Date('2026-07-20T00:00:00.000Z'),
     supersededAt: null,
-    card: {
-      id: 'card-1',
-      event: {
-        stockId: 'stock-1',
-        stock: { symbol: '600519', name: '贵州茅台', market: 'CN' },
-      },
+    event: {
+      id: 'event-1',
+      stockId: 'stock-1',
+      stock: { symbol: '600519', name: '贵州茅台', market: 'CN' },
     },
   });
   const status = dto.facts[0].reconcileStatus;

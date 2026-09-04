@@ -39,6 +39,9 @@ describe('evidence pack prompt V2', () => {
     const prompts = buildStructuredOutputPrompts('RISK_REGISTER', 'report', []);
     expect(prompts.system).toContain('analysis-section-v2');
     expect(prompts.system).toContain('basedOnIncompleteSections');
+    expect(prompts.system).toContain('没有缺失模块时填写 []');
+    expect(prompts.system).toContain('数据缺口说明只能写入 limitations');
+    expect(prompts.system).toContain('invalidates 都只能是字符串数组');
     expect(prompts.user).toContain('RISK_REGISTER');
   });
 });

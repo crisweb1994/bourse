@@ -159,20 +159,17 @@ describe('HomepageService', () => {
           ];
         },
       },
-      earningsCard: {
+      earningsEvent: {
         findMany: async (args: any) => {
           eventQueryCount += 1;
           calls.push({ name: 'cards', args });
           return [
             {
-              id: 'card-a',
-              event: {
-                stockId: stockA.id,
-                periodType: 'Q2',
-                fiscalYear: 2026,
-                fiscalQuarter: 2,
-                filingLinks: [{ filingId: 'filing-linked' }],
-              },
+              id: 'event-a',
+              stockId: stockA.id,
+              periodType: 'Q2',
+              fiscalYear: 2026,
+              filingLinks: [{ filingId: 'filing-linked' }],
               currentRevision: {
                 id: 'revision-a',
                 revisionNo: 2,
@@ -180,14 +177,11 @@ describe('HomepageService', () => {
               },
             },
             {
-              id: 'card-b-old',
-              event: {
-                stockId: stockB.id,
-                periodType: 'H1',
-                fiscalYear: 2026,
-                fiscalQuarter: null,
-                filingLinks: [],
-              },
+              id: 'event-b',
+              stockId: stockB.id,
+              periodType: 'H1',
+              fiscalYear: 2026,
+              filingLinks: [],
               currentRevision: {
                 id: 'revision-b-old',
                 revisionNo: 1,
@@ -231,7 +225,7 @@ describe('HomepageService', () => {
       stockB.id,
       stockC.id,
     ]);
-    assert.deepEqual(calls.find((call) => call.name === 'cards')!.args.where.event.stockId.in, [
+    assert.deepEqual(calls.find((call) => call.name === 'cards')!.args.where.stockId.in, [
       stockA.id,
       stockB.id,
       stockC.id,
@@ -271,7 +265,7 @@ describe('HomepageService', () => {
           }));
         },
       },
-      earningsCard: {
+      earningsEvent: {
         findMany: async (args: any) => {
           calls.push({ name: 'cards', args });
           return [];
@@ -314,7 +308,7 @@ describe('HomepageService', () => {
           return [];
         },
       },
-      earningsCard: {
+      earningsEvent: {
         findMany: async () => {
           eventQueryCount += 1;
           return [];

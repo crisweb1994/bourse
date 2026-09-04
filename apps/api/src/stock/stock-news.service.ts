@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { isMarket } from '@bourse/shared-types';
 import {
   buildAdapterFromEnv,
   WebSearchExecutor,
@@ -64,7 +65,7 @@ export class StockNewsService {
   ): WebSearchExecutor {
     return new WebSearchExecutor({
       adapter,
-      timeoutMs: Number(process.env.WEB_SEARCH_TIMEOUT_MS) || 12_000,
+      timeoutMs: 12_000,
       maxSearchesPerRun: 50,
       cacheTtlMs,
     });
@@ -77,7 +78,7 @@ export class StockNewsService {
   ): Promise<StockNewsResponse> {
     const m = (market ?? '').trim().toUpperCase();
     const s = (symbol ?? '').trim().toUpperCase();
-    if (!s || (m !== 'US' && m !== 'CN' && m !== 'HK')) {
+    if (!s || !isMarket(m)) {
       return { items: [], degraded: { reason: 'UNSUPPORTED_MARKET' } };
     }
 

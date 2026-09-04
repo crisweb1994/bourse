@@ -102,13 +102,11 @@ async function main() {
         userId: user.id,
         enabled: true,
         markets: ['US'],
-        sessions: ['PRE', 'POST'],
         channels: [{ type: 'WEBHOOK', url: `http://localhost:${PORT}/hook`, secret: WEBHOOK_SECRET }],
       },
       update: {
         enabled: true,
         markets: ['US'],
-        sessions: ['PRE', 'POST'],
         channels: [{ type: 'WEBHOOK', url: `http://localhost:${PORT}/hook`, secret: WEBHOOK_SECRET }],
       },
     });

@@ -1,7 +1,6 @@
 'use client';
 
 import type { AnalysisMode, Confidence, FocusWindow, OverallSignal, SectionType } from '@bourse/shared-types';
-import type { OverallConclusionDto } from '@/lib/api';
 import { SECTION_LABELS } from '@/lib/constants';
 
 export const ANALYSIS_MODE_OPTIONS: Array<{ value: AnalysisMode; label: string }> = [
@@ -37,40 +36,4 @@ export function inferMarketFromSymbol(symbol: string | null): string {
   return normalized ? 'US' : '';
 }
 
-export interface SectionLike {
-  type: SectionType;
-  status: string;
-  structuredJson?: {
-    assessment?: string;
-    confidence?: Confidence;
-    summary?: string;
-  } | null;
-}
 
-export interface SummaryLike extends OverallConclusionDto {
-  headline: string;
-  signal: OverallSignal | null;
-}
-
-export function buildRightInsightsSummary(
-  summaryJson: SummaryLike | null | undefined,
-  sections: SectionLike[],
-): SummaryLike | null {
-  if (summaryJson) return summaryJson;
-  const usable = sections.filter((section) => section.structuredJson?.assessment);
-  if (usable.length === 0) return null;
-  return {
-    headline: '综合结论尚未生成',
-    signal: null,
-    confidence: 'LOW',
-    rationale: [],
-    counterpoints: [],
-    changeConditions: [],
-    missingSections: sections.filter((section) => !section.structuredJson).map((section) => section.type),
-    dataAsOf: '',
-  };
-}
-
-export function sectionTitle(type: SectionType): string {
-  return SECTION_LABELS[type] ?? type;
-}

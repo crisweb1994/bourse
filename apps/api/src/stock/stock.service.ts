@@ -3,6 +3,7 @@ import {
   Market,
   StockHistoryResponseSchema,
   StockHistoryBatchResponseSchema,
+  isMarket,
   type StockHistoryResponse,
   type StockHistoryBatchResponse,
   type StockSearchResult,
@@ -13,7 +14,6 @@ import { computeTechnicalIndicators, derivePriceSeries } from '@bourse/analysis'
 import { PrismaService } from '../prisma/prisma.service';
 import { UpsertStockDto } from './stock.dto';
 import { MARKET_DATA_CLIENT } from '../connectors/connectors.module';
-import { resolveMarketState } from './market-hours';
 import { TtlLruCache } from './search-cache';
 import { EarningsQueryService } from '../earnings/earnings-query.service';
 
@@ -124,18 +124,6 @@ export class StockService {
   }
 
   /**
-   * plan-v2 §12.1 — single merged detail endpoint replacing the legacy
-   * lookup / :id/quote / :id/profile triple. Returns the canonical Stock
-   * row (when known) plus a live quote + profile snapshot fetched in
-   * parallel. On unknown (symbol, market), `stock` is null and
-   * `candidates` carries provider-search results so the UI can offer
-   * "add to watchlist + analyze" recovery.
-   *
-   * Quote / profile degradation is per-field, not whole-response: each
-   * carries its own `{ degraded, reason }` marker so a stock with valid
-   * quote but missing profile still renders most of the panel.
-   */
-  /**
    * Chart history for the stock page (visualization §五⑦ / D3).
    *
    * P1 invariant: every indicator is computed server-side by the SAME pure
@@ -150,7 +138,7 @@ export class StockService {
     days?: number,
   ): Promise<StockHistoryResponse> {
     const normalizedMarket = market.trim().toUpperCase();
-    if (normalizedMarket !== 'US' && normalizedMarket !== 'CN' && normalizedMarket !== 'HK') {
+    if (!isMarket(normalizedMarket)) {
       throw new BadRequestException('market must be one of US | CN | HK');
     }
     const window =
@@ -245,6 +233,18 @@ export class StockService {
     return StockHistoryBatchResponseSchema.parse(result);
   }
 
+  /**
+   * plan-v2 §12.1 — single merged detail endpoint replacing the legacy
+   * lookup / :id/quote / :id/profile triple. Returns the canonical Stock
+   * row (when known) plus a live quote + profile snapshot fetched in
+   * parallel. On unknown (symbol, market), `stock` is null and
+   * `candidates` carries provider-search results so the UI can offer
+   * "add to watchlist + analyze" recovery.
+   *
+   * Quote / profile degradation is per-field, not whole-response: each
+   * carries its own `{ degraded, reason }` marker so a stock with valid
+   * quote but missing profile still renders most of the panel.
+   */
   async getDetail(symbol: string, market: string) {
     const stock = await this.findBySymbolAndMarket(symbol, market);
     if (!stock) {
@@ -263,13 +263,25 @@ export class StockService {
     return { stock, quote, profile, candidates: [] as const };
   }
 
+  private async marketSessionLabel(market: string): Promise<string> {
+    try {
+      const result = await this.marketData.getMarketSession(
+        market as 'US' | 'CN' | 'HK',
+      );
+      const state = result.status === 'ok' ? result.data?.state : undefined;
+      return SESSION_STATE_LABEL[state ?? 'CLOSED'] ?? 'CLOSED';
+    } catch {
+      return 'CLOSED';
+    }
+  }
+
   private async fetchQuoteAndProfile(stock: {
     id: string;
     symbol: string;
     market: string;
   }): Promise<{ quote: QuoteDto; profile: ProfileDto }> {
     const market = stock.market.trim().toUpperCase();
-    if (market !== 'US' && market !== 'CN' && market !== 'HK') {
+    if (!isMarket(market)) {
       const reason = 'UNSUPPORTED_MARKET';
       return {
         quote: { degraded: true, reason },
@@ -313,12 +325,12 @@ export class StockService {
       currency: q.currency,
       // Authoritative session state first: Yahoo (US/HK) reports it via the
       // crumb'd price module. When the source omits it (CN, or a Yahoo crumb
-      // miss) fall back to deriving it from the exchange's trading session in
-      // the exchange's own timezone — q.timestamp (real last-trade time) then
-      // doubles as a holiday guard. See market-hours.ts.
+      // miss) fall back to market-data's rule-based calendar — weekend AND
+      // static-holiday aware (KISS C6-9). Note: the rule calendar models a
+      // continuous session, so CN/HK lunch reads as REGULAR here.
       marketState:
-        marketStatusToLabel(q.marketStatus) ??
-        resolveMarketState(market, new Date(), q.timestamp),
+        marketStatusToLabel(q.marketStatus)
+        ?? (await this.marketSessionLabel(market)),
       asOf: q.timestamp,
     };
 
@@ -344,6 +356,19 @@ export class StockService {
       profileSettled.status === 'fulfilled' ? profileSettled.value?.data : undefined;
     const sector = companyProfile?.sector;
     const industry = companyProfile?.industry;
+
+    // Stock.sector 的唯一读取方是 POST 简报板块归因（brief.generator），在
+    // 详情页顺手落库；best-effort，失败不影响详情响应，下次详情会再试。
+    if (sector) {
+      try {
+        await this.prisma.stock.update({
+          where: { id: stock.id },
+          data: { sector },
+        });
+      } catch {
+        // ignore
+      }
+    }
 
     const nextEarningsDate = this.pickNextEarningsDate(
       earningsSettled.status === 'fulfilled' ? earningsSettled.value?.data : undefined,
@@ -435,6 +460,20 @@ function normalizeDetailSearchSymbol(symbol: string, market: string): string {
  * web header understands. Returns null when the source gave no usable state
  * (absent or UNKNOWN) so the caller can fall back to the exchange-clock check.
  */
+/**
+ * Map the market-data calendar states to the Yahoo-style state strings the
+ * web header understands (REGULAR / PRE / POST / CLOSED). HOLIDAY and UNKNOWN
+ * both render as CLOSED.
+ */
+const SESSION_STATE_LABEL: Record<string, string> = {
+  OPEN: 'REGULAR',
+  PRE_MARKET: 'PRE',
+  AFTER_HOURS: 'POST',
+  CLOSED: 'CLOSED',
+  HOLIDAY: 'CLOSED',
+  UNKNOWN: 'CLOSED',
+};
+
 function marketStatusToLabel(
   status: 'OPEN' | 'CLOSED' | 'PRE_MARKET' | 'AFTER_HOURS' | 'UNKNOWN' | undefined,
 ): string | null {

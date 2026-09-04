@@ -10,25 +10,11 @@ interface GithubProfile {
   photos?: Array<{ value: string }>;
 }
 
-const DURATION_RE = /^(\d+)\s*(s|m|h|d|w)$/;
-const UNIT_SECONDS: Record<string, number> = {
-  s: 1,
-  m: 60,
-  h: 3600,
-  d: 86400,
-  w: 604800,
-};
-
-/** Parse a duration string like "7d", "2h", "30m" into seconds. */
-function parseDuration(value: string): number {
-  const match = value.match(DURATION_RE);
-  if (match) {
-    return parseInt(match[1], 10) * UNIT_SECONDS[match[2]];
-  }
-  const asNum = parseInt(value, 10);
-  if (!isNaN(asNum)) return asNum;
-  return 604800; // default 7 days
-}
+/** Session lifetime for BOTH the JWT and the cookies — one source, no drift.
+ *  (KISS env review: JWT_EXPIRES_IN only affected the token while three cookie
+ *  maxAge sites hardcoded 7d; the knob is gone, the constant is the contract.) */
+export const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
+export const SESSION_TTL_MS = SESSION_TTL_SECONDS * 1000;
 
 @Injectable()
 export class AuthService {
@@ -52,10 +38,7 @@ export class AuthService {
 
   signJwt(userId: string): string {
     const secret = this.config.getOrThrow<string>('JWT_SECRET');
-    const expiresIn = parseDuration(
-      this.config.get<string>('JWT_EXPIRES_IN', '7d'),
-    );
-    return jwt.sign({ sub: userId }, secret, { expiresIn });
+    return jwt.sign({ sub: userId }, secret, { expiresIn: SESSION_TTL_SECONDS });
   }
 
   verifyJwt(token: string): { sub: string } | null {

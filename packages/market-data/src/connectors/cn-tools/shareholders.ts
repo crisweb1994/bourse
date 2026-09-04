@@ -7,6 +7,7 @@ import type {
   MarketDataToolResult as ToolResult,
 } from './types';
 import type { CnToolFetchLike } from './_fetch-headers';
+import { defaultFetch, pickFloat, pickInt, pickDecimalFromPct, resolveSourcePriorities } from './shared';
 import { cnBrowserHeaders } from './_fetch-headers';
 
 /**
@@ -59,10 +60,6 @@ export const ShareholdersOutputSchema = z.object({
 });
 export type ShareholdersOutput = z.infer<typeof ShareholdersOutputSchema>;
 
-const defaultFetch: CnToolFetchLike = (url, init) =>
-  globalThis.fetch(url, init) as Promise<
-    ReturnType<CnToolFetchLike> extends Promise<infer T> ? T : never
-  >;
 
 export function makeShareholdersCN(opts?: {
   fetchImpl?: CnToolFetchLike;
@@ -222,29 +219,6 @@ async function fetchFromEastmoney(
 // Helpers
 // ============================================================================
 
-function pickFloat(v: unknown): number | null {
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (typeof v === 'string') {
-    const trimmed = v.trim();
-    if (trimmed === '' || trimmed === '-' || trimmed === 'null') return null;
-    const n = parseFloat(trimmed);
-    return Number.isFinite(n) ? n : null;
-  }
-  return null;
-}
-
-function pickInt(v: unknown): number | null {
-  const f = pickFloat(v);
-  if (f === null) return null;
-  return Math.round(f);
-}
-
-/** Eastmoney expresses HOLDER_TOTAL_NUMCHANGEH as raw % (e.g. -3.5). */
-function pickDecimalFromPct(v: unknown): number | null {
-  const f = pickFloat(v);
-  if (f === null) return null;
-  return f / 100;
-}
 
 function deriveTrend(rows: ShareholdersRow[]): ShareholdersOutput['latestTrend'] {
   if (rows.length === 0) return 'unknown';
@@ -262,15 +236,6 @@ function makeCitation(symbol: string, url: string): Citation {
     sourceType: 'OTHER',
     retrievedAt: new Date().toISOString(),
   };
-}
-
-function resolveSourcePriorities(
-  profile: MarketProfile | undefined,
-  fact: string,
-): string[] {
-  const fromProfile = profile?.sourcePriorities?.[fact];
-  if (fromProfile && fromProfile.length > 0) return fromProfile;
-  return ['eastmoney'];
 }
 
 export const shareholdersCN = makeShareholdersCN();

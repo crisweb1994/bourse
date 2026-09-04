@@ -67,15 +67,10 @@ function usBundle(): FinancialsBundleV2 {
 
 class FakeSelectionService {
   snapshots: Array<{ stockId: string; bundle: FinancialsBundleV2 }> = [];
-  selections: Array<Record<string, unknown>> = [];
 
   async saveSnapshot(stockId: string, bundle: FinancialsBundleV2) {
     this.snapshots.push({ stockId, bundle });
     return { id: 'snap-saved-1' };
-  }
-
-  async saveSelection(input: Record<string, unknown>) {
-    this.selections.push(input);
   }
 }
 
@@ -261,8 +256,6 @@ test('runStructuredLane saves snapshot and ready selection for an exact period',
   assert.equal(result.snapshotId, 'snap-saved-1');
   assert.equal(selectionService.snapshots.length, 1);
   assert.equal(selectionService.snapshots[0].stockId, 'stock-1');
-  assert.equal(selectionService.selections.length, 1);
-  assert.equal((selectionService.selections[0].snapshotIds as string[])[0], 'snap-saved-1');
 });
 
 test('runStructuredLane returns pending when the exact period is missing', async () => {
@@ -281,11 +274,11 @@ test('runStructuredLane returns pending when the exact period is missing', async
   assert.equal(result.selection.status, 'pending');
   if (result.selection.status === 'pending') {
     assert.equal(result.selection.reason, 'no_exact_period');
-    assert.equal(selectionService.selections[0].retryAt, '2025-02-01T12:00:00.000Z');
+    assert.equal(result.selection.retryAt, '2025-02-01T12:00:00.000Z');
   }
 });
 
-test('runStructuredLane returns unsupported with a default retry when the source has no data', async () => {
+test('runStructuredLane returns unsupported when the source has no data', async () => {
   const selectionService = new FakeSelectionService();
   const runner = new EarningsV2RunnerService(selectionService as unknown as StructuredSelectionService);
   const result = await runner.runStructuredLane({
@@ -303,5 +296,4 @@ test('runStructuredLane returns unsupported with a default retry when the source
     assert.equal(result.selection.reason, 'source_no_data');
   }
   assert.equal(selectionService.snapshots.length, 0);
-  assert.equal(selectionService.selections[0].retryAt, '2025-02-01T00:30:00.000Z');
 });

@@ -22,14 +22,13 @@ import {
   type DigestChannel,
   type DigestChannelType,
   type DigestMarket,
-  type DigestSession,
   type DigestSubscriptionDto,
 } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 /**
  * Daily Brief 订阅配置卡（docs/prd-daily-brief.md · task4 后端 / 前端 UI）。
- * 仿 web-search-card 的 per-user 单卡 upsert 模式：开关 + 推送市场/时点 +
+ * 仿 web-search-card 的 per-user 单卡 upsert 模式：开关 + 推送市场 +
  * 渠道列表（可增删）。channels 敏感字段后端已 mask；编辑时留空 = keep-existing。
  */
 
@@ -39,30 +38,19 @@ const MARKET_OPTIONS: { value: DigestMarket; label: string }[] = [
   { value: 'HK', label: '港股' },
 ];
 
-const SESSION_OPTIONS: { value: DigestSession; label: string }[] = [
-  { value: 'PRE', label: '盘前' },
-  { value: 'POST', label: '盘后' },
-];
-
 const CHANNEL_OPTIONS: {
   value: DigestChannelType;
   label: string;
-  /** 飞书/钉钉/企微/Slack 留 backlog（PRD Phase B），首批只 Webhook + 飞书 + TG。 */
-  available: boolean;
 }[] = [
-  { value: 'TELEGRAM', label: 'Telegram', available: true },
-  { value: 'FEISHU', label: '飞书', available: true },
-  { value: 'WEBHOOK', label: '通用 Webhook', available: true },
-  { value: 'DINGTALK', label: '钉钉', available: false },
-  { value: 'WECOM', label: '企业微信', available: false },
-  { value: 'SLACK', label: 'Slack', available: false },
+  { value: 'TELEGRAM', label: 'Telegram' },
+  { value: 'FEISHU', label: '飞书' },
+  { value: 'WEBHOOK', label: '通用 Webhook' },
 ];
 
 interface FormState {
   enabled: boolean;
   earningsImmediateEnabled: boolean;
   markets: DigestMarket[];
-  sessions: DigestSession[];
   channels: DigestChannel[];
 }
 
@@ -70,7 +58,6 @@ const EMPTY_FORM: FormState = {
   enabled: false,
   earningsImmediateEnabled: false,
   markets: [],
-  sessions: ['PRE', 'POST'],
   channels: [],
 };
 
@@ -79,7 +66,6 @@ function fromDto(dto: DigestSubscriptionDto): FormState {
     enabled: dto.enabled,
     earningsImmediateEnabled: dto.earningsImmediateEnabled,
     markets: dto.markets as DigestMarket[],
-    sessions: dto.sessions as DigestSession[],
     // 后端返回的 channels 已 mask（secret/botToken = ••••末四位）；前端原样持有，
     // 保存时空值由后端 mergeSecrets 保留旧凭证。
     channels: dto.channels as DigestChannel[],
@@ -123,14 +109,6 @@ export function DigestSettingsForm() {
     });
   };
 
-  const toggleSession = (s: DigestSession): void => {
-    updateForm({
-      sessions: form.sessions.includes(s)
-        ? form.sessions.filter((x) => x !== s)
-        : [...form.sessions, s],
-    });
-  };
-
   const addChannel = (type: DigestChannelType): void => {
     const empty: DigestChannel = emptyChannel(type);
     updateForm({ channels: [...form.channels, empty] });
@@ -154,7 +132,6 @@ export function DigestSettingsForm() {
 
   const payload = () => ({
     markets: form.markets,
-    sessions: form.sessions,
     channels: form.channels,
     enabled: form.enabled,
     earningsImmediateEnabled: form.earningsImmediateEnabled,
@@ -216,7 +193,7 @@ export function DigestSettingsForm() {
         ) : (
           <>
             <p className="text-[12px] text-[var(--color-fg-2)] leading-[1.55] max-w-[560px]">
-              在每个市场开盘前 30 至 5 分钟、收盘后 5 至 30 分钟生成行情简报，
+              在每个市场开盘前 30 至 5 分钟、收盘后 5 至 30 分钟均生成行情简报，
               并投递到已配置渠道。没有可用 Provider 时仅发送数字摘要。
             </p>
 
@@ -246,23 +223,6 @@ export function DigestSettingsForm() {
                     label={opt.label}
                     checked={form.markets.includes(opt.value)}
                     onClick={() => toggleMarket(opt.value)}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* 推送时点 */}
-            <div>
-              <div className="mb-2 text-[11px] font-mono uppercase tracking-[0.04em] text-[var(--color-fg-2)]">
-                推送时点
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {SESSION_OPTIONS.map((opt) => (
-                  <ChipToggle
-                    key={opt.value}
-                    label={opt.label}
-                    checked={form.sessions.includes(opt.value)}
-                    onClick={() => toggleSession(opt.value)}
                   />
                 ))}
               </div>
@@ -364,15 +324,9 @@ function AddChannelMenu({ onAdd }: { onAdd: (t: DigestChannelType) => void }) {
         {CHANNEL_OPTIONS.map((opt) => (
           <DropdownMenuItem
             key={opt.value}
-            disabled={!opt.available}
             onSelect={() => onAdd(opt.value)}
           >
             {opt.label}
-            {!opt.available && (
-              <span className="ml-auto font-mono text-[10.5px] text-[var(--color-fg-3)]">
-                后续版本
-              </span>
-            )}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
@@ -425,7 +379,7 @@ function ChannelEditor({
           />
         </div>
       ) : (
-        // WEBHOOK / FEISHU / DINGTALK / WECOM / SLACK：incoming webhook URL + 可选/必填 secret
+        // WEBHOOK / FEISHU：incoming webhook URL + 可选/必填 secret
         <>
           <ChannelInput
             label="Webhook URL"
@@ -435,11 +389,7 @@ function ChannelEditor({
           />
           {('secret' in channel) && (
             <ChannelInput
-              label={
-                channel.type === 'DINGTALK' || channel.type === 'WEBHOOK'
-                  ? '签名 Secret'
-                  : '签名 Secret（可选）'
-              }
+              label={channel.type === 'WEBHOOK' ? '签名 Secret' : '签名 Secret（可选）'}
               value={channel.secret ?? ''}
               placeholder={masked ? '••••（留空保持不变）' : '签名密钥'}
               onChange={(v) => onChange({ secret: v } as Partial<DigestChannel>)}
@@ -487,11 +437,5 @@ function emptyChannel(type: DigestChannelType): DigestChannel {
       return { type: 'WEBHOOK', url: '', secret: '' };
     case 'FEISHU':
       return { type: 'FEISHU', url: '' };
-    case 'DINGTALK':
-      return { type: 'DINGTALK', url: '', secret: '' };
-    case 'WECOM':
-      return { type: 'WECOM', url: '' };
-    case 'SLACK':
-      return { type: 'SLACK', url: '' };
   }
 }

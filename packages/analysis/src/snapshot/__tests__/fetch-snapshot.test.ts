@@ -3,7 +3,7 @@ import type {
   FinancialsBundle,
   PriceBar,
   Quote,
-} from '../..';
+} from '@bourse/market-data';
 import { fetchSnapshot } from '../fetch-snapshot';
 import { defineMarketConfig, type MarketConfigMap } from '../market-config';
 

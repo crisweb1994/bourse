@@ -15,7 +15,9 @@ import { TelegramAdapter } from './channel/telegram.adapter';
 import { EarningsModule } from '../earnings/earnings.module';
 
 /**
- * Daily Brief 子系统（docs/prd-daily-brief.md）。
+ * Daily Brief 子系统（原专项 PRD "docs/prd-daily-brief.md" 已不在仓库与
+ * git 历史中，现状描述见 docs/improve.md「Daily Brief / 行情简报」节；
+ * 代码注释里的 "PRD DB.x" 编号沿用该 PRD 的章节号，仅作意图索引）。
  * task4 订阅 CRUD；task5 生成 BriefPayload；task6 投递（ChannelAdapter + 重试 +
  * DeliveryRecord）。task7 trigger/幂等待加。
  *

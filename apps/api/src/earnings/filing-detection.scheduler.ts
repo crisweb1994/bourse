@@ -47,6 +47,12 @@ export class FilingDetectionScheduler implements OnModuleInit, OnModuleDestroy {
       for (let index = 0; index < due.length; index += CONCURRENCY) {
         await Promise.all(due.slice(index, index + CONCURRENCY).map(({ stockId }) => this.scanOne(stockId)));
       }
+    } catch (error) {
+      // 与 digest-scheduler 同款纪律:单次 tick 失败只记日志,不成为
+      // unhandled rejection 杀掉进程,下个窗口自动补。
+      this.logger.error(
+        `财报检测 tick 失败: ${error instanceof Error ? error.message : String(error)}`,
+      );
     } finally {
       this.running = false;
     }
@@ -70,18 +76,12 @@ export class FilingDetectionScheduler implements OnModuleInit, OnModuleDestroy {
   private async scanOne(stockId: string): Promise<void> {
     const startedAt = Date.now();
     try {
-      const run = await this.generations.createDetected(stockId);
+      await this.generations.createDetected(stockId);
       await this.prisma.filingDetectionCursor.update({
         where: { stockId },
         data: {
-          lastCheckedAt: new Date(),
           nextCheckAt: new Date(Date.now() + DEFAULT_INTERVAL_MS),
           failureCount: 0,
-          lastError: null,
-          ...(run ? {
-            lastDiscoveredAt: run.createdAt,
-            lastSourceDocumentId: descriptorValue(run.sourceDescriptor, 'sourceDocumentId'),
-          } : {}),
         },
       });
       this.logger.debug(`检测 ${stockId} 完成，${Date.now() - startedAt}ms`);
@@ -94,10 +94,8 @@ export class FilingDetectionScheduler implements OnModuleInit, OnModuleDestroy {
       await this.prisma.filingDetectionCursor.update({
         where: { stockId },
         data: {
-          lastCheckedAt: new Date(),
           nextCheckAt: new Date(Date.now() + (normalNoFiling ? DEFAULT_INTERVAL_MS : backoff)),
           failureCount: normalNoFiling ? 0 : failureCount,
-          lastError: normalNoFiling ? null : String(error).slice(0, 500),
         },
       });
       if (!normalNoFiling) {
@@ -105,13 +103,6 @@ export class FilingDetectionScheduler implements OnModuleInit, OnModuleDestroy {
       }
     }
   }
-}
-
-function descriptorValue(value: unknown, key: string): string | undefined {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    && typeof (value as Record<string, unknown>)[key] === 'string'
-    ? (value as Record<string, string>)[key]
-    : undefined;
 }
 
 function extractErrorCode(error: unknown): string | undefined {

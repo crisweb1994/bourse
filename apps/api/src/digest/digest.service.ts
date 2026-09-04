@@ -1,15 +1,16 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { ChannelConfig } from '@bourse/analysis';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   DIGEST_MARKETS,
-  DIGEST_SESSIONS,
   type UpsertDigestSubscriptionDto,
 } from './digest.dto';
 
 /**
  * Daily Brief 订阅 CRUD（docs/prd-daily-brief.md）。
- * 单条 per-user（userId unique）。channels 存 ChannelConfig[] JSON。
+ * 单条 per-user（userId unique）。channels 存 ChannelConfig[] JSON
+ * （凭证明文，产品决策：不做静态加密）。
  * 完整简报不落库（v1.4）——这里只管订阅配置 + 投递记录（DeliveryRecord）。
  */
 @Injectable()
@@ -24,17 +25,12 @@ export class DigestSubscriptionService {
     return row ? this.toPublic(row) : null;
   }
 
-  /** PUT — 整体替换；markets/sessions 枚举校验 + channels zod 严验 +
+  /** PUT — 整体替换；markets 枚举校验 + channels zod 严验 +
    *  敏感字段空/mask 形态时保留旧值（前端拿不到真凭证）。 */
   async upsert(userId: string, dto: UpsertDigestSubscriptionDto) {
     for (const m of dto.markets) {
       if (!DIGEST_MARKETS.includes(m as (typeof DIGEST_MARKETS)[number])) {
         throw new BadRequestException(`invalid market: ${m}`);
-      }
-    }
-    for (const s of dto.sessions) {
-      if (!DIGEST_SESSIONS.includes(s as (typeof DIGEST_SESSIONS)[number])) {
-        throw new BadRequestException(`invalid session: ${s}`);
       }
     }
 
@@ -55,20 +51,19 @@ export class DigestSubscriptionService {
 
     const enabled = dto.enabled ?? true;
     const earningsImmediateEnabled = dto.earningsImmediateEnabled ?? false;
+    const channels = parsed.data;
     const row = await this.prisma.digestSubscription.upsert({
       where: { userId },
       create: {
         userId,
         markets: dto.markets,
-        sessions: dto.sessions,
-        channels: parsed.data,
+        channels,
         enabled,
         earningsImmediateEnabled,
       },
       update: {
         markets: dto.markets,
-        sessions: dto.sessions,
-        channels: parsed.data,
+        channels,
         enabled,
         earningsImmediateEnabled,
       },
@@ -76,15 +71,23 @@ export class DigestSubscriptionService {
     return this.toPublic(row);
   }
 
-  /** DELETE — 删订阅（idempotent，不存在不报错）。 */
+  /** DELETE — 删订阅(幂等:不存在视为已删,其余错误照常抛)。 */
   async remove(userId: string): Promise<void> {
-    await this.prisma.digestSubscription
-      .delete({ where: { userId } })
-      .catch(() => undefined);
+    try {
+      await this.prisma.digestSubscription.delete({ where: { userId } });
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
+        return;
+      }
+      throw err;
+    }
   }
 
   /**
-   * Internal — generator/adapter 读真 channels（含凭证，不 mask）。
+   * Internal — generator/adapter 读真 channels（凭证已解密，不 mask）。
    * 仅进程内调用，不暴露 HTTP。
    */
   async getInternal(userId: string) {
@@ -93,7 +96,6 @@ export class DigestSubscriptionService {
 
   private toPublic(row: {
     markets: string[];
-    sessions: string[];
     channels: unknown;
     enabled: boolean;
     earningsImmediateEnabled: boolean;
@@ -102,7 +104,6 @@ export class DigestSubscriptionService {
   }) {
     return {
       markets: row.markets,
-      sessions: row.sessions,
       channels: (row.channels as ChannelConfig[]).map(maskChannel),
       enabled: row.enabled,
       earningsImmediateEnabled: row.earningsImmediateEnabled,
@@ -124,12 +125,8 @@ function maskChannel(c: ChannelConfig): ChannelConfig {
       return { ...c, secret: maskSecret(c.secret) };
     case 'FEISHU':
       return c.secret ? { ...c, secret: maskSecret(c.secret) } : c;
-    case 'DINGTALK':
-      return { ...c, secret: maskSecret(c.secret) };
     case 'TELEGRAM':
       return { ...c, botToken: maskSecret(c.botToken) };
-    default:
-      return c; // WECOM / SLACK 无敏感字段
   }
 }
 

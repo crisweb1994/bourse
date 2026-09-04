@@ -695,7 +695,6 @@ async function fetchEastmoney(
 interface ConsensusEpsFetchOk {
   ok: true;
   bundle: {
-    avgEps: number;
     analystCount: number;
     asOf: string;
     forecasts: Array<{ year: number; value: number }>;
@@ -773,11 +772,9 @@ async function fetchEastmoneyConsensusEps(
       return { ok: false, code: 'NO_DATA', message: 'no parseable forecast rows' };
     }
     forecasts.sort((a, b) => a.year - b.year);
-    const avgEps = forecasts[0].value; // nearest forward year is the headline
     return {
       ok: true,
       bundle: {
-        avgEps,
         analystCount,
         asOf: retrievedAt,
         forecasts,

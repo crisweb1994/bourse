@@ -171,10 +171,12 @@ Analysis V2 的报告模型收敛为五个固定模块：公司质量、行业�
 
 ## Daily Brief / 行情简报（定时推送）
 
-> 专项 PRD 已归 git 历史（v1.5 定稿）。
+> 专项 PRD（prd-daily-brief.md v1.5）实际未保留在仓库或 git 历史中，
+> 无法溯源；本节为现状描述的权威出处。代码注释中的 "PRD DB.x" 编号
+> 沿用该 PRD 章节号，仅作意图索引。
 > 承接场景：被动收消息 / 关键事件告警 / 自动复研建议 / 自选股聚合面板。
 
-- **价值**：用户不打开 App 也能收到盘前 / 盘后的两段式行情简报（大盘指数 + 自选股，AI 解读 + 异动深入），主动推送到 IM（飞书 / Telegram / Slack / 钉钉 / 企微 / 通用 Webhook）。是 Bourse 第一根「时间驱动 + 主动触达」的能力。
+- **价值**：用户不打开 App 也能收到盘前 / 盘后的两段式行情简报（大盘指数 + 自选股，AI 解读 + 异动深入），主动推送到 IM（通用 Webhook / 飞书 / Telegram；钉钉 / 企微 / Slack 未实现，契约中已移除）。是 Bourse 第一根「时间驱动 + 主动触达」的能力。
 - **已定档（v1.5）**：模式 C heartbeat 调度（`market-hours.ts` 判窗口，DST 解耦）；AI 标配走用户 `AiProviderSetting`（Utility，未配降级纯数字）；完整简报只在 IM（不新增 App 页、不落库）；单向推送 + 按钮跳转（无双向回调）；ChannelAdapter 抽象；异动 + 大盘优先截断；实时推送不勿扰。
 - **Phase A 范围**：heartbeat 调度 + 指数数据层（首要风险：`^GSPC` 可拉性验证）+ Market Overview / 自选 compute+AI + 通用 Webhook / 飞书 / Telegram adapter + DigestSubscription / DeliveryRecord。
 - **触发实现**：进 Phase A 前先实测指数 `getQuote`，证伪则 DB.4 回炉。

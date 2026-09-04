@@ -1,20 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  buildWebSearchExecutorFromSetting,
-  computeContentHash,
-} from '@bourse/analysis';
+import { computeContentHash } from '@bourse/market-data';
+import { buildWebSearchExecutorFromSetting } from '@bourse/analysis';
 import { WebSearchSettingsService } from '../web-search-settings/web-search-settings.service';
-import type {
-  ResearchGatewayPort,
-  ResearchGatewayResult,
-  ChatSourceSnapshot,
-} from './types';
+import type { ResearchGatewayResult, ChatSourceSnapshot } from './types';
 
 /** Shared Research Gateway adapter. Chat receives normalized sources only;
  * it never receives an arbitrary web tool or provider-owned search handle. */
 @Injectable()
-export class ResearchGatewayService implements ResearchGatewayPort {
+export class ResearchGatewayService {
   private readonly logger = new Logger(ResearchGatewayService.name);
 
   constructor(
@@ -32,7 +26,7 @@ export class ResearchGatewayService implements ResearchGatewayPort {
     const accessedAt = new Date().toISOString();
     const setting = await this.settings.getInternalForRuntime(input.userId).catch(() => null);
     const providerType = setting?.providerType?.toLowerCase() as 'tavily' | 'searxng' | undefined;
-    const envProvider = this.config.get<string>('RESEARCH_GATEWAY_PROVIDER')?.toLowerCase();
+    const envProvider = this.config.get<string>('WEB_SEARCH_PROVIDER')?.toLowerCase();
     const selected = providerType ?? envProvider ?? (this.config.get<string>('TAVILY_API_KEY') ? 'tavily' : 'searxng');
     const apiKey = setting?.apiKey ?? this.config.get<string>('TAVILY_API_KEY');
     const baseUrl = setting?.baseUrl ?? this.config.get<string>('SEARXNG_BASE_URL');

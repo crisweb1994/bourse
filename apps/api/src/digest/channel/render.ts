@@ -1,4 +1,4 @@
-import type { BriefPayload } from '@bourse/analysis';
+import { BriefPayload } from '../brief-payload';
 
 /**
  * BriefPayload → 人类可读 markdown（PRD DB.6 / §0.5 卡片样例）。

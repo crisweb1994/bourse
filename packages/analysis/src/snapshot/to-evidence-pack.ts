@@ -46,6 +46,10 @@ import type { StockSnapshot } from './types';
 import { buildResearchCoverage } from './research-coverage';
 import { derivePriceSeries } from '../compute/chart-series';
 
+
+/** Gating private/licensed fact fields (KISS C4-6). */
+const PRIVATE_FACT_FIELDS: readonly string[] = ['consensusEps'];
+
 const DEFAULT_TIER: SourceTier = 'B';
 
 export interface ToEvidencePackOptions {
@@ -286,10 +290,29 @@ export function snapshotToEvidencePack(
       missing.push({ field: 'northboundFlow', reason: 'no_data: source returned holdings, not net flow' });
     }
   }
+  // KISS C4-6: private-fact degradation producer. Gating private fields are
+  // single-sourced here; keep in sync with dimensions/configs'
+  // requiresPrivateData (VALUATION_SCENARIOS declares consensusEps). When a
+  // private field is not available, dimensions requiring it skip honestly
+  // instead of running on insufficient facts.
+  const missingPrivateFields = PRIVATE_FACT_FIELDS.filter(
+    (field) => !available.has(field),
+  );
   const availability: EvidencePackDataAvailability = {
     complete: [...available],
     missing,
     fallbacks: [],
+    degradedSource: missingPrivateFields.length > 0 ? 'WEB_SEARCH_FALLBACK' : 'NONE',
+    ...(missingPrivateFields.length > 0
+      ? {
+          missingPrivateFields,
+          fallbackReason: {
+            kind: 'OTHER',
+            failedTools: [...missingPrivateFields],
+            message: `私有/授权数据源未提供 ${missingPrivateFields.join('、')}，依赖该数据的模块将因数据缺失跳过`,
+          },
+        }
+      : {}),
   };
   const researchCoverage = buildResearchCoverage(
     new Set(snap.dataAvailability.available),

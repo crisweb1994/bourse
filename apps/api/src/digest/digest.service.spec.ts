@@ -20,22 +20,9 @@ describe('DigestSubscriptionService · validation', () => {
       () =>
         svc.upsert('u1', {
           markets: ['XX'],
-          sessions: ['PRE'],
           channels: [FEISHU('s1')],
         } as any),
       /invalid market/,
-    );
-  });
-
-  it('rejects invalid session', async () => {
-    await assert.rejects(
-      () =>
-        svc.upsert('u1', {
-          markets: ['US'],
-          sessions: ['XX'],
-          channels: [FEISHU('s1')],
-        } as any),
-      /invalid session/,
     );
   });
 
@@ -44,7 +31,6 @@ describe('DigestSubscriptionService · validation', () => {
       () =>
         svc.upsert('u1', {
           markets: ['US'],
-          sessions: ['PRE'],
           channels: [{ type: 'FEISHU' }],
         } as any),
       /invalid channels/,
@@ -56,7 +42,6 @@ describe('DigestSubscriptionService · validation', () => {
       () =>
         svc.upsert('u1', {
           markets: ['US'],
-          sessions: ['PRE'],
           channels: [{ type: 'TELEGRAM', chatId: '1' }],
         } as any),
       /invalid channels/,
@@ -68,7 +53,6 @@ describe('DigestSubscriptionService · keep-existing secrets', () => {
   const baseRow = {
     userId: 'u1',
     markets: ['US'],
-    sessions: ['PRE'],
     enabled: true,
     earningsImmediateEnabled: false,
     createdAt: new Date(),
@@ -92,7 +76,6 @@ describe('DigestSubscriptionService · keep-existing secrets', () => {
     const svc = new DigestSubscriptionService(stub as any);
     await svc.upsert('u1', {
       markets: ['US'],
-      sessions: ['PRE'],
       channels: [FEISHU('••••5678')], // mask 形态 → 应保留旧值
     } as any);
     assert.equal(captured.channels[0].secret, 'REAL-SECRET-5678');
@@ -112,7 +95,6 @@ describe('DigestSubscriptionService · keep-existing secrets', () => {
     const svc = new DigestSubscriptionService(stub as any);
     await svc.upsert('u1', {
       markets: ['US'],
-      sessions: ['PRE'],
       channels: [FEISHU('NEW-SECRET-9999')],
     } as any);
     assert.equal(captured.channels[0].secret, 'NEW-SECRET-9999');
@@ -132,7 +114,6 @@ describe('DigestSubscriptionService · keep-existing secrets', () => {
     const svc = new DigestSubscriptionService(stub as any);
     await svc.upsert('u1', {
       markets: ['US'],
-      sessions: ['POST'],
       channels: [FEISHU('SECRET')],
       earningsImmediateEnabled: true,
     } as any);
@@ -141,19 +122,17 @@ describe('DigestSubscriptionService · keep-existing secrets', () => {
 });
 
 describe('DigestSubscriptionService · masking on get', () => {
-  it('masks secret/botToken in get response; leaves WECOM untouched', async () => {
+  it('masks secret/botToken in get response', async () => {
     const stub = {
       digestSubscription: {
         findUnique: async () => ({
           userId: 'u1',
           markets: ['US'],
-          sessions: ['PRE'],
           enabled: true,
           earningsImmediateEnabled: true,
           channels: [
             FEISHU('abcdefgh5678'),
             { type: 'TELEGRAM', botToken: '1234567890:ABC', chatId: '99' },
-            { type: 'WECOM', url: 'https://y' },
           ],
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -167,7 +146,6 @@ describe('DigestSubscriptionService · masking on get', () => {
     const ch = out!.channels as any[];
     assert.equal(ch[0].secret, '••••5678');
     assert.equal(ch[1].botToken, '••••:ABC');
-    assert.equal(ch[2].url, 'https://y'); // WECOM 无敏感字段，不变
     assert.equal(out!.earningsImmediateEnabled, true);
   });
 

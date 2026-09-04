@@ -1,9 +1,12 @@
 export * from './chat';
-export * from './build-metadata';
 export * from './earnings';
 export * from './charts';
 export * from './screening';
 export * from './homepage';
+export * from './web-search-settings';
+export * from './ai-provider-settings';
+export * from './analysis-sse';
+export * from './channel-config';
 
 // ===== Enums =====
 
@@ -155,6 +158,13 @@ export const Market = {
 
 export type Market = (typeof Market)[keyof typeof Market];
 
+const MARKET_SET = new Set<string>(Object.values(Market));
+
+/** Strict (case-sensitive) market guard; callers normalize before checking. */
+export function isMarket(value: string): value is Market {
+  return MARKET_SET.has(value);
+}
+
 export const DigestSession = {
   PRE: 'PRE',
   POST: 'POST',
@@ -175,10 +185,7 @@ export type DeliveryStatus =
 export const ChannelType = {
   WEBHOOK: 'WEBHOOK',
   FEISHU: 'FEISHU',
-  DINGTALK: 'DINGTALK',
-  WECOM: 'WECOM',
   TELEGRAM: 'TELEGRAM',
-  SLACK: 'SLACK',
 } as const;
 
 export type ChannelType = (typeof ChannelType)[keyof typeof ChannelType];

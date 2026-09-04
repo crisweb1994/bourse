@@ -3,7 +3,6 @@ import {
   createEastmoneyHkV2FinancialsConnector,
   createEastmoneyV2FinancialsConnector,
   createSecEdgarXbrlV2FinancialsConnector,
-  type FetchLike,
   type FinancialsBundleV2,
   type ProviderFinancialsV2Port,
 } from '@bourse/market-data';
@@ -13,6 +12,7 @@ import {
   type StructuredEarningsSelection,
 } from '@bourse/analysis';
 import { StructuredSelectionService } from './structured-selection.service';
+import { SEC_USER_AGENT_FALLBACK } from '../connectors/connectors.module';
 
 /**
  * Earnings v2 双通道 runner 核心（docs/structured-first-earnings-architecture.md §11）。
@@ -379,33 +379,20 @@ function toExpectedPeriodType(value: string): ExpectedEarningsPeriodType {
     : value === 'Q4' ? 'FY' : 'FY';
 }
 
-export interface V2ConnectorOptions {
-  /** SEC User-Agent；默认使用项目确认的 bourance + bourance.gmail.com。 */
-  userAgent?: string;
-  fetchLike?: FetchLike;
-}
-
-/** 市场 → v2 financials connector 工厂（US/CN/HK）。 */
-export function buildV2FinancialsConnector(
-  market: string,
-  options: V2ConnectorOptions = {},
-): ProviderFinancialsV2Port | null {
-  const userAgent = options.userAgent ?? 'bourance + bourance.gmail.com';
+/** 市场 → v2 financials connector 工厂（US/CN/HK）。
+ *  SEC UA 与 connectors.module 单源(同一 EDGAR 服务一个身份)。 */
+export function buildV2FinancialsConnector(market: string): ProviderFinancialsV2Port | null {
   if (market === 'US') {
     return createSecEdgarXbrlV2FinancialsConnector({
-      userAgent,
-      ...(options.fetchLike ? { fetchLike: options.fetchLike } : {}),
+      userAgent:
+        process.env.RESEARCH_CORE_USER_AGENT?.trim() || SEC_USER_AGENT_FALLBACK,
     });
   }
   if (market === 'CN') {
-    return createEastmoneyV2FinancialsConnector({
-      ...(options.fetchLike ? { fetchLike: options.fetchLike } : {}),
-    });
+    return createEastmoneyV2FinancialsConnector({});
   }
   if (market === 'HK') {
-    return createEastmoneyHkV2FinancialsConnector({
-      ...(options.fetchLike ? { fetchLike: options.fetchLike } : {}),
-    });
+    return createEastmoneyHkV2FinancialsConnector({});
   }
   return null;
 }
@@ -449,13 +436,6 @@ export class EarningsV2RunnerService {
         'source_no_data',
         result.warnings.map((warning) => warning.message),
       );
-      await this.selectionService.saveSelection({
-        eventId: input.eventId,
-        selection,
-        snapshotIds: [],
-        knowledgeCutoffAt: input.knowledgeCutoffAt,
-        retryAt: defaultRetryAt(input.now, input.stock.market),
-      });
       return { selection };
     }
 
@@ -470,13 +450,6 @@ export class EarningsV2RunnerService {
       eventPublishedAt: input.eventPublishedAt,
       knowledgeCutoffAt: input.knowledgeCutoffAt,
       now: input.now,
-    });
-    await this.selectionService.saveSelection({
-      eventId: input.eventId,
-      selection,
-      snapshotIds: [snapshot.id],
-      knowledgeCutoffAt: input.knowledgeCutoffAt,
-      retryAt: selection.status === 'pending' ? selection.retryAt : undefined,
     });
     return { selection, snapshotId: snapshot.id };
   }
@@ -496,12 +469,4 @@ function unsupportedSelection(
       warnings,
     },
   };
-}
-
-function defaultRetryAt(now: string | undefined, market: string): string | undefined {
-  if (!now) return undefined;
-  const baseMs = Date.parse(now);
-  if (Number.isNaN(baseMs)) return undefined;
-  const intervalMs = market === 'US' ? 12 * 60 * 60 * 1000 : 30 * 60 * 1000;
-  return new Date(baseMs + intervalMs).toISOString();
 }

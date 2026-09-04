@@ -108,6 +108,9 @@ function parseRow(row: unknown): PriceBar[] {
 }
 
 function exchangePrefix(symbol: string): 'sh' | 'sz' | 'bj' | null {
+  // BJ 前缀(43/83/87/88/92,与 cn-common.inferExchange 同表)必须先于
+  // 9→sh 判定——否则 920xxx(北交所新代码)会被错误路由到沪市 URL。
+  if (/^(43|83|87|88|92)\d{4}$/.test(symbol)) return 'bj';
   if (/^(5|6|9)/.test(symbol)) return 'sh';
   if (/^(0|1|2|3)/.test(symbol)) return 'sz';
   if (/^(4|8)/.test(symbol)) return 'bj';

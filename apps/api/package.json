@@ -13,7 +13,6 @@
     "db:push": "node scripts/prisma-root-env.mjs db push"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.95.0",
     "@bourse/analysis": "workspace:*",
     "@bourse/market-data": "workspace:*",
     "@bourse/shared-types": "workspace:*",

@@ -1,9 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import type { AnalysisChatContext, AnalysisChatPort, AnalysisChatSummary } from '../chat/types';
+import type { AnalysisChatContext, AnalysisChatSummary } from '../chat/types';
 
 @Injectable()
-export class AnalysisChatService implements AnalysisChatPort {
+export class AnalysisChatService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getAnalysisContext(input: {
@@ -39,16 +39,12 @@ export class AnalysisChatService implements AnalysisChatPort {
         ? {
             snapshot: {
               id: analysis.evidenceSnapshot.id,
-              schemaVersion: analysis.evidenceSnapshot.schemaVersion,
-              evidencePackVersion: analysis.evidenceSnapshot.evidencePackVersion,
               capturedAt: analysis.evidenceSnapshot.capturedAt.toISOString(),
               dataAsOf: analysis.evidenceSnapshot.dataAsOf,
-              sourceMode: analysis.evidenceSnapshot.sourceMode,
               degraded: analysis.evidenceSnapshot.degraded,
               missingFields: analysis.evidenceSnapshot.missingFields,
               payload: analysis.evidenceSnapshot.payload as any,
               sourceSnapshots: analysis.evidenceSnapshot.sourceSnapshots,
-              contentHash: analysis.evidenceSnapshot.contentHash,
             },
           }
         : {}),

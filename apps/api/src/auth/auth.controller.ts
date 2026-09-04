@@ -10,7 +10,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
-import { AuthService } from './auth.service';
+import { SESSION_TTL_MS, AuthService } from './auth.service';
 import { JwtCookieGuard } from './jwt-cookie.guard';
 import { OptionalGithubAuthGuard } from './optional-github.guard';
 import { CsrfGuard } from './csrf.guard';
@@ -51,7 +51,7 @@ export class AuthController {
       httpOnly: true,
       secure: isProduction,
       sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      maxAge: SESSION_TTL_MS,
       path: '/',
       domain: cookieDomain,
     });
@@ -60,7 +60,7 @@ export class AuthController {
       httpOnly: false,
       secure: isProduction,
       sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: SESSION_TTL_MS,
       path: '/',
       domain: cookieDomain,
     });

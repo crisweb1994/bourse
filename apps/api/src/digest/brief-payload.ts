@@ -1,74 +1,12 @@
 import { z } from 'zod';
-import {
-  ChannelType as SharedChannelType,
-  DigestSession as SharedDigestSession,
-  Market as SharedMarket,
-} from '@bourse/shared-types';
+import { Market as SharedMarket, DigestSession as SharedDigestSession } from '@bourse/shared-types';
 
 /**
- * Daily Brief 契约（docs/prd-daily-brief.md v1.5）。
- *
- * Schema-first（不变式 #4）。本文件是 digest 子系统的全部 zod 契约：
- *  - ChannelConfig：DigestSubscription.channels 的 JSON 形状（订阅凭证）
- *  - BriefPayload：生成层 → ChannelAdapter 的运行时内存结构（v1.4 不落库）
- *
- * 放在 analysis/contracts 是因为 zod 依赖在 analysis 包（api 不直接依赖 zod，
- * pnpm strict）。指数数据层（fetchIndexQuote 等）也在 analysis 包，契约同包一致。
- * api digest module 从 @bourse/analysis 消费这些类型。
- *
- * Market / DigestSession / ChannelType 通过 z.nativeEnum 复用 @bourse/shared-types
- * 的 const-object（与 enums.ts 的 AnalysisMode/Signal 同款桥接），单一来源。
+ * Daily Brief 契约(KISS Codex #5:自 @bourse/analysis 迁入 digest 域——
+ * 这些是 API 内部生成→投递的运行时结构,仅 apps/api/src/digest 与
+ * earnings-notice 消费,不是分析包契约)。ChannelConfig 的单源在
+ * @bourse/shared-types/channel-config。
  */
-
-// ============================================================================
-// 渠道配置（订阅凭证，存 DigestSubscription.channels JSON）
-// ============================================================================
-
-export const ChannelType = z.nativeEnum(SharedChannelType);
-export type ChannelType = z.infer<typeof ChannelType>;
-
-/**
- * 渠道配置 discriminated union。各平台字段不同：
- *  - incoming webhook 类（飞书/钉钉/企微/Slack）：url [+ secret]
- *  - Telegram：Bot Token + Chat ID（非 webhook）
- *  - 通用 Webhook：url + HMAC secret
- * 凭证明文落库（同 AiProviderSetting.apiKey 策略，加密属 Phase 2）。
- */
-export const ChannelConfig = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('WEBHOOK'),
-    url: z.string().url(),
-    secret: z.string().min(1),
-  }),
-  z.object({
-    type: z.literal('FEISHU'),
-    url: z.string().url(),
-    secret: z.string().optional(), // 飞书自定义机器人签名校验可选
-  }),
-  z.object({
-    type: z.literal('DINGTALK'),
-    url: z.string().url(),
-    secret: z.string().min(1), // 钉钉必填签名（timestamp + secret）
-  }),
-  z.object({
-    type: z.literal('WECOM'),
-    url: z.string().url(),
-  }),
-  z.object({
-    type: z.literal('TELEGRAM'),
-    botToken: z.string().min(1),
-    chatId: z.string().min(1),
-  }),
-  z.object({
-    type: z.literal('SLACK'),
-    url: z.string().url(),
-  }),
-]);
-export type ChannelConfig = z.infer<typeof ChannelConfig>;
-
-// ============================================================================
-// BriefPayload（两段式，发给 ChannelAdapter）
-// ============================================================================
 
 export const IndexQuoteBrief = z.object({
   symbol: z.string(),

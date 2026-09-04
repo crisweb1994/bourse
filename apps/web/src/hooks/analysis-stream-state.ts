@@ -1,6 +1,14 @@
 import { isSectionType } from '@bourse/shared-types';
 import type { AnalysisStatus, SectionStatus, SectionType } from '@bourse/shared-types';
 
+// SSE wire contract lives in @bourse/shared-types (KISS C3-1); local aliases
+// keep existing consumers importing from this module.
+export type {
+  AnalysisSsePayloadMap as AnalysisStreamEventPayloadMap,
+  AnalysisSseEventName as AnalysisStreamEventName,
+} from '@bourse/shared-types';
+export { isAnalysisSseEventName as isAnalysisStreamEventName } from '@bourse/shared-types';
+
 export interface AnalysisCitation {
   title: string;
   url: string;
@@ -29,65 +37,6 @@ export interface SectionData {
   errorMessage?: string | null;
   skipReason?: string;
   skipMissingFields?: string[];
-}
-
-export interface AnalysisStreamEventPayloadMap {
-  evidence_pack_ready: { pack: unknown };
-  section_skipped: {
-    sectionType: SectionType;
-    reason: string;
-    missingFields: string[];
-  };
-  section_start: {
-    sectionType: SectionType;
-    sectionId: string;
-    order: number;
-  };
-  report_chunk: { text: string; sectionType?: SectionType };
-  report_complete: { text: string; sectionType: SectionType };
-  citation: {
-    title: string;
-    url: string;
-    claim: string;
-    sectionType?: SectionType;
-    searchAdapter?: string;
-    retrievedAt?: string;
-  };
-  structured_data: { json: unknown; sectionType: SectionType };
-  section_complete: {
-    sectionType: SectionType;
-    status: SectionStatus;
-    error?: string | null;
-  };
-  summary_chunk: { text: string };
-  summary_complete: { summaryJson: unknown };
-  cost_update: { totalTokens: number; toolCalls: number };
-  done: { analysisId: string; status?: AnalysisStatus };
-  error: { message: string; failedSections?: SectionType[]; sectionType?: SectionType };
-}
-
-export type AnalysisStreamEventName = keyof AnalysisStreamEventPayloadMap;
-
-const ANALYSIS_STREAM_EVENT_NAMES = [
-  'evidence_pack_ready',
-  'section_skipped',
-  'section_start',
-  'report_chunk',
-  'report_complete',
-  'citation',
-  'structured_data',
-  'section_complete',
-  'summary_chunk',
-  'summary_complete',
-  'cost_update',
-  'done',
-  'error',
-] as const satisfies readonly AnalysisStreamEventName[];
-
-const ANALYSIS_STREAM_EVENT_NAME_SET = new Set<string>(ANALYSIS_STREAM_EVENT_NAMES);
-
-export function isAnalysisStreamEventName(value: string): value is AnalysisStreamEventName {
-  return ANALYSIS_STREAM_EVENT_NAME_SET.has(value);
 }
 
 export interface DegradedInfo {

@@ -1,11 +1,11 @@
 import {
   ChatSsePayloadSchema,
   Market,
-  DigestSession,
   ChannelType,
   type ChartEvidenceResponse,
   type StockHistoryResponse,
   type StockHistoryBatchResponse,
+  ChannelConfig,
 } from '@bourse/shared-types';
 import type {
   AnalysisMode,
@@ -164,11 +164,8 @@ export interface ChatMessageDto {
   id: string;
   generationId: string | null;
   role: 'USER' | 'ASSISTANT' | 'SYSTEM_NOTICE';
-  kind: string;
-  status: string;
   content: string;
   sequence: number;
-  citationRefs?: string[] | null;
   createdAt: string;
 }
 
@@ -185,7 +182,6 @@ export interface ChatGenerationDto {
   openResearchSnapshot?: {
     id: string;
     dataAsOf: string;
-    gatewayVersion: string;
     sources: any[];
   } | null;
 }
@@ -525,7 +521,6 @@ export interface AnalysisDto {
   userId: string;
   stockId: string;
   symbol: string;
-  market: Market;
   mode: AnalysisMode;
   focusWindow: FocusWindow;
   question: string | null;
@@ -700,60 +695,27 @@ export async function retryAnalysis(analysisId: string): Promise<{ ok: boolean }
   });
 }
 
-export type ProviderTypeStr = 'ANTHROPIC' | 'OPENAI_COMPATIBLE';
+// Settings contracts live in @bourse/shared-types (KISS review B1-7);
+// re-exported here under the names existing consumers import.
+import type {
+  AiModelOptionDto,
+  AiProviderSettingDetailDto,
+  AiProviderSettingInput,
+  AiProviderSettingSummaryDto,
+  AiProviderTestResult,
+  BuiltinProviderTemplate,
+  ProviderTypeStr,
+} from '@bourse/shared-types';
 
-export interface AiProviderSettingDto {
-  id: string;
-  label: string;
-  providerType: ProviderTypeStr;
-  enabledModels: string[];
-  primaryModel: string | null;
-  utilityModel: string | null;
-  isDefault: boolean;
-  enabled: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface AiProviderSettingDetailDto extends AiProviderSettingDto {
-  baseUrl: string;
-  hasApiKey: boolean;
-  apiKeyMasked: string | null;
-}
-
-export interface BuiltinProviderTemplate {
-  id: string;
-  label: string;
-  providerType: ProviderTypeStr;
-  baseUrl: string;
-  defaultModels: string[];
-  iconColor: string;
-  iconText: string;
-}
-
-export interface AiModelOptionDto {
-  id: string;
-  name: string;
-}
-
-export interface TestConnectionResult {
-  ok: boolean;
-  latencyMs: number;
-  error?: string;
-}
-
-export interface AiProviderSettingInput {
-  label: string;
-  providerType: ProviderTypeStr;
-  baseUrl?: string;
-  apiKey?: string;
-  clearApiKey?: boolean;
-  enabledModels?: string[];
-  primaryModel?: string;
-  utilityModel?: string;
-  isDefault?: boolean;
-  enabled?: boolean;
-}
+export type {
+  AiModelOptionDto,
+  AiProviderSettingDetailDto,
+  AiProviderSettingInput,
+  BuiltinProviderTemplate,
+  ProviderTypeStr,
+};
+export type AiProviderSettingDto = AiProviderSettingSummaryDto;
+export type TestConnectionResult = AiProviderTestResult;
 
 export function listAiProviderSettings(): Promise<AiProviderSettingDto[]> {
   return fetchApi('/api/settings/providers');
@@ -824,35 +786,22 @@ export function testProviderConnection(input: {
   });
 }
 
-export type WebSearchProviderType = 'TAVILY' | 'SEARXNG';
-export type WebSearchPrimaryMode = 'NATIVE_FIRST' | 'CUSTOM_ONLY';
+// Web-search settings contract lives in @bourse/shared-types (KISS review B1-4).
+import type {
+  UpsertWebSearchSettingPayload,
+  WebSearchPrimaryMode,
+  WebSearchProviderType,
+  WebSearchSettingDto,
+  WebSearchTestResult,
+} from '@bourse/shared-types';
 
-export interface WebSearchSettingDto {
-  providerType: WebSearchProviderType;
-  apiKeyMasked: string | null;
-  baseUrl: string | null;
-  primaryMode: WebSearchPrimaryMode;
-  timeoutMs: number | null;
-  cacheTtlMs: number | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface UpsertWebSearchSettingPayload {
-  providerType: WebSearchProviderType;
-  apiKey?: string;
-  baseUrl?: string;
-  primaryMode?: WebSearchPrimaryMode;
-  timeoutMs?: number;
-  cacheTtlMs?: number;
-}
-
-export interface WebSearchTestResult {
-  ok: boolean;
-  latencyMs: number;
-  sample?: { title: string; url: string };
-  error?: string;
-}
+export type {
+  UpsertWebSearchSettingPayload,
+  WebSearchPrimaryMode,
+  WebSearchProviderType,
+  WebSearchSettingDto,
+  WebSearchTestResult,
+};
 
 export function getWebSearchSetting(): Promise<WebSearchSettingDto | null> {
   return fetchApi('/api/settings/web-search');
@@ -892,23 +841,16 @@ export function testWebSearchSetting(
 // keep-existing（后端 mergeSecrets 处理）。
 // ============================================================================
 
-// Market / DigestSession / ChannelType 从 @bourse/shared-types 复用（与 Prisma
+// Market / ChannelType 从 @bourse/shared-types 复用（与 Prisma
 // enum 同源），单一来源。别名保留以减少 digest-card 等消费方的 import 改动。
 export type DigestMarket = Market;
-export type { DigestSession };
 export type DigestChannelType = ChannelType;
 
-export type DigestChannel =
-  | { type: 'WEBHOOK'; url: string; secret: string }
-  | { type: 'FEISHU'; url: string; secret?: string }
-  | { type: 'DINGTALK'; url: string; secret: string }
-  | { type: 'WECOM'; url: string }
-  | { type: 'TELEGRAM'; botToken: string; chatId: string }
-  | { type: 'SLACK'; url: string };
+// 渠道契约单源于 shared-types 的 zod union(T2-2);结构与原手写联合逐字段一致。
+export type DigestChannel = ChannelConfig;
 
 export interface DigestSubscriptionDto {
   markets: DigestMarket[];
-  sessions: DigestSession[];
   /** 后端 mask 过的 channels（secret/botToken 显示 •••• 末四位）。 */
   channels: DigestChannel[];
   enabled: boolean;
@@ -919,7 +861,6 @@ export interface DigestSubscriptionDto {
 
 export interface UpsertDigestSubscriptionPayload {
   markets: DigestMarket[];
-  sessions: DigestSession[];
   /** 真凭证（新建）或 mask 形态（编辑 keep-existing）。 */
   channels: DigestChannel[];
   enabled?: boolean;

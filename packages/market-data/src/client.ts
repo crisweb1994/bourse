@@ -18,7 +18,6 @@ import { createHkexDerivedFinancialsConnector } from './connectors/financials/hk
 import { createSecEdgarXbrlFinancialsConnector } from './connectors/financials/sec-edgar-xbrl';
 import { createOfficialMacroConnector } from './connectors/macro/official';
 import { createNbsMacroSourcePlugin } from './connectors/macro/nbs';
-import { createOfficialMacroFileSourcePlugin, type OfficialMacroFileSourceConfig } from './connectors/macro/official-file';
 import { createTushareSourcePlugin, type TushareSourceConfig } from './connectors/tushare';
 import { createHkexDerivedCorporateActionsConnector, createHkexDerivedMarketEventsConnector, createSfcShortPositionConnector } from './connectors/hk';
 import { createMassiveSourcePlugin, type MassiveSourceConfig } from './connectors/massive';
@@ -56,7 +55,7 @@ import type { MarketCode } from './contracts/instrument';
 import type { CachePort } from './ports/cache';
 import type { SourceRequestContext } from './ports/request-context';
 import { MemoryCache } from './cache/memory-cache';
-import { createBuiltInSourcePlugins } from './sources/built-in';
+import { createBuiltInSources } from './sources/built-in';
 import { unavailable } from './sources/provider-port';
 import { InMemorySourceHealth } from './sources/health';
 import { InMemoryRateLimiter } from './sources/rate-limit';
@@ -91,7 +90,6 @@ export interface CreateMarketDataOptions {
   eodhdApiKey?: string;
   tushare?: TushareSourceConfig;
   massive?: MassiveSourceConfig;
-  officialMacroFiles?: readonly OfficialMacroFileSourceConfig[];
   sfcShortPositionCsvUrl?: string;
   cache?: CachePort;
   policies?: readonly RoutingPolicy[];
@@ -135,11 +133,6 @@ export class ResearchMarketDataClient {
         ? port.getQuote({ instrumentId }, connectorContext(requestContext, ctx))
         : unavailable(source.manifest.id, 'Source does not implement QuotePort.');
     }, undefined, undefined, constraints);
-  }
-
-  /** Results always have the same length and order as the input. */
-  getQuotes(inputs: readonly QuoteInput[], ctx: ConnectorRunContext = {}): Promise<ResearchResultV2<Quote>[]> {
-    return Promise.all(inputs.map((input) => this.getQuote(input.instrumentId, ctx)));
   }
 
   getHistory(input: HistoryInput, ctx: ConnectorRunContext = {}, constraints?: RouteConstraints): Promise<ResearchResultV2<PriceBar[]>> {
@@ -390,13 +383,13 @@ export class ResearchMarketDataClient {
 
 export function createMarketData(options: CreateMarketDataOptions = {}): ResearchMarketDataClient {
   const registry = new SourceRegistry();
-  for (const plugin of createBuiltInSourcePlugins(createDefaultProviderPorts(options))) {
-    registry.registerPlugin(plugin, {});
+  // KISS Codex #1: built-in sources register as instances directly — the
+  // instance→plugin→instance round-trip was ceremony. registerPlugin stays
+  // for config-driven external plugins (tushare/massive/nbs).
+  for (const instance of createBuiltInSources(createDefaultProviderPorts(options))) {
+    registry.register(instance);
   }
   registry.registerPlugin(createNbsMacroSourcePlugin(), {});
-  for (const source of options.officialMacroFiles ?? []) {
-    registry.registerPlugin(createOfficialMacroFileSourcePlugin(source), { enabled: source.enabled });
-  }
   if (options.tushare?.token.trim() && options.tushare.enabledDataSets.length > 0) {
     registry.registerPlugin(createTushareSourcePlugin(), options.tushare);
   }

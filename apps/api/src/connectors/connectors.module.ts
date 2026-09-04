@@ -10,7 +10,7 @@ import {
 
 export const MARKET_DATA_CLIENT = Symbol('MARKET_DATA_CLIENT');
 
-const SEC_USER_AGENT_FALLBACK = 'stock-suggest-research contact@example.com';
+export const SEC_USER_AGENT_FALLBACK = 'stock-suggest-research contact@example.com';
 /**
  * The application owns environment parsing. @bourse/market-data receives
  * constructed source configuration and never reads process.env itself.

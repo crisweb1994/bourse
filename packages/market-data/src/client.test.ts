@@ -105,22 +105,6 @@ class TestResearchMarketDataClient extends ResearchMarketDataClient {
 }
 
 describe('ResearchMarketDataClient', () => {
-  it('returns batch quotes in exactly the input order', async () => {
-    const client = createResearchMarketDataClient(createBuiltInSources(providers({
-      yahoo: finance({
-        getQuote: async ({ instrumentId }) => result(quote(instrumentId, instrumentId === 'US:MSFT' ? 420 : 200), 'yahoo'),
-      }),
-    })));
-
-    const responses = await client.getQuotes([
-      { instrumentId: 'US:MSFT' },
-      { instrumentId: 'US:AAPL' },
-    ]);
-
-    expect(responses.map((response) => response.data?.instrument.instrumentId)).toEqual(['US:MSFT', 'US:AAPL']);
-    expect(responses.map((response) => response.data?.price)).toEqual([420, 200]);
-  });
-
   it('routes market-calendar requests with the default policy', async () => {
     const client = createResearchMarketDataClient(createBuiltInSources(providers()));
 

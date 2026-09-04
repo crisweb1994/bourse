@@ -8,5 +8,4 @@ export interface CacheEntry<T> {
 export interface CachePort {
   get<T>(key: string): Promise<CacheEntry<T> | null>;
   set<T>(key: string, value: T, ttlMs: number, staleTtlMs?: number): Promise<void>;
-  invalidate(prefix: string): Promise<void>;
 }

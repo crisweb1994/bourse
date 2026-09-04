@@ -17,26 +17,24 @@ interface RevisionWithCard {
   payload: unknown;
   generatedAt: Date;
   supersededAt: Date | null;
-  card: {
+  event: {
     id: string;
-    event: {
-      stockId: string;
-      stock: { symbol: string; name: string; market: string };
-    };
+    stockId: string;
+    stock: { symbol: string; name: string; market: string };
   };
 }
 
 export function toEarningsCardDto(revision: RevisionWithCard): EarningsCardDto {
   const payload = EarningsCardPayloadSchema.parse(revision.payload);
   return {
-    id: revision.card.id,
+    id: revision.event.id,
     revisionId: revision.id,
     revisionNo: revision.revisionNo,
-    stockId: revision.card.event.stockId,
+    stockId: revision.event.stockId,
     instrumentId: payload.event.instrumentId,
-    symbol: revision.card.event.stock.symbol,
-    name: revision.card.event.stock.name,
-    market: revision.card.event.stock.market as EarningsCardDto['market'],
+    symbol: revision.event.stock.symbol,
+    name: revision.event.stock.name,
+    market: revision.event.stock.market as EarningsCardDto['market'],
     periodEndOn: payload.event.periodEndOn,
     periodType: payload.event.periodType,
     fiscalYear: payload.event.fiscalYear,

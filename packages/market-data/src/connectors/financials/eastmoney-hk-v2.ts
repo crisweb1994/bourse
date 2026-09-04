@@ -10,7 +10,8 @@ import {
 } from '../../ports/financials-v2';
 import { parseInstrumentId } from '../../util/instrument-id';
 import type { ConnectorRunContext, FetchLike } from '../types';
-import { failure as httpFailure, resolveFetch, withTimeout } from '../http';
+import { failure as httpFailure, resolveFetch, withTimeout, HttpError, failureCodeFor } from '../http';
+import { eastmoneyQuery, readEastmoneyBody } from './eastmoney-http';
 
 /**
  * Eastmoney HK F10 connector — v2（structured-first earnings）。
@@ -116,7 +117,7 @@ export function createEastmoneyHkV2FinancialsConnector(
         reportingCurrency = currency;
       } catch (err) {
         const message = (err as Error)?.message ?? String(err);
-        return failure(retrievedAt, 'SOURCE_UNAVAILABLE', `Eastmoney HK fetch error: ${message}`, message);
+        return failure(retrievedAt, failureCodeFor(err), `Eastmoney HK fetch error: ${message}`, message);
       }
 
       if (mainRows.length === 0) {
@@ -183,20 +184,14 @@ function toSecucode(symbol: string): string {
 }
 
 function queryFor(reportName: string, secucode: string, pageSize: number): string {
-  return (
-    `${BASE_URL}?reportName=${reportName}` +
-    `&columns=ALL` +
-    `&filter=(SECUCODE%3D%22${encodeURIComponent(secucode)}%22)` +
-    `&pageNumber=1&pageSize=${pageSize}` +
-    `&sortColumns=REPORT_DATE&sortTypes=-1`
-  );
+  return eastmoneyQuery(BASE_URL, 'SECUCODE', secucode, pageSize, reportName);
 }
 
-async function readBody(fetchLike: FetchLike, url: string, signal: AbortSignal): Promise<string> {
-  const res = await fetchLike(url, { headers: COMMON_HEADERS, signal });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.text ? await res.text() : JSON.stringify(await res.json());
-}
+const readBody = (
+  fetchLike: FetchLike,
+  url: string,
+  signal: AbortSignal,
+): Promise<string> => readEastmoneyBody(fetchLike, url, signal, COMMON_HEADERS);
 
 function parseEmRows(body: string): Array<Record<string, unknown>> {
   let parsed: unknown;

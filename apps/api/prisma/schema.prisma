@@ -38,7 +38,8 @@ model Stock {
   exchange    String
   currency    String   @default("USD")
   yahooSymbol String?
-  // 由 connector 首次 ingest 写入，用于 compute/relative.ts 同行分组。
+  // 股票详情页拉取 finance profile 时落库（stock.service detail），供 POST 简报
+  // 板块归因（brief.generator.computeSectorAttribution）分组使用。
   sector      String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -50,7 +51,6 @@ model Stock {
   filings                          Filing[]
   earningsEvents                   EarningsEvent[]
   earningsGenerationRuns           EarningsGenerationRun[]
-  earningsGuidance                 EarningsGuidance[]
   filingDetectionCursor            FilingDetectionCursor?
   earningsDeliveryRecords          EarningsDeliveryRecord[]
   investorRelationsEvents         InvestorRelationsEvent[]
@@ -98,8 +98,6 @@ model ScreeningRun {
   userId        String
   savedScreenId String?
   query         Json
-  sourceId      String
-  capturedAt    DateTime
   snapshot      Json
   createdAt     DateTime @default(now())
 
@@ -108,7 +106,6 @@ model ScreeningRun {
   refinements ScreeningRefinement[]
 
   @@index([userId, createdAt])
-  @@index([savedScreenId, createdAt])
 }
 
 model ScreeningRefinement {
@@ -133,7 +130,7 @@ model AiProviderSetting {
   isDefault     Boolean         @default(false)
 
   baseUrl         String?
-  apiKeyEncrypted String? // versioned AES-256-GCM ciphertext
+  apiKey          String? // 明文存储（产品决策：不做静态加密）
   enabled         Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -183,8 +180,7 @@ model WebSearchSetting {
 model DigestSubscription {
   id                       String          @id @default(cuid())
   userId                   String          @unique
-  markets                  Market[] // ["US","CN","HK"] 子集
-  sessions                 DigestSession[] // ["PRE","POST"] 子集
+  markets                  Market[] // ["US","CN","HK"] 子集；PRE/POST 两个窗口均投递，不按 session 订阅
   channels                 Json // ChannelConfig[]（discriminated union，含凭证）
   enabled                  Boolean         @default(true)
   earningsImmediateEnabled Boolean         @default(false)
@@ -216,7 +212,6 @@ model EarningsDeliveryRecord {
   userId             String
   stockId            String
   revisionId         String
-  previousRevisionId String?
   kind               EarningsDeliveryKind
   channelType        ChannelType
   target             String
@@ -239,7 +234,6 @@ model Analysis {
   userId              String
   stockId             String
   symbol              String
-  market              Market
   mode                AnalysisMode
   focusWindow         FocusWindow
   question            String?
@@ -301,9 +295,7 @@ enum ChatIntent {
   EARNINGS_BRIEF
   INVESTOR_RELATIONS
   EXPLAIN_EXISTING
-  COMPARE_HISTORY
   REFRESH_REQUIRED
-  VALIDATE_THESIS
   SCOPE_CHANGE
   UNSUPPORTED
 }
@@ -320,20 +312,6 @@ enum ChatMessageRole {
   USER
   ASSISTANT
   SYSTEM_NOTICE
-}
-
-enum ChatMessageKind {
-  TEXT
-  PROPOSAL
-  DELTA_SUMMARY
-  THESIS_REVIEW
-  ERROR_NOTICE
-}
-
-enum ChatMessageStatus {
-  COMPLETED
-  PARTIAL
-  FAILED
 }
 
 model ResearchThread {
@@ -361,9 +339,6 @@ model ChatGeneration {
   status                      ChatGenerationStatus @default(PENDING)
   contextSnapshot             Json
   analysisContextSnapshotId   String?
-  earningsRevisionId          String?
-  investorRelationsRevisionId String?
-  promptVersion               String
   groundedSources             Json?
   errorCode                   String?
   createdAt                   DateTime             @default(now())
@@ -374,8 +349,6 @@ model ChatGeneration {
   openResearchSnapshot      OpenResearchSnapshot?
   streamEvents              ChatStreamEvent[]
   analysisContextSnapshot   ChatAnalysisContextSnapshot? @relation(fields: [analysisContextSnapshotId], references: [id], onDelete: SetNull)
-  earningsRevision          EarningsCardRevision?        @relation(fields: [earningsRevisionId], references: [id], onDelete: SetNull)
-  investorRelationsRevision InvestorRelationsRevision?   @relation(fields: [investorRelationsRevisionId], references: [id], onDelete: SetNull)
 
   @@unique([threadId, clientRequestId])
   @@index([threadId, status])
@@ -408,16 +381,13 @@ model ChatStreamEvent {
 }
 
 model ChatMessage {
-  id           String            @id @default(cuid())
+  id           String         @id @default(cuid())
   threadId     String
   generationId String?
   role         ChatMessageRole
-  kind         ChatMessageKind
-  status       ChatMessageStatus
-  content      String            @db.Text
+  content      String         @db.Text
   sequence     Int
-  citationRefs Json?
-  createdAt    DateTime          @default(now())
+  createdAt    DateTime       @default(now())
 
   thread     ResearchThread  @relation(fields: [threadId], references: [id], onDelete: Cascade)
   generation ChatGeneration? @relation(fields: [generationId], references: [id], onDelete: SetNull)
@@ -432,10 +402,8 @@ model OpenResearchSnapshot {
   stockId            String
   query              String   @db.Text
   dataAsOf           DateTime
-  gatewayVersion     String
   sources            Json
   citationCandidates Json
-  contentHash        String
   createdAt          DateTime @default(now())
 
   generation ChatGeneration @relation(fields: [generationId], references: [id], onDelete: Cascade)
@@ -445,18 +413,14 @@ model OpenResearchSnapshot {
 }
 
 model AnalysisEvidenceSnapshot {
-  id                  String   @id @default(cuid())
-  analysisId          String   @unique
-  schemaVersion       String
-  evidencePackVersion String
-  capturedAt          DateTime @default(now())
-  dataAsOf            Json
-  sourceMode          String
-  degraded            Boolean  @default(false)
-  missingFields       String[]
-  payload             Json
-  sourceSnapshots     Json
-  contentHash         String
+  id            String   @id @default(cuid())
+  analysisId    String   @unique
+  capturedAt    DateTime @default(now())
+  dataAsOf      Json
+  degraded      Boolean  @default(false)
+  missingFields String[]
+  payload       Json
+  sourceSnapshots Json
 
   analysis Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
 }
@@ -475,7 +439,6 @@ model Filing {
   sourceUrl        String
   publishedAt      DateTime
   retrievedAt      DateTime
-  mimeType         String
   language         String?
   contentHash      String
   createdAt        DateTime           @default(now())
@@ -484,7 +447,6 @@ model Filing {
   derivations                 FilingDerivation[]
   eventLinks                  EarningsEventFiling[]
   investorRelationsEventLinks InvestorRelationsEventFiling[]
-  guidance                    EarningsGuidance[]
 
   @@unique([provider, sourceDocumentId])
   @@index([stockId, publishedAt])
@@ -496,10 +458,6 @@ model FilingDerivation {
   id             String                 @id @default(cuid())
   filingId       String
   derivationKey  String                 @unique
-  parserVersion  String
-  modelVersion   String
-  promptVersion  String
-  schemaVersion  String
   status         FilingDerivationStatus
   normalizedText String                 @db.Text
   contentHash    String
@@ -515,53 +473,22 @@ model FilingDerivation {
   @@index([filingId, createdAt])
 }
 
-// Forward-looking company guidance. It stays separate from actuals and is
-// eligible only when issued before the actual filing publication time.
-model EarningsGuidance {
-  id                 String                 @id @default(cuid())
-  dedupeKey          String                 @unique
-  stockId            String
-  filingId           String?
-  metricCode         String
-  targetPeriodEndOn  DateTime               @db.Date
-  targetPeriodType   EarningsPeriodType
-  valueMin           Decimal                @db.Decimal(30, 8)
-  valueMax           Decimal                @db.Decimal(30, 8)
-  unit               String
-  currency           String?
-  scale              Int                    @default(1)
-  accountingBasis    String
-  consolidationScope EarningsReportingScope
-  issuedAt           DateTime
-  provider           String
-  sourceUrl          String
-  sourceSpan         Json
-  supersededAt       DateTime?
-  createdAt          DateTime               @default(now())
-
-  stock  Stock   @relation(fields: [stockId], references: [id], onDelete: Cascade)
-  filing Filing? @relation(fields: [filingId], references: [id], onDelete: SetNull)
-
-  @@index([stockId, targetPeriodEndOn, targetPeriodType, metricCode, issuedAt], map: "EarningsGuidance_lookup_idx")
-  @@index([filingId])
-}
-
 model EarningsEvent {
-  id             String                 @id @default(cuid())
-  stockId        String
-  periodEndOn    DateTime               @db.Date
-  periodType     EarningsPeriodType
-  reportingScope EarningsReportingScope
-  fiscalYear     Int
-  fiscalQuarter  Int?
-  createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
+  id                String                 @id @default(cuid())
+  stockId           String
+  periodEndOn       DateTime               @db.Date
+  periodType        EarningsPeriodType
+  reportingScope    EarningsReportingScope
+  fiscalYear        Int
+  currentRevisionId String?                @unique
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
 
-  stock          Stock                   @relation(fields: [stockId], references: [id], onDelete: Cascade)
-  filingLinks    EarningsEventFiling[]
-  card           EarningsCard?
-  generationRuns EarningsGenerationRun[]
-  structuredSelections EarningsStructuredSelection[]
+  stock            Stock                   @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  filingLinks      EarningsEventFiling[]
+  generationRuns   EarningsGenerationRun[]
+  currentRevision  EarningsCardRevision?   @relation("CurrentEarningsRevision", fields: [currentRevisionId], references: [id], onDelete: SetNull)
+  revisions        EarningsCardRevision[]  @relation("EarningsCardRevisions")
 
   @@unique([stockId, periodEndOn, periodType, reportingScope])
   @@index([stockId, periodEndOn])
@@ -580,41 +507,23 @@ model EarningsEventFiling {
   @@index([filingId])
 }
 
-model EarningsCard {
-  id                String   @id @default(cuid())
-  eventId           String   @unique
-  currentRevisionId String?  @unique
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  event           EarningsEvent          @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  currentRevision EarningsCardRevision?  @relation("CurrentEarningsRevision", fields: [currentRevisionId], references: [id], onDelete: SetNull)
-  revisions       EarningsCardRevision[] @relation("EarningsCardRevisions")
-}
-
 model EarningsCardRevision {
   id            String                     @id @default(cuid())
-  cardId        String
+  eventId       String
   revisionNo    Int
   status        EarningsCardRevisionStatus
-  schemaVersion String
-  promptVersion String
-  model         String?
   payload       Json
   contentHash   String
-  inputTokens   Int                        @default(0)
-  outputTokens  Int                        @default(0)
   generatedAt   DateTime                   @default(now())
   supersededAt  DateTime?
 
-  card            EarningsCard          @relation("EarningsCardRevisions", fields: [cardId], references: [id], onDelete: Cascade)
-  currentFor      EarningsCard?         @relation("CurrentEarningsRevision")
+  event           EarningsEvent          @relation("EarningsCardRevisions", fields: [eventId], references: [id], onDelete: Cascade)
+  currentFor      EarningsEvent?         @relation("CurrentEarningsRevision")
   generationRuns  EarningsGenerationRun[]
-  chatGenerations ChatGeneration[]
   deliveryRecords EarningsDeliveryRecord[]
 
-  @@unique([cardId, revisionNo])
-  @@index([cardId, generatedAt])
+  @@unique([eventId, revisionNo])
+  @@index([eventId, generatedAt])
 }
 
 model EarningsGenerationRun {
@@ -632,10 +541,6 @@ model EarningsGenerationRun {
   retryable         Boolean                  @default(true)
   errorCode         String?
   errorMessage      String?
-  provider          String?
-  model             String?
-  inputTokens       Int                      @default(0)
-  outputTokens      Int                      @default(0)
   createdAt         DateTime                 @default(now())
   startedAt         DateTime?
   completedAt       DateTime?
@@ -658,8 +563,6 @@ model FinancialDataSnapshot {
   id                String   @id @default(cuid())
   stockId           String
   provider          String
-  sourceNature      String
-  qualityTier       String
   sourceUrl         String
   schemaVersion     String
   retrievedAt       DateTime
@@ -667,55 +570,18 @@ model FinancialDataSnapshot {
   normalizedPayload Json
   createdAt         DateTime @default(now())
 
-  stock      Stock                         @relation(fields: [stockId], references: [id], onDelete: Cascade)
-  selections SelectionSnapshot[]
+  stock Stock @relation(fields: [stockId], references: [id], onDelete: Cascade)
 
   @@unique([stockId, provider, contentHash, schemaVersion])
   @@index([stockId, retrievedAt])
 }
 
-model EarningsStructuredSelection {
-  id                String   @id @default(cuid())
-  eventId           String
-  selectionVersion  String
-  status            String
-  selectedPeriodId  String?
-  diagnostics       Json
-  knowledgeCutoffAt DateTime
-  retryAt           DateTime?
-  createdAt         DateTime @default(now())
-
-  event     EarningsEvent      @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  snapshots SelectionSnapshot[]
-
-  @@unique([eventId, selectionVersion])
-  @@index([eventId, createdAt])
-}
-
-// 多 provider 多对多：同一 selection 可引用多个 snapshot（不同 metric 来自不同
-// provider）；事实级 provenance.snapshotId 是权威引用，role 仅作汇总标记。
-model SelectionSnapshot {
-  selectionId String
-  snapshotId  String
-  role        String   @default("primary")
-  createdAt   DateTime @default(now())
-
-  selection EarningsStructuredSelection @relation(fields: [selectionId], references: [id], onDelete: Cascade)
-  snapshot  FinancialDataSnapshot       @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
-
-  @@id([selectionId, snapshotId])
-}
-
 model FilingDetectionCursor {
-  stockId              String    @id
-  nextCheckAt          DateTime  @default(now())
-  lastCheckedAt        DateTime?
-  lastDiscoveredAt     DateTime?
-  lastSourceDocumentId String?
-  failureCount         Int       @default(0)
-  lastError            String?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  stockId       String    @id
+  nextCheckAt   DateTime  @default(now())
+  failureCount  Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   stock Stock @relation(fields: [stockId], references: [id], onDelete: Cascade)
 
@@ -760,20 +626,14 @@ model InvestorRelationsRevision {
   eventId       String
   revisionNo    Int
   status        InvestorRelationsRevisionStatus
-  schemaVersion String
-  promptVersion String
-  model         String?
   payload       Json
   contentHash   String
-  inputTokens   Int                             @default(0)
-  outputTokens  Int                             @default(0)
   generatedAt   DateTime                        @default(now())
   supersededAt  DateTime?
 
   event           InvestorRelationsEvent           @relation("InvestorRelationsEventRevisions", fields: [eventId], references: [id], onDelete: Cascade)
   currentFor      InvestorRelationsEvent?          @relation("CurrentInvestorRelationsRevision")
   generationRuns  InvestorRelationsGenerationRun[]
-  chatGenerations ChatGeneration[]
 
   @@unique([eventId, revisionNo])
   @@index([eventId, generatedAt])
@@ -794,10 +654,6 @@ model InvestorRelationsGenerationRun {
   retryable         Boolean                           @default(true)
   errorCode         String?
   errorMessage      String?
-  provider          String?
-  model             String?
-  inputTokens       Int                               @default(0)
-  outputTokens      Int                               @default(0)
   createdAt         DateTime                          @default(now())
   startedAt         DateTime?
   completedAt       DateTime?
@@ -920,10 +776,7 @@ enum DeliveryStatus {
 enum ChannelType {
   WEBHOOK
   FEISHU
-  DINGTALK
-  WECOM
   TELEGRAM
-  SLACK
 }
 
 enum EarningsDeliveryKind {

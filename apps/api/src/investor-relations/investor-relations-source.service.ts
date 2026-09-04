@@ -1,5 +1,8 @@
+import type {
+  FilingDocument,
+} from '@bourse/market-data';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { FilingDocument } from '@bourse/analysis';
+
 import type { ResearchMarketDataClient } from '@bourse/market-data';
 import type { Stock } from '@prisma/client';
 import { MARKET_DATA_CLIENT } from '../connectors/connectors.module';

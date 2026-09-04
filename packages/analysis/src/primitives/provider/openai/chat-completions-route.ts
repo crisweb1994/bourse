@@ -140,6 +140,9 @@ export class OpenAIChatCompletionsRoute implements OpenAIRoute {
         messages,
         stream: true,
         ...(options.maxTokens ? { max_tokens: options.maxTokens } : {}),
+        ...(model.toLowerCase().startsWith('deepseek-')
+          ? { thinking: { type: 'disabled' } }
+          : {}),
       };
       if (executor && !isLastRound && webSearchUses < maxToolUses) {
         params.tools = [WEB_SEARCH_FUNCTION_SCHEMA];
@@ -310,21 +313,8 @@ export class OpenAIChatCompletionsRoute implements OpenAIRoute {
           );
           toolUseCounts.webSearch = (toolUseCounts.webSearch ?? 0) + 1;
           for (const c of result.output.citations) pushCitation(c);
-          // Diag (2026-05-19): print every web_search invocation + outcome
-          // so dev triage knows what the model was asking about.
           const itemCount = result.output.results?.items?.length ?? 0;
-          const durationMs = Date.now() - searchStartedAt;
-          if (process.env.LOG_WEB_SEARCH) {
-            // eslint-disable-next-line no-console
-            console.log(
-              `[OpenAIChatCompletionsRoute] web_search round=${round} #${toolUseCounts.webSearch} ` +
-                `· q=${JSON.stringify(queryStr)}` +
-                (freshnessDays ? ` · ${freshnessDays}d` : '') +
-                ` · ${itemCount} hits · ${durationMs}ms` +
-                (result.error ? ` · ERROR ${result.error.code}` : '') +
-                (result.limitReached ? ' · LIMIT_REACHED' : ''),
-            );
-          }
+          void itemCount; void searchStartedAt;
           messages.push({
             role: 'tool',
             tool_call_id: call.id,
@@ -436,9 +426,15 @@ export class OpenAIChatCompletionsRoute implements OpenAIRoute {
         { role: 'system', content: flattenSystem(systemPrompt) },
         { role: 'user', content: userPrompt },
       ],
+      ...(model.toLowerCase().startsWith('deepseek-')
+        ? { thinking: { type: 'disabled' } }
+        : {}),
     };
     if (options.maxTokens) completeParams.max_tokens = options.maxTokens;
-    if (process.env?.OPENAI_CHAT_RESPONSE_FORMAT === 'true') {
+    if (
+      model.toLowerCase().startsWith('deepseek-') ||
+      process.env?.OPENAI_CHAT_RESPONSE_FORMAT === 'true'
+    ) {
       completeParams.response_format = { type: 'json_object' };
     }
     const response = (await this.client.chat.completions.create(

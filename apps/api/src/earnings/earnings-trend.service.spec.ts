@@ -9,19 +9,18 @@ function card(
   value: string,
   accumulation: 'discrete' | 'YTD' = 'discrete',
 ) {
-  const periodType = quarter === 2 && accumulation === 'YTD' ? 'H1' : `Q${quarter}`;
+  // Prisma 枚举无 Q4（年末走 FY），fixture 与真实事件对齐。
+  const periodType =
+    quarter === 4 ? 'FY' : quarter === 2 && accumulation === 'YTD' ? 'H1' : `Q${quarter}`;
   const month = String(quarter * 3).padStart(2, '0');
   const day = quarter === 1 || quarter === 4 ? '31' : '30';
   const periodEndOn = `${year}-${month}-${day}`;
   return {
-    eventId: `event-${year}-q${quarter}-${accumulation}`,
+    id: `event-${year}-q${quarter}-${accumulation}`,
     currentRevisionId: `revision-${year}-q${quarter}-${accumulation}`,
-    event: {
-      fiscalYear: year,
-      fiscalQuarter: quarter,
-      periodType,
-      periodEndOn: new Date(`${periodEndOn}T00:00:00.000Z`),
-    },
+    fiscalYear: year,
+    periodType,
+    periodEndOn: new Date(`${periodEndOn}T00:00:00.000Z`),
     currentRevision: {
       id: `revision-${year}-q${quarter}-${accumulation}`,
       payload: {
@@ -94,7 +93,7 @@ function card(
 function service(cards: ReturnType<typeof card>[]) {
   const prisma = {
     stock: { findUnique: async () => ({ id: 'stock-1' }) },
-    earningsCard: { findMany: async () => cards },
+    earningsEvent: { findMany: async () => cards },
   };
   return new EarningsTrendService(prisma as any);
 }

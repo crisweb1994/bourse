@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { isMarket } from '@bourse/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { StockService } from '../stock/stock.service';
 import { CreateThreadDto, UpdateThreadDto } from './chat.dto';
@@ -30,7 +31,7 @@ export class ThreadService {
         return symbols.includes(normalized)
           && (!market || candidate.market.toUpperCase() === market.toUpperCase());
       });
-      if (exact && ['US', 'CN', 'HK'].includes(exact.market.toUpperCase())) {
+      if (exact && isMarket(exact.market.toUpperCase())) {
         stock = await this.stocks.upsert({
           symbol: exact.symbol,
           name: exact.name,
@@ -128,7 +129,6 @@ export class ThreadService {
               select: {
                 id: true,
                 dataAsOf: true,
-                gatewayVersion: true,
                 sources: true,
               },
             },
@@ -162,6 +162,11 @@ export class ThreadService {
       throw new ConflictException('Cannot delete a thread while an answer is running');
     }
     await this.prisma.researchThread.delete({ where: { id: threadId } });
+    // 线程删除后回收失去全部引用的去重快照（ChatGeneration.analysisContextSnapshotId
+    // 为 SetNull，多个 generation 可共享同一快照，不能靠 FK 级联）。
+    await this.prisma.chatAnalysisContextSnapshot.deleteMany({
+      where: { generations: { none: {} } },
+    });
     return { ok: true };
   }
 
